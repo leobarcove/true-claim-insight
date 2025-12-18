@@ -211,3 +211,13 @@ pnpm build
 | Document Service | 3005 |
 | Adjuster Portal | 4000 |
 | Claimant Web | 4001 |
+
+## Test Credentials (Local Development)
+
+After running migrations, register a test user or use:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Adjuster | ahmad@adjustingfirm.com | SecureP@ss123 |
+
+**Note:** You must first register the user via `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs

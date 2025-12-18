@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+import { useLogout } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getInitials } from '@/lib/utils';
@@ -28,11 +29,11 @@ const secondaryNavigation = [
 
 export function Sidebar() {
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
+  const logoutMutation = useLogout();
 
   const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
+    logoutMutation.mutate();
   };
 
   return (

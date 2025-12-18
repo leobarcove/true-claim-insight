@@ -1,27 +1,31 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { AxiosError } from 'axios';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuthStore } from '@/stores/auth-store';
+import { useLogin } from '@/hooks/use-auth';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(1, 'Password is required'),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+interface ApiErrorResponse {
+  message: string | string[];
+  error: string;
+  statusCode: number;
+}
+
 export function LoginPage() {
-  const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const loginMutation = useLogin();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -33,34 +37,29 @@ export function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
     setError(null);
 
     try {
-      // TODO: Replace with actual API call
-      // Simulating API call for now
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Mock successful login
-      const mockUser = {
-        id: '1',
+      await loginMutation.mutateAsync({
         email: data.email,
-        fullName: 'Ahmad bin Abdullah',
-        role: 'ADJUSTER' as const,
-        tenantId: 'tenant-1',
-        tenantName: 'ABC Adjusting Firm',
-        licenseNumber: 'LA-2025-001234',
-        bcillaCertified: true,
-      };
-
-      setAuth(mockUser, 'mock-access-token', 'mock-refresh-token');
-      navigate('/');
+        password: data.password,
+      });
+      // Navigation is handled by the mutation's onSuccess
     } catch (err) {
-      setError('Invalid email or password. Please try again.');
-    } finally {
-      setIsLoading(false);
+      const axiosError = err as AxiosError<ApiErrorResponse>;
+      const message = axiosError.response?.data?.message;
+      
+      if (Array.isArray(message)) {
+        setError(message[0]);
+      } else if (message) {
+        setError(message);
+      } else {
+        setError('Invalid email or password. Please try again.');
+      }
     }
   };
+
+  const isLoading = loginMutation.isPending;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">

@@ -140,6 +140,7 @@
 | Claim detail page | ✅ | Full claim info, timeline, docs |
 | Login page | ✅ | Form validation with Zod |
 | Error boundary | ✅ | Graceful error handling |
+| **API Gateway integration** | ✅ | Login/logout connected to backend |
 | Adjuster registration | ⚪ | Backend auth required |
 | Scheduling UI | ⚪ | Video service integration |
 
@@ -243,7 +244,7 @@
 ### This Week
 - [x] Setup local development environment
 - [x] Create api-gateway service with JWT auth
-- [ ] Connect adjuster-portal to api-gateway
+- [x] Connect adjuster-portal to api-gateway
 - [ ] Obtain API docs from vendors
 - [ ] Create cost estimates
 
