@@ -1,0 +1,70 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  IsDateString,
+  IsEnum,
+  IsObject,
+  IsOptional,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export enum ClaimType {
+  OWN_DAMAGE = 'OWN_DAMAGE',
+  THIRD_PARTY_PROPERTY = 'THIRD_PARTY_PROPERTY',
+  THEFT = 'THEFT',
+  WINDSCREEN = 'WINDSCREEN',
+}
+
+export class IncidentLocationDto {
+  @ApiProperty({ example: 'Jalan Bukit Bintang, KL' })
+  @IsString()
+  @IsNotEmpty()
+  address!: string;
+
+  @ApiPropertyOptional({ example: 3.1478 })
+  @IsOptional()
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: 101.7128 })
+  @IsOptional()
+  longitude?: number;
+}
+
+export class CreateClaimDto {
+  @ApiProperty({ example: 'POL-2025-001234' })
+  @IsString()
+  @IsOptional()
+  policyNumber?: string;
+
+  @ApiProperty({ enum: ClaimType, example: ClaimType.OWN_DAMAGE })
+  @IsEnum(ClaimType)
+  claimType!: ClaimType;
+
+  @ApiProperty({ example: '2025-12-15' })
+  @IsDateString()
+  incidentDate!: string;
+
+  @ApiProperty({ type: IncidentLocationDto })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => IncidentLocationDto)
+  incidentLocation!: IncidentLocationDto;
+
+  @ApiProperty({ example: 'Rear-ended at traffic light junction' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  description!: string;
+
+  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  @IsUUID()
+  claimantId!: string;
+
+  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440001' })
+  @IsUUID()
+  tenantId!: string;
+}

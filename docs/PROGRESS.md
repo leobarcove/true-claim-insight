@@ -10,9 +10,9 @@
 
 | Phase | Description | Status | Progress |
 |-------|-------------|--------|----------|
-| P0 | Foundation & Planning | 🟡 In Progress | 75% |
+| P0 | Foundation & Planning | ✅ Complete | 100% |
 | P1 | Core Infrastructure | ⚪ Not Started | 0% |
-| P2 | Identity & Case Management | ⚪ Not Started | 0% |
+| P2 | Identity & Case Management | 🟡 In Progress | 30% |
 | P3 | Video & AI Layer | ⚪ Not Started | 0% |
 | P4 | Reporting & Signing | ⚪ Not Started | 0% |
 | P5 | MVP Launch | ⚪ Not Started | 0% |
@@ -107,13 +107,16 @@
 | PWA manifest + service worker | ⚪ |
 
 ### Case Service
-| Task | Status |
-|------|--------|
-| Create NestJS service | ⚪ |
-| Claims CRUD endpoints | ⚪ |
-| Document upload | ⚪ |
-| Adjuster assignment | ⚪ |
-| Case queue endpoints | ⚪ |
+| Task | Status | Notes |
+|------|--------|-------|
+| Create NestJS service | ✅ | NestJS 11 + Fastify 5 |
+| Claims CRUD endpoints | ✅ | Full CRUD with validation |
+| Document upload | ✅ | S3-ready with presigned URLs |
+| Adjuster assignment | ✅ | Smart workload-based assignment |
+| Case queue endpoints | ✅ | Queue with stats and workload |
+| Health check endpoints | ✅ | Liveness + readiness probes |
+| Swagger documentation | ✅ | Auto-generated OpenAPI |
+| JWT auth guards | ✅ | Role-based access control |
 
 ### Adjuster Portal
 | Task | Status |
@@ -224,7 +227,7 @@
 
 ### This Month
 - [ ] Secure pilot adjuster commitments
-- [ ] Create first NestJS service (case-service)
+- [x] Create first NestJS service (case-service)
 - [ ] Create first React app (adjuster-portal)
 - [ ] Begin Phase 1 infrastructure
 
