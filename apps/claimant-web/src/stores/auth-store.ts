@@ -4,9 +4,8 @@ import { persist } from 'zustand/middleware';
 export interface ClaimantUser {
   id: string;
   phoneNumber: string;
-  fullName?: string;
-  icNumber?: string;
-  isVerified: boolean;
+  fullName?: string | null;
+  kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED';
 }
 
 interface AuthState {

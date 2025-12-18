@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { AxiosError } from 'axios';
 import { ArrowLeft, Phone, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { isValidMalaysianPhone } from '@/lib/utils';
+import { useSendOtp } from '@/hooks/use-otp';
 
 const phoneSchema = z.object({
   phoneNumber: z
@@ -19,7 +21,8 @@ const phoneSchema = z.object({
 type PhoneFormData = z.infer<typeof phoneSchema>;
 
 export function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const sendOtp = useSendOtp();
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -34,22 +37,21 @@ export function LoginPage() {
   });
 
   const onSubmit = async (data: PhoneFormData) => {
-    setIsLoading(true);
     setError(null);
 
     try {
-      // TODO: Implement OTP sending via API
-      console.log('Sending OTP to:', data.phoneNumber);
+      const result = await sendOtp.mutateAsync(data.phoneNumber);
       
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // TODO: Navigate to OTP verification page
-      alert(`OTP would be sent to ${data.phoneNumber}\n\nThis is a scaffold - OTP flow coming soon!`);
+      // Navigate to OTP verification page with phone number
+      navigate('/verify-otp', {
+        state: {
+          phoneNumber: result.phoneNumber,
+          expiresIn: result.expiresIn,
+        },
+      });
     } catch (err) {
-      setError('Failed to send OTP. Please try again.');
-    } finally {
-      setIsLoading(false);
+      const axiosError = err as AxiosError<{ message: string }>;
+      setError(axiosError.response?.data?.message || 'Failed to send OTP. Please try again.');
     }
   };
 
@@ -117,9 +119,9 @@ export function LoginPage() {
               type="submit"
               size="lg"
               className="w-full h-14 text-lg"
-              disabled={isLoading}
+              disabled={sendOtp.isPending}
             >
-              {isLoading ? (
+              {sendOtp.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Sending code...
@@ -148,3 +150,4 @@ export function LoginPage() {
     </div>
   );
 }
+

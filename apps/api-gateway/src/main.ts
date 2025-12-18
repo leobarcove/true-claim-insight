@@ -37,9 +37,20 @@ async function bootstrap() {
     secret: configService.get<string>('COOKIE_SECRET', 'tci-cookie-secret'),
   });
 
-  // CORS configuration
+  // CORS configuration - allow both adjuster portal and claimant web
+  const allowedOrigins = [
+    'http://localhost:4000', // adjuster-portal
+    'http://localhost:4001', // claimant-web
+  ];
   app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN', 'http://localhost:4000'),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
