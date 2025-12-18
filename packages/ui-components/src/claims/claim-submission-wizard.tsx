@@ -124,10 +124,13 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
 
-    const data = await extractData(file);
+    // Convert FileList to Array
+    const files = Array.from(fileList);
+
+    const data = await extractData(files);
     
     setFormData((prev: any) => ({
       ...prev,
@@ -201,7 +204,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
             <div className="text-center">
               <h3 className="font-bold text-lg">AI Import</h3>
-              <p className="text-xs text-gray-500 mt-1">Upload MyKad or Police Report</p>
+              <p className="text-xs text-gray-500 mt-1">Upload MyKad and Incident Photos</p>
             </div>
             <div className="mt-2 px-3 py-1 bg-blue-600 text-[10px] font-bold text-white rounded-full">
               RECOMMENDED
@@ -211,6 +214,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
         <input 
           type="file" 
+          multiple
           ref={fileInputRef} 
           className="hidden" 
           onChange={handleFileUpload}
