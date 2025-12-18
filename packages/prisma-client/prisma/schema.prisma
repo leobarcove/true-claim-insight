@@ -1,0 +1,304 @@
+// ============================================
+// Augmented Adjusting - Prisma Schema
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ TENANTS ============
+
+model Tenant {
+  id               String           @id @default(uuid())
+  name             String
+  type             TenantType
+  subscriptionTier SubscriptionTier @default(BASIC)
+  settings         Json             @default("{}")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  adjusters Adjuster[]
+  claims    Claim[]    @relation("InsurerClaims")
+
+  @@map("tenants")
+}
+
+enum TenantType {
+  ADJUSTING_FIRM
+  INSURER
+}
+
+enum SubscriptionTier {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+// ============ ADJUSTERS ============
+
+model Adjuster {
+  id                String         @id @default(uuid())
+  tenantId          String
+  licenseNumber     String         @unique
+  bcillaCertified   Boolean        @default(false)
+  amlaMember        Boolean        @default(false)
+  fullName          String
+  email             String         @unique
+  phoneNumber       String?
+  passwordHash      String?
+  status            AdjusterStatus @default(ACTIVE)
+  licenseVerifiedAt DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  claims Claim[]
+
+  @@index([tenantId])
+  @@map("adjusters")
+}
+
+enum AdjusterStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// ============ CLAIMANTS ============
+
+model Claimant {
+  id            String    @id @default(uuid())
+  nricHash      String    @unique
+  nricEncrypted Bytes
+  fullName      String
+  dateOfBirth   DateTime
+  phoneNumber   String
+  email         String?
+  kycStatus     KycStatus @default(PENDING)
+  kycVerifiedAt DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  claims Claim[]
+
+  @@map("claimants")
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  EXPIRED
+}
+
+// ============ CLAIMS ============
+
+model Claim {
+  id                      String      @id @default(uuid())
+  claimNumber             String      @unique
+  claimantId              String
+  adjusterId              String?
+  insurerTenantId         String?
+  policyNumber            String
+  claimType               ClaimType
+  status                  ClaimStatus @default(SUBMITTED)
+  incidentDate            DateTime
+  incidentTime            DateTime?
+  incidentLocation        Json
+  description             String
+  otherParty              Json?
+  policeReportNumber      String?
+  priority                Priority    @default(NORMAL)
+  scheduledAssessmentTime DateTime?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  claimant      Claimant   @relation(fields: [claimantId], references: [id])
+  adjuster      Adjuster?  @relation(fields: [adjusterId], references: [id])
+  insurerTenant Tenant?    @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
+  sessions      Session[]
+  documents     Document[]
+  notes         ClaimNote[]
+
+  @@index([claimantId])
+  @@index([adjusterId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("claims")
+}
+
+enum ClaimType {
+  OWN_DAMAGE
+  THIRD_PARTY_PROPERTY
+  THIRD_PARTY_INJURY
+  THEFT
+  WINDSCREEN
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  DOCUMENTS_PENDING
+  PENDING_ASSIGNMENT
+  ASSIGNED
+  SCHEDULED
+  IN_ASSESSMENT
+  REPORT_PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ESCALATED_SIU
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ============ CLAIM NOTES ============
+
+model ClaimNote {
+  id        String   @id @default(uuid())
+  claimId   String
+  authorId  String
+  authorType ActorType
+  content   String
+  isPrivate Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("claim_notes")
+}
+
+// ============ VIDEO SESSIONS ============
+
+model Session {
+  id              String        @id @default(uuid())
+  claimId         String
+  roomId          BigInt
+  status          SessionStatus @default(SCHEDULED)
+  scheduledTime   DateTime?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  recordingUrl    String?
+  screenshots     Json          @default("[]")
+  createdAt       DateTime      @default(now())
+
+  claim           Claim            @relation(fields: [claimId], references: [id])
+  riskAssessments RiskAssessment[]
+
+  @@index([claimId])
+  @@map("sessions")
+}
+
+enum SessionStatus {
+  SCHEDULED
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+// ============ RISK ASSESSMENTS ============
+
+model RiskAssessment {
+  id             String         @id @default(uuid())
+  sessionId      String
+  assessmentType AssessmentType
+  provider       String
+  questionId     String?
+  questionText   String?
+  riskScore      RiskScore?
+  confidence     Decimal?       @db.Decimal(5, 4)
+  rawResponse    Json?
+  contextData    Json?
+  createdAt      DateTime       @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("risk_assessments")
+}
+
+enum AssessmentType {
+  VOICE_ANALYSIS
+  VISUAL_MODERATION
+  ATTENTION_TRACKING
+  DEEPFAKE_CHECK
+}
+
+enum RiskScore {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============ DOCUMENTS ============
+
+model Document {
+  id           String       @id @default(uuid())
+  claimId      String
+  type         DocumentType
+  filename     String
+  storageUrl   String
+  fileSize     Int?
+  mimeType     String?
+  metadata     Json         @default("{}")
+  signedAt     DateTime?
+  documentHash String?
+  createdAt    DateTime     @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("documents")
+}
+
+enum DocumentType {
+  DAMAGE_PHOTO
+  POLICE_REPORT
+  DRIVING_LICENCE
+  ASSESSMENT_REPORT
+  SIGNED_STATEMENT
+}
+
+// ============ AUDIT TRAIL ============
+
+model AuditTrail {
+  id         String     @id @default(uuid())
+  entityType String
+  entityId   String
+  action     String
+  actorId    String?
+  actorType  ActorType?
+  ipAddress  String?
+  userAgent  String?
+  oldValues  Json?
+  newValues  Json?
+  metadata   Json?
+  createdAt  DateTime   @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_trail")
+}
+
+enum ActorType {
+  CLAIMANT
+  ADJUSTER
+  ADMIN
+  SYSTEM
+}

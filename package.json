@@ -1,0 +1,48 @@
+{
+  "name": "augmented-adjusting",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote claims assessment platform for loss adjusters",
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "turbo run typecheck",
+    "prisma:generate": "pnpm --filter @augadj/prisma-client generate",
+    "prisma:migrate": "pnpm --filter @augadj/prisma-client migrate:dev",
+    "prisma:studio": "pnpm --filter @augadj/prisma-client studio",
+    "prisma:seed": "pnpm --filter @augadj/prisma-client seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:reset": "docker-compose down -v && docker-compose up -d",
+    "setup": "pnpm install && cp -n .env.example .env || true && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:generate",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.1.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}

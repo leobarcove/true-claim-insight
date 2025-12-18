@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # ============ DATABASE ============
+  postgres:
+    image: postgres:15-alpine
+    container_name: augadj-postgres
+    environment:
+      POSTGRES_USER: augadj
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: augmented_adjusting
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U augadj"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ CACHE ============
+  redis:
+    image: redis:7-alpine
+    container_name: augadj-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ AWS LOCAL ============
+  localstack:
+    image: localstack/localstack:latest
+    container_name: augadj-localstack
+    environment:
+      SERVICES: s3,secretsmanager
+      DEFAULT_REGION: ap-southeast-5
+      AWS_ACCESS_KEY_ID: localstack
+      AWS_SECRET_ACCESS_KEY: localstack
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh
+
+  # ============ MAIL (DEV) ============
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: augadj-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+
+volumes:
+  postgres_data:
+  redis_data:
+  localstack_data:

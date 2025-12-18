@@ -1,0 +1,241 @@
+# Project Progress
+
+**Last Updated:** 2025-12-18
+**Status:** Planning Phase
+**Current Phase:** P0 - Foundation
+
+---
+
+## Phase Overview
+
+| Phase | Description | Status | Progress |
+|-------|-------------|--------|----------|
+| P0 | Foundation & Planning | 🟡 In Progress | 75% |
+| P1 | Core Infrastructure | ⚪ Not Started | 0% |
+| P2 | Identity & Case Management | ⚪ Not Started | 0% |
+| P3 | Video & AI Layer | ⚪ Not Started | 0% |
+| P4 | Reporting & Signing | ⚪ Not Started | 0% |
+| P5 | MVP Launch | ⚪ Not Started | 0% |
+
+---
+
+## Phase 0: Foundation & Planning
+
+### Documentation
+| Task | Status | Notes |
+|------|--------|-------|
+| Define stakeholders | ✅ | Adjuster + Claimant primary |
+| Document requirements | ✅ | docs/REQUIREMENTS.md |
+| Technical architecture | ✅ | docs/ARCHITECTURE.md |
+| Tech stack decision | ✅ | TypeScript, NestJS, React, AWS |
+| Progress tracker | ✅ | This file |
+
+### Regulatory Research
+| Task | Status | Notes |
+|------|--------|-------|
+| BNM Sandbox requirements | ✅ | Standard vs Green Lane |
+| Adjuster licensing (BCILLA) | ✅ | MII qualification required |
+| PDPA compliance | ⚪ | Pending detailed review |
+| Indonesia (OJK) | 🟡 | Basic research done |
+| Thailand (OIC) | ⚪ | Pending |
+| Philippines (IC) | ⚪ | Pending |
+
+### Third-Party Integrations
+| Provider | Documentation | Credentials | Cost Estimate |
+|----------|--------------|-------------|---------------|
+| Innov8tif/CTOS | ⚪ | ⚪ | ⚪ |
+| Tencent TRTC | ⚪ | ⚪ | ⚪ |
+| Clearspeed | ⚪ | ⚪ | ⚪ |
+| Hive AI | ⚪ | ⚪ | ⚪ |
+| SigningCloud | ⚪ | ⚪ | ⚪ |
+| MediaPipe | ⚪ | N/A | Free |
+
+### Partnership
+| Task | Status | Notes |
+|------|--------|-------|
+| Identify pilot adjusters (5-10) | ⚪ | Beta testing |
+| Identify pilot firm (AMLA) | ⚪ | Partnership target |
+| Prepare pitch deck | ⚪ | For outreach |
+
+### Local Development Environment
+| Task | Status | Notes |
+|------|--------|-------|
+| Docker Compose (Postgres, Redis, LocalStack) | ✅ | `docker-compose.yml` |
+| Environment variables template | ✅ | `.env.example` |
+| Monorepo setup (Turborepo + pnpm) | ✅ | `turbo.json`, `pnpm-workspace.yaml` |
+| Root package.json with scripts | ✅ | `pnpm setup` one-liner |
+| TypeScript base config | ✅ | `tsconfig.base.json` |
+| Shared types package | ✅ | `packages/shared-types` |
+| Prisma schema | ✅ | `packages/prisma-client` |
+| Folder structure | ✅ | apps/, packages/, infrastructure/ |
+
+---
+
+## Phase 1: Core Infrastructure
+
+### Cloud Setup
+| Task | Status |
+|------|--------|
+| Provision AWS Malaysia region | ⚪ |
+| Setup EKS cluster | ⚪ |
+| Configure VPC and security | ⚪ |
+| Setup PostgreSQL (RDS) | ⚪ |
+| Setup Redis (ElastiCache) | ⚪ |
+| Setup S3 buckets | ⚪ |
+| Setup CI/CD pipeline | ⚪ |
+
+### API Gateway
+| Task | Status |
+|------|--------|
+| Deploy API Gateway | ⚪ |
+| Implement OAuth 2.0 / JWT | ⚪ |
+| Implement rate limiting | ⚪ |
+| Setup audit logging | ⚪ |
+
+---
+
+## Phase 2: Identity & Case Management
+
+### Claimant PWA
+| Task | Status |
+|------|--------|
+| Setup React + Vite PWA | ⚪ |
+| Phone OTP registration | ⚪ |
+| Innov8tif Web SDK integration | ⚪ |
+| Liveness detection flow | ⚪ |
+| eKYC result screens | ⚪ |
+| PWA manifest + service worker | ⚪ |
+
+### Case Service
+| Task | Status |
+|------|--------|
+| Create NestJS service | ⚪ |
+| Claims CRUD endpoints | ⚪ |
+| Document upload | ⚪ |
+| Adjuster assignment | ⚪ |
+| Case queue endpoints | ⚪ |
+
+### Adjuster Portal
+| Task | Status |
+|------|--------|
+| Setup React project | ⚪ |
+| Adjuster registration | ⚪ |
+| Case queue dashboard | ⚪ |
+| Case detail view | ⚪ |
+| Scheduling UI | ⚪ |
+
+---
+
+## Phase 3: Video & AI Layer
+
+### Video Service
+| Task | Status |
+|------|--------|
+| Create NestJS service | ⚪ |
+| UserSig generation | ⚪ |
+| TRTC Web SDK (Adjuster) | ⚪ |
+| TRTC Web SDK (Claimant) | ⚪ |
+| Room management | ⚪ |
+| Recording capture | ⚪ |
+
+### Risk Engine
+| Task | Status |
+|------|--------|
+| Create NestJS service | ⚪ |
+| Clearspeed integration | ⚪ |
+| Hive AI integration | ⚪ |
+| MediaPipe integration | ⚪ |
+| Unified risk scoring | ⚪ |
+| Explainability layer | ⚪ |
+
+---
+
+## Phase 4: Reporting & Signing
+
+### Document Service
+| Task | Status |
+|------|--------|
+| Create NestJS service | ⚪ |
+| Report template (PDF) | ⚪ |
+| Auto-generation from call | ⚪ |
+| SigningCloud integration | ⚪ |
+| Signing webhooks | ⚪ |
+
+---
+
+## Phase 5: MVP Launch
+
+### Quality Assurance
+| Task | Status |
+|------|--------|
+| E2E testing | ⚪ |
+| Security audit | ⚪ |
+| Performance testing | ⚪ |
+| UAT with pilot adjusters | ⚪ |
+
+### Launch
+| Task | Status |
+|------|--------|
+| Documentation / user guides | ⚪ |
+| Monitoring setup | ⚪ |
+| Pilot onboarding (5-10 adjusters) | ⚪ |
+
+---
+
+## Decision Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2025-12-18 | Adjuster-centric platform | Primary users are adjusters |
+| 2025-12-18 | Motor Insurance MVP | Largest volume, clearest use case |
+| 2025-12-18 | B2B SaaS model | Adjusters as paying customers |
+| 2025-12-18 | TypeScript everywhere | Single language, type safety |
+| 2025-12-18 | NestJS for backend | Enterprise-ready, microservices |
+| 2025-12-18 | PWA for claimant | Speed to market, web eKYC works |
+| 2025-12-18 | AWS Malaysia | Data sovereignty, BNM compliance |
+| 2025-12-18 | Turborepo monorepo | Shared types, efficient builds |
+| 2025-12-18 | Prisma ORM | Type-safe, great migrations |
+
+---
+
+## Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Pilot adjusters not interested | Medium | High | Strong value proposition |
+| API integration delays | Medium | Medium | Early vendor engagement |
+| Clearspeed accuracy (MY accents) | Medium | High | Calibration testing |
+| Video quality on low bandwidth | Medium | Medium | Adaptive bitrate |
+| Regulatory compliance gaps | Low | High | Legal review, BNM consult |
+| Data breach | Low | Critical | Security audit, encryption |
+
+---
+
+## Next Actions
+
+### This Week
+- [x] Setup local development environment
+- [ ] Obtain API docs from vendors
+- [ ] Create cost estimates
+- [ ] Research PDPA requirements
+
+### This Month
+- [ ] Secure pilot adjuster commitments
+- [ ] Create first NestJS service (case-service)
+- [ ] Create first React app (adjuster-portal)
+- [ ] Begin Phase 1 infrastructure
+
+---
+
+## KPIs (Target)
+
+| Metric | Baseline | Target |
+|--------|----------|--------|
+| Claim Cycle Time | 14-30 days | 3-5 days |
+| Adjuster Cases/Day | 3-4 | 6-8 |
+| Travel Time/Day | 5+ hours | 1-2 hours |
+| Fraud Detection | 2-3% | 5-8% |
+
+---
+
+*Update this document weekly during active development.*
