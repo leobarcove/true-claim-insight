@@ -65,22 +65,22 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 
 ### Claimant App (PWA)
 
-#### Onboarding
+#### Identity & Onboarding
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | CLM-001 | Registration with phone OTP | P0 |
-| CLM-002 | eKYC - MyKad OCR scan | P0 |
-| CLM-003 | eKYC - Liveness detection | P0 |
-| CLM-004 | eKYC - Face match | P0 |
+| CLM-002 | Video eKYC (V-KYC) during assessment | P0 |
+| CLM-003 | MyKad OCR via video stream | P0 |
+| CLM-004 | Live liveness detection | P0 |
 
-#### Claim Submission
+#### Claim Submission (Shared via UI Components)
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | CLM-010 | Select claim type | P0 |
-| CLM-011 | Enter incident details | P0 |
-| CLM-012 | Upload damage photos | P0 |
-| CLM-013 | Upload supporting documents | P0 |
-| CLM-014 | Select assessment times | P0 |
+| CLM-011 | Enter vehicle details (Plate/Make/Model) | P0 |
+| CLM-012 | Enter incident details & description | P0 |
+| CLM-013 | Upload initial damage photos | P0 |
+| CLM-014 | Agent-assisted submission support | P0 |
 
 #### Video Assessment
 | ID | Requirement | Priority |

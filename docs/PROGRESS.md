@@ -13,7 +13,7 @@
 | P0 | Foundation & Planning | ✅ Complete | 100% |
 | P1 | Core Infrastructure | 🟡 In Progress | 50% |
 | P2 | Identity & Case Management | 🟡 In Progress | 60% |
-| P3 | Video & AI Layer | ⚪ Not Started | 0% |
+| P3 | Video & AI Layer | 🟡 In Progress | 30% |
 | P4 | Reporting & Signing | ⚪ Not Started | 0% |
 | P5 | MVP Launch | ⚪ Not Started | 0% |
 
@@ -146,7 +146,7 @@
 | Error boundary | ✅ | Graceful error handling |
 | **API Gateway integration** | ✅ | Login/logout connected to backend |
 | **Adjuster registration** | ✅ | Form with validation, connected to API |
-| Scheduling UI | ⚪ | Video service integration |
+| Scheduling UI | ✅ | Video session management implemented |
 
 ---
 
@@ -161,7 +161,9 @@
 | Session tracking | ✅ | Linked to claims via Prisma |
 | Daily.co Web SDK (Adjuster) | ✅ | Integrated into Portal |
 | Daily.co Web SDK (Claimant) | ✅ | Integrated into PWA |
-| Recording capture | ⚪ | Requires TRTC credentials |
+| **Shared Claim Submission Component** | ✅ | `@tci/ui-components` |
+| Video eKYC (V-KYC) | 🟡 | Pivot: During Video Session |
+| Recording capture | ⚪ | Requires Daily.co configuration |
 
 ### Risk Engine
 | Task | Status |
@@ -228,6 +230,9 @@
 | 2025-12-18 | Zustand for client state | Minimal, TypeScript-first, persistent storage |
 | 2025-12-18 | User model for auth | Generic User model supports all roles (Adjuster, Firm Admin, Claimant, Insurer Staff) |
 | 2025-12-18 | API Gateway first | Central auth + routing before connecting frontends |
+| 2025-12-18 | Daily.co for Video | Better PWA support and Malaysian region availability |
+| 2025-12-18 | Pivot to V-KYC | Perform eKYC during video session to align with MY agent market |
+| 2025-12-18 | Shared Submission UI | Use `@tci/ui-components` for both PWA and Portal consistency |
 
 ---
 
