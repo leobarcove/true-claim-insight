@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { LoginPage } from '@/pages/login';
+import { RegisterPage } from '@/pages/register';
 import { DashboardPage } from '@/pages/dashboard';
 import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
@@ -53,6 +54,14 @@ export default function App() {
               element={
                 <PublicRoute>
                   <LoginPage />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <PublicRoute>
+                  <RegisterPage />
                 </PublicRoute>
               }
             />

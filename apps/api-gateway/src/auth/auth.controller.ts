@@ -16,11 +16,16 @@ import {
 } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { Throttle } from '@nestjs/throttler';
+import { JwtService } from '@nestjs/jwt';
 
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
+import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { SendOtpDto } from './dto/send-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -28,7 +33,12 @@ import { CurrentUser } from './decorators/current-user.decorator';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly otpService: OtpService,
+    private readonly claimantsService: ClaimantsService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Post('register')
   @Public()
@@ -108,4 +118,98 @@ export class AuthController {
       tenantName: user.tenant?.name,
     };
   }
+
+  // ============ CLAIMANT OTP AUTHENTICATION ============
+
+  @Post('claimant/send-otp')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 3600000 } }) // 5 requests per hour
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP to claimant phone number' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        expiresIn: { type: 'number', example: 300 },
+      },
+    },
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 400, description: 'Invalid phone number' })
+  async sendOtp(@Body() dto: SendOtpDto) {
+    const result = await this.otpService.sendOtp(dto.phoneNumber);
+    return {
+      message: 'OTP sent successfully',
+      expiresIn: result.expiresIn,
+    };
+  }
+
+  @Post('claimant/verify-otp')
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and authenticate claimant' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified, tokens returned',
+    schema: {
+      type: 'object',
+      properties: {
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            phoneNumber: { type: 'string' },
+            fullName: { type: 'string', nullable: true },
+            kycStatus: { type: 'string' },
+          },
+        },
+        tokens: {
+          type: 'object',
+          properties: {
+            accessToken: { type: 'string' },
+            refreshToken: { type: 'string' },
+            expiresIn: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    // Verify OTP
+    await this.otpService.verifyOtp(dto.phoneNumber, dto.code);
+
+    // Find or create claimant
+    const claimant = await this.claimantsService.findOrCreateByPhone(
+      dto.phoneNumber,
+    );
+
+    // Generate JWT tokens for claimant
+    const payload = {
+      sub: claimant.id,
+      phoneNumber: claimant.phoneNumber,
+      role: 'CLAIMANT',
+    };
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn: 900 }); // 15 minutes
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+    return {
+      user: {
+        id: claimant.id,
+        phoneNumber: claimant.phoneNumber,
+        fullName: claimant.fullName,
+        kycStatus: claimant.kycStatus,
+      },
+      tokens: {
+        accessToken,
+        refreshToken,
+        expiresIn: 900,
+      },
+    };
+  }
 }
+

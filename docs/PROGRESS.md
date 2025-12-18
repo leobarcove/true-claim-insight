@@ -143,7 +143,7 @@
 | Login page | ✅ | Form validation with Zod |
 | Error boundary | ✅ | Graceful error handling |
 | **API Gateway integration** | ✅ | Login/logout connected to backend |
-| Adjuster registration | ⚪ | Backend auth required |
+| **Adjuster registration** | ✅ | Form with validation, connected to API |
 | Scheduling UI | ⚪ | Video service integration |
 
 ---

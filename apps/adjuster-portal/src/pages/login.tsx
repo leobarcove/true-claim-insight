@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -148,9 +149,9 @@ export function LoginPage() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <a href="#" className="text-primary hover:underline">
-              Contact your administrator
-            </a>
+            <Link to="/register" className="text-primary hover:underline">
+              Create one
+            </Link>
           </div>
         </CardContent>
       </Card>

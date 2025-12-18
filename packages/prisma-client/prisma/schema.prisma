@@ -104,11 +104,11 @@ enum AdjusterStatus {
 
 model Claimant {
   id            String    @id @default(uuid())
-  nricHash      String    @unique
-  nricEncrypted Bytes
-  fullName      String
-  dateOfBirth   DateTime
-  phoneNumber   String
+  phoneNumber   String    @unique
+  nricHash      String?   @unique
+  nricEncrypted Bytes?
+  fullName      String?
+  dateOfBirth   DateTime?
   email         String?
   kycStatus     KycStatus @default(PENDING)
   kycVerifiedAt DateTime?
@@ -118,7 +118,24 @@ model Claimant {
 
   claims Claim[]
 
+  @@index([phoneNumber])
   @@map("claimants")
+}
+
+// ============ OTP CODES ============
+
+model OtpCode {
+  id          String   @id @default(uuid())
+  phoneNumber String
+  code        String
+  expiresAt   DateTime
+  verified    Boolean  @default(false)
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([phoneNumber, code])
+  @@index([expiresAt])
+  @@map("otp_codes")
 }
 
 enum KycStatus {
