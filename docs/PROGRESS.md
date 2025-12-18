@@ -12,7 +12,7 @@
 |-------|-------------|--------|----------|
 | P0 | Foundation & Planning | ✅ Complete | 100% |
 | P1 | Core Infrastructure | ⚪ Not Started | 0% |
-| P2 | Identity & Case Management | 🟡 In Progress | 30% |
+| P2 | Identity & Case Management | 🟡 In Progress | 60% |
 | P3 | Video & AI Layer | ⚪ Not Started | 0% |
 | P4 | Reporting & Signing | ⚪ Not Started | 0% |
 | P5 | MVP Launch | ⚪ Not Started | 0% |
@@ -119,13 +119,21 @@
 | JWT auth guards | ✅ | Role-based access control |
 
 ### Adjuster Portal
-| Task | Status |
-|------|--------|
-| Setup React project | ⚪ |
-| Adjuster registration | ⚪ |
-| Case queue dashboard | ⚪ |
-| Case detail view | ⚪ |
-| Scheduling UI | ⚪ |
+| Task | Status | Notes |
+|------|--------|-------|
+| Setup React project | ✅ | Vite 6 + React 18 + TypeScript |
+| shadcn/ui components | ✅ | button, card, input, badge, avatar, table, dialog, select, toast |
+| TanStack Query integration | ✅ | Hooks for claims API |
+| Zustand auth store | ✅ | Persistent auth state |
+| React Router setup | ✅ | Protected + public routes |
+| API client (axios) | ✅ | Token refresh, interceptors |
+| Dashboard page | ✅ | Stats, recent claims, sessions |
+| Claims list page | ✅ | Search, filters, status tabs |
+| Claim detail page | ✅ | Full claim info, timeline, docs |
+| Login page | ✅ | Form validation with Zod |
+| Error boundary | ✅ | Graceful error handling |
+| Adjuster registration | ⚪ | Backend auth required |
+| Scheduling UI | ⚪ | Video service integration |
 
 ---
 
@@ -201,6 +209,9 @@
 | 2025-12-18 | NestJS + Fastify adapter | 3x performance vs Express, keeps TypeScript |
 | 2025-12-18 | Project name: True Claim Insight | Professional, clear purpose |
 | 2025-12-18 | Latest stable versions | Node 22, NestJS 11, Prisma 6, Vite 6, PostgreSQL 16 |
+| 2025-12-18 | shadcn/ui for components | Accessible, customisable, TailwindCSS-based |
+| 2025-12-18 | TanStack Query for data fetching | Caching, stale-while-revalidate, devtools |
+| 2025-12-18 | Zustand for client state | Minimal, TypeScript-first, persistent storage |
 
 ---
 
@@ -228,8 +239,9 @@
 ### This Month
 - [ ] Secure pilot adjuster commitments
 - [x] Create first NestJS service (case-service)
-- [ ] Create first React app (adjuster-portal)
+- [x] Create first React app (adjuster-portal)
 - [ ] Begin Phase 1 infrastructure
+- [ ] Connect adjuster-portal to case-service API
 
 ---
 

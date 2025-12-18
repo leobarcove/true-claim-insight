@@ -3,7 +3,6 @@ import {
   Video,
   Clock,
   CheckCircle,
-  AlertTriangle,
   TrendingUp,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
@@ -11,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
-import { formatDate } from '@/lib/utils';
 
 // Mock data for dashboard
 const stats = [

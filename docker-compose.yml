@@ -3,7 +3,7 @@ name: true-claim-insight
 services:
   # ============ DATABASE ============
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.6-alpine
     container_name: tci-postgres
     environment:
       POSTGRES_USER: tci
@@ -34,19 +34,20 @@ services:
       retries: 5
 
   # ============ AWS LOCAL ============
-  localstack:
-    image: localstack/localstack:latest
-    container_name: tci-localstack
-    environment:
-      SERVICES: s3,secretsmanager
-      DEFAULT_REGION: ap-southeast-5
-      AWS_ACCESS_KEY_ID: localstack
-      AWS_SECRET_ACCESS_KEY: localstack
-    ports:
-      - "4566:4566"
-    volumes:
-      - localstack_data:/var/lib/localstack
-      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh
+  # Temporarily disabled due to Docker registry issues
+  # localstack:
+  #   image: localstack/localstack:latest
+  #   container_name: tci-localstack
+  #   environment:
+  #     SERVICES: s3,secretsmanager
+  #     DEFAULT_REGION: ap-southeast-5
+  #     AWS_ACCESS_KEY_ID: localstack
+  #     AWS_SECRET_ACCESS_KEY: localstack
+  #   ports:
+  #     - "4566:4566"
+  #   volumes:
+  #     - localstack_data:/var/lib/localstack
+  #     - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh
 
   # ============ MAIL (DEV) ============
   mailhog:
@@ -59,4 +60,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  localstack_data:
+  # localstack_data:

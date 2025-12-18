@@ -1,14 +1,12 @@
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
-  User,
   Phone,
   MapPin,
   Calendar,
   FileText,
   Video,
   Clock,
-  AlertTriangle,
   CheckCircle,
   Upload,
 } from 'lucide-react';
@@ -86,8 +84,8 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
 };
 
 export function ClaimDetailPage() {
-  const { id } = useParams();
-  const claim = mockClaimDetail; // In production, fetch by ID
+  const { id: _claimId } = useParams();
+  const claim = mockClaimDetail; // TODO: Use useClaim(_claimId) hook
 
   return (
     <div className="flex flex-col h-full">
