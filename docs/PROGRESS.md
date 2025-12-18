@@ -195,6 +195,9 @@
 | 2025-12-18 | AWS Malaysia | Data sovereignty, BNM compliance |
 | 2025-12-18 | Turborepo monorepo | Shared types, efficient builds |
 | 2025-12-18 | Prisma ORM | Type-safe, great migrations |
+| 2025-12-18 | NestJS + Fastify adapter | 3x performance vs Express, keeps TypeScript |
+| 2025-12-18 | Project name: True Claim Insight | Professional, clear purpose |
+| 2025-12-18 | Latest stable versions | Node 22, NestJS 11, Prisma 6, Vite 6, PostgreSQL 16 |
 
 ---
 

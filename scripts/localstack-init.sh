@@ -5,7 +5,7 @@
 echo "Initializing LocalStack..."
 
 # Create S3 buckets
-awslocal s3 mb s3://augadj-documents
-awslocal s3 mb s3://augadj-recordings
+awslocal s3 mb s3://tci-documents
+awslocal s3 mb s3://tci-recordings
 
 echo "LocalStack initialized successfully!"

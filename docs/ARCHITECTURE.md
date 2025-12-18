@@ -4,19 +4,19 @@
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| Language | TypeScript | 5.x |
-| Runtime | Node.js | 20 LTS |
-| Backend | NestJS | 10.x |
-| Frontend | React.js | 18.x |
-| Build Tool | Vite | 5.x |
-| Database | PostgreSQL | 15.x |
-| ORM | Prisma | 5.x |
-| Cache | Redis | 7.x |
+| Language | TypeScript | 5.8.x |
+| Runtime | Node.js | 22.x LTS |
+| Backend | NestJS + Fastify | 11.x + 5.x |
+| Frontend | React.js | 18.3.x |
+| Build Tool | Vite | 6.x |
+| Database | PostgreSQL | 16.x |
+| ORM | Prisma | 6.x |
+| Cache | Redis | 7.4.x |
 | Cloud | AWS Malaysia | ap-southeast-5 |
-| Container | Docker | 24.x |
-| Orchestration | Kubernetes (EKS) | 1.28+ |
-| Monorepo | Turborepo | 2.x |
-| Package Manager | pnpm | 8.x |
+| Container | Docker | 27.x |
+| Orchestration | Kubernetes (EKS) | 1.31+ |
+| Monorepo | Turborepo | 2.3.x |
+| Package Manager | pnpm | 9.x |
 
 ---
 
@@ -30,6 +30,44 @@
 | Security-by-Design | Encryption, audit trails, OAuth 2.0 |
 | Cloud-Native | Containerised, Kubernetes-orchestrated |
 | Multi-Tenant | Data isolation per firm/insurer |
+| Performance-Optimised | Fastify adapter, connection pooling, caching |
+
+---
+
+## Performance Optimisations
+
+### Fastify Adapter (3x faster than Express)
+
+```typescript
+// All NestJS services use Fastify adapter
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({ logger: true })
+);
+```
+
+### Optimisation Checklist
+
+| Optimisation | Implementation | Impact |
+|--------------|----------------|--------|
+| Fastify adapter | Replace Express | 3x throughput |
+| Redis caching | Cache frequent queries | 10x read speed |
+| Connection pooling | Prisma pool config | Reduced latency |
+| Response compression | @fastify/compress | 70% bandwidth |
+| Lazy module loading | forwardRef() | Faster startup |
+| Cluster mode | PM2 / Node cluster | Utilise all cores |
+| Class-validator | whitelist: true | Strip unknown fields |
+
+### Expected Performance
+
+| Metric | Target |
+|--------|--------|
+| API response time (p95) | < 100ms |
+| Throughput per service | 30,000-50,000 req/s |
+| Memory per service | < 150MB |
+| Cold start time | < 3s |
 
 ---
 

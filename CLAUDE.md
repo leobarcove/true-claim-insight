@@ -1,4 +1,4 @@
-# Augmented Adjusting Platform
+# True Claim Insight
 
 Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's insurance sector.
 
@@ -18,27 +18,27 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 ## Tech Stack Rules
 
 ### Language & Runtime
-- **TypeScript 5.x** everywhere (frontend + backend)
-- **Node.js 20 LTS** runtime
-- **pnpm 8.x** package manager
+- **TypeScript 5.8.x** everywhere (frontend + backend)
+- **Node.js 22.x LTS** runtime
+- **pnpm 9.x** package manager
 
 ### Frontend
-- **React.js 18.x** with **Vite 5.x**
+- **React.js 18.3.x** with **Vite 6.x**
 - **shadcn/ui** + **Tailwind CSS** for styling
 - **Zustand** for state, **TanStack Query** for server state
 - **React Hook Form** + **Zod** for forms/validation
 - Claimant app is **PWA** (not native mobile)
 
 ### Backend
-- **NestJS 10.x** for all microservices
-- **Prisma 5.x** ORM with **PostgreSQL 15.x**
-- **Redis 7.x** for caching
+- **NestJS 11.x** with **Fastify 5.x** adapter (3x faster than Express)
+- **Prisma 6.x** ORM with **PostgreSQL 16.x**
+- **Redis 7.4.x** for caching
 - REST APIs with OpenAPI/Swagger docs
 
 ### Infrastructure
 - **AWS Malaysia** (ap-southeast-5) for data sovereignty
-- **Docker** + **Kubernetes (EKS)** for deployment
-- **Turborepo 2.x** monorepo structure
+- **Docker 27.x** + **Kubernetes (EKS) 1.31+** for deployment
+- **Turborepo 2.3.x** monorepo structure
 
 ### Third-Party Integrations
 | Provider | Purpose |
@@ -59,7 +59,7 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 
 ### Project Structure
 ```
-augmented-adjusting/
+true-claim-insight/
 ├── apps/
 │   ├── api-gateway/          # NestJS - routing, auth
 │   ├── case-service/         # NestJS - claims lifecycle
@@ -71,9 +71,9 @@ augmented-adjusting/
 │   ├── claimant-web/         # React PWA - claimant app
 │   └── insurer-dashboard/    # React - insurer portal
 ├── packages/
-│   ├── shared-types/         # TypeScript interfaces
-│   ├── ui-components/        # Shared React components
-│   └── prisma-client/        # Prisma schema + client
+│   ├── shared-types/         # TypeScript interfaces (@tci/shared-types)
+│   ├── ui-components/        # Shared React components (@tci/ui-components)
+│   └── prisma-client/        # Prisma schema + client (@tci/prisma-client)
 ├── infrastructure/
 │   ├── terraform/
 │   └── kubernetes/
@@ -95,6 +95,7 @@ augmented-adjusting/
 - DTOs with class-validator decorators
 - Services contain business logic
 - Controllers handle HTTP only
+- **Use Fastify adapter** for all services (not Express)
 
 ### React Conventions
 - Functional components with hooks
@@ -119,14 +120,15 @@ augmented-adjusting/
 ## Development Commands
 
 ```bash
-# Install dependencies
+# One-liner setup
+pnpm setup
+
+# Or manually:
 pnpm install
-
-# Start local infrastructure
-docker-compose up -d postgres redis localstack
-
-# Run database migrations
+cp .env.example .env
+docker-compose up -d
 pnpm prisma:migrate
+pnpm prisma:generate
 
 # Start all services in dev mode
 pnpm dev

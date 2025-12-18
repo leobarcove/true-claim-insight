@@ -3,26 +3,26 @@ version: '3.8'
 services:
   # ============ DATABASE ============
   postgres:
-    image: postgres:15-alpine
-    container_name: augadj-postgres
+    image: postgres:16-alpine
+    container_name: tci-postgres
     environment:
-      POSTGRES_USER: augadj
+      POSTGRES_USER: tci
       POSTGRES_PASSWORD: localdev
-      POSTGRES_DB: augmented_adjusting
+      POSTGRES_DB: true_claim_insight
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U augadj"]
+      test: ["CMD-SHELL", "pg_isready -U tci"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # ============ CACHE ============
   redis:
-    image: redis:7-alpine
-    container_name: augadj-redis
+    image: redis:7.4-alpine
+    container_name: tci-redis
     ports:
       - "6379:6379"
     volumes:
@@ -36,7 +36,7 @@ services:
   # ============ AWS LOCAL ============
   localstack:
     image: localstack/localstack:latest
-    container_name: augadj-localstack
+    container_name: tci-localstack
     environment:
       SERVICES: s3,secretsmanager
       DEFAULT_REGION: ap-southeast-5
@@ -51,7 +51,7 @@ services:
   # ============ MAIL (DEV) ============
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: augadj-mailhog
+    container_name: tci-mailhog
     ports:
       - "1025:1025"  # SMTP
       - "8025:8025"  # Web UI

@@ -1,10 +1,10 @@
-# Augmented Adjusting
+# True Claim Insight
 
 Remote claims assessment platform for insurance loss adjusters in Malaysia.
 
 ## Overview
 
-Augmented Adjusting digitises face-to-face interactions between loss adjusters and claimants through real-time video, AI-powered fraud detection, and streamlined documentation.
+True Claim Insight digitises face-to-face interactions between loss adjusters and claimants through real-time video, AI-powered fraud detection, and streamlined documentation.
 
 **Key Features:**
 - Remote video assessments (no travel required)
@@ -17,11 +17,12 @@ Augmented Adjusting digitises face-to-face interactions between loss adjusters a
 
 | Layer | Technology |
 |-------|------------|
-| Language | TypeScript 5.x |
-| Backend | NestJS 10.x |
-| Frontend | React 18.x + Vite |
-| Database | PostgreSQL 15.x |
-| Cache | Redis 7.x |
+| Language | TypeScript 5.8.x |
+| Backend | NestJS 11.x + Fastify 5.x |
+| Frontend | React 18.3.x + Vite 6.x |
+| Database | PostgreSQL 16.x |
+| ORM | Prisma 6.x |
+| Cache | Redis 7.4.x |
 | Cloud | AWS Malaysia |
 | Container | Docker + Kubernetes |
 
@@ -29,28 +30,26 @@ Augmented Adjusting digitises face-to-face interactions between loss adjusters a
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 8+
-- Docker 24+
+- Node.js 22+
+- pnpm 9+
+- Docker 27+
 
 ### Setup
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/augmented-adjusting.git
-cd augmented-adjusting
+git clone https://github.com/your-org/true-claim-insight.git
+cd true-claim-insight
 
-# Install dependencies
+# One-liner setup (installs deps, starts Docker, runs migrations)
+pnpm setup
+
+# Or manually:
 pnpm install
-
-# Copy environment file
-cp .env.example .env.development
-
-# Start infrastructure
-docker-compose up -d postgres redis localstack
-
-# Run database migrations
+cp .env.example .env
+docker-compose up -d
 pnpm prisma:migrate
+pnpm prisma:generate
 
 # Start development servers
 pnpm dev
@@ -64,11 +63,13 @@ pnpm dev
 | API Docs | http://localhost:3000/api/docs |
 | Adjuster Portal | http://localhost:4000 |
 | Claimant Web | http://localhost:4001 |
+| Prisma Studio | http://localhost:5555 |
+| MailHog (email) | http://localhost:8025 |
 
 ## Project Structure
 
 ```
-augmented-adjusting/
+true-claim-insight/
 ├── apps/                    # Applications
 │   ├── api-gateway/         # API routing & auth
 │   ├── case-service/        # Claims management
@@ -95,12 +96,18 @@ augmented-adjusting/
 ## Scripts
 
 ```bash
+pnpm setup        # One-liner setup
 pnpm dev          # Start all services
 pnpm build        # Build all packages
 pnpm test         # Run tests
 pnpm lint         # Lint code
+pnpm format       # Format code
+pnpm typecheck    # TypeScript check
 pnpm prisma:migrate  # Run DB migrations
 pnpm prisma:studio   # Open Prisma Studio
+pnpm docker:up       # Start Docker services
+pnpm docker:down     # Stop Docker services
+pnpm docker:reset    # Reset Docker volumes
 ```
 
 ## Licence
