@@ -111,6 +111,65 @@ true-claim-insight/
 4. **Data sovereignty** - All data must stay in Malaysia region
 5. **Multi-tenant isolation** - Adjusting firms and insurers are separate tenants
 
+## Multi-Tenant Architecture
+
+### Tenant Model
+```
+Tenant (Organisation)
+├── type: ADJUSTING_FIRM | INSURER
+├── subscriptionTier: BASIC | PROFESSIONAL | ENTERPRISE
+└── settings: JSON (tenant-specific config)
+
+Adjuster (User) → belongs to Tenant
+├── Each tenant has multiple adjusters (users)
+└── Users within same tenant share access to organisation data
+```
+
+### Tenant Isolation Implementation
+
+**Location:** `apps/case-service/src/tenant/`
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| TenantGuard | `common/guards/tenant.guard.ts` | Validates & injects tenant context |
+| TenantService | `tenant/tenant.service.ts` | Tenant filtering utilities |
+| @TenantIsolation | `common/decorators/tenant.decorator.ts` | Controller/route decoration |
+| @Tenant | `common/decorators/tenant.decorator.ts` | Extract tenant context in handlers |
+
+### Tenant Scopes
+- **STRICT**: All queries filtered by tenantId (default for data endpoints)
+- **FLEXIBLE**: Tenant filter can be overridden by admins
+- **NONE**: No tenant filtering (public/health endpoints)
+
+### Usage Pattern
+```typescript
+// Controller with tenant isolation
+@Controller('claims')
+@UseGuards(TenantGuard)
+@TenantIsolation(TenantScope.STRICT)
+export class ClaimsController {
+  @Get()
+  async findAll(@Tenant() tenantContext: TenantContext) {
+    return this.service.findAll(query, tenantContext);
+  }
+}
+
+// Service with tenant validation
+async findOne(id: string, tenantContext?: TenantContext) {
+  const claim = await this.prisma.claim.findUnique({ where: { id } });
+  if (tenantContext) {
+    await this.tenantService.validateClaimAccess(id, tenantContext);
+  }
+  return claim;
+}
+```
+
+### Key Rules
+- **Never** access data without tenant context in protected routes
+- **Always** validate resource ownership before returning data
+- Adjusters can only see claims assigned to their organisation
+- Cross-tenant access is blocked with `ForbiddenException`
+
 ## Documentation References
 
 - **Business requirements:** `docs/REQUIREMENTS.md`

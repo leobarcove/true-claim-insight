@@ -1,20 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
+import { TenantService } from '../tenant/tenant.service';
+import { TenantContext } from '../common/guards/tenant.guard';
 
 @Injectable()
 export class AdjustersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService,
+  ) {}
 
   /**
-   * Get adjuster's case queue
+   * Get adjuster's case queue with tenant validation
    */
-  async getQueue(adjusterId: string, status?: string) {
+  async getQueue(adjusterId: string, status?: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
     });
 
     if (!adjuster) {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
+    }
+
+    // Validate tenant access - ensure adjuster belongs to user's organisation
+    if (tenantContext) {
+      this.tenantService.validateTenantAccess(
+        adjuster.tenantId,
+        tenantContext,
+        'Adjuster',
+      );
     }
 
     const where: any = { adjusterId };
@@ -66,15 +80,24 @@ export class AdjustersService {
   }
 
   /**
-   * Get adjuster statistics
+   * Get adjuster statistics with tenant validation
    */
-  async getStats(adjusterId: string) {
+  async getStats(adjusterId: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
     });
 
     if (!adjuster) {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
+    }
+
+    // Validate tenant access
+    if (tenantContext) {
+      this.tenantService.validateTenantAccess(
+        adjuster.tenantId,
+        tenantContext,
+        'Adjuster',
+      );
     }
 
     const now = new Date();
@@ -150,15 +173,24 @@ export class AdjustersService {
   }
 
   /**
-   * Get adjuster workload for smart assignment
+   * Get adjuster workload for smart assignment with tenant validation
    */
-  async getWorkload(adjusterId: string) {
+  async getWorkload(adjusterId: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
     });
 
     if (!adjuster) {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
+    }
+
+    // Validate tenant access
+    if (tenantContext) {
+      this.tenantService.validateTenantAccess(
+        adjuster.tenantId,
+        tenantContext,
+        'Adjuster',
+      );
     }
 
     const activeClaims = await this.prisma.claim.count({

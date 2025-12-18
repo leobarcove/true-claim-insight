@@ -61,31 +61,51 @@ export class ClaimsService {
 
   /**
    * Find all claims with pagination and filters
+   * Now with mandatory tenant isolation
    */
-  async findAll(query: ClaimQueryDto) {
+  async findAll(query: ClaimQueryDto, tenantContext?: TenantContext) {
     const {
       page = 1,
       limit = 20,
       status,
       claimType,
       adjusterId,
-      tenantId,
       search,
     } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    // Build base where clause
+    let where: any = {};
 
     if (status) where.status = status;
     if (claimType) where.claimType = claimType;
     if (adjusterId) where.adjusterId = adjusterId;
-    if (tenantId) where.tenantId = tenantId;
+
+    // Apply tenant isolation filter
+    if (tenantContext) {
+      where = this.tenantService.buildClaimTenantFilter(tenantContext, where);
+    }
+
+    // Apply search filter (must be after tenant filter to combine properly)
     if (search) {
-      where.OR = [
+      const searchConditions = [
         { claimNumber: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
         { claimant: { fullName: { contains: search, mode: 'insensitive' } } },
       ];
+
+      // Combine search with existing filters
+      if (where.OR) {
+        // If tenant filter already has OR, wrap everything in AND
+        where = {
+          AND: [
+            { OR: where.OR },
+            { OR: searchConditions },
+          ],
+        };
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const [claims, total] = await Promise.all([
@@ -133,14 +153,18 @@ export class ClaimsService {
   }
 
   /**
-   * Find a single claim by ID
+   * Find a single claim by ID with tenant validation
    */
-  async findOne(id: string) {
+  async findOne(id: string, tenantContext?: TenantContext) {
     const claim = await this.prisma.claim.findUnique({
       where: { id },
       include: {
         claimant: true,
-        adjuster: true,
+        adjuster: {
+          include: {
+            tenant: { select: { id: true, name: true } },
+          },
+        },
         documents: {
           orderBy: { createdAt: 'desc' },
         },
@@ -160,14 +184,19 @@ export class ClaimsService {
       throw new NotFoundException(`Claim with ID ${id} not found`);
     }
 
+    // Validate tenant access if context provided
+    if (tenantContext) {
+      await this.tenantService.validateClaimAccess(id, tenantContext);
+    }
+
     return claim;
   }
 
   /**
-   * Update a claim
+   * Update a claim with tenant validation
    */
-  async update(id: string, updateClaimDto: UpdateClaimDto) {
-    await this.findOne(id); // Verify claim exists
+  async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
+    await this.findOne(id, tenantContext); // Verify claim exists and tenant access
 
     const claim = await this.prisma.claim.update({
       where: { id },
@@ -204,10 +233,10 @@ export class ClaimsService {
   }
 
   /**
-   * Update claim status
+   * Update claim status with tenant validation
    */
-  async updateStatus(id: string, status: string) {
-    const existingClaim = await this.findOne(id);
+  async updateStatus(id: string, status: string, tenantContext?: TenantContext) {
+    const existingClaim = await this.findOne(id, tenantContext);
 
     // Validate status transition
     this.validateStatusTransition(existingClaim.status, status);
@@ -231,10 +260,11 @@ export class ClaimsService {
   }
 
   /**
-   * Assign an adjuster to a claim
+   * Assign an adjuster to a claim with tenant validation
+   * Ensures adjuster belongs to the same tenant as the user
    */
-  async assignAdjuster(claimId: string, adjusterId: string) {
-    const claim = await this.findOne(claimId);
+  async assignAdjuster(claimId: string, adjusterId: string, tenantContext?: TenantContext) {
+    const claim = await this.findOne(claimId, tenantContext);
 
     // Verify adjuster exists
     const adjuster = await this.prisma.adjuster.findUnique({
@@ -243,6 +273,15 @@ export class ClaimsService {
 
     if (!adjuster) {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
+    }
+
+    // Validate adjuster belongs to the same tenant
+    if (tenantContext) {
+      this.tenantService.validateTenantAccess(
+        adjuster.tenantId,
+        tenantContext,
+        'Adjuster',
+      );
     }
 
     const updatedClaim = await this.prisma.claim.update({
@@ -274,10 +313,10 @@ export class ClaimsService {
   }
 
   /**
-   * Soft delete a claim
+   * Soft delete a claim with tenant validation
    */
-  async remove(id: string) {
-    const claim = await this.findOne(id);
+  async remove(id: string, tenantContext?: TenantContext) {
+    const claim = await this.findOne(id, tenantContext);
 
     await this.prisma.claim.update({
       where: { id },
@@ -295,10 +334,10 @@ export class ClaimsService {
   }
 
   /**
-   * Get claim timeline/audit trail
+   * Get claim timeline/audit trail with tenant validation
    */
-  async getTimeline(id: string) {
-    await this.findOne(id);
+  async getTimeline(id: string, tenantContext?: TenantContext) {
+    await this.findOne(id, tenantContext);
 
     const auditTrail = await this.prisma.auditTrail.findMany({
       where: { entityId: id, entityType: 'CLAIM' },
@@ -309,10 +348,10 @@ export class ClaimsService {
   }
 
   /**
-   * Add a note to a claim
+   * Add a note to a claim with tenant validation
    */
-  async addNote(claimId: string, content: string, authorId: string) {
-    await this.findOne(claimId);
+  async addNote(claimId: string, content: string, authorId: string, tenantContext?: TenantContext) {
+    await this.findOne(claimId, tenantContext);
 
     const note = await this.prisma.claimNote.create({
       data: {

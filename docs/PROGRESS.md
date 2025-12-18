@@ -122,6 +122,9 @@
 | Health check endpoints | ✅ | Liveness + readiness probes |
 | Swagger documentation | ✅ | Auto-generated OpenAPI |
 | JWT auth guards | ✅ | Role-based access control |
+| **Multi-tenant isolation** | ✅ | TenantGuard + TenantService |
+| Tenant-scoped queries | ✅ | All CRUD filtered by tenantId |
+| Cross-tenant prevention | ✅ | Validates resource ownership |
 
 ### Adjuster Portal
 | Task | Status | Notes |
