@@ -1,26 +1,19 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Phone,
   MapPin,
   Calendar,
-  FileText,
   Video,
-  Clock,
-  CheckCircle,
-  Upload,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { formatDate, formatDateTime, getInitials } from '@/lib/utils';
+import { formatDate, getInitials } from '@/lib/utils';
 import { useClaim } from '@/hooks/use-claims';
 import { useCreateVideoRoom } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
-
-// Mock claim detail
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' }> = {
   SUBMITTED: { label: 'Submitted', variant: 'secondary' },
@@ -61,7 +54,9 @@ export function ClaimDetailPage() {
       </div>
     );
   }
+
   return (
+    <div className="flex flex-col h-full">
       <Header
         title={claim.claimNumber}
         description={`${claim.claimantId} • ${claim.claimType.replace('_', ' ')}`}
@@ -123,35 +118,10 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Vehicle Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Vehicle Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-sm font-medium">Make & Model</p>
-                    <p className="text-sm text-muted-foreground">
-                      {claim.vehicleMake} {claim.vehicleModel} ({claim.vehicleYear})
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Plate Number</p>
-                    <p className="text-sm text-muted-foreground">{claim.vehiclePlateNumber}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Documents */}
+            {/* Documents placeholder */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Documents</CardTitle>
-                <Button variant="outline" size="sm">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
-                </Button>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
@@ -160,13 +130,10 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Notes */}
+            {/* Notes placeholder */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Notes</CardTitle>
-                <Button variant="outline" size="sm">
-                  Add Note
-                </Button>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-center p-4 text-muted-foreground">
@@ -189,9 +156,8 @@ export function ClaimDetailPage() {
                     <AvatarFallback>{getInitials(claim.claimantId)}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{claim.claimantId}</p>
-                    <Badge variant="success" className="text-xs">
-                      <CheckCircle className="h-3 w-3 mr-1" />
+                    <p className="font-medium text-sm">ID: {claim.claimantId}</p>
+                    <Badge variant="success" className="text-[10px] mt-1">
                       eKYC Verified
                     </Badge>
                   </div>
@@ -199,7 +165,7 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Video Session Placeholder */}
+            {/* Video Session button */}
             <Card>
               <CardHeader>
                 <CardTitle>Video Session</CardTitle>
@@ -214,14 +180,14 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Timeline */}
+            {/* Timeline Placeholder */}
             <Card>
               <CardHeader>
                 <CardTitle>Timeline</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center p-4 text-muted-foreground">
-                  <p className="text-sm">Timeline records will appear as the claim progresses.</p>
+                <div className="flex items-center justify-center p-4 text-muted-foreground text-center">
+                  <p className="text-xs">Timeline records will appear as the claim progresses.</p>
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
 
 export const videoKeys = {
