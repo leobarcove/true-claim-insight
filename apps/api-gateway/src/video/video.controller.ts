@@ -1,0 +1,91 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { VideoService } from './video.service';
+import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/video.dto';
+
+@ApiTags('video')
+@Controller('video')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('access-token')
+export class VideoController {
+  constructor(private readonly videoService: VideoService) {}
+
+  @Post('rooms')
+  @Roles('ADJUSTER', 'ADMIN')
+  @ApiOperation({ summary: 'Create a video room (Adjuster only)' })
+  async createRoom(@Body() dto: CreateRoomDto) {
+    try {
+      return await this.videoService.createRoom(dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('rooms/:id')
+  @ApiOperation({ summary: 'Get room details' })
+  async getRoom(@Param('id') id: string) {
+    try {
+      return await this.videoService.getRoom(id);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('rooms/:id/join')
+  @ApiOperation({ summary: 'Join a video room and get Daily.co token' })
+  async joinRoom(@Param('id') id: string, @Body() dto: JoinRoomDto) {
+    try {
+      return await this.videoService.joinRoom(id, dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('rooms/:id/end')
+  @Roles('ADJUSTER', 'ADMIN')
+  @ApiOperation({ summary: 'End a video session (Adjuster only)' })
+  async endRoom(@Param('id') id: string, @Body() dto: EndRoomDto) {
+    try {
+      return await this.videoService.endRoom(id, dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('claims/:claimId/sessions')
+  @ApiOperation({ summary: 'Get all video sessions for a claim' })
+  async getSessions(@Param('claimId') claimId: string) {
+    try {
+      return await this.videoService.getSessionsForClaim(claimId);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('status')
+  @ApiOperation({ summary: 'Check video provider status' })
+  async getStatus() {
+    try {
+      return await this.videoService.getConfigStatus();
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+}

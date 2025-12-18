@@ -44,7 +44,7 @@
 | Provider | Documentation | Credentials | Cost Estimate |
 |----------|--------------|-------------|---------------|
 | Innov8tif/CTOS | ⚪ | ⚪ | ⚪ |
-| Tencent TRTC | ⚪ | ⚪ | ⚪ |
+| Daily.co | ⚪ | ⚪ | ⚪ |
 | Clearspeed | ⚪ | ⚪ | ⚪ |
 | Hive AI | ⚪ | ⚪ | ⚪ |
 | SigningCloud | ⚪ | ⚪ | ⚪ |
@@ -153,14 +153,15 @@
 ## Phase 3: Video & AI Layer
 
 ### Video Service
-| Task | Status |
-|------|--------|
-| Create NestJS service | ⚪ |
-| UserSig generation | ⚪ |
-| TRTC Web SDK (Adjuster) | ⚪ |
-| TRTC Web SDK (Claimant) | ⚪ |
-| Room management | ⚪ |
-| Recording capture | ⚪ |
+| Task | Status | Notes |
+|------|--------|-------|
+| Create NestJS service | ✅ | Port 3002, Fastify + Swagger (Daily.co) |
+| UserSig generation | ✅ | HMAC-SHA256 with zlib compression |
+| Room management | ✅ | Create, join, end, cancel sessions |
+| Session tracking | ✅ | Linked to claims via Prisma |
+| Daily.co Web SDK (Adjuster) | ✅ | Integrated into Portal |
+| Daily.co Web SDK (Claimant) | ✅ | Integrated into PWA |
+| Recording capture | ⚪ | Requires TRTC credentials |
 
 ### Risk Engine
 | Task | Status |

@@ -1,7 +1,3 @@
-// ============================================
-// True Claim Insight - Prisma Schema
-// ============================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,8 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ============ USERS ============
 
 model User {
   id            String    @id @default(uuid())
@@ -25,22 +19,12 @@ model User {
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([email])
   @@map("users")
 }
-
-enum UserRole {
-  ADJUSTER
-  FIRM_ADMIN
-  CLAIMANT
-  INSURER_STAFF
-}
-
-// ============ TENANTS ============
 
 model Tenant {
   id               String           @id @default(uuid())
@@ -50,26 +34,12 @@ model Tenant {
   settings         Json             @default("{}")
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
-
-  users     User[]
-  adjusters Adjuster[]
-  claims    Claim[]    @relation("InsurerClaims")
+  adjusters        Adjuster[]
+  claims           Claim[]          @relation("InsurerClaims")
+  users            User[]
 
   @@map("tenants")
 }
-
-enum TenantType {
-  ADJUSTING_FIRM
-  INSURER
-}
-
-enum SubscriptionTier {
-  BASIC
-  PROFESSIONAL
-  ENTERPRISE
-}
-
-// ============ ADJUSTERS ============
 
 model Adjuster {
   id                String         @id @default(uuid())
@@ -86,43 +56,31 @@ model Adjuster {
   lastLoginAt       DateTime?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
-
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
-  claims Claim[]
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  claims            Claim[]
 
   @@index([tenantId])
   @@map("adjusters")
 }
 
-enum AdjusterStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-// ============ CLAIMANTS ============
-
 model Claimant {
   id            String    @id @default(uuid())
-  phoneNumber   String    @unique
   nricHash      String?   @unique
   nricEncrypted Bytes?
   fullName      String?
   dateOfBirth   DateTime?
+  phoneNumber   String    @unique
   email         String?
   kycStatus     KycStatus @default(PENDING)
   kycVerifiedAt DateTime?
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-
-  claims Claim[]
+  claims        Claim[]
 
   @@index([phoneNumber])
   @@map("claimants")
 }
-
-// ============ OTP CODES ============
 
 model OtpCode {
   id          String   @id @default(uuid())
@@ -137,15 +95,6 @@ model OtpCode {
   @@index([expiresAt])
   @@map("otp_codes")
 }
-
-enum KycStatus {
-  PENDING
-  VERIFIED
-  FAILED
-  EXPIRED
-}
-
-// ============ CLAIMS ============
 
 model Claim {
   id                      String      @id @default(uuid())
@@ -166,19 +115,138 @@ model Claim {
   scheduledAssessmentTime DateTime?
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
-
-  claimant      Claimant   @relation(fields: [claimantId], references: [id])
-  adjuster      Adjuster?  @relation(fields: [adjusterId], references: [id])
-  insurerTenant Tenant?    @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
-  sessions      Session[]
-  documents     Document[]
-  notes         ClaimNote[]
+  notes                   ClaimNote[]
+  adjuster                Adjuster?   @relation(fields: [adjusterId], references: [id])
+  claimant                Claimant    @relation(fields: [claimantId], references: [id])
+  insurerTenant           Tenant?     @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
+  documents               Document[]
+  sessions                Session[]
 
   @@index([claimantId])
   @@index([adjusterId])
   @@index([status])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
+}
+
+model ClaimNote {
+  id         String    @id @default(uuid())
+  claimId    String
+  authorId   String
+  authorType ActorType
+  content    String
+  isPrivate  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  claim      Claim     @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("claim_notes")
+}
+
+model Session {
+  id              String           @id @default(uuid())
+  claimId         String
+  roomId          BigInt
+  status          SessionStatus    @default(SCHEDULED)
+  scheduledTime   DateTime?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  recordingUrl    String?
+  screenshots     Json             @default("[]")
+  createdAt       DateTime         @default(now())
+  roomUrl         String?
+  riskAssessments RiskAssessment[]
+  claim           Claim            @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("sessions")
+}
+
+model RiskAssessment {
+  id             String         @id @default(uuid())
+  sessionId      String
+  assessmentType AssessmentType
+  provider       String
+  questionId     String?
+  questionText   String?
+  riskScore      RiskScore?
+  confidence     Decimal?       @db.Decimal(5, 4)
+  rawResponse    Json?
+  contextData    Json?
+  createdAt      DateTime       @default(now())
+  session        Session        @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("risk_assessments")
+}
+
+model Document {
+  id           String       @id @default(uuid())
+  claimId      String
+  type         DocumentType
+  filename     String
+  storageUrl   String
+  fileSize     Int?
+  mimeType     String?
+  metadata     Json         @default("{}")
+  signedAt     DateTime?
+  documentHash String?
+  createdAt    DateTime     @default(now())
+  claim        Claim        @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("documents")
+}
+
+model AuditTrail {
+  id         String     @id @default(uuid())
+  entityType String
+  entityId   String
+  action     String
+  actorId    String?
+  actorType  ActorType?
+  ipAddress  String?
+  userAgent  String?
+  oldValues  Json?
+  newValues  Json?
+  metadata   Json?
+  createdAt  DateTime   @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_trail")
+}
+
+enum UserRole {
+  ADJUSTER
+  FIRM_ADMIN
+  CLAIMANT
+  INSURER_STAFF
+}
+
+enum TenantType {
+  ADJUSTING_FIRM
+  INSURER
+}
+
+enum SubscriptionTier {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum AdjusterStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  EXPIRED
 }
 
 enum ClaimType {
@@ -211,45 +279,6 @@ enum Priority {
   URGENT
 }
 
-// ============ CLAIM NOTES ============
-
-model ClaimNote {
-  id        String   @id @default(uuid())
-  claimId   String
-  authorId  String
-  authorType ActorType
-  content   String
-  isPrivate Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  claim Claim @relation(fields: [claimId], references: [id])
-
-  @@index([claimId])
-  @@map("claim_notes")
-}
-
-// ============ VIDEO SESSIONS ============
-
-model Session {
-  id              String        @id @default(uuid())
-  claimId         String
-  roomId          BigInt
-  status          SessionStatus @default(SCHEDULED)
-  scheduledTime   DateTime?
-  startedAt       DateTime?
-  endedAt         DateTime?
-  durationSeconds Int?
-  recordingUrl    String?
-  screenshots     Json          @default("[]")
-  createdAt       DateTime      @default(now())
-
-  claim           Claim            @relation(fields: [claimId], references: [id])
-  riskAssessments RiskAssessment[]
-
-  @@index([claimId])
-  @@map("sessions")
-}
-
 enum SessionStatus {
   SCHEDULED
   WAITING
@@ -257,27 +286,6 @@ enum SessionStatus {
   COMPLETED
   CANCELLED
   FAILED
-}
-
-// ============ RISK ASSESSMENTS ============
-
-model RiskAssessment {
-  id             String         @id @default(uuid())
-  sessionId      String
-  assessmentType AssessmentType
-  provider       String
-  questionId     String?
-  questionText   String?
-  riskScore      RiskScore?
-  confidence     Decimal?       @db.Decimal(5, 4)
-  rawResponse    Json?
-  contextData    Json?
-  createdAt      DateTime       @default(now())
-
-  session Session @relation(fields: [sessionId], references: [id])
-
-  @@index([sessionId])
-  @@map("risk_assessments")
 }
 
 enum AssessmentType {
@@ -293,54 +301,12 @@ enum RiskScore {
   HIGH
 }
 
-// ============ DOCUMENTS ============
-
-model Document {
-  id           String       @id @default(uuid())
-  claimId      String
-  type         DocumentType
-  filename     String
-  storageUrl   String
-  fileSize     Int?
-  mimeType     String?
-  metadata     Json         @default("{}")
-  signedAt     DateTime?
-  documentHash String?
-  createdAt    DateTime     @default(now())
-
-  claim Claim @relation(fields: [claimId], references: [id])
-
-  @@index([claimId])
-  @@map("documents")
-}
-
 enum DocumentType {
   DAMAGE_PHOTO
   POLICE_REPORT
   DRIVING_LICENCE
   ASSESSMENT_REPORT
   SIGNED_STATEMENT
-}
-
-// ============ AUDIT TRAIL ============
-
-model AuditTrail {
-  id         String     @id @default(uuid())
-  entityType String
-  entityId   String
-  action     String
-  actorId    String?
-  actorType  ActorType?
-  ipAddress  String?
-  userAgent  String?
-  oldValues  Json?
-  newValues  Json?
-  metadata   Json?
-  createdAt  DateTime   @default(now())
-
-  @@index([entityType, entityId])
-  @@index([createdAt(sort: Desc)])
-  @@map("audit_trail")
 }
 
 enum ActorType {

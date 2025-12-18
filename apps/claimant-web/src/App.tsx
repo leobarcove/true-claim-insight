@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { WelcomePage } from '@/pages/welcome';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
+import { ClaimantVideoCallPage } from '@/pages/video/call';
 import { useAuthStore } from '@/stores/auth-store';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,10 +56,17 @@ function App() {
 
           {/* Protected routes */}
           <Route
-            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video/:sessionId"
+            element={
+              <ProtectedRoute>
+                <ClaimantVideoCallPage />
               </ProtectedRoute>
             }
           />

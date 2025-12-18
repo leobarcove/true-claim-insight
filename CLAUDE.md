@@ -43,7 +43,7 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 ### Third-Party Integrations
 | Provider | Purpose |
 |----------|---------|
-| Tencent TRTC | Video calls |
+| Daily.co | Video calls |
 | Innov8tif/CTOS | eKYC (OCR, Liveness) |
 | Clearspeed | Voice risk analysis |
 | Hive AI | Deepfake detection |
@@ -63,7 +63,7 @@ true-claim-insight/
 ├── apps/
 │   ├── api-gateway/          # NestJS - routing, auth
 │   ├── case-service/         # NestJS - claims lifecycle
-│   ├── video-service/        # NestJS - TRTC rooms
+│   ├── video-service/        # NestJS - Daily.co rooms
 │   ├── identity-service/     # NestJS - eKYC
 │   ├── risk-engine/          # NestJS - AI scoring
 │   ├── document-service/     # NestJS - reports, signing

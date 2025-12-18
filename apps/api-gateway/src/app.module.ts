@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { VideoModule } from './video/video.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -46,6 +47,7 @@ import configuration from './config/configuration';
     // Feature modules
     AuthModule,
     UsersModule,
+    VideoModule,
     HealthModule,
   ],
   providers: [

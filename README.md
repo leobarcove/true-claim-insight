@@ -81,9 +81,14 @@ pnpm dev
 
 | Application | URL | Description |
 |-------------|-----|-------------|
-| **Adjuster Portal** | http://localhost:4000 | React web app for loss adjusters |
-| **Case Service API** | http://localhost:3001 | NestJS backend API |
-| **API Docs** | http://localhost:3001/api/docs | Swagger/OpenAPI documentation |
+| **API Gateway** | http://localhost:3000 | Authentication, routing |
+| **API Gateway Docs** | http://localhost:3000/docs | Swagger for Auth/Users |
+| **Case Service** | http://localhost:3001 | Claims management |
+| **Case Service Docs** | http://localhost:3001/api/docs | Swagger for Claims |
+| **Video Service** | http://localhost:3002 | Video room management (TRTC) |
+| **Video Service Docs** | http://localhost:3002/docs | Swagger for Video |
+| **Adjuster Portal** | http://localhost:4000 | React web app for adjusters |
+| **Claimant PWA** | http://localhost:4001 | React PWA for claimants |
 | **MailHog** | http://localhost:8025 | Email testing UI |
 | **Prisma Studio** | Run `pnpm prisma:studio` | Database GUI |
 
@@ -91,12 +96,19 @@ pnpm dev
 
 ## Login Credentials (Development)
 
-Currently using mock authentication. Any valid email + password (minimum 8 characters) will work:
+### Adjuster Portal
 
 | Field | Value |
 |-------|-------|
-| **Email** | `adjuster@example.com` |
-| **Password** | `password123` |
+| **Email** | `admin@demo.com` |
+| **Password** | `DemoPass123!` |
+
+### Claimant PWA (Phone OTP)
+
+1. Enter any Malaysian phone number (e.g., `123456789`)
+2. Check the terminal for the OTP code (logged to console)
+3. Enter the 6-digit code to login
+
 
 ---
 

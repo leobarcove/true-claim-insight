@@ -10,6 +10,7 @@ import { RegisterPage } from '@/pages/register';
 import { DashboardPage } from '@/pages/dashboard';
 import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
+import { VideoCallPage } from '@/pages/video/call';
 import { useAuthStore } from '@/stores/auth-store';
 import { env } from '@/lib/env';
 
@@ -77,6 +78,7 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/claims" element={<ClaimsListPage />} />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
+              <Route path="/video/:sessionId" element={<VideoCallPage />} />
               <Route path="/sessions" element={<ComingSoon title="Video Sessions" />} />
               <Route path="/schedule" element={<ComingSoon title="Schedule" />} />
               <Route path="/settings" element={<ComingSoon title="Settings" />} />
