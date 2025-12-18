@@ -5,6 +5,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
+import { TenantService } from '../tenant/tenant.service';
+import { TenantContext } from '../common/guards/tenant.guard';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
@@ -13,7 +15,10 @@ import { ClaimQueryDto } from './dto/claim-query.dto';
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService,
+  ) {}
 
   /**
    * Create a new claim

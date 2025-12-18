@@ -1,5 +1,5 @@
 // ============================================
-// Augmented Adjusting - Prisma Schema
+// True Claim Insight - Prisma Schema
 // ============================================
 
 generator client {
@@ -9,6 +9,35 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ============ USERS ============
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  fullName      String
+  phoneNumber   String
+  role          UserRole
+  licenseNumber String?
+  tenantId      String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  ADJUSTER
+  FIRM_ADMIN
+  CLAIMANT
+  INSURER_STAFF
 }
 
 // ============ TENANTS ============
@@ -22,6 +51,7 @@ model Tenant {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
+  users     User[]
   adjusters Adjuster[]
   claims    Claim[]    @relation("InsurerClaims")
 

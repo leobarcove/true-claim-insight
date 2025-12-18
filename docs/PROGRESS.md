@@ -1,8 +1,8 @@
 # Project Progress
 
 **Last Updated:** 2025-12-18
-**Status:** Planning Phase
-**Current Phase:** P0 - Foundation
+**Status:** Development Phase
+**Current Phase:** P2 - Identity & Case Management
 
 ---
 
@@ -11,7 +11,7 @@
 | Phase | Description | Status | Progress |
 |-------|-------------|--------|----------|
 | P0 | Foundation & Planning | ✅ Complete | 100% |
-| P1 | Core Infrastructure | ⚪ Not Started | 0% |
+| P1 | Core Infrastructure | 🟡 In Progress | 50% |
 | P2 | Identity & Case Management | 🟡 In Progress | 60% |
 | P3 | Video & AI Layer | ⚪ Not Started | 0% |
 | P4 | Reporting & Signing | ⚪ Not Started | 0% |
@@ -85,12 +85,17 @@
 | Setup CI/CD pipeline | ⚪ |
 
 ### API Gateway
-| Task | Status |
-|------|--------|
-| Deploy API Gateway | ⚪ |
-| Implement OAuth 2.0 / JWT | ⚪ |
-| Implement rate limiting | ⚪ |
-| Setup audit logging | ⚪ |
+| Task | Status | Notes |
+|------|--------|-------|
+| Create NestJS service | ✅ | NestJS 11 + Fastify 5 adapter |
+| Implement JWT authentication | ✅ | Access + refresh tokens |
+| Auth endpoints (register/login/refresh) | ✅ | With validation DTOs |
+| Implement rate limiting | ✅ | @nestjs/throttler |
+| Setup audit logging | ✅ | Request/response interceptor |
+| Health check endpoints | ✅ | Liveness + readiness probes |
+| Swagger documentation | ✅ | Auto-generated OpenAPI |
+| Role-based access control | ✅ | RBAC guards |
+| Deploy API Gateway | ⚪ | Pending cloud setup |
 
 ---
 
@@ -212,6 +217,8 @@
 | 2025-12-18 | shadcn/ui for components | Accessible, customisable, TailwindCSS-based |
 | 2025-12-18 | TanStack Query for data fetching | Caching, stale-while-revalidate, devtools |
 | 2025-12-18 | Zustand for client state | Minimal, TypeScript-first, persistent storage |
+| 2025-12-18 | User model for auth | Generic User model supports all roles (Adjuster, Firm Admin, Claimant, Insurer Staff) |
+| 2025-12-18 | API Gateway first | Central auth + routing before connecting frontends |
 
 ---
 
@@ -232,16 +239,19 @@
 
 ### This Week
 - [x] Setup local development environment
+- [x] Create api-gateway service with JWT auth
+- [ ] Connect adjuster-portal to api-gateway
 - [ ] Obtain API docs from vendors
 - [ ] Create cost estimates
-- [ ] Research PDPA requirements
 
 ### This Month
 - [ ] Secure pilot adjuster commitments
 - [x] Create first NestJS service (case-service)
+- [x] Create api-gateway with full auth flow
 - [x] Create first React app (adjuster-portal)
-- [ ] Begin Phase 1 infrastructure
-- [ ] Connect adjuster-portal to case-service API
+- [ ] Begin Phase 1 cloud infrastructure
+- [ ] Create Claimant PWA scaffold
+- [ ] Research PDPA requirements
 
 ---
 

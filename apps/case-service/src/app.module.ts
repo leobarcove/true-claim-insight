@@ -8,6 +8,7 @@ import { AdjustersModule } from './adjusters/adjusters.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
+import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -40,6 +41,9 @@ import configuration from './config/configuration';
 
     // Database
     PrismaModule,
+
+    // Multi-tenancy
+    TenantModule,
 
     // Feature modules
     ClaimsModule,
