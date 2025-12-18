@@ -60,29 +60,27 @@ export function ClaimDetailPage() {
       <Header
         title={claim.claimNumber}
         description={`${claim.claimantId} • ${claim.claimType.replace('_', ' ')}`}
-      />
-
-      <div className="flex-1 overflow-auto p-6">
-        {/* Back button and actions */}
-        <div className="flex items-center justify-between mb-6">
+      >
+        <div className="flex items-center gap-3">
           <Link to="/claims">
-            <Button variant="ghost" size="sm">
+            <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Claims
+              Back
             </Button>
           </Link>
-          <div className="flex items-center gap-2">
-            <Badge variant={statusConfig[claim.status].variant} className="text-sm px-3 py-1">
-              {statusConfig[claim.status].label}
-            </Badge>
-            {claim.status === 'SCHEDULED' && (
-              <Button onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
-                <Video className="h-4 w-4 mr-2" />
-                {createVideoRoom.isPending ? 'Starting...' : 'Start Video Session'}
-              </Button>
-            )}
-          </div>
+          <Badge variant={statusConfig[claim.status].variant}>
+            {statusConfig[claim.status].label}
+          </Badge>
+          {claim.status === 'SCHEDULED' && (
+            <Button size="sm" onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
+              <Video className="h-4 w-4 mr-2" />
+              {createVideoRoom.isPending ? 'Starting...' : 'Start Session'}
+            </Button>
+          )}
         </div>
+      </Header>
+
+      <div className="flex-1 overflow-auto p-6">
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content */}

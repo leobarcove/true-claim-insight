@@ -81,6 +81,7 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 | CLM-012 | Enter incident details & description | P0 |
 | CLM-013 | Upload initial damage photos | P0 |
 | CLM-014 | Agent-assisted submission support | P0 |
+| CLM-015 | AI-aided "Upload & Autocomplete" flow | P1 |
 
 #### Video Assessment
 | ID | Requirement | Priority |

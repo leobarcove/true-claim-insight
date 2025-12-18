@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 interface HeaderProps {
   title: string;
   description?: string;
+  children?: React.ReactNode;
 }
 
-export function Header({ title, description }: HeaderProps) {
+export function Header({ title, description, children }: HeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
       <div>
@@ -18,6 +19,7 @@ export function Header({ title, description }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {children}
         {/* Search */}
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

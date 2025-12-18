@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, Eye, Video, FileText } from 'lucide-react';
+import { Search, Filter, Eye, Video, FileText, PlusCircle } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +47,14 @@ export function ClaimsListPage() {
       <Header
         title="Claims"
         description="Manage and process your assigned claims"
-      />
+      >
+        <Link to="/claims/new">
+          <Button>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            New Claim
+          </Button>
+        </Link>
+      </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Filters */}

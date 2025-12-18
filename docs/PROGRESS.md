@@ -163,6 +163,7 @@
 | Daily.co Web SDK (Claimant) | ✅ | Integrated into PWA |
 | **Shared Claim Submission Component** | ✅ | `@tci/ui-components` |
 | Video eKYC (V-KYC) | 🟡 | Pivot: During Video Session |
+| **AI-Aided Submission** | ✅ | Upload & Pre-fill flow for Agents |
 | Recording capture | ⚪ | Requires Daily.co configuration |
 
 ### Risk Engine
@@ -233,6 +234,7 @@
 | 2025-12-18 | Daily.co for Video | Better PWA support and Malaysian region availability |
 | 2025-12-18 | Pivot to V-KYC | Perform eKYC during video session to align with MY agent market |
 | 2025-12-18 | Shared Submission UI | Use `@tci/ui-components` for both PWA and Portal consistency |
+| 2025-12-18 | AI-Aided Submission | Implement OCR pre-filling for agents to minimize data entry |
 
 ---
 

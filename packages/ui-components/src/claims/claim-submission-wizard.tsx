@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { 
   ClipboardCheck, 
   Car, 
@@ -7,10 +8,14 @@ import {
   ChevronRight, 
   CheckCircle2,
   Search,
-  User
+  User,
+  Sparkles,
+  Loader2,
+  Check
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAiExtraction } from '../hooks/use-ai-extraction';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,6 +27,8 @@ const Button = ({ children, className, variant = 'default', ...props }: any) => 
     default: 'bg-blue-600 text-white hover:bg-blue-700',
     outline: 'border border-gray-300 bg-white hover:bg-gray-50 text-gray-700',
     ghost: 'hover:bg-gray-100 text-gray-600',
+    primary: 'bg-blue-600 text-white hover:bg-blue-700',
+    secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
   };
   return (
     <button 
@@ -37,13 +44,21 @@ const Button = ({ children, className, variant = 'default', ...props }: any) => 
   );
 };
 
-const Input = ({ label, error, ...props }: any) => (
-  <div className="space-y-1.5">
-    {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+const Input = ({ label, error, aiFilled, ...props }: any) => (
+  <div className="space-y-1.5 relative">
+    <div className="flex justify-between items-center">
+      {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+      {aiFilled && (
+        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 animate-pulse">
+          <Sparkles size={10} /> AI FILLED
+        </span>
+      )}
+    </div>
     <input 
       className={cn(
-        "w-full px-3 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all",
-        error && "border-red-500 ring-1 ring-red-500"
+        "w-full px-3 py-2 rounded-md border transition-all outline-none",
+        aiFilled ? "border-amber-300 bg-amber-50 focus:ring-amber-500" : "border-gray-300 focus:ring-blue-500",
+        error ? "border-red-500 ring-1 ring-red-500" : "focus:ring-2 focus:border-transparent"
       )} 
       {...props} 
     />
@@ -60,8 +75,14 @@ interface ClaimSubmissionWizardProps {
 }
 
 export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmissionWizardProps) {
-  const [step, setStep] = useState(mode === 'AGENT' ? 1 : 2);
-  const [formData, setFormData] = useState({
+  // Step 0 is the Selection Screen (AI vs Manual)
+  // Agents start at Step 0. Claimants skip to Step 2 (Vehicle) directly.
+  const [step, setStep] = useState(() => {
+    const initialStep = mode === 'AGENT' ? 0 : 2;
+    console.log('[Wizard] Initializing. Mode:', mode, 'Initial Step:', initialStep);
+    return initialStep;
+  });
+  const [formData, setFormData] = useState<any>({
     claimantId: '',
     mobileNumber: '',
     nric: '',
@@ -76,32 +97,143 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     photos: [] as File[],
   });
 
-  const [stepStates] = useState([
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
+  const { extractData, isExtracting } = useAiExtraction();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stepper labels (only for steps 1-6)
+  const stepStates = [
     { title: 'Claimant', icon: User, show: mode === 'AGENT' },
     { title: 'Vehicle', icon: Car, show: true },
     { title: 'Incident', icon: AlertCircle, show: true },
     { title: 'Location', icon: MapPin, show: true },
     { title: 'Evidence', icon: Camera, show: true },
     { title: 'Review', icon: ClipboardCheck, show: true },
-  ].filter(s => s.show));
+  ].filter((s: any) => s.show);
 
-  const currentStepIndex = step - (mode === 'AGENT' ? 1 : 2) + (mode === 'AGENT' ? 0 : 1);
+  // Calculate current index in the filtered stepper (1-indexed for the UI circles)
+  const currentStepperIndex = step - (mode === 'AGENT' ? 1 : 2) + (mode === 'AGENT' ? 0 : 1);
 
-  const handleNext = () => setStep(s => s + 1);
-  const handleBack = () => setStep(s => s - 1);
+  const handleNext = () => setStep((s: number) => s + 1);
+  const handleBack = () => {
+    if (step === 1 && mode === 'AGENT') {
+      setStep(0);
+    } else {
+      setStep((s: number) => s - 1);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const data = await extractData(file);
+    
+    setFormData((prev: any) => ({
+      ...prev,
+      claimantId: data.claimantName || prev.claimantId,
+      nric: data.nric || prev.nric,
+      mobileNumber: data.mobileNumber || prev.mobileNumber,
+      vehiclePlate: data.vehiclePlate || prev.vehiclePlate,
+      vehicleMake: data.vehicleMake || prev.vehicleMake,
+      vehicleModel: data.vehicleModel || prev.vehicleModel,
+      incidentDate: data.incidentDate || prev.incidentDate,
+      incidentTime: data.incidentTime || prev.incidentTime,
+      description: data.description || prev.description,
+    }));
+
+    const filled = new Set<string>();
+    if (data.claimantName) filled.add('claimantId');
+    if (data.nric) filled.add('nric');
+    if (data.mobileNumber) filled.add('mobileNumber');
+    if (data.vehiclePlate) filled.add('vehiclePlate');
+    if (data.vehicleMake) filled.add('vehicleMake');
+    if (data.vehicleModel) filled.add('vehicleModel');
+    if (data.incidentDate) filled.add('incidentDate');
+    if (data.incidentTime) filled.add('incidentTime');
+    if (data.description) filled.add('description');
+    setAiFilledFields(filled);
+
+    // After AI extraction, go to Step 1 (Agent) or Step 2 (Claimant)
+    setStep(mode === 'AGENT' ? 1 : 2);
+  };
 
   const handleSubmit = () => {
     onSuccess(formData);
   };
+
+  // Selection View (Step 0)
+  if (step === 0 && mode === 'AGENT') {
+    return (
+      <div className="max-w-xl mx-auto space-y-8 py-4">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">How would you like to start?</h2>
+          <p className="text-gray-500">Pick an entry method for the new claim.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <button 
+            onClick={() => setStep(1)}
+            className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 transition-all group"
+          >
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+              <User className="text-gray-500 group-hover:text-blue-600" size={32} />
+            </div>
+            <div className="text-center">
+              <h3 className="font-bold text-lg">Manual Entry</h3>
+              <p className="text-xs text-gray-500 mt-1">Fill in details step-by-step</p>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isExtracting}
+            className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-blue-100 bg-blue-50/30 hover:border-blue-500 hover:bg-blue-50 transition-all group relative overflow-hidden"
+          >
+            {isExtracting && (
+              <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-10 animate-in fade-in">
+                <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Extracting...</span>
+              </div>
+            )}
+            <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Sparkles className="text-white" size={32} />
+            </div>
+            <div className="text-center">
+              <h3 className="font-bold text-lg">AI Import</h3>
+              <p className="text-xs text-gray-500 mt-1">Upload MyKad or Police Report</p>
+            </div>
+            <div className="mt-2 px-3 py-1 bg-blue-600 text-[10px] font-bold text-white rounded-full">
+              RECOMMENDED
+            </div>
+          </button>
+        </div>
+
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          onChange={handleFileUpload}
+          accept="image/*,.pdf"
+        />
+
+        <div className="text-center">
+          <Button variant="ghost" onClick={onCancel} className="text-gray-400">
+            Cancel and Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Progress Header */}
       <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
         <div className="flex justify-between">
-          {stepStates.map((s, idx) => {
-            const isActive = idx === currentStepIndex;
-            const isCompleted = idx < currentStepIndex;
+          {stepStates.map((s: any, idx: number) => {
+            const isActive = idx === currentStepperIndex;
+            const isCompleted = idx < currentStepperIndex;
             const StepIcon = s.icon;
             return (
               <div key={s.title} className="flex flex-col items-center gap-1.5 flex-1 relative">
@@ -137,19 +269,43 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Full Name" 
                 placeholder="As per MyKad" 
                 value={formData.claimantId}
-                onChange={(e: any) => setFormData({...formData, claimantId: e.target.value})}
+                aiFilled={aiFilledFields.has('claimantId')}
+                onChange={(e: any) => {
+                  setFormData({...formData, claimantId: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('claimantId');
+                    return next;
+                  });
+                }}
               />
               <Input 
                 label="NRIC Number" 
                 placeholder="880101-14-1234" 
                 value={formData.nric}
-                onChange={(e: any) => setFormData({...formData, nric: e.target.value})}
+                aiFilled={aiFilledFields.has('nric')}
+                onChange={(e: any) => {
+                  setFormData({...formData, nric: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('nric');
+                    return next;
+                  });
+                }}
               />
               <Input 
                 label="Mobile Number" 
                 placeholder="+60123456789" 
                 value={formData.mobileNumber}
-                onChange={(e: any) => setFormData({...formData, mobileNumber: e.target.value})}
+                aiFilled={aiFilledFields.has('mobileNumber')}
+                onChange={(e: any) => {
+                  setFormData({...formData, mobileNumber: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('mobileNumber');
+                    return next;
+                  });
+                }}
               />
             </div>
           </div>
@@ -164,7 +320,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Plate Number" 
                 placeholder="ABC 1234" 
                 value={formData.vehiclePlate}
-                onChange={(e: any) => setFormData({...formData, vehiclePlate: e.target.value})}
+                aiFilled={aiFilledFields.has('vehiclePlate')}
+                onChange={(e: any) => {
+                  setFormData({...formData, vehiclePlate: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('vehiclePlate');
+                    return next;
+                  });
+                }}
               />
               <Input 
                 label="Year" 
@@ -176,13 +340,29 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Make" 
                 placeholder="Perodua" 
                 value={formData.vehicleMake}
-                onChange={(e: any) => setFormData({...formData, vehicleMake: e.target.value})}
+                aiFilled={aiFilledFields.has('vehicleMake')}
+                onChange={(e: any) => {
+                  setFormData({...formData, vehicleMake: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('vehicleMake');
+                    return next;
+                  });
+                }}
               />
               <Input 
                 label="Model" 
                 placeholder="Myvi" 
                 value={formData.vehicleModel}
-                onChange={(e: any) => setFormData({...formData, vehicleModel: e.target.value})}
+                aiFilled={aiFilledFields.has('vehicleModel')}
+                onChange={(e: any) => {
+                  setFormData({...formData, vehicleModel: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('vehicleModel');
+                    return next;
+                  });
+                }}
               />
             </div>
           </div>
@@ -210,22 +390,55 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Date" 
                 type="date"
                 value={formData.incidentDate}
-                onChange={(e: any) => setFormData({...formData, incidentDate: e.target.value})}
+                aiFilled={aiFilledFields.has('incidentDate')}
+                onChange={(e: any) => {
+                  setFormData({...formData, incidentDate: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('incidentDate');
+                    return next;
+                  });
+                }}
               />
               <Input 
                 label="Time" 
                 type="time" 
                 value={formData.incidentTime}
-                onChange={(e: any) => setFormData({...formData, incidentTime: e.target.value})}
+                aiFilled={aiFilledFields.has('incidentTime')}
+                onChange={(e: any) => {
+                  setFormData({...formData, incidentTime: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('incidentTime');
+                    return next;
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Description</label>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                {aiFilledFields.has('description') && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                    <Sparkles size={10} /> AI GENERATED
+                  </span>
+                )}
+              </div>
               <textarea 
-                className="w-full px-3 py-2 rounded-md border border-gray-300 outline-none h-24 resize-none"
+                className={cn(
+                  "w-full px-3 py-2 rounded-md border outline-none h-24 resize-none transition-all",
+                  aiFilledFields.has('description') ? "border-amber-300 bg-amber-50 focus:ring-amber-500" : "border-gray-300 focus:ring-blue-500"
+                )}
                 placeholder="Explain what happened..."
                 value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                onChange={(e) => {
+                  setFormData({...formData, description: e.target.value});
+                  setAiFilledFields(prev => {
+                    const next = new Set(prev);
+                    next.delete('description');
+                    return next;
+                  });
+                }}
               />
             </div>
           </div>
@@ -307,18 +520,30 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         <div className="mt-8 flex items-center justify-between gap-3">
           <Button 
             variant="ghost" 
-            onClick={step === (mode === 'AGENT' ? 1 : 2) ? onCancel : handleBack}
+            onClick={handleBack}
           >
             {step === (mode === 'AGENT' ? 1 : 2) ? 'Cancel' : 'Back'}
           </Button>
           
-          <Button 
-            className="flex-1"
-            onClick={step === 6 ? handleSubmit : handleNext}
-          >
-            {step === 6 ? 'Submit Claim' : 'Continue'}
-            {step !== 6 && <ChevronRight size={18} />}
-          </Button>
+          <div className="flex-1 flex gap-3">
+            {aiFilledFields.size > 0 && (
+              <Button 
+                variant="outline"
+                className="group border-amber-200 hover:bg-amber-50"
+                onClick={() => setAiFilledFields(new Set())}
+              >
+                <Check size={18} className="text-amber-500 group-hover:scale-110 transition-transform" />
+                <span className="text-amber-700">Verify All AI</span>
+              </Button>
+            )}
+            <Button 
+              className="flex-1"
+              onClick={step === 6 ? handleSubmit : handleNext}
+            >
+              {step === 6 ? 'Submit Claim' : 'Continue'}
+              {step !== 6 && <ChevronRight size={18} />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
