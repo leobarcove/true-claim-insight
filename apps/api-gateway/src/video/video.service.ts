@@ -1,10 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/video.dto';
 
 @Injectable()
 export class VideoService {
-  private readonly logger = new Logger(VideoService.name);
   private readonly baseUrl: string;
 
   constructor(private readonly configService: ConfigService) {

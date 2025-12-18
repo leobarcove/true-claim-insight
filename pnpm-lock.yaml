@@ -455,6 +455,9 @@ importers:
       '@tci/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@tci/ui-components':
+        specifier: workspace:*
+        version: link:../../packages/ui-components
       axios:
         specifier: ^1.7.0
         version: 1.13.2

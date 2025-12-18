@@ -17,7 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@tci/shared-types": ["../../packages/shared-types/src"],
+      "@tci/ui-components": ["../../packages/ui-components/src"]
     }
   },
   "include": ["src"],

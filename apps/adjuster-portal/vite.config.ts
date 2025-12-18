@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@tci/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
+      '@tci/ui-components': path.resolve(__dirname, '../../packages/ui-components/src/index.ts'),
     },
   },
   server: {
