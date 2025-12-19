@@ -27,6 +27,7 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const callRef = useRef<DailyCall | null>(null);
+  const hasJoinedMeeting = useRef(false); // Track if user has actually joined the meeting
   const [status, setStatus] = useState<'loading' | 'joined' | 'error'>('loading');
 
   // Expose methods to parent via ref
@@ -128,12 +129,19 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         callRef.current = callFrame;
 
         callFrame.on('joined-meeting', () => {
+          console.log('[DailyVideoPlayer] joined-meeting event');
+          hasJoinedMeeting.current = true;
           setStatus('joined');
           onJoined?.();
         });
 
         callFrame.on('left-meeting', () => {
-          onLeft?.();
+          console.log('[DailyVideoPlayer] left-meeting event, hasJoined:', hasJoinedMeeting.current);
+          // Only trigger onLeft if user had actually joined the meeting
+          // This prevents redirect from lobby errors or pre-join issues
+          if (hasJoinedMeeting.current) {
+            onLeft?.();
+          }
         });
 
         callFrame.on('error', (e) => {
@@ -147,6 +155,8 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         setStatus('joined'); 
         
         await callFrame.join({ url, token });
+        console.log('[DailyVideoPlayer] callFrame.join() completed');
+        hasJoinedMeeting.current = true;
         onJoined?.();
       } catch (err: any) {
         console.error('[DailyVideoPlayer] Initialization failed:', err);

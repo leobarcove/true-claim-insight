@@ -91,9 +91,12 @@ export function ClaimDetailPage() {
       const devLink = `http://localhost:4001/video/${sessionId}`;
       setMagicLink(devLink);
       
+      // Auto-copy to clipboard for easy testing
+      await navigator.clipboard.writeText(devLink);
+      
       toast({
         title: 'Assessment Started',
-        description: 'Claimant has been notified. Joining video room...',
+        description: 'Magic link copied to clipboard! Joining video room...',
       });
 
       // Small delay to show the magic link before navigating
