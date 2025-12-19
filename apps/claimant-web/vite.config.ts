@@ -64,6 +64,9 @@ export default defineConfig({
   },
   server: {
     port: 4001,
+    fs: {
+      allow: ['..', '../../packages'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

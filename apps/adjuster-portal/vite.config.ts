@@ -13,6 +13,9 @@ export default defineConfig({
   },
   server: {
     port: 4000,
+    fs: {
+      allow: ['..', '../../packages'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

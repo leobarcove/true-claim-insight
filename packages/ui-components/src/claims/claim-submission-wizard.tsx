@@ -161,6 +161,25 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     setStep(mode === 'AGENT' ? 1 : 2);
   };
 
+  const fillDemoData = () => {
+    setFormData({
+      ...formData,
+      claimantId: 'Ahmad bin Zulkifli',
+      nric: '850512-14-5567',
+      mobileNumber: '+60123456789',
+      vehiclePlate: 'WQX 9988',
+      vehicleMake: 'Proton',
+      vehicleModel: 'X50',
+      claimType: 'OWN_DAMAGE',
+      description: 'The vehicle was hit from the rear by a motorcycle while waiting at a traffic light in Kuala Lumpur.',
+      address: 'Jalan Bukit Bintang, Kuala Lumpur',
+    });
+    // Mark these as NOT AI filled (or AI filled if we want to show the sparkles)
+    setAiFilledFields(new Set());
+    // Go to first manual entry step if at step 0
+    if (step === 0) setStep(1);
+  };
+
   const handleSubmit = () => {
     onSuccess(formData);
   };
@@ -209,6 +228,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             <div className="mt-2 px-3 py-1 bg-blue-600 text-[10px] font-bold text-white rounded-full">
               RECOMMENDED
             </div>
+          </button>
+        </div>
+
+        <div className="flex justify-center">
+          <button 
+            onClick={fillDemoData}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors shadow-sm"
+          >
+            <Sparkles size={14} />
+            FILL DEMO DATA (SHORTCUT)
           </button>
         </div>
 
@@ -530,6 +559,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           </Button>
           
           <div className="flex-1 flex gap-3">
+            {step < 5 && (
+              <Button 
+                variant="outline"
+                className="group border-amber-200 hover:bg-amber-50"
+                onClick={fillDemoData}
+              >
+                <Sparkles size={18} className="text-amber-500 group-hover:scale-110 transition-transform" />
+                <span className="text-amber-700">Demo Fill</span>
+              </Button>
+            )}
             {aiFilledFields.size > 0 && (
               <Button 
                 variant="outline"
