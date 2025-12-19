@@ -82,11 +82,21 @@ export function useJoinVideoRoom() {
       userId: string;
       role: 'ADJUSTER' | 'CLAIMANT';
     }) => {
-      const { data } = await apiClient.post<ApiResponse<JoinRoomResponse>>(
-        `/video/rooms/${sessionId}/join`,
-        { userId, role }
-      );
-      return data.data;
+      console.log('[useJoinVideoRoom] Starting API call...', { sessionId, userId, role });
+      try {
+        const response = await apiClient.post<ApiResponse<JoinRoomResponse>>(
+          `/video/rooms/${sessionId}/join`,
+          { userId, role }
+        );
+        console.log('[useJoinVideoRoom] API response:', response);
+        console.log('[useJoinVideoRoom] Response data:', response.data);
+        const result = response.data.data;
+        console.log('[useJoinVideoRoom] Extracted data:', result);
+        return result;
+      } catch (error) {
+        console.error('[useJoinVideoRoom] API error:', error);
+        throw error;
+      }
     },
   });
 }

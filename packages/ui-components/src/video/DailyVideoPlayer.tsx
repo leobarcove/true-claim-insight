@@ -10,6 +10,9 @@ interface DailyVideoPlayerProps {
   onError?: (error: string) => void;
 }
 
+// Track global destruction promise to handle React Strict Mode async cleanup race conditions
+let dailyDestroyPromise: Promise<void> | null = null;
+
 export const DailyVideoPlayer: React.FC<DailyVideoPlayerProps> = ({
   url,
   token,
@@ -26,6 +29,44 @@ export const DailyVideoPlayer: React.FC<DailyVideoPlayerProps> = ({
 
     const initCall = async () => {
       try {
+        // Validation: Check for ANY existing global instance and destroy it
+        const existingCall = DailyIframe.getCallInstance();
+        if (existingCall) {
+          console.log('[DailyVideoPlayer] Found orphan Daily instance. Destroying...');
+          try {
+            await existingCall.destroy();
+            console.log('[DailyVideoPlayer] Orphan instance destroyed.');
+          } catch (e) {
+            console.warn('[DailyVideoPlayer] Failed to destroy orphan instance:', e);
+          }
+        }
+
+        // Validation: If a local destroy is pending, wait for it with timeout
+        if (dailyDestroyPromise) {
+          console.log('[DailyVideoPlayer] Waiting for previous instance to destroy...');
+          const timeoutPromise = new Promise<void>((_, reject) => 
+            setTimeout(() => reject(new Error('Destroy timeout')), 2000)
+          );
+          
+          try {
+            await Promise.race([dailyDestroyPromise, timeoutPromise]);
+            console.log('[DailyVideoPlayer] Previous instance destroyed.');
+          } catch (e) {
+            console.warn('[DailyVideoPlayer] Wait for destroy timed out or failed, proceeding anyway:', e);
+          }
+          dailyDestroyPromise = null;
+        }
+
+         // Double check after await
+        if (!containerRef.current) return;
+        
+        // Final sanity check before creating
+        if (DailyIframe.getCallInstance()) {
+           console.warn('[DailyVideoPlayer] Instance still exists after cleanup! Waiting 500ms...');
+           await new Promise(r => setTimeout(r, 500));
+        }
+
+        console.log('[DailyVideoPlayer] Creating new Daily frame...');
         const callFrame = DailyIframe.createFrame(containerRef.current!, {
           iframeStyle: {
             width: '100%',
@@ -40,11 +81,13 @@ export const DailyVideoPlayer: React.FC<DailyVideoPlayerProps> = ({
         callRef.current = callFrame;
 
         callFrame.on('joined-meeting', () => {
+          console.log('[DailyVideoPlayer] Joined meeting');
           setStatus('joined');
           onJoined?.();
         });
 
         callFrame.on('left-meeting', () => {
+          console.log('[DailyVideoPlayer] Left meeting');
           onLeft?.();
         });
 
@@ -54,7 +97,13 @@ export const DailyVideoPlayer: React.FC<DailyVideoPlayerProps> = ({
           onError?.(e.errorMsg || 'An unknown error occurred');
         });
 
+        // Hide loader immediately before join to allow pre-join UI interactions
+        console.log('[DailyVideoPlayer] Hiding loader and joining room...');
+        setStatus('joined'); 
+        
         await callFrame.join({ url, token });
+        console.log('[DailyVideoPlayer] Join resolved');
+        onJoined?.();
       } catch (err: any) {
         console.error('Failed to join Daily room:', err);
         setStatus('error');
@@ -66,7 +115,14 @@ export const DailyVideoPlayer: React.FC<DailyVideoPlayerProps> = ({
 
     return () => {
       if (callRef.current) {
-        callRef.current.destroy();
+        console.log('[DailyVideoPlayer] Destroying instance...');
+        dailyDestroyPromise = callRef.current.destroy()
+          .then(() => {
+             console.log('[DailyVideoPlayer] Instance destroyed successfully');
+          })
+          .catch(err => {
+             console.error('[DailyVideoPlayer] Error destroying instance:', err);
+          });
         callRef.current = null;
       }
     };

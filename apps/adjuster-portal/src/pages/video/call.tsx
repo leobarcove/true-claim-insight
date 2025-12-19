@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Maximize2, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,33 +16,53 @@ export function VideoCallPage() {
   const { toast } = useToast();
   
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const hasAttemptedJoin = useRef(false);
   
   const { data: session, isLoading: isSessionLoading } = useVideoSession(sessionId || '');
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
 
+  // Debug logging
+  console.log('[VideoCallPage] State:', {
+    sessionId,
+    user: user?.id,
+    joinData,
+    joinError,
+    hasAttemptedJoin: hasAttemptedJoin.current,
+    isPending: joinRoom.isPending,
+  });
+
+  // Effect to trigger join and set data directly
   useEffect(() => {
-    // Only attempt to join once - prevent infinite loop on error
-    if (sessionId && user && !joinData && !hasAttemptedJoin.current && !joinRoom.isPending) {
+    const doJoin = async () => {
+      if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
+      
+      console.log('[VideoCallPage] Starting join...');
       hasAttemptedJoin.current = true;
-      joinRoom.mutate(
-        { sessionId, userId: user.id, role: 'ADJUSTER' },
-        {
-          onSuccess: (data) => {
-            setJoinData({ url: data.roomUrl, token: data.token });
-          },
-          onError: (error: any) => {
-            toast({
-              title: 'Connection Error',
-              description: error.message || 'Failed to join the video room.',
-              variant: 'destructive',
-            });
-          },
-        }
-      );
-    }
-  }, [sessionId, user, joinData, joinRoom.isPending, toast]);
+      
+      try {
+        const result = await joinRoom.mutateAsync({ 
+          sessionId, 
+          userId: user.id, 
+          role: 'ADJUSTER' 
+        });
+        console.log('[VideoCallPage] Join succeeded:', result);
+        setJoinData({ url: result.roomUrl, token: result.token });
+      } catch (error: any) {
+        console.error('[VideoCallPage] Join failed:', error);
+        setJoinError(error.message || 'Failed to join the video room.');
+        toast({
+          title: 'Connection Error',
+          description: error.message || 'Failed to join the video room.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    doJoin();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, user?.id]);
 
   const handleEndCall = async () => {
     if (!sessionId) return;
@@ -63,7 +83,36 @@ export function VideoCallPage() {
     }
   };
 
-  if (isSessionLoading || !joinData) {
+  // Show error state with retry option
+  if (joinError && !joinRoom.isPending) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <p className="text-lg font-medium mb-2">Failed to Join Video Room</p>
+        <p className="text-sm text-slate-400 mb-6 max-w-md text-center">{joinError}</p>
+        <div className="flex gap-4">
+          <Button onClick={() => navigate(-1)} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Go Back
+          </Button>
+          <Button onClick={attemptJoin}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Debug: Check render conditions
+  console.log('[VideoCallPage] Render conditions:', {
+    isSessionLoading,
+    isPending: joinRoom.isPending,
+    joinData,
+    willShowLoading: isSessionLoading || joinRoom.isPending || !joinData
+  });
+
+  if (!joinData) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />

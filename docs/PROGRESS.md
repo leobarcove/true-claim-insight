@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last Updated:** 2025-12-18
+**Last Updated:** 2025-12-19
 **Status:** Development Phase
 **Current Phase:** P2 - Identity & Case Management
 
@@ -160,7 +160,7 @@
 | UserSig generation | ✅ | HMAC-SHA256 with zlib compression |
 | Room management | ✅ | Create, join, end, cancel sessions |
 | Session tracking | ✅ | Linked to claims via Prisma |
-| Daily.co Web SDK (Adjuster) | ✅ | Integrated into Portal |
+| Daily.co Web SDK (Adjuster) | ✅ | Integrated + Lifecycle fixes (Strict Mode) |
 | Daily.co Web SDK (Claimant) | ✅ | Integrated into PWA |
 | **Shared Claim Submission Component** | ✅ | `@tci/ui-components` |
 | Video eKYC (V-KYC) | 🟡 | Pivot: During Video Session |
@@ -240,6 +240,8 @@
 | 2025-12-19 | Multi-Tenant Data Isolation | Reinforced isolation between Insurers and Adjusting Firms |
 | 2025-12-19 | Identity Consolidation | Linked Adjuster 1:1 with User; consolidated credentials and profiles |
 | 2025-12-19 | Admin Role completion | Added INSURER_ADMIN and SUPER_ADMIN for full hierarchy |
+| 2025-12-19 | Video Session Reliability | Fixed 429 Join Loop and Strict Mode Duplicate Instance errors |
+| 2025-12-19 | Video UX Enhancement | Removed blocking loading mask during Daily pre-join UI |
 
 ---
 
