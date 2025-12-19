@@ -39,7 +39,10 @@ export interface ClaimStats {
   pendingReview: number;
   inProgress: number;
   completedThisMonth: number;
-  averageDaysToClose: number;
+  completedThisWeek: number;
+  averagePerDay: number;
+  totalClaims: number;
+  statusBreakdown: Record<string, number>;
 }
 
 export interface CreateClaimInput {

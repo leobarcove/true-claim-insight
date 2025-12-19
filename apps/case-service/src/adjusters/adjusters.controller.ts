@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { AdjustersService } from './adjusters.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { TenantIsolation, TenantScope, Tenant, TenantId } from '../common/decorators/tenant.decorator';
 
 /**
@@ -27,7 +28,7 @@ import { TenantIsolation, TenantScope, Tenant, TenantId } from '../common/decora
 @ApiTags('adjusters')
 @ApiBearerAuth()
 @Controller('adjusters')
-@UseGuards(TenantGuard)
+@UseGuards(InternalAuthGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class AdjustersController {
   constructor(private readonly adjustersService: AdjustersService) {}

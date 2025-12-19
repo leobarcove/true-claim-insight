@@ -33,7 +33,7 @@ const getStatusBadge = (status: string) => {
 
 export function DashboardPage() {
   const { user } = useAuthStore();
-  const { data: statsData } = useClaimStats();
+  const { data: statsData, isLoading: statsLoading } = useClaimStats();
   const { data: claimsData, isLoading: claimsLoading } = useClaims({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' });
   const { data: sessionsData, isLoading: sessionsLoading } = useClaims({ status: 'SCHEDULED' as any, limit: 5 });
 
@@ -90,7 +90,11 @@ export function DashboardPage() {
                 <stat.icon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                {statsLoading ? (
+                  <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+                ) : (
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                )}
                 <p className={`text-xs ${
                   stat.trend === 'up' ? 'text-green-600' :
                   stat.trend === 'warning' ? 'text-yellow-600' :
@@ -195,16 +199,34 @@ export function DashboardPage() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="text-center p-4 rounded-lg bg-accent/50">
-                <p className="text-3xl font-bold text-primary">4.2</p>
-                <p className="text-sm text-muted-foreground">Avg. Days to Close</p>
+                {statsLoading ? (
+                  <div className="h-9 w-12 mx-auto bg-muted animate-pulse rounded" />
+                ) : (
+                  <p className="text-3xl font-bold text-primary">
+                    {statsData?.averagePerDay?.toFixed(1) || '0'}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">Avg. Cases/Day</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-accent/50">
-                <p className="text-3xl font-bold text-green-600">96%</p>
-                <p className="text-sm text-muted-foreground">On-Time Completion</p>
+                {statsLoading ? (
+                  <div className="h-9 w-12 mx-auto bg-muted animate-pulse rounded" />
+                ) : (
+                  <p className="text-3xl font-bold text-green-600">
+                    {statsData?.completedThisWeek || 0}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">Completed This Week</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-accent/50">
-                <p className="text-3xl font-bold text-blue-600">28</p>
-                <p className="text-sm text-muted-foreground">Cases This Month</p>
+                {statsLoading ? (
+                  <div className="h-9 w-12 mx-auto bg-muted animate-pulse rounded" />
+                ) : (
+                  <p className="text-3xl font-bold text-blue-600">
+                    {statsData?.totalClaims || 0}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">Total Cases Handled</p>
               </div>
             </div>
           </CardContent>

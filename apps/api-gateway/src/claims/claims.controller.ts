@@ -43,6 +43,42 @@ export class ClaimsController {
       );
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get claim statistics for the current adjuster' })
+  getStats(@Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+    };
+
+    // Call case service's adjuster stats endpoint
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/adjusters/${req.user?.id}/stats`, { headers })
+      .pipe(
+        map((response) => {
+          const data = response.data.data;
+          // Transform to frontend expected format
+          return {
+            totalAssigned: data.stats?.activeClaims || 0,
+            pendingReview: data.statusBreakdown?.REPORT_PENDING || 0,
+            inProgress: data.statusBreakdown?.SCHEDULED || 0,
+            completedThisMonth: data.stats?.completedThisMonth || 0,
+            completedThisWeek: data.stats?.completedThisWeek || 0,
+            averagePerDay: data.stats?.averagePerDay || 0,
+            totalClaims: data.stats?.totalClaims || 0,
+            statusBreakdown: data.statusBreakdown || {},
+          };
+        }),
+        catchError((e) => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch claim stats',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }),
+      );
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all claims for the user/tenant' })
   findAll(@Req() req: any) {

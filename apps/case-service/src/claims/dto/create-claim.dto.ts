@@ -68,4 +68,38 @@ export class CreateClaimDto {
   @IsString()
   @IsNotEmpty()
   tenantId!: string;
+
+  @ApiPropertyOptional({ example: 'W12345A' })
+  @IsString()
+  @IsOptional()
+  vehiclePlateNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Perodua' })
+  @IsString()
+  @IsOptional()
+  vehicleMake?: string;
+
+  @ApiPropertyOptional({ example: 'Myvi' })
+  @IsString()
+  @IsOptional()
+  vehicleModel?: string;
+
+  @ApiPropertyOptional({ example: 'POL/123/2025' })
+  @IsString()
+  @IsOptional()
+  policeReportNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Balai Polis Travers' })
+  @IsString()
+  @IsOptional()
+  policeStation?: string;
+
+  @ApiPropertyOptional({ example: '2025-12-15' })
+  @IsDateString()
+  @IsOptional()
+  policeReportDate?: string;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  isPdpaCompliant?: boolean;
 }

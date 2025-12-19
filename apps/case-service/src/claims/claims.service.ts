@@ -36,6 +36,13 @@ export class ClaimsService {
         description: createClaimDto.description,
         claimantId: createClaimDto.claimantId,
         insurerTenantId: createClaimDto.tenantId,
+        vehiclePlateNumber: createClaimDto.vehiclePlateNumber,
+        vehicleMake: createClaimDto.vehicleMake,
+        vehicleModel: createClaimDto.vehicleModel,
+        policeReportNumber: createClaimDto.policeReportNumber,
+        policeStation: createClaimDto.policeStation,
+        policeReportDate: createClaimDto.policeReportDate ? new Date(createClaimDto.policeReportDate) : null,
+        isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
       },
       include: {
         claimant: {
@@ -207,6 +214,16 @@ export class ClaimsService {
         ...(updateClaimDto.incidentLocation && {
           incidentLocation: updateClaimDto.incidentLocation as any,
         }),
+        vehiclePlateNumber: updateClaimDto.vehiclePlateNumber,
+        vehicleMake: updateClaimDto.vehicleMake,
+        vehicleModel: updateClaimDto.vehicleModel,
+        policeReportNumber: updateClaimDto.policeReportNumber,
+        policeStation: updateClaimDto.policeStation,
+        policeReportDate: updateClaimDto.policeReportDate ? new Date(updateClaimDto.policeReportDate) : undefined,
+        workshopName: updateClaimDto.workshopName,
+        estimatedRepairCost: updateClaimDto.estimatedRepairCost,
+        isPdpaCompliant: updateClaimDto.isPdpaCompliant,
+        slaDeadline: updateClaimDto.slaDeadline ? new Date(updateClaimDto.slaDeadline) : undefined,
         updatedAt: new Date(),
       },
       include: {

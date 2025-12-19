@@ -43,3 +43,10 @@ export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
   return `${str.slice(0, length)}...`;
 }
+
+export function getDaysSince(date: string | Date): number {
+  const start = new Date(date).getTime();
+  const now = new Date().getTime();
+  const diff = now - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}

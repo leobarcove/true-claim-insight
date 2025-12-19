@@ -111,6 +111,15 @@ model Claim {
   description             String
   otherParty              Json?
   policeReportNumber      String?
+  policeStation           String?
+  policeReportDate        DateTime?
+  vehiclePlateNumber      String?
+  vehicleMake             String?
+  vehicleModel            String?
+  workshopName            String?
+  estimatedRepairCost     Decimal?    @db.Decimal(12, 2)
+  isPdpaCompliant         Boolean     @default(false)
+  slaDeadline             DateTime?
   priority                Priority    @default(NORMAL)
   scheduledAssessmentTime DateTime?
   createdAt               DateTime    @default(now())

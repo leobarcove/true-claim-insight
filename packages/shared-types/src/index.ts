@@ -154,6 +154,15 @@ export interface Claim {
   description: string;
   otherParty?: Record<string, unknown>;
   policeReportNumber?: string;
+  policeStation?: string;
+  policeReportDate?: string;
+  vehiclePlateNumber?: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  workshopName?: string;
+  estimatedRepairCost?: number;
+  isPdpaCompliant: boolean;
+  slaDeadline?: string;
   priority: Priority;
   scheduledAssessmentTime?: string;
   createdAt: string;

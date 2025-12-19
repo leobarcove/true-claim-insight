@@ -4,14 +4,21 @@ import {
   MapPin,
   Calendar,
   Video,
+  Car,
+  FileText,
+  ShieldCheck,
+  AlertCircle,
+  Building2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { formatDate, getInitials } from '@/lib/utils';
-import { useClaim } from '@/hooks/use-claims';
+import { formatDate, getInitials, cn, getDaysSince } from '@/lib/utils';
+import { useClaim, useUpdateClaim } from '@/hooks/use-claims';
 import { useCreateVideoRoom } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,6 +29,8 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
   IN_ASSESSMENT: { label: 'In Assessment', variant: 'warning' },
   REPORT_PENDING: { label: 'Report Pending', variant: 'warning' },
   APPROVED: { label: 'Approved', variant: 'success' },
+  REJECTED: { label: 'Rejected', variant: 'destructive' },
+  CLOSED: { label: 'Closed', variant: 'secondary' },
 };
 
 export function ClaimDetailPage() {
@@ -30,7 +39,26 @@ export function ClaimDetailPage() {
   const { toast } = useToast();
   
   const { data: claim, isLoading } = useClaim(claimId || '');
+  const updateClaim = useUpdateClaim(claimId || '');
   const createVideoRoom = useCreateVideoRoom();
+
+  const handleUpdateStatus = async (status: string) => {
+    if (!claimId) return;
+    
+    try {
+      await updateClaim.mutateAsync({ status: status as any });
+      toast({
+        title: 'Success',
+        description: `Claim status updated to ${status}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update claim status.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleStartVideoSession = async () => {
     if (!claimId) return;
@@ -143,6 +171,98 @@ export function ClaimDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* SLA Status */}
+            <Card className={cn(
+              "border-l-4",
+              getDaysSince(claim.createdAt) > 7 ? "border-l-destructive" : "border-l-success"
+            )}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">SLA Status (BNM)</span>
+                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? "destructive" : "success"}>
+                    {getDaysSince(claim.createdAt)} Days Active
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {getDaysSince(claim.createdAt) > 7 
+                    ? "SLA breach: Recommended TAT is 7 working days for acknowledgement." 
+                    : "Within recommended turnaround time."}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button 
+                  className="w-full bg-success hover:bg-success/90" 
+                  onClick={() => handleUpdateStatus('APPROVED')}
+                  disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve Claim
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  className="w-full" 
+                  onClick={() => handleUpdateStatus('REJECTED')}
+                  disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject Claim
+                </Button>
+                <Button variant="outline" className="w-full">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Request Documents
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Vehicle Info */}
+            <Card>
+              <CardHeader className="py-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Car className="h-4 w-4" />
+                  Vehicle Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Plate No:</span>
+                  <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Make/Model:</span>
+                  <span className="font-medium">
+                    {claim.vehicleMake} {claim.vehicleModel}
+                    {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Police Report */}
+            <Card>
+              <CardHeader className="py-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Police Report
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Report No:</span>
+                  <span className="font-medium">{claim.policeReportNumber || 'N/A'}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground">Station:</span>
+                  <span className="font-medium">{claim.policeStation || 'Not provided'}</span>
+                </div>
+              </CardContent>
+            </Card>
             {/* Claimant Info */}
             <Card>
               <CardHeader>
@@ -155,9 +275,20 @@ export function ClaimDetailPage() {
                   </Avatar>
                   <div>
                     <p className="font-medium text-sm">ID: {claim.claimantId}</p>
-                    <Badge variant="success" className="text-[10px] mt-1">
-                      eKYC Verified
-                    </Badge>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <Badge variant="success" className="text-[10px] w-fit">
+                        eKYC Verified
+                      </Badge>
+                      {claim.isPdpaCompliant ? (
+                        <Badge variant="info" className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">
+                          PDPA Consented
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="text-[10px] w-fit">
+                          PDPA PENDING
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
