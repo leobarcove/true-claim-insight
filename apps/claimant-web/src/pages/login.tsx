@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,8 +22,10 @@ type PhoneFormData = z.infer<typeof phoneSchema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const sendOtp = useSendOtp();
   const [error, setError] = useState<string | null>(null);
+  const from = location.state?.from;
 
   const {
     register,
@@ -42,11 +44,12 @@ export function LoginPage() {
     try {
       const result = await sendOtp.mutateAsync(data.phoneNumber);
       
-      // Navigate to OTP verification page with phone number
+      // Navigate to OTP verification page with phone number and optional redirect path
       navigate('/verify-otp', {
         state: {
           phoneNumber: result.phoneNumber,
           expiresIn: result.expiresIn,
+          from,
         },
       });
     } catch (err) {

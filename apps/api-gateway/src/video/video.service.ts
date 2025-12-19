@@ -18,22 +18,12 @@ export class VideoService {
       body: JSON.stringify(dto),
     });
 
-    if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
-    }
-
-    // Video service returns data directly without wrapper
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async getRoom(id: string) {
     const response = await fetch(`${this.baseUrl}/rooms/${id}`);
-    
-    if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async joinRoom(id: string, dto: JoinRoomDto) {
@@ -43,11 +33,7 @@ export class VideoService {
       body: JSON.stringify(dto),
     });
 
-    if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async endRoom(id: string, dto: EndRoomDto) {
@@ -57,28 +43,36 @@ export class VideoService {
       body: JSON.stringify(dto),
     });
 
-    if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async getSessionsForClaim(claimId: string) {
     const response = await fetch(`${this.baseUrl}/rooms/claim/${claimId}`);
-
-    if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
-    }
-
-    return response.json();
+    return this.handleResponse(response);
   }
 
   async getConfigStatus() {
     const response = await fetch(`${this.baseUrl}/rooms/config/status`);
-    
+    return this.handleResponse(response);
+  }
+
+  private async handleResponse(response: Response) {
     if (!response.ok) {
-      throw new Error(`Video service error: ${response.statusText}`);
+      const errorText = await response.text();
+      let errorMessage = response.statusText;
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.message) {
+          errorMessage = Array.isArray(errorJson.message) 
+            ? errorJson.message.join(', ') 
+            : errorJson.message;
+        }
+      } catch (e) {
+        errorMessage = errorText || errorMessage;
+      }
+      
+      throw new Error(`Video service error: ${errorMessage}`);
     }
 
     return response.json();

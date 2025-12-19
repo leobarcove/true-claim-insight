@@ -171,31 +171,42 @@ export class DailyService implements OnModuleInit {
       return `mock-token-${userId}-${Date.now()}`;
     }
 
-    const response = await fetch(`${this.apiUrl}/meeting-tokens`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        properties: {
-          room_name: roomName,
-          user_id: userId,
-          user_name: userName,
-          is_owner: isOwner,
-          enable_screenshare: true,
-          enable_recording: isOwner ? 'cloud' : undefined,
+    const isDev = this.configService.get<string>('NODE_ENV') === 'development';
+
+    try {
+      const response = await fetch(`${this.apiUrl}/meeting-tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
         },
-      }),
-    });
+        body: JSON.stringify({
+          properties: {
+            room_name: roomName,
+            user_id: userId,
+            user_name: userName,
+            is_owner: isOwner,
+            enable_screenshare: true,
+            enable_recording: isOwner ? 'cloud' : undefined,
+          },
+        }),
+        // Add a signal if we wanted explicit timeout, but default undici timeout is what triggered the error
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      this.logger.error(`Failed to create token: ${error}`);
-      throw new Error(`Daily.co API error: ${response.status}`);
+      if (!response.ok) {
+        const error = await response.text();
+        this.logger.error(`Failed to create token: ${error}`);
+        throw new Error(`Daily.co API error: ${response.status}`);
+      }
+
+      const data = await response.json() as DailyMeetingToken;
+      return data.token;
+    } catch (error: any) {
+      if (isDev && (error.name === 'ConnectTimeoutError' || error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.message.includes('timeout'))) {
+        this.logger.warn(`Daily.co API timeout - falling back to mock token for dev: ${error.message}`);
+        return `mock-token-${userId}-${Date.now()}`;
+      }
+      throw error;
     }
-
-    const data = await response.json() as DailyMeetingToken;
-    return data.token;
   }
 }

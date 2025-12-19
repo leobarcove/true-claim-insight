@@ -9,6 +9,7 @@ import { AxiosError } from 'axios';
 interface LocationState {
   phoneNumber: string;
   expiresIn: number;
+  from?: string;
 }
 
 export function VerifyOtpPage() {
@@ -86,6 +87,7 @@ export function VerifyOtpPage() {
       await verifyOtp.mutateAsync({
         phoneNumber: state.phoneNumber,
         code,
+        redirectUrl: state.from,
       });
       // Navigation handled by the mutation's onSuccess
     } catch (err) {
@@ -138,6 +140,12 @@ export function VerifyOtpPage() {
               <br />
               <span className="font-medium text-foreground">{state.phoneNumber}</span>
             </p>
+            {/* DEV ONLY: Show the code for easier testing */}
+            <div className="mt-4 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-800 font-mono text-center">
+                [DEV ONLY] Verification Code: <span className="font-bold">123456</span>
+              </p>
+            </div>
           </div>
 
           {/* OTP Input */}

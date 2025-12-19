@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DailyVideoPlayer } from '@tci/ui-components';
 import { useJoinVideoRoom } from '@/hooks/use-video';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
-import { XCircle, Loader2 } from 'lucide-react';
+import { XCircle, Loader2, RefreshCw, ArrowLeft } from 'lucide-react';
 
 export function ClaimantVideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -13,27 +13,45 @@ export function ClaimantVideoCallPage() {
   
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const hasAttemptedJoin = useRef(false);
   
   const joinRoom = useJoinVideoRoom();
 
   useEffect(() => {
-    if (sessionId && user && !joinData) {
-      joinRoom.mutate(
-        { sessionId, userId: user.id },
-        {
-          onSuccess: (data) => {
-            setJoinData({ url: data.roomUrl, token: data.token });
-          },
-          onError: (err: any) => {
-            setError(err.message || 'Failed to join video room');
-          },
-        }
-      );
-    }
-  }, [sessionId, user, joinRoom, joinData]);
+    const doJoin = async () => {
+      if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
+      
+      hasAttemptedJoin.current = true;
+      setError(null);
+      
+      try {
+        const result = await joinRoom.mutateAsync({ 
+          sessionId, 
+          userId: user.id 
+        });
+        setJoinData({ url: result.roomUrl, token: result.token });
+      } catch (err: any) {
+        console.error('[ClaimantVideoCallPage] Join failed:', err);
+        setError(err.message || 'Failed to join video room');
+      }
+    };
+
+    doJoin();
+  }, [sessionId, user?.id]);
+
+  const attemptRetry = () => {
+    hasAttemptedJoin.current = false;
+    setJoinData(null);
+    setError(null);
+    // The effect will re-run as hasAttemptedJoin.current is now false
+    // But since dependencies haven't changed, we might need to manually call doJoin or force a re-render.
+    // Actually, setting joinData to null might not trigger the effect.
+    // Let's use a trigger state or just call it.
+    window.location.reload(); // Simple solution for dev-test reliability
+  };
 
   const handleEndCall = () => {
-    navigate('/dashboard');
+    navigate('/tracker');
   };
 
   if (error) {
@@ -41,10 +59,17 @@ export function ClaimantVideoCallPage() {
       <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-slate-950 text-slate-200">
         <XCircle className="h-16 w-16 text-red-500 mb-4" />
         <h2 className="text-xl font-bold mb-2">Connection Failed</h2>
-        <p className="text-slate-400 mb-6">{error}</p>
-        <Button onClick={() => navigate('/dashboard')} variant="outline">
-          Return to Dashboard
-        </Button>
+        <p className="text-slate-400 mb-6 max-w-xs">{error}</p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button onClick={attemptRetry} className="w-full">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+          <Button onClick={() => navigate('/tracker')} variant="outline" className="w-full">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Tracker
+          </Button>
+        </div>
       </div>
     );
   }
