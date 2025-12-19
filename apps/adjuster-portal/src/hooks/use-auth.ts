@@ -54,7 +54,7 @@ export function useLogin() {
       return data.data;
     },
     onSuccess: (data) => {
-      setAuth(data.user, data.tokens.accessToken, data.tokens.refreshToken);
+      setAuth(data.user, data.tokens.accessToken);
       queryClient.invalidateQueries({ queryKey: authKeys.user() });
       navigate('/');
     },
@@ -79,7 +79,7 @@ export function useRegister() {
       return data.data;
     },
     onSuccess: (data) => {
-      setAuth(data.user, data.tokens.accessToken, data.tokens.refreshToken);
+      setAuth(data.user, data.tokens.accessToken);
       queryClient.invalidateQueries({ queryKey: authKeys.user() });
       navigate('/');
     },

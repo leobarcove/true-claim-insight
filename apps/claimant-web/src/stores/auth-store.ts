@@ -11,9 +11,8 @@ export interface ClaimantUser {
 interface AuthState {
   user: ClaimantUser | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
-  setAuth: (user: ClaimantUser, accessToken: string, refreshToken: string) => void;
+  setAuth: (user: ClaimantUser, accessToken: string) => void;
   updateUser: (user: Partial<ClaimantUser>) => void;
   logout: () => void;
 }
@@ -23,14 +22,12 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
 
-      setAuth: (user, accessToken, refreshToken) =>
+      setAuth: (user, accessToken) =>
         set({
           user,
           accessToken,
-          refreshToken,
           isAuthenticated: true,
         }),
 
@@ -43,7 +40,6 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           accessToken: null,
-          refreshToken: null,
           isAuthenticated: false,
         }),
     }),
@@ -52,7 +48,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
     }

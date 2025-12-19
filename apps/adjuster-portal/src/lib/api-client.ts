@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // Crucial for sending/receiving cookies
   headers: {
     'Content-Type': 'application/json',
   },
@@ -34,31 +35,27 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      const refreshToken = useAuthStore.getState().refreshToken;
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refreshToken,
-          });
+      try {
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
 
-          const { accessToken, refreshToken: newRefreshToken } = response.data;
-          const user = useAuthStore.getState().user;
+        const { accessToken } = response.data.data;
+        const user = useAuthStore.getState().user;
 
-          if (user) {
-            useAuthStore.getState().setAuth(user, accessToken, newRefreshToken);
-          }
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest);
-        } catch (refreshError) {
-          useAuthStore.getState().logout();
-          window.location.href = '/login';
-          return Promise.reject(refreshError);
+        if (user) {
+          useAuthStore.getState().setAuth(user, accessToken);
         }
-      }
 
-      useAuthStore.getState().logout();
-      window.location.href = '/login';
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
     }
 
     return Promise.reject(error);

@@ -7,6 +7,8 @@ import {
   UseGuards,
   Get,
   Res,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,7 +25,6 @@ import { OtpService } from './otp.service';
 import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -48,8 +49,13 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'User already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Res({ passthrough: true }) response: FastifyReply,
+  ) {
+    const result = await this.authService.register(registerDto);
+    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+    return result;
   }
 
   @Post('login')
@@ -64,16 +70,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: FastifyReply,
   ) {
     const result = await this.authService.login(loginDto);
-
-    // Set refresh token in HTTP-only cookie
-    response.setCookie('refreshToken', result.tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-
+    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
     return result;
   }
 
@@ -83,8 +80,18 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Tokens refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  async refresh(
+    @Req() request: any,
+    @Res({ passthrough: true }) response: FastifyReply,
+  ) {
+    const refreshToken = request.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing');
+    }
+
+    const tokens = await this.authService.refreshTokens(refreshToken);
+    this.setRefreshTokenCookie(response, tokens.refreshToken); // Rotation
+    return tokens;
   }
 
   @Post('logout')
@@ -94,12 +101,21 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout and invalidate tokens' })
   @ApiResponse({ status: 200, description: 'Logout successful' })
   async logout(@Res({ passthrough: true }) response: FastifyReply) {
-    // Clear refresh token cookie
     response.clearCookie('refreshToken', {
       path: '/api/v1/auth/refresh',
     });
 
     return { message: 'Logout successful' };
+  }
+
+  private setRefreshTokenCookie(response: FastifyReply, refreshToken: string) {
+    response.setCookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/v1/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
   }
 
   @Get('me')
@@ -178,7 +194,10 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
+  async verifyOtp(
+    @Body() dto: VerifyOtpDto,
+    @Res({ passthrough: true }) response: FastifyReply,
+  ) {
     // Verify OTP
     await this.otpService.verifyOtp(dto.phoneNumber, dto.code);
 
@@ -196,6 +215,8 @@ export class AuthController {
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: 900 }); // 15 minutes
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+    this.setRefreshTokenCookie(response, refreshToken);
 
     return {
       user: {

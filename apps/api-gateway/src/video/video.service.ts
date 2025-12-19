@@ -21,7 +21,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as any;
+    return result.data;
   }
 
   async getRoom(id: string) {
@@ -31,7 +32,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as any;
+    return result.data;
   }
 
   async joinRoom(id: string, dto: JoinRoomDto) {
@@ -45,7 +47,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as any;
+    return result.data;
   }
 
   async endRoom(id: string, dto: EndRoomDto) {
@@ -59,7 +62,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as any;
+    return result.data;
   }
 
   async getSessionsForClaim(claimId: string) {
@@ -69,7 +73,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as any;
+    return result.data;
   }
 
   async getConfigStatus() {

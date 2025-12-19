@@ -55,8 +55,7 @@ export function useVerifyOtp() {
     onSuccess: (data) => {
       setAuth(
         data.user,
-        data.tokens.accessToken,
-        data.tokens.refreshToken
+        data.tokens.accessToken
       );
       navigate('/dashboard');
     },

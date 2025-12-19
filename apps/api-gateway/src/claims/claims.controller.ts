@@ -33,7 +33,7 @@ export class ClaimsController {
     return this.httpService
       .post(`${this.caseServiceUrl}/api/v1/claims`, createClaimDto, { headers })
       .pipe(
-        map((response) => response.data),
+        map((response) => response.data.data), // Extract .data.data to avoid double wrapping
         catchError((e) => {
           throw new HttpException(
             e.response?.data || 'Failed to create claim',
@@ -54,9 +54,12 @@ export class ClaimsController {
 
     // case-service has /api/v1 prefix
     return this.httpService
-      .get(`${this.caseServiceUrl}/api/v1/claims`, { headers })
+      .get(`${this.caseServiceUrl}/api/v1/claims`, { 
+        headers,
+        params: req.query, // Pass query parameters (search, status, etc.)
+      })
       .pipe(
-        map((response) => response.data),
+        map((response) => response.data.data), // Extract .data.data to avoid double wrapping
         catchError((e) => {
           throw new HttpException(
             e.response?.data || 'Failed to fetch claims',
