@@ -12,6 +12,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { VideoModule } from './video/video.module';
 import { ClaimsModule } from './claims/claims.module';
+import { LocationModule } from './location/location.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -51,6 +52,7 @@ import configuration from './config/configuration';
     VideoModule,
     ClaimsModule,
     HealthModule,
+    LocationModule,
   ],
   providers: [
     // Global rate limiting guard
