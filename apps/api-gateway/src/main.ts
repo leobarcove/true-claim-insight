@@ -11,6 +11,7 @@ import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 
 import { AppModule } from './app.module';
+import multipart from '@fastify/multipart';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -36,6 +37,9 @@ async function bootstrap() {
   await app.register(cookie, {
     secret: configService.get<string>('COOKIE_SECRET', 'tci-cookie-secret'),
   });
+
+  // Enable multipart support
+  await app.register(multipart);
 
   // CORS configuration - allow both adjuster portal and claimant web
   const allowedOrigins = [

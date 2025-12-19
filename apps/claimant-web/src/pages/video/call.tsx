@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DailyVideoPlayer } from '@tci/ui-components';
 import { useJoinVideoRoom } from '@/hooks/use-video';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
-import { XCircle, Loader2, RefreshCw, ArrowLeft } from 'lucide-react';
+import { XCircle, Loader2, RefreshCw, ArrowLeft, Mic } from 'lucide-react';
+import { useAudioRecorder } from '@/hooks/use-audio-recorder';
 
 export function ClaimantVideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -16,6 +17,66 @@ export function ClaimantVideoCallPage() {
   const hasAttemptedJoin = useRef(false);
   
   const joinRoom = useJoinVideoRoom();
+  const { startRecording, stopRecording, getAudioBlob, isRecording } = useAudioRecorder();
+
+  // Handle uploading audio for analysis
+  const handleUploadAudio = useCallback(async () => {
+    try {
+      const blob = await getAudioBlob();
+      if (!blob || blob.size === 0) {
+        console.warn('No audio recorded yet');
+        return;
+      }
+
+      if (!sessionId) {
+        console.error('Session ID is missing, cannot upload audio.');
+        return;
+      }
+      
+      console.log('[VideoCallPage] Uploading audio blob, size:', blob.size);
+      const formData = new FormData();
+      formData.append('file', blob, 'claimant-audio.webm');
+      formData.append('sessionId', sessionId);
+      
+      // Use API Gateway endpoint (proxies to Risk Engine)
+      // Since claimant-web runs on 5173 and API Gateway on 3000
+      // We'll trust the proxy setup or use absolute URL for MVP
+      const response = await fetch('http://localhost:3000/api/v1/risk/upload-audio', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      console.log('Audio uploaded successfully');
+    } catch (err) {
+      console.error('Failed to upload audio:', err);
+    }
+  }, [getAudioBlob, sessionId]);
+
+  useEffect(() => {
+    // Setup Daily event listener for "app-message"
+    // This requires access to the daily instance. 
+    // Since DailyVideoPlayer creates its own instance internally, we might need a way to access it 
+    // or rely on window.DailyIframe if exposed.
+    // Ideally, @tci/ui-components would expose the call object via ref or context.
+    // For now, let's assume specific "request-voice-analysis" handling 
+    // OR we put the listener on the window if Daily exposes it globally (it doesn't by default).
+    
+    // WORKAROUND: We'll simulate the listener setup being managed inside Player
+    // OR we can rely on a different signaling mechanism if Player hides the instance.
+    // BUT! daily-js events are dispatched on the call object.
+    
+    // Assuming DailyVideoPlayer might forward events or we attach via a custom prop if we modify it.
+    // Let's modify DailyVideoPlayer in ui-components later to expose the call object?
+    // See next step.
+    
+    return () => {
+      stopRecording();
+    };
+  }, [stopRecording]);
 
   useEffect(() => {
     // Check for NRIC verification in sessionStorage
@@ -39,6 +100,9 @@ export function ClaimantVideoCallPage() {
           userId: user.id 
         });
         setJoinData({ url: result.roomUrl, token: result.token });
+        
+        // Start recording immediately when joining
+        startRecording();
       } catch (err: any) {
         console.error('[ClaimantVideoCallPage] Join failed:', err);
         setError(err.message || 'Failed to join video room');
@@ -46,22 +110,34 @@ export function ClaimantVideoCallPage() {
     };
 
     doJoin();
-  }, [sessionId, user?.id]);
+  }, [sessionId, user?.id, joinRoom, startRecording]);
 
   const attemptRetry = () => {
     hasAttemptedJoin.current = false;
     setJoinData(null);
     setError(null);
-    // The effect will re-run as hasAttemptedJoin.current is now false
-    // But since dependencies haven't changed, we might need to manually call doJoin or force a re-render.
-    // Actually, setting joinData to null might not trigger the effect.
-    // Let's use a trigger state or just call it.
-    window.location.reload(); // Simple solution for dev-test reliability
+    window.location.reload(); 
   };
 
   const handleEndCall = () => {
+    stopRecording();
     navigate('/tracker');
   };
+  
+  // Handle Daily app messages (signaling)
+  const handleAppMessage = useCallback((e: any) => {
+    console.log('[VideoCallPage] Received app message full event:', JSON.stringify(e, null, 2));
+    console.log('[VideoCallPage] Message Type:', e?.data?.type);
+    
+    if (e?.data?.type === 'request-voice-analysis') {
+      console.log('[VideoCallPage] Triggering audio upload from signal');
+      try {
+        handleUploadAudio();
+      } catch (err) {
+        console.error('[VideoCallPage] Error calling handleUploadAudio:', err);
+      }
+    }
+  }, [handleUploadAudio]);
 
   if (error) {
     return (
@@ -98,7 +174,14 @@ export function ClaimantVideoCallPage() {
       <div className="bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-800">
         <div>
           <h1 className="text-white font-semibold text-sm">Remote Assessment</h1>
-          <p className="text-xs text-slate-400">Secure Professional Connection</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-slate-400">Secure Professional Connection</p>
+            {isRecording && (
+              <span className="flex items-center text-[10px] text-red-400 gap-1 bg-red-900/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                <Mic className="h-3 w-3" /> REC
+              </span>
+            )}
+          </div>
         </div>
         <Button variant="destructive" size="sm" onClick={handleEndCall}>
           Exit
@@ -111,6 +194,7 @@ export function ClaimantVideoCallPage() {
           url={joinData.url} 
           token={joinData.token} 
           onLeft={handleEndCall}
+          onAppMessage={handleAppMessage}
         />
       </div>
 

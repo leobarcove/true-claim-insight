@@ -6,6 +6,7 @@ import { PrismaModule } from './config/prisma.module';
 import { HealthModule } from './health/health.module';
 import { DailyModule } from './daily/daily.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RoomsModule } from './rooms/rooms.module';
     HealthModule,
     DailyModule,
     RoomsModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

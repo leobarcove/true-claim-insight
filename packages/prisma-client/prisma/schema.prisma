@@ -173,6 +173,7 @@ model Session {
   endedAt         DateTime?
   durationSeconds Int?
   recordingUrl    String?
+  analysisStatus  AnalysisStatus   @default(PENDING)
   screenshots     Json             @default("[]")
   createdAt       DateTime         @default(now())
   roomUrl         String?
@@ -197,6 +198,7 @@ model RiskAssessment {
   createdAt      DateTime       @default(now())
   session        Session        @relation(fields: [sessionId], references: [id])
 
+  @@unique([sessionId, assessmentType])
   @@index([sessionId])
   @@map("risk_assessments")
 }
@@ -311,6 +313,13 @@ enum SessionStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  FAILED
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
   FAILED
 }
 

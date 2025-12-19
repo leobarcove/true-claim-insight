@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class RiskService {
+  private readonly logger = new Logger(RiskService.name);
   private readonly baseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -20,6 +21,26 @@ export class RiskService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, assessmentType }),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async uploadAudio(fileBuffer: Buffer, sessionId: string) {
+    const FormData = require('form-data');
+    const form = new FormData();
+    
+    form.append('file', fileBuffer, { filename: 'audio.blob' });
+    form.append('sessionId', sessionId);
+
+    this.logger.log(`Proxying audio upload for session ${sessionId}, size: ${fileBuffer.length}`);
+
+    const response = await fetch(`${this.baseUrl}/assessments/upload-audio`, {
+      method: 'POST',
+      body: form as any,
+      headers: {
+        ...form.getHeaders(),
+      },
     });
 
     return this.handleResponse(response);

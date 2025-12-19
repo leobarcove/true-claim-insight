@@ -7,15 +7,20 @@ import {
   UseGuards,
   HttpException,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
+import { FastifyRequest } from 'fastify';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { RiskService } from './risk.service';
 
 @ApiTags('risk')
@@ -46,6 +51,59 @@ export class RiskController {
       return await this.riskService.triggerAssessment(sessionId, assessmentType);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+
+  @Post('upload-audio')
+  @Public()
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        sessionId: { type: 'string' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload claimant audio' })
+  async uploadAudio(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new HttpException('Request is not multipart', HttpStatus.BAD_REQUEST);
+    }
+
+    let audioBuffer: Buffer | null = null;
+    let sessionId: string | null = null;
+
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === 'file') {
+          if (part.fieldname === 'file') {
+            audioBuffer = await part.toBuffer();
+          } else {
+            await part.toBuffer(); // Consume unused
+          }
+        } else {
+          if (part.fieldname === 'sessionId') {
+            sessionId = part.value as string;
+          }
+        }
+      }
+
+      if (!audioBuffer) {
+        throw new HttpException('No audio file uploaded', HttpStatus.BAD_REQUEST);
+      }
+
+      if (!sessionId) {
+        // Fallback to query param if needed
+        const query = req.query as any;
+        sessionId = query.sessionId || 'unknown';
+      }
+
+      return await this.riskService.uploadAudio(audioBuffer, sessionId as string);
+    } catch (error: any) {
+      throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
   }
 }

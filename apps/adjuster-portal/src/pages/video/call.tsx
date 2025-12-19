@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
@@ -87,6 +87,16 @@ export function VideoCallPage() {
     // The effect will trigger doJoin
   };
 
+  // Memoized callback to prevent component remount
+  const handleVideoLeft = useCallback(() => {
+    console.log('[VideoCallPage] onLeft triggered, isAnalyzing:', isAnalyzingRef.current);
+    if (!isAnalyzingRef.current) {
+      navigate(`/claims/${session?.claimId || ''}`);
+    } else {
+      console.log('[VideoCallPage] Blocked navigation due to analysis in progress');
+    }
+  }, [navigate, session?.claimId]);
+
   // Show error state with retry option
   if (joinError && !joinRoom.isPending) {
     return (
@@ -167,18 +177,11 @@ export function VideoCallPage() {
         {/* Remote/Main Video */}
         <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
           <DailyVideoPlayer 
+            key={`daily-${joinData.url}`}
             ref={playerRef}
             url={joinData.url} 
             token={joinData.token} 
-            onLeft={() => {
-              console.log('[VideoCallPage] onLeft triggered, isAnalyzing:', isAnalyzingRef.current);
-              // Don't navigate if we're in the middle of an analysis
-              if (!isAnalyzingRef.current) {
-                navigate(`/claims/${session?.claimId || ''}`);
-              } else {
-                console.log('[VideoCallPage] Blocked navigation due to analysis in progress');
-              }
-            }}
+            onLeft={handleVideoLeft}
           />
         </div>
 
@@ -328,25 +331,32 @@ export function VideoCallPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  isAnalyzingRef.current = true;
-                  console.log('[VideoCallPage] Starting voice analysis, isAnalyzing set to true');
-                  triggerAssessment.mutate(
-                    { sessionId: sessionId || '', assessmentType: 'VOICE' },
-                    {
-                      onSettled: () => {
-                        // Keep the flag set for a bit to prevent race conditions
-                        setTimeout(() => {
-                          isAnalyzingRef.current = false;
-                          console.log('[VideoCallPage] Voice analysis settled, isAnalyzing set to false');
-                        }, 1000);
-                      }
-                    }
-                  );
+                  
+                  if (playerRef.current) {
+                    console.log('[VideoCallPage] Sending voice analysis request to claimant');
+                    playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
+                    toast({
+                      title: 'Request Sent',
+                      description: 'Asking claimant device to send audio sample...',
+                    });
+                    
+                    // Simulate "pending" state or just wait for polling
+                    isAnalyzingRef.current = true;
+                    setTimeout(() => {
+                      isAnalyzingRef.current = false;
+                    }, 5000); 
+                  } else {
+                    toast({
+                      title: 'Error',
+                      description: 'Video connection not ready.',
+                      variant: 'destructive',
+                    });
+                  }
                 }}
-                disabled={triggerAssessment.isPending}
+                disabled={false} // Always enable if connected
               >
                 <Zap className="h-3 w-3 mr-2" />
-                Analyze Voice Stress
+                Analyze Voice Stress (Live)
               </Button>
               <Button 
                 type="button"
