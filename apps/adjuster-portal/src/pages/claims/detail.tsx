@@ -11,6 +11,11 @@ import {
   XCircle,
   FileCheck,
   Banknote,
+  AlertTriangle,
+  Clock,
+  Download,
+  Image,
+  User,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -115,8 +120,11 @@ export function ClaimDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Incident Details */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Incident Details</CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Updated: {formatDate(claim.updatedAt)}
+                </span>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm">{claim.description}</p>
@@ -141,6 +149,33 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Other Party Details (for TPPD claims) */}
+                {claim.otherParty && Object.keys(claim.otherParty).length > 0 && (
+                  <div className="pt-4 border-t">
+                    <p className="text-sm font-medium mb-2">Other Party Details</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {(claim.otherParty as any).name && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Name:</span>
+                          <span className="font-medium">{String((claim.otherParty as any).name)}</span>
+                        </div>
+                      )}
+                      {(claim.otherParty as any).vehiclePlate && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Vehicle:</span>
+                          <span className="font-medium">{String((claim.otherParty as any).vehiclePlate)}</span>
+                        </div>
+                      )}
+                      {(claim.otherParty as any).insurerName && (
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-muted-foreground">Insurer:</span>
+                          <span className="font-medium">{String((claim.otherParty as any).insurerName)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -219,22 +254,58 @@ export function ClaimDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Betterment</span>
-                    <span className="text-sm font-medium">RM 0.00</span>
+                    <span className="text-sm text-muted-foreground">Excess/Deductible</span>
+                    <span className="text-sm font-medium">
+                      {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'N/A'}
+                    </span>
                   </div>
                 </div>
+                {claim.approvedAmount && (
+                  <div className="pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-green-700">Approved Payout</span>
+                      <span className="text-xl font-bold text-green-700">
+                        RM {claim.approvedAmount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Documents placeholder */}
+            {/* Documents */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Documents</CardTitle>
+                <Badge variant="secondary">{claim.documents?.length || 0}</Badge>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                  <p className="text-sm">No documents uploaded yet.</p>
-                </div>
+                {claim.documents && claim.documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {claim.documents.map((doc: any) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          {doc.type === 'DAMAGE_PHOTO' ? (
+                            <Image className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <div>
+                            <p className="text-sm font-medium">{doc.filename}</p>
+                            <p className="text-xs text-muted-foreground">{doc.type.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <p className="text-sm">No documents uploaded yet.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -321,11 +392,19 @@ export function ClaimDetailPage() {
                   <span className="font-medium">{claim.vehicleChassisNumber || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-muted-foreground">Engine No:</span>
+                  <span className="font-medium">{claim.vehicleEngineNumber || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Make/Model:</span>
                   <span className="font-medium">
                     {claim.vehicleMake} {claim.vehicleModel}
                     {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Year:</span>
+                  <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
                 </div>
               </CardContent>
             </Card>
@@ -358,19 +437,29 @@ export function ClaimDetailPage() {
             {/* Claimant Info */}
             <Card>
               <CardHeader>
-                <CardTitle>Claimant</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Claimant
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar>
-                    <AvatarFallback>{getInitials(claim.claimantId)}</AvatarFallback>
+                    <AvatarFallback>{getInitials(claim.claimant?.fullName || claim.claimantId)}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium text-sm">ID: {claim.claimantId}</p>
-                    <div className="flex flex-col gap-1 mt-1">
-                      <Badge variant="success" className="text-[10px] w-fit">
-                        eKYC Verified
-                      </Badge>
+                    <p className="font-medium text-sm">{claim.claimant?.fullName || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground">{claim.claimant?.phoneNumber || 'No phone'}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {claim.claimant?.kycStatus === 'VERIFIED' ? (
+                        <Badge variant="success" className="text-[10px] w-fit">
+                          eKYC Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" className="text-[10px] w-fit">
+                          KYC {claim.claimant?.kycStatus || 'PENDING'}
+                        </Badge>
+                      )}
                       {claim.isPdpaCompliant ? (
                         <Badge variant="info" className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">
                           PDPA Consented
@@ -383,6 +472,12 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 </div>
+                {claim.siuInvestigatorId && (
+                  <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-medium text-amber-700">Escalated to SIU</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -401,15 +496,36 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Timeline Placeholder */}
+            {/* Timeline */}
             <Card>
               <CardHeader>
-                <CardTitle>Timeline</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Timeline
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center p-4 text-muted-foreground text-center">
-                  <p className="text-xs">Timeline records will appear as the claim progresses.</p>
-                </div>
+                {claim.sessions && claim.sessions.length > 0 ? (
+                  <div className="space-y-3">
+                    {claim.sessions.map((session: any) => (
+                      <div key={session.id} className="flex items-start gap-3">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
+                        <div>
+                          <p className="text-xs font-medium">
+                            Video Session - {session.status}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {session.scheduledTime ? formatDate(session.scheduledTime) : formatDate(session.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center p-4 text-muted-foreground text-center">
+                    <p className="text-xs">No timeline events yet.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

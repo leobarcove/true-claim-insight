@@ -176,12 +176,16 @@ export interface Claim {
   vehicleChassisNumber?: string;
   vehicleMake?: string;
   vehicleModel?: string;
+  vehicleEngineNumber?: string;
+  vehicleYear?: number;
   ncdRate?: number;
   sumInsured?: number;
   workshopName?: string;
   estimatedLossAmount?: number;
   estimatedRepairCost?: number;
   sstAmount?: number;
+  excessAmount?: number;
+  approvedAmount?: number;
   isPdpaCompliant: boolean;
   slaDeadline?: string;
   complianceNotes?: Record<string, any>;
@@ -190,6 +194,11 @@ export interface Claim {
   scheduledAssessmentTime?: string;
   createdAt: string;
   updatedAt: string;
+  // Relations (populated by API)
+  claimant?: Claimant;
+  adjuster?: Adjuster;
+  documents?: Document[];
+  sessions?: Session[];
 }
 
 export interface Session {

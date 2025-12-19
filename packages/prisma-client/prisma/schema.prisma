@@ -116,12 +116,16 @@ model Claim {
   vehicleChassisNumber    String?     // New: Compliance
   vehicleMake             String?
   vehicleModel            String?
+  vehicleEngineNumber     String?     // PIAM: Fraud check
+  vehicleYear             Int?        // PIAM: Betterment calculation
   ncdRate                 Float?      // New: Policy Info (0.00 to 1.00)
   sumInsured              Decimal?    // New: Policy Info
   workshopName            String?
   estimatedLossAmount     Decimal?    // New: Financials
   estimatedRepairCost     Decimal?    @db.Decimal(12, 2)
   sstAmount               Decimal?    // New: Financials
+  excessAmount            Decimal?    // Policy excess/deductible
+  approvedAmount          Decimal?    // Final approved payout
   isPdpaCompliant         Boolean     @default(false)
   slaDeadline             DateTime?
   complianceNotes         Json?       @default("{}")
