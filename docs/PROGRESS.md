@@ -35,7 +35,7 @@
 |------|--------|-------|
 | BNM Sandbox requirements | ✅ | Standard vs Green Lane |
 | Adjuster licensing (BCILLA) | ✅ | MII qualification required |
-| PDPA compliance | ⚪ | Pending detailed review |
+| PDPA compliance | ✅ | Privacy consent & roles implemented |
 | Indonesia (OJK) | 🟡 | Basic research done |
 | Thailand (OIC) | ⚪ | Pending |
 | Philippines (IC) | ⚪ | Pending |
@@ -235,6 +235,10 @@
 | 2025-12-18 | Pivot to V-KYC | Perform eKYC during video session to align with MY agent market |
 | 2025-12-18 | Shared Submission UI | Use `@tci/ui-components` for both PWA and Portal consistency |
 | 2025-12-18 | AI-Aided Submission | Implement OCR pre-filling for agents to minimize data entry |
+| 2025-12-19 | Regulatory Role Expansion | Added SIU, Compliance, Support, and Shariah roles for BNM compliance |
+| 2025-12-19 | Multi-Tenant Data Isolation | Reinforced isolation between Insurers and Adjusting Firms |
+| 2025-12-19 | Identity Consolidation | Linked Adjuster 1:1 with User; consolidated credentials and profiles |
+| 2025-12-19 | Admin Role completion | Added INSURER_ADMIN and SUPER_ADMIN for full hierarchy |
 
 ---
 

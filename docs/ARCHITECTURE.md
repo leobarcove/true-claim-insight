@@ -141,6 +141,18 @@ const app = await NestFactory.create<NestFastifyApplication>(
 ### Core Entities
 
 ```prisma
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  fullName      String
+  role          UserRole
+  tenantId      String?
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  adjuster      Adjuster?
+  siuClaims     Claim[]   @relation("SIUInvestigator")
+}
+
 model Tenant {
   id               String    @id @default(uuid())
   name             String
@@ -148,17 +160,18 @@ model Tenant {
   subscriptionTier SubscriptionTier @default(BASIC)
   adjusters        Adjuster[]
   claims           Claim[]
+  users            User[]
 }
 
 model Adjuster {
-  id              String    @id @default(uuid())
+  id              String         @id @default(uuid())
+  userId          String         @unique
   tenantId        String
-  licenseNumber   String    @unique
-  bcillaCertified Boolean   @default(false)
-  fullName        String
-  email           String    @unique
+  licenseNumber   String         @unique
+  bcillaCertified Boolean        @default(false)
   status          AdjusterStatus @default(ACTIVE)
-  tenant          Tenant    @relation(fields: [tenantId])
+  user            User           @relation(fields: [userId], references: [id])
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
   claims          Claim[]
 }
 
@@ -173,19 +186,27 @@ model Claimant {
 }
 
 model Claim {
-  id                String      @id @default(uuid())
-  claimNumber       String      @unique
-  claimantId        String
-  adjusterId        String?
-  claimType         ClaimType
-  status            ClaimStatus @default(SUBMITTED)
-  incidentDate      DateTime
-  incidentLocation  Json
-  description       String
-  claimant          Claimant    @relation(fields: [claimantId])
-  adjuster          Adjuster?   @relation(fields: [adjusterId])
-  sessions          Session[]
-  documents         Document[]
+  id                      String      @id @default(uuid())
+  claimNumber             String      @unique
+  claimantId              String
+  adjusterId              String?
+  insurerTenantId         String?     // FK to Tenant (INSURER)
+  siuInvestigatorId       String?     // FK to User (SIU_INVESTIGATOR)
+  policyNumber            String
+  claimType               ClaimType
+  status                  ClaimStatus @default(SUBMITTED)
+  incidentDate            DateTime
+  description             String
+  policeReportNumber      String?
+  vehiclePlateNumber      String?
+  isPdpaCompliant         Boolean     @default(false)
+  slaDeadline             DateTime?
+  complianceNotes         Json?       // Storage for audit trail
+  claimant                Claimant    @relation(fields: [claimantId])
+  adjuster                Adjuster?   @relation(fields: [adjusterId])
+  siuInvestigator         User?       @relation("SIUInvestigator", fields: [siuInvestigatorId])
+  sessions                Session[]
+  documents               Document[]
 }
 
 model Session {
@@ -225,6 +246,19 @@ model Document {
 ### Enums
 
 ```prisma
+enum UserRole {
+  ADJUSTER
+  FIRM_ADMIN
+  CLAIMANT
+  INSURER_STAFF
+  INSURER_ADMIN
+  SUPER_ADMIN
+  SIU_INVESTIGATOR
+  COMPLIANCE_OFFICER
+  SUPPORT_DESK
+  SHARIAH_REVIEWER
+}
+
 enum ClaimType { OWN_DAMAGE, THIRD_PARTY_PROPERTY, THEFT, WINDSCREEN }
 enum ClaimStatus { SUBMITTED, ASSIGNED, SCHEDULED, IN_ASSESSMENT, REPORT_PENDING, APPROVED, REJECTED, ESCALATED_SIU, CLOSED }
 enum SessionStatus { SCHEDULED, WAITING, IN_PROGRESS, COMPLETED, CANCELLED }
@@ -261,6 +295,10 @@ CLAIMANT: [view_own_claims, submit_claims, join_video, sign_documents]
 ADJUSTER: [view_assigned_claims, conduct_assessments, generate_reports]
 FIRM_ADMIN: [manage_adjusters, view_firm_claims, billing]
 INSURER_ADMIN: [assign_claims, view_reports, export_data]
+SIU_INVESTIGATOR: [view_all_claims, escalate_fraud, cross_case_analysis]
+COMPLIANCE_OFFICER: [audit_logs, pdpa_review, sla_monitoring]
+SUPPORT_DESK: [view_status, answer_enquiries, update_notes]
+SHARIAH_REVIEWER: [view_settlements, verify_takaful_compliance]
 ```
 
 ---

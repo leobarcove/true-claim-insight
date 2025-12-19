@@ -9,9 +9,12 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 **Primary users:**
 - **Loss Adjusters** - Conduct remote video assessments via web portal
 - **Claimants** - Submit claims and join video calls via PWA (mobile web)
+- **Compliance/SIU** - Fraud detection and regulatory oversight
 
 **Secondary users:**
-- Insurance companies - View reports and assign cases (demo quality for MVP)
+- **Insurance Admins** - Manage insurer staff, vendors, and assignments
+- **Firm Admins** - Manage adjusting firm operations
+- **Support Desk** - Handle customer enquiries
 
 **MVP scope:** Motor insurance claims (Own Damage, Third-Party Property) in Malaysia
 
@@ -120,9 +123,14 @@ Tenant (Organisation)
 ├── subscriptionTier: BASIC | PROFESSIONAL | ENTERPRISE
 └── settings: JSON (tenant-specific config)
 
-Adjuster (User) → belongs to Tenant
-├── Each tenant has multiple adjusters (users)
-└── Users within same tenant share access to organisation data
+User (Identity) → belongs to Tenant
+├── Generic model for all roles
+└── Linked 1:1 to Adjuster for Loss Adjusters
+
+Adjuster (Professional Profile)
+├── Linked to User record
+├── Stores license and certifications
+└── Does NOT store credentials (uses linked User)
 ```
 
 ### Tenant Isolation Implementation
@@ -195,7 +203,7 @@ pnpm dev
 # Run tests
 pnpm test
 
-# Build all packages
+# Build all packages (generates Prisma client)
 pnpm build
 ```
 

@@ -8,10 +8,12 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 
 | Stakeholder | Role | Priority |
 |-------------|------|----------|
-| Loss Adjuster | Conducts remote assessments | PRIMARY |
-| Claimant | Makes insurance claims | PRIMARY |
-| Insurance Company | Assigns cases, views reports | SECONDARY |
-| Adjusting Firm | Subscribes to platform | SECONDARY |
+| Loss Adjuster | Conducts remote assessments (ADJUSTER) | PRIMARY |
+| Claimant | Makes insurance claims (CLAIMANT) | PRIMARY |
+| Insurance Admin | Manages staff and vendors (INSURER_ADMIN) | SECONDARY |
+| Firm Admin | Manages firm operations (FIRM_ADMIN) | SECONDARY |
+| Compliance Entity | Audits for BNM/PDPA compliance | REGULATORY |
+| Support Desk | Handles customer grievances | SUPPORT |
 
 ## MVP Scope
 
@@ -33,7 +35,10 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 | ADJ-003 | View case details and documents | P0 |
 | ADJ-004 | Schedule video assessment | P0 |
 | ADJ-005 | Add case notes | P0 |
-| ADJ-006 | Escalate to SIU | P0 |
+| ADJ-006 | Escalate to SIU (Special Investigation Unit) | P0 |
+| ADJ-007 | Track BNM SLA (Acknowledgement within 7 days) | P0 |
+| ADJ-008 | Record vehicle Plate/Make/Model for fraud check | P0 |
+| ADJ-009 | Verify PDPA consent status | P0 |
 
 #### Video Assessment
 | ID | Requirement | Priority |
@@ -98,14 +103,22 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 | CLM-031 | Receive notifications | P0 |
 | CLM-032 | View assessment summary | P0 |
 
-### Insurer Dashboard (Demo)
+### Insurer Dashboard (V2)
 
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| INS-001 | Dashboard overview | P1 |
-| INS-002 | Assign claims to adjusters | P1 |
-| INS-003 | View assessment reports | P1 |
-| INS-004 | Export data | P2 |
+| ID | Requirement | Priority | Role |
+|----|-------------|----------|------|
+| INS-001 | Dashboard overview & KPI tracking | P1 | INSURER_STAFF |
+| INS-002 | Manage internal staff and vendor access | P1 | INSURER_ADMIN |
+| INS-003 | View and export assessment reports | P1 | INSURER_STAFF |
+| INS-004 | Configure organizational compliance settings | P2 | INSURER_ADMIN |
+
+### Regulatory & Compliance (New)
+| ID | Requirement | Priority | Role |
+|----|-------------|----------|------|
+| REG-001 | Cross-claim fraud pattern analysis | P0 | SIU_INVESTIGATOR |
+| REG-002 | Data privacy (PDPA) audit logs | P0 | COMPLIANCE_OFFICER |
+| REG-003 | Customer grievance resolution | P1 | SUPPORT_DESK |
+| REG-004 | Takaful Shariah compliance review | P1 | SHARIAH_REVIEWER |
 
 ---
 
@@ -201,4 +214,4 @@ Platform must verify:
 
 ---
 
-*Version 2.0 | Last Updated: 2025-12-18*
+*Version 2.1 | Last Updated: 2025-12-19*

@@ -16,6 +16,7 @@ export class AdjustersService {
   async getQueue(adjusterId: string, status?: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
+      include: { user: true },
     });
 
     if (!adjuster) {
@@ -73,7 +74,7 @@ export class AdjustersService {
 
     return {
       adjusterId,
-      adjusterName: adjuster.fullName,
+      adjusterName: adjuster.user.fullName,
       totalCases: claims.length,
       cases: claims,
     };
@@ -85,6 +86,7 @@ export class AdjustersService {
   async getStats(adjusterId: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
+      include: { user: true },
     });
 
     if (!adjuster) {
@@ -154,7 +156,7 @@ export class AdjustersService {
 
     return {
       adjusterId,
-      adjusterName: adjuster.fullName,
+      adjusterName: adjuster.user.fullName,
       stats: {
         totalClaims,
         activeClaims,
@@ -178,6 +180,7 @@ export class AdjustersService {
   async getWorkload(adjusterId: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
+      include: { user: true },
     });
 
     if (!adjuster) {
@@ -216,7 +219,7 @@ export class AdjustersService {
 
     return {
       adjusterId,
-      adjusterName: adjuster.fullName,
+      adjusterName: adjuster.user.fullName,
       activeClaims,
       scheduledSessions,
       workloadScore,
@@ -234,6 +237,7 @@ export class AdjustersService {
         status: 'ACTIVE',
       },
       include: {
+        user: true,
         _count: {
           select: {
             claims: {
@@ -256,8 +260,8 @@ export class AdjustersService {
 
       return {
         id: adjuster.id,
-        fullName: adjuster.fullName,
-        email: adjuster.email,
+        fullName: adjuster.user.fullName,
+        email: adjuster.user.email,
         licenseNumber: adjuster.licenseNumber,
         bcillaCertified: adjuster.bcillaCertified,
         activeClaims,

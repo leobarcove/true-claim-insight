@@ -10,22 +10,36 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: RegisterDto & { password: string }) {
+    const userData: any = {
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      phoneNumber: data.phoneNumber,
+      role: data.role,
+      licenseNumber: data.licenseNumber,
+      tenantId: data.tenantId,
+    };
+
+    // If role is ADJUSTER, we need to create an Adjuster record too
+    if (data.role === 'ADJUSTER' && data.licenseNumber && data.tenantId) {
+      userData.adjuster = {
+        create: {
+          licenseNumber: data.licenseNumber,
+          tenantId: data.tenantId,
+          status: 'ACTIVE',
+        },
+      };
+    }
+
     const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-        phoneNumber: data.phoneNumber,
-        role: data.role,
-        licenseNumber: data.licenseNumber,
-        tenantId: data.tenantId,
-      },
+      data: userData,
       include: {
         tenant: true,
+        adjuster: true,
       },
     });
 
-    this.logger.log(`User created: ${user.id}`);
+    this.logger.log(`User created: ${user.id} (Role: ${user.role})`);
 
     return user;
   }

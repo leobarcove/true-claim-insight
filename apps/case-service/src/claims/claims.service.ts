@@ -132,8 +132,12 @@ export class ClaimsService {
           adjuster: {
             select: {
               id: true,
-              fullName: true,
-              email: true,
+              user: {
+                select: {
+                  fullName: true,
+                  email: true,
+                },
+              },
             },
           },
           _count: {
@@ -169,6 +173,7 @@ export class ClaimsService {
         claimant: true,
         adjuster: {
           include: {
+            user: { select: { fullName: true, email: true } },
             tenant: { select: { id: true, name: true } },
           },
         },
@@ -236,7 +241,7 @@ export class ClaimsService {
         adjuster: {
           select: {
             id: true,
-            fullName: true,
+            user: { select: { fullName: true } },
           },
         },
       },
@@ -286,6 +291,7 @@ export class ClaimsService {
     // Verify adjuster exists
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },
+      include: { user: true },
     });
 
     if (!adjuster) {
@@ -312,8 +318,12 @@ export class ClaimsService {
         adjuster: {
           select: {
             id: true,
-            fullName: true,
-            email: true,
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -321,10 +331,10 @@ export class ClaimsService {
 
     await this.createAuditTrail(claimId, 'ADJUSTER_ASSIGNED', {
       adjusterId,
-      adjusterName: adjuster.fullName,
+      adjusterName: adjuster.user.fullName,
     });
 
-    this.logger.log(`Adjuster ${adjuster.fullName} assigned to claim ${claim.claimNumber}`);
+    this.logger.log(`Adjuster ${adjuster.user.fullName} assigned to claim ${claim.claimNumber}`);
 
     return updatedClaim;
   }

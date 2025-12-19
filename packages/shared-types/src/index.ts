@@ -95,6 +95,19 @@ export enum ActorType {
   SYSTEM = 'SYSTEM',
 }
 
+export enum UserRole {
+  ADJUSTER = 'ADJUSTER',
+  FIRM_ADMIN = 'FIRM_ADMIN',
+  CLAIMANT = 'CLAIMANT',
+  INSURER_STAFF = 'INSURER_STAFF',
+  INSURER_ADMIN = 'INSURER_ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  SIU_INVESTIGATOR = 'SIU_INVESTIGATOR',
+  COMPLIANCE_OFFICER = 'COMPLIANCE_OFFICER',
+  SUPPORT_DESK = 'SUPPORT_DESK',
+  SHARIAH_REVIEWER = 'SHARIAH_REVIEWER',
+}
+
 // ============ INTERFACES ============
 
 export interface Location {
@@ -115,17 +128,20 @@ export interface Tenant {
 
 export interface Adjuster {
   id: string;
+  userId: string;
   tenantId: string;
   licenseNumber: string;
   bcillaCertified: boolean;
   amlaMember: boolean;
-  fullName: string;
-  email: string;
-  phoneNumber?: string;
   status: AdjusterStatus;
   licenseVerifiedAt?: string;
   createdAt: string;
   updatedAt: string;
+  user?: {
+    fullName: string;
+    email: string;
+    phoneNumber?: string;
+  };
 }
 
 export interface Claimant {
@@ -157,12 +173,19 @@ export interface Claim {
   policeStation?: string;
   policeReportDate?: string;
   vehiclePlateNumber?: string;
+  vehicleChassisNumber?: string;
   vehicleMake?: string;
   vehicleModel?: string;
+  ncdRate?: number;
+  sumInsured?: number;
   workshopName?: string;
+  estimatedLossAmount?: number;
   estimatedRepairCost?: number;
+  sstAmount?: number;
   isPdpaCompliant: boolean;
   slaDeadline?: string;
+  complianceNotes?: Record<string, any>;
+  siuInvestigatorId?: string;
   priority: Priority;
   scheduledAssessmentTime?: string;
   createdAt: string;

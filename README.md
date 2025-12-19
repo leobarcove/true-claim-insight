@@ -10,8 +10,10 @@ True Claim Insight digitises face-to-face interactions between loss adjusters an
 - Remote video assessments (no travel required)
 - AI-assisted fraud detection (voice analysis, deepfake detection)
 - Digital identity verification (eKYC)
-- Automated report generation
-- Digital document signing
+- **BNM Regulatory Compliance**: 7-day SLA tracking, PDPA consent, and SIU escalation.
+- **B2B Multi-Tenancy**: Strict data isolation for multiple insurers and adjusting firms.
+- **Role-Based Access**: 10 granular roles (Adjusters, Admins, Compliance, SIU, etc.)
+- Automated report generation & digital document signing
 
 **MVP Scope:** Motor insurance claims (Own Damage, Third-Party Property) in Malaysia
 
@@ -96,18 +98,26 @@ pnpm dev
 
 ## Login Credentials (Development)
 
-### Adjuster Portal
+### Role-Based Demo Users
 
-| Field | Value |
-|-------|-------|
-| **Email** | `admin@demo.com` |
-| **Password** | `DemoPass123!` |
+All users use the password: `DemoPass123!`
+
+| Role | Email | Tenant |
+|------|-------|--------|
+| **Super Admin** | `superadmin@tci.com` | System |
+| **Insurer Admin** | `admin@allianz.com` | Allianz |
+| **Firm Admin** | `admin@pacific.com` | Pacific Adjusters |
+| **Adjuster** | `adjuster@pacific.com` | Pacific Adjusters |
+| **Insurer Staff** | `staff@allianz.com` | Allianz |
+| **SIU Investigator** | `siu@allianz.com` | Allianz |
+| **Compliance Officer** | `compliance@allianz.com` | Allianz |
+| **Shariah Reviewer** | `shariah@allianz.com` | Allianz |
+| **Support Desk** | `support@tci.com` | System |
 
 ### Claimant PWA (Phone OTP)
 
-1. Enter any Malaysian phone number (e.g., `123456789`)
-2. Check the terminal for the OTP code (logged to console)
-3. Enter the 6-digit code to login
+1. **Phone Number**: `+60123456789` (or any MAL phone)
+2. **OTP**: Check the terminal logs for the 6-digit code.
 
 
 ---

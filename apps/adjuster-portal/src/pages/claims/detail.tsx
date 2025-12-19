@@ -7,10 +7,10 @@ import {
   Car,
   FileText,
   ShieldCheck,
-  AlertCircle,
-  Building2,
   CheckCircle2,
   XCircle,
+  FileCheck,
+  Banknote,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -144,6 +144,88 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Policy Information (New: Compliance) */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FileCheck className="h-5 w-5" />
+                  Policy Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground text-sm">Policy Number</span>
+                    <span className="font-medium text-sm">{claim.policyNumber}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground text-sm">Sum Insured</span>
+                    <span className="font-medium text-sm">
+                      {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground text-sm">NCD Rate</span>
+                    <span className="font-medium text-sm">
+                      {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground text-sm">Policy Type</span>
+                    <span className="font-medium text-sm">
+                      {claim.claimType.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground text-sm">Panel Workshop</span>
+                    <span className="font-medium text-sm">{claim.workshopName || 'Not Assigned'}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Financials (New: Compliance) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Banknote className="h-5 w-5" />
+                  Financials & Estimates
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Estimated Loss</p>
+                    <p className="text-2xl font-bold">
+                      {claim.estimatedLossAmount 
+                        ? `RM ${claim.estimatedLossAmount.toLocaleString()}` 
+                        : 'Pending'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Repair Cost (Final)</p>
+                    <p className="text-2xl font-bold text-muted-foreground">
+                      {claim.estimatedRepairCost 
+                        ? `RM ${claim.estimatedRepairCost.toLocaleString()}` 
+                        : 'Pending'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">SST (Service Tax)</span>
+                    <span className="text-sm font-medium">
+                      {claim.sstAmount ? `RM ${claim.sstAmount.toLocaleString()}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Betterment</span>
+                    <span className="text-sm font-medium">RM 0.00</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Documents placeholder */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -235,6 +317,10 @@ export function ClaimDetailPage() {
                   <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-muted-foreground">Chassis No:</span>
+                  <span className="font-medium">{claim.vehicleChassisNumber || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Make/Model:</span>
                   <span className="font-medium">
                     {claim.vehicleMake} {claim.vehicleModel}
@@ -256,6 +342,12 @@ export function ClaimDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Report No:</span>
                   <span className="font-medium">{claim.policeReportNumber || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Date:</span>
+                  <span className="font-medium">
+                    {claim.policeReportDate ? formatDate(claim.policeReportDate) : 'N/A'}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-muted-foreground">Station:</span>

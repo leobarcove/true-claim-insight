@@ -41,6 +41,31 @@ export class UpdateClaimDto {
   @IsOptional()
   vehicleModel?: string;
 
+  @ApiPropertyOptional({ example: 'PMK123456789' })
+  @IsString()
+  @IsOptional()
+  vehicleChassisNumber?: string;
+
+  @ApiPropertyOptional({ example: 0.55 })
+  @IsNumber()
+  @IsOptional()
+  ncdRate?: number;
+
+  @ApiPropertyOptional({ example: 50000 })
+  @IsNumber()
+  @IsOptional()
+  sumInsured?: number;
+
+  @ApiPropertyOptional({ example: 5000 })
+  @IsNumber()
+  @IsOptional()
+  estimatedLossAmount?: number;
+
+  @ApiPropertyOptional({ example: 300 })
+  @IsNumber()
+  @IsOptional()
+  sstAmount?: number;
+
   @ApiPropertyOptional({ example: 'POL/123/2025' })
   @IsString()
   @IsOptional()
