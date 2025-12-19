@@ -5,10 +5,11 @@ import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { useVideoSession, useJoinVideoRoom, useEndVideoSession } from '@/hooks/use-video';
+import { useVideoSession, useJoinVideoRoom, useEndVideoSession, useRiskAssessments, useTriggerAssessment } from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
+import { ShieldAlert, ShieldCheck, ShieldMinus, Zap } from 'lucide-react';
 
 export function VideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -23,8 +24,11 @@ export function VideoCallPage() {
   
   const { data: session } = useVideoSession(sessionId || '');
   const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
+  const { data: assessments } = useRiskAssessments(sessionId || '');
+  
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
+  const triggerAssessment = useTriggerAssessment();
 
 
   // Effect to trigger join and set data directly
@@ -187,11 +191,61 @@ export function VideoCallPage() {
             </div>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 p-4 flex-1">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">Risk Markers</h3>
-            <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-4">
-              <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
-              <p className="text-xs">Risk engine will analyze the stream in real-time once the call is fully established.</p>
+          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Risk Markers</h3>
+              <Badge variant="outline" className="text-[10px] h-5 border-slate-700 text-slate-400">
+                LIVE
+              </Badge>
+            </div>
+            
+            <div className="flex-1 overflow-auto space-y-3 min-h-0">
+              {assessments && assessments.length > 0 ? (
+                assessments.map((marker) => (
+                  <div key={marker.id} className="p-2 rounded bg-slate-800/50 border border-slate-700/50 animate-in fade-in slide-in-from-right-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">
+                        {marker.assessmentType.replace('_', ' ')}
+                      </span>
+                      {marker.riskScore === 'HIGH' && <ShieldAlert className="h-3 w-3 text-red-500" />}
+                      {marker.riskScore === 'MEDIUM' && <ShieldMinus className="h-3 w-3 text-amber-500" />}
+                      {marker.riskScore === 'LOW' && <ShieldCheck className="h-3 w-3 text-emerald-500" />}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-200">
+                        {marker.provider}
+                      </p>
+                      <Badge 
+                        variant={
+                          marker.riskScore === 'HIGH' ? 'destructive' : 
+                          marker.riskScore === 'MEDIUM' ? 'secondary' : 'default'
+                        }
+                        className="text-[9px] h-4 px-1"
+                      >
+                        {marker.riskScore || 'PENDING'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-4 py-8">
+                  <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-xs">No risk markers detected yet. Analysis starts automatically.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={() => triggerAssessment.mutate({ sessionId: sessionId || '', assessmentType: 'VOICE' })}
+                disabled={triggerAssessment.isPending}
+              >
+                <Zap className="h-3 w-3 mr-2" />
+                Trigger Voice Analysis
+              </Button>
             </div>
           </Card>
         </div>

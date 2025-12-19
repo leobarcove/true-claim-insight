@@ -14,6 +14,7 @@ import { VideoModule } from './video/video.module';
 import { ClaimsModule } from './claims/claims.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
+import { RiskModule } from './risk/risk.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -55,6 +56,7 @@ import configuration from './config/configuration';
     ClaimantsModule,
     HealthModule,
     LocationModule,
+    RiskModule,
   ],
   providers: [
     // Global rate limiting guard
