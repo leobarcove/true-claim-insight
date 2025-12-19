@@ -163,10 +163,15 @@ export function useTriggerAssessment() {
       );
       return data.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      // Use variables.sessionId if data.sessionId is not available
       queryClient.invalidateQueries({
-        queryKey: riskKeys.session(data.sessionId),
+        queryKey: riskKeys.session(data?.sessionId || variables.sessionId),
       });
+    },
+    onError: (error: any) => {
+      console.error('[useTriggerAssessment] Error:', error?.message || error);
+      // Error is logged but not thrown to prevent page navigation
     },
   });
 }
