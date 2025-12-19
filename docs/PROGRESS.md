@@ -27,6 +27,7 @@
 | Define stakeholders | ✅ | Full 10-role ecosystem |
 | Document requirements | ✅ | docs/REQUIREMENTS.md |
 | Technical architecture | ✅ | docs/ARCHITECTURE.md |
+| Claims workflow | ✅ | docs/CLAIMS_WORKFLOW.md |
 | Tech stack decision | ✅ | TypeScript, NestJS, React, AWS |
 | Progress tracker | ✅ | This file |
 

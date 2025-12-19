@@ -18,6 +18,11 @@
 | Monorepo | Turborepo | 2.3.x |
 | Package Manager | pnpm | 9.x |
 
+> 📄 **Related Documentation**:
+> - [Requirements](./REQUIREMENTS.md) - Business requirements and functional specs
+> - [Claims Workflow](./CLAIMS_WORKFLOW.md) - End-to-end claim scenarios and diagrams
+> - [Progress](./PROGRESS.md) - Development progress tracker
+
 ---
 
 ## Architecture Principles

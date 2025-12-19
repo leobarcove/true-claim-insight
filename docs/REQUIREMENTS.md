@@ -25,6 +25,8 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 **Insurance Type:** Motor Insurance
 **Claim Types:** Own Damage, Third-Party Property
 
+> 📄 **See also**: [Claims Workflow](./CLAIMS_WORKFLOW.md) for detailed end-to-end scenarios and diagrams.
+
 ---
 
 ## Functional Requirements
