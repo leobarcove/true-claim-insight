@@ -11,6 +11,7 @@ import { PrismaModule } from './config/prisma.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { VideoModule } from './video/video.module';
+import { ClaimsModule } from './claims/claims.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -48,6 +49,7 @@ import configuration from './config/configuration';
     AuthModule,
     UsersModule,
     VideoModule,
+    ClaimsModule,
     HealthModule,
   ],
   providers: [

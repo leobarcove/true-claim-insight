@@ -26,6 +26,7 @@ import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
 
 /**
@@ -39,7 +40,7 @@ import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenan
 @ApiTags('claims')
 @ApiBearerAuth()
 @Controller('claims')
-@UseGuards(TenantGuard)
+@UseGuards(InternalAuthGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimsController {
   constructor(private readonly claimsService: ClaimsService) {}
