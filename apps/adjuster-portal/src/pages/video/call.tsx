@@ -21,27 +21,17 @@ export function VideoCallPage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const hasAttemptedJoin = useRef(false);
   
-  const { data: session, isLoading: isSessionLoading } = useVideoSession(sessionId || '');
+  const { data: session } = useVideoSession(sessionId || '');
   const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
 
-  // Debug logging
-  console.log('[VideoCallPage] State:', {
-    sessionId,
-    user: user?.id,
-    joinData,
-    joinError,
-    hasAttemptedJoin: hasAttemptedJoin.current,
-    isPending: joinRoom.isPending,
-  });
 
   // Effect to trigger join and set data directly
   useEffect(() => {
     const doJoin = async () => {
       if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
       
-      console.log('[VideoCallPage] Starting join...');
       hasAttemptedJoin.current = true;
       
       try {
@@ -50,7 +40,6 @@ export function VideoCallPage() {
           userId: user.id, 
           role: 'ADJUSTER' 
         });
-        console.log('[VideoCallPage] Join succeeded:', result);
         setJoinData({ url: result.roomUrl, token: result.token });
       } catch (error: any) {
         console.error('[VideoCallPage] Join failed:', error);
@@ -112,13 +101,6 @@ export function VideoCallPage() {
     );
   }
 
-  // Debug: Check render conditions
-  console.log('[VideoCallPage] Render conditions:', {
-    isSessionLoading,
-    isPending: joinRoom.isPending,
-    joinData,
-    willShowLoading: !joinData
-  });
 
   if (!joinData) {
     return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import DailyIframe, { DailyCall } from '@daily-co/daily-js';
 import { Loader2, VideoOff } from 'lucide-react';
 
@@ -32,7 +32,6 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     requestFullscreen: () => {
-      console.log('[DailyVideoPlayer] requestFullscreen called');
       if (callRef.current) {
         try {
           callRef.current.requestFullscreen();
@@ -47,7 +46,6 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
       }
     },
     exitFullscreen: () => {
-      console.log('[DailyVideoPlayer] exitFullscreen called');
       if (callRef.current) {
         try {
           callRef.current.exitFullscreen();
@@ -65,7 +63,6 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
 
     const initCall = async () => {
       try {
-        console.log('[DailyVideoPlayer] Initializing call...');
         
         let callFrame: DailyCall | null = null;
         let retryCount = 0;
@@ -76,7 +73,6 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
             // 1. Check for global instance and destroy if it exists
             const existingCall = DailyIframe.getCallInstance();
             if (existingCall) {
-              console.log('[DailyVideoPlayer] Orphan Daily instance found. Destroying before creation...');
               await existingCall.destroy();
               // Small pause to let Daily JS internal state update
               await new Promise(r => setTimeout(r, 200));
@@ -103,7 +99,6 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
             }
 
             // 4. Attempt to create the frame
-            console.log(`[DailyVideoPlayer] Creating frame (attempt ${retryCount + 1})...`);
             callFrame = DailyIframe.createFrame(containerRef.current!, {
               iframeStyle: {
                 width: '100%',
@@ -133,13 +128,11 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         callRef.current = callFrame;
 
         callFrame.on('joined-meeting', () => {
-          console.log('[DailyVideoPlayer] Joined meeting event');
           setStatus('joined');
           onJoined?.();
         });
 
         callFrame.on('left-meeting', () => {
-          console.log('[DailyVideoPlayer] Left meeting event');
           onLeft?.();
         });
 
@@ -151,11 +144,9 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
 
         // Use 'joined' status to remove our loader once we are ready to show the iframe
         // Daily pre-join UI needs to be visible for the user to click 'Join'
-        console.log('[DailyVideoPlayer] Removing loader and joining room...');
         setStatus('joined'); 
         
         await callFrame.join({ url, token });
-        console.log('[DailyVideoPlayer] Join promise resolved');
         onJoined?.();
       } catch (err: any) {
         console.error('[DailyVideoPlayer] Initialization failed:', err);
@@ -168,10 +159,8 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
 
     return () => {
       if (callRef.current) {
-        console.log('[DailyVideoPlayer] Destroying instance...');
         dailyDestroyPromise = callRef.current.destroy()
           .then(() => {
-             console.log('[DailyVideoPlayer] Instance destroyed successfully');
           })
           .catch(err => {
              console.error('[DailyVideoPlayer] Error destroying instance:', err);
