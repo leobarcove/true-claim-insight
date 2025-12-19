@@ -58,9 +58,12 @@ export function truncate(str: string, length: number): string {
   return `${str.slice(0, length)}...`;
 }
 
-export function getDaysSince(date: string | Date): number {
+export function getDaysSince(date: string | Date | null | undefined): number {
+  if (!date) return 0;
   const start = new Date(date).getTime();
+  if (isNaN(start)) return 0;
+  
   const now = new Date().getTime();
   const diff = now - start;
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }

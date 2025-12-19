@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import { DailyVideoPlayer } from '@tci/ui-components';
+import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { useVideoSession, useJoinVideoRoom, useEndVideoSession } from '@/hooks/use-video';
+import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 
@@ -14,12 +15,14 @@ export function VideoCallPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const playerRef = useRef<DailyVideoPlayerRef>(null);
   
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const hasAttemptedJoin = useRef(false);
   
   const { data: session, isLoading: isSessionLoading } = useVideoSession(sessionId || '');
+  const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
 
@@ -83,6 +86,11 @@ export function VideoCallPage() {
     }
   };
 
+  const attemptJoin = () => {
+    hasAttemptedJoin.current = false;
+    // The effect will trigger doJoin
+  };
+
   // Show error state with retry option
   if (joinError && !joinRoom.isPending) {
     return (
@@ -109,7 +117,7 @@ export function VideoCallPage() {
     isSessionLoading,
     isPending: joinRoom.isPending,
     joinData,
-    willShowLoading: isSessionLoading || joinRoom.isPending || !joinData
+    willShowLoading: !joinData
   });
 
   if (!joinData) {
@@ -149,7 +157,12 @@ export function VideoCallPage() {
         </div>
         
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="bg-slate-800 border-slate-700 text-slate-300">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="bg-slate-800 border-slate-700 text-slate-300"
+            onClick={() => playerRef.current?.requestFullscreen()}
+          >
             <Maximize2 className="h-4 w-4 mr-2" />
             Fullscreen
           </Button>
@@ -165,6 +178,7 @@ export function VideoCallPage() {
         {/* Remote/Main Video */}
         <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
           <DailyVideoPlayer 
+            ref={playerRef}
             url={joinData.url} 
             token={joinData.token} 
             onLeft={() => navigate(`/claims/${session?.claimId || ''}`)}
@@ -178,11 +192,15 @@ export function VideoCallPage() {
             <div className="space-y-3">
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
-                <p className="text-sm text-slate-300">Tan Wei Ming</p>
+                <p className="text-sm text-slate-300">
+                  {isClaimLoading ? 'Loading...' : claim?.claimant?.fullName || 'N/A'}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">Location</p>
-                <p className="text-sm text-slate-300 truncate">Petaling Jaya, Selangor</p>
+                <p className="text-sm text-slate-300 truncate">
+                  {isClaimLoading ? 'Loading...' : claim?.incidentLocation?.address || 'N/A'}
+                </p>
               </div>
             </div>
           </Card>
