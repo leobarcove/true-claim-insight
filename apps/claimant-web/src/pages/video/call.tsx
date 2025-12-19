@@ -18,6 +18,15 @@ export function ClaimantVideoCallPage() {
   const joinRoom = useJoinVideoRoom();
 
   useEffect(() => {
+    // Check for NRIC verification in sessionStorage
+    const isVerified = sessionStorage.getItem(`nric_verified_${sessionId}`) === 'true';
+    
+    if (!isVerified && sessionId) {
+      console.log(`[ClaimantVideoCallPage] NRIC not verified for session ${sessionId}, redirecting...`);
+      navigate(`/video/${sessionId}/verify-nric`);
+      return;
+    }
+
     const doJoin = async () => {
       if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
       

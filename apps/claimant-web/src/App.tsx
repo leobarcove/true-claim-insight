@@ -5,6 +5,7 @@ import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
 import { SubmitClaimPage } from '@/pages/claims/submit';
 import { ClaimantVideoCallPage } from '@/pages/video/call';
+import { VerifyNRICPage } from '@/pages/video/verify-nric';
 import { useAuthStore } from '@/stores/auth-store';
 import { useClaims, useClaimSessions } from '@/hooks/use-claims';
 import { cn } from '@/lib/utils';
@@ -188,6 +189,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ClaimantVideoCallPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video/:sessionId/verify-nric"
+            element={
+              <ProtectedRoute>
+                <VerifyNRICPage />
               </ProtectedRoute>
             }
           />
