@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type UserRole =
+  | 'ADJUSTER'
+  | 'FIRM_ADMIN'
+  | 'INSURER_ADMIN'
+  | 'INSURER_STAFF'
+  | 'SIU_INVESTIGATOR'
+  | 'COMPLIANCE_OFFICER'
+  | 'SUPPORT_DESK'
+  | 'SHARIAH_REVIEWER'
+  | 'SUPER_ADMIN';
+
 export interface User {
   id: string;
   email: string;
   fullName: string;
-  role: 'ADJUSTER' | 'FIRM_ADMIN';
+  role: UserRole;
   tenantId: string;
   tenantName: string;
   licenseNumber?: string;

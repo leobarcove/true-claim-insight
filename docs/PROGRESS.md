@@ -24,7 +24,7 @@
 ### Documentation
 | Task | Status | Notes |
 |------|--------|-------|
-| Define stakeholders | ✅ | Adjuster + Claimant primary |
+| Define stakeholders | ✅ | Full 10-role ecosystem |
 | Document requirements | ✅ | docs/REQUIREMENTS.md |
 | Technical architecture | ✅ | docs/ARCHITECTURE.md |
 | Tech stack decision | ✅ | TypeScript, NestJS, React, AWS |

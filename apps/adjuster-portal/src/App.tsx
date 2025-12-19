@@ -13,6 +13,7 @@ import { ClaimDetailPage } from '@/pages/claims/detail';
 import { NewClaimPage } from '@/pages/claims/new';
 import { VideoCallPage } from '@/pages/video/call';
 import { useAuthStore } from '@/stores/auth-store';
+import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
 
 const queryClient = new QueryClient({
@@ -78,9 +79,23 @@ export default function App() {
             >
               <Route path="/" element={<DashboardPage />} />
               <Route path="/claims" element={<ClaimsListPage />} />
-              <Route path="/claims/new" element={<NewClaimPage />} />
+              <Route
+                path="/claims/new"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'INSURER_STAFF', 'SUPER_ADMIN']}>
+                    <NewClaimPage />
+                  </RoleRoute>
+                }
+              />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
-              <Route path="/video/:sessionId" element={<VideoCallPage />} />
+              <Route
+                path="/video/:sessionId"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                    <VideoCallPage />
+                  </RoleRoute>
+                }
+              />
               <Route path="/sessions" element={<ComingSoon title="Video Sessions" />} />
               <Route path="/schedule" element={<ComingSoon title="Schedule" />} />
               <Route path="/settings" element={<ComingSoon title="Settings" />} />

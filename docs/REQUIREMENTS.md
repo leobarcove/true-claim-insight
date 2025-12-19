@@ -10,10 +10,14 @@ Augmented Adjusting digitises face-to-face interactions between **Loss Adjusters
 |-------------|------|----------|
 | Loss Adjuster | Conducts remote assessments (ADJUSTER) | PRIMARY |
 | Claimant | Makes insurance claims (CLAIMANT) | PRIMARY |
-| Insurance Admin | Manages staff and vendors (INSURER_ADMIN) | SECONDARY |
-| Firm Admin | Manages firm operations (FIRM_ADMIN) | SECONDARY |
-| Compliance Entity | Audits for BNM/PDPA compliance | REGULATORY |
-| Support Desk | Handles customer grievances | SUPPORT |
+| Super Admin | Platform administration (SUPER_ADMIN) | ADMIN |
+| Insurer Admin | Manages insurer staff/policies (INSURER_ADMIN) | ADMIN |
+| Insurer Staff | General claims processing (INSURER_STAFF) | SECONDARY |
+| Firm Admin | Manages adjusting firm (FIRM_ADMIN) | ADMIN |
+| SIU Investigator | Fraud investigation (SIU_INVESTIGATOR) | REGULATORY |
+| Compliance Officer | PDPA/Audit oversight (COMPLIANCE_OFFICER) | REGULATORY |
+| Support Desk | Customer support (SUPPORT_DESK) | SUPPORT |
+| Shariah Reviewer | Takaful compliance (SHARIAH_REVIEWER) | REGULATORY |
 
 ## MVP Scope
 
