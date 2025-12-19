@@ -72,61 +72,39 @@ export function ClaimDetailPage() {
     (s) => s.status === 'WAITING' || s.status === 'SCHEDULED' || s.status === 'IN_PROGRESS'
   );
 
-  const handleStartVideoSession = async () => {
-    if (!claimId) return;
-    
-    // If there's already an active session, just join it
-    if (activeVideoSession) {
-      navigate(`/video/${activeVideoSession.id}`);
-      return;
-    }
-
-    try {
-      const session = await createVideoRoom.mutateAsync(claimId);
-      navigate(`/video/${session.sessionId}`);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: 'Failed to create a video session. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleNotifyClaimant = async () => {
+  const handleStartVideoAssessment = async () => {
     if (!claimId) return;
     setIsNotifying(true);
-    setMagicLink(null);
     
     try {
-      let sessionToUse = activeVideoSession;
+      let sessionId: string;
 
-      // If no active session exists, create one first so the link is valid
-      if (!sessionToUse) {
-        const result = await createVideoRoom.mutateAsync(claimId);
-        sessionToUse = { 
-          id: result.sessionId, 
-          status: result.status as any,
-          claimId,
-          roomId: 0, // MockroomId for UI
-        } as any;
+      // If there's already an active session, use it; otherwise create one
+      if (activeVideoSession) {
+        sessionId = activeVideoSession.id;
+      } else {
+        const session = await createVideoRoom.mutateAsync(claimId);
+        sessionId = session.sessionId;
       }
 
-      // Mocking the notification delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const session = sessionToUse || { id: 'dev-session-id' };
-      const devLink = `http://localhost:4001/video/${session.id}`;
-      
+      // Generate magic link for claimant (in production, this would send SMS)
+      const devLink = `http://localhost:4001/video/${sessionId}`;
       setMagicLink(devLink);
+      
       toast({
-        title: 'Notification Sent',
-        description: 'Magic Link generated and displayed for development.',
+        title: 'Assessment Started',
+        description: 'Claimant has been notified. Joining video room...',
       });
+
+      // Small delay to show the magic link before navigating
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Navigate adjuster to video call
+      navigate(`/video/${sessionId}`);
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to notify claimant.',
+        description: 'Failed to start video assessment. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -159,9 +137,9 @@ export function ClaimDetailPage() {
             {statusConfig[claim.status].label}
           </Badge>
           {claim.status === 'SCHEDULED' && (
-            <Button size="sm" onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
+            <Button size="sm" onClick={handleStartVideoAssessment} disabled={createVideoRoom.isPending || isNotifying}>
               <Video className="h-4 w-4 mr-2" />
-              {createVideoRoom.isPending ? 'Starting...' : 'Start Session'}
+              {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
             </Button>
           )}
         </div>
@@ -542,19 +520,17 @@ export function ClaimDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Button className="w-full" onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
-                    <Video className="h-4 w-4 mr-2" />
-                    {createVideoRoom.isPending ? 'Starting...' : 'Start Session'}
-                  </Button>
                   <Button 
-                    variant="outline" 
-                    className="w-full border-primary text-primary hover:bg-primary/5" 
-                    onClick={handleNotifyClaimant}
-                    disabled={isNotifying}
+                    className="w-full" 
+                    onClick={handleStartVideoAssessment} 
+                    disabled={createVideoRoom.isPending || isNotifying}
                   >
-                    <ShieldCheck className="h-4 w-4 mr-2" />
-                    {isNotifying ? 'Sending...' : 'Notify Claimant (SMS)'}
+                    <Video className="h-4 w-4 mr-2" />
+                    {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
                   </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Creates room & notifies claimant via SMS
+                  </p>
 
                   {/* DEV ONLY: Show Magic Link */}
                   {magicLink && (

@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  UseGuards,
   HttpStatus,
   HttpException,
   Logger,
@@ -11,25 +10,18 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../config/prisma.service';
 
 @ApiTags('claimants')
 @Controller('claimants')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth('access-token')
 export class ClaimantsController {
   private readonly logger = new Logger(ClaimantsController.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
   @Post('verify-nric')
-  @Roles('CLAIMANT')
-  @ApiOperation({ summary: 'Verify claimant NRIC before joining video assessment' })
+  @ApiOperation({ summary: 'Verify claimant NRIC before joining video assessment (public - part of magic link flow)' })
   @ApiResponse({ status: 200, description: 'NRIC verified successfully' })
   @ApiResponse({ status: 400, description: 'Invalid NRIC' })
   async verifyNric(

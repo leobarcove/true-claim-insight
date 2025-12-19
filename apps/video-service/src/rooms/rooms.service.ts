@@ -15,6 +15,7 @@ export class RoomsService {
 
   /**
    * Create a new video room for a claim assessment
+   * If an active session already exists for the claim, return that instead
    */
   async createRoom(dto: CreateRoomDto): Promise<{
     session: Session;
@@ -27,6 +28,22 @@ export class RoomsService {
 
     if (!claim) {
       throw new NotFoundException(`Claim ${dto.claimId} not found`);
+    }
+
+    // Check for existing active session for this claim
+    const existingSession = await this.prisma.session.findFirst({
+      where: {
+        claimId: dto.claimId,
+        status: {
+          in: [SessionStatus.WAITING, SessionStatus.SCHEDULED, SessionStatus.IN_PROGRESS],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingSession && existingSession.roomUrl) {
+      this.logger.log(`Returning existing active session ${existingSession.id} for claim ${dto.claimId}`);
+      return { session: existingSession, roomUrl: existingSession.roomUrl };
     }
 
     // Create Daily.co room
