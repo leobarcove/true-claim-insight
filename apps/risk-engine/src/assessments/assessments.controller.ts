@@ -17,7 +17,7 @@ export class AssessmentsController {
   }
 
   @Post('trigger')
-  @ApiOperation({ summary: 'Trigger a real-time risk assessment (Mock)' })
+  @ApiOperation({ summary: 'Trigger a mock risk assessment' })
   @SwaggerResponse({ status: 201, description: 'Assessment triggered' })
   async triggerAssessment(
     @Body('sessionId') sessionId: string,
@@ -25,5 +25,17 @@ export class AssessmentsController {
   ) {
     this.logger.log(`Triggering ${assessmentType} assessment for session ${sessionId}`);
     return this.assessmentsService.triggerMockAssessment(sessionId, assessmentType);
+  }
+
+  @Get('analyzer-health')
+  @ApiOperation({ summary: 'Check if Python analyzer service is healthy' })
+  @SwaggerResponse({ status: 200, description: 'Analyzer health status' })
+  async getAnalyzerHealth() {
+    const isHealthy = await this.assessmentsService.isAnalyzerHealthy();
+    return {
+      service: 'risk-analyzer',
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      url: 'http://localhost:3005',
+    };
   }
 }
