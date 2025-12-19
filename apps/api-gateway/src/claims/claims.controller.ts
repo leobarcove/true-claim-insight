@@ -52,9 +52,26 @@ export class ClaimsController {
       'X-User-Id': req.user?.id,
     };
 
+    // Use adjuster ID from the user's adjuster relationship
+    const adjusterId = req.user?.adjuster?.id;
+    
+    if (!adjusterId) {
+      // If user is not an adjuster, return empty stats
+      return {
+        totalAssigned: 0,
+        pendingReview: 0,
+        inProgress: 0,
+        completedThisMonth: 0,
+        completedThisWeek: 0,
+        averagePerDay: 0,
+        totalClaims: 0,
+        statusBreakdown: {},
+      };
+    }
+
     // Call case service's adjuster stats endpoint
     return this.httpService
-      .get(`${this.caseServiceUrl}/api/v1/adjusters/${req.user?.id}/stats`, { headers })
+      .get(`${this.caseServiceUrl}/api/v1/adjusters/${adjusterId}/stats`, { headers })
       .pipe(
         map((response) => {
           const data = response.data.data;

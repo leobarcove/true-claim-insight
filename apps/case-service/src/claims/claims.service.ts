@@ -78,6 +78,8 @@ export class ClaimsService {
       claimType,
       adjusterId,
       search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
     } = query;
     const skip = (page - 1) * limit;
 
@@ -115,12 +117,15 @@ export class ClaimsService {
       }
     }
 
+    // Build orderBy from sortBy and sortOrder
+    const orderBy: Record<string, 'asc' | 'desc'> = { [sortBy]: sortOrder };
+
     const [claims, total] = await Promise.all([
       this.prisma.claim.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           claimant: {
             select: {

@@ -58,6 +58,7 @@ export class UsersService {
       where: { id },
       include: {
         tenant: true,
+        adjuster: true,
       },
     });
   }

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -22,6 +23,37 @@ export interface ApiResponse<T> {
   };
 }
 
+/**
+ * Convert Prisma Decimal types to numbers for JSON serialization
+ */
+function serializeDecimals(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (obj instanceof Decimal) {
+    return obj.toNumber();
+  }
+  
+  if (typeof obj === 'bigint') {
+    return Number(obj);
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(serializeDecimals);
+  }
+  
+  if (typeof obj === 'object' && obj !== null) {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = serializeDecimals(obj[key]);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
 @Injectable()
 export class TransformInterceptor<T>
   implements NestInterceptor<T, ApiResponse<T>>
@@ -35,7 +67,7 @@ export class TransformInterceptor<T>
     return next.handle().pipe(
       map((data) => ({
         success: true,
-        data,
+        data: serializeDecimals(data),
         meta: {
           timestamp: new Date().toISOString(),
           requestId: request.id,

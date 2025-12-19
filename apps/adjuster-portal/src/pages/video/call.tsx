@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle } from 'lucide-react';
 import { DailyVideoPlayer } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
@@ -16,13 +16,16 @@ export function VideoCallPage() {
   const { toast } = useToast();
   
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
+  const hasAttemptedJoin = useRef(false);
   
   const { data: session, isLoading: isSessionLoading } = useVideoSession(sessionId || '');
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
 
   useEffect(() => {
-    if (sessionId && user && !joinData) {
+    // Only attempt to join once - prevent infinite loop on error
+    if (sessionId && user && !joinData && !hasAttemptedJoin.current && !joinRoom.isPending) {
+      hasAttemptedJoin.current = true;
       joinRoom.mutate(
         { sessionId, userId: user.id, role: 'ADJUSTER' },
         {
@@ -39,7 +42,7 @@ export function VideoCallPage() {
         }
       );
     }
-  }, [sessionId, user, joinRoom, joinData, toast]);
+  }, [sessionId, user, joinData, joinRoom.isPending, toast]);
 
   const handleEndCall = async () => {
     if (!sessionId) return;

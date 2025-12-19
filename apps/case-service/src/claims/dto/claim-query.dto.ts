@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -62,4 +63,24 @@ export class ClaimQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ 
+    example: 'createdAt',
+    description: 'Field to sort by',
+    enum: ['createdAt', 'updatedAt', 'claimNumber', 'status', 'priority'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['createdAt', 'updatedAt', 'claimNumber', 'status', 'priority'])
+  sortBy?: string = 'createdAt';
+
+  @ApiPropertyOptional({ 
+    example: 'desc',
+    description: 'Sort order',
+    enum: ['asc', 'desc'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc' = 'desc';
 }

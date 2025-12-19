@@ -7,7 +7,8 @@ export class VideoService {
   private readonly baseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.baseUrl = this.configService.get<string>('services.videoService', 'http://localhost:3002');
+    const serviceUrl = this.configService.get<string>('services.videoService', 'http://localhost:3002');
+    this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
   async createRoom(dto: CreateRoomDto) {
@@ -21,8 +22,8 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as any;
-    return result.data;
+    // Video service returns data directly without wrapper
+    return response.json();
   }
 
   async getRoom(id: string) {
@@ -32,8 +33,7 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as any;
-    return result.data;
+    return response.json();
   }
 
   async joinRoom(id: string, dto: JoinRoomDto) {
@@ -47,8 +47,7 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as any;
-    return result.data;
+    return response.json();
   }
 
   async endRoom(id: string, dto: EndRoomDto) {
@@ -62,8 +61,7 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as any;
-    return result.data;
+    return response.json();
   }
 
   async getSessionsForClaim(claimId: string) {
@@ -73,8 +71,7 @@ export class VideoService {
       throw new Error(`Video service error: ${response.statusText}`);
     }
 
-    const result = (await response.json()) as any;
-    return result.data;
+    return response.json();
   }
 
   async getConfigStatus() {

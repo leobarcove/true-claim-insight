@@ -1,17 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class LocationService {
   private readonly logger = new Logger(LocationService.name);
   private readonly nominatimUrl = 'https://nominatim.openstreetmap.org/search';
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
   async searchAddress(query: string, limit: number = 5) {
     if (!query || query.length < 3) {
