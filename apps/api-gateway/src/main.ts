@@ -1,14 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 
@@ -17,7 +15,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }),
+    new FastifyAdapter({ logger: false })
   );
 
   const configService = app.get(ConfigService);
@@ -32,9 +30,15 @@ async function bootstrap() {
   // Compression
   await app.register(compress, { encodings: ['gzip', 'deflate'] });
 
-  // Cookies for refresh tokens
   await app.register(cookie, {
     secret: configService.get<string>('COOKIE_SECRET', 'tci-cookie-secret'),
+  });
+
+  // Multipart for file uploads (OCR)
+  await app.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
   });
 
   // CORS configuration - allow both adjuster portal and claimant web
@@ -65,7 +69,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-    }),
+    })
   );
 
   // API prefix
@@ -86,7 +90,7 @@ async function bootstrap() {
           description: 'Enter JWT token',
           in: 'header',
         },
-        'access-token',
+        'access-token'
       )
       .addTag('auth', 'Authentication endpoints')
       .addTag('users', 'User management endpoints')

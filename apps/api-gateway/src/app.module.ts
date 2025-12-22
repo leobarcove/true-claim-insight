@@ -13,6 +13,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { VideoModule } from './video/video.module';
 import { ClaimsModule } from './claims/claims.module';
 import { LocationModule } from './location/location.module';
+import { OcrModule } from './ocr/ocr.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -53,6 +54,7 @@ import configuration from './config/configuration';
     ClaimsModule,
     HealthModule,
     LocationModule,
+    OcrModule,
   ],
   providers: [
     // Global rate limiting guard

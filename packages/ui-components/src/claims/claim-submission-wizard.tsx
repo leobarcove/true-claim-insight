@@ -26,7 +26,7 @@ function cn(...inputs: ClassValue[]) {
 // ================= CONSTANTS & DATA =================
 
 const MALAYSIA_CARS: Record<string, string[]> = {
-  Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa'],
+  Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa', 'Traz'],
   Proton: ['Saga', 'Persona', 'Iriz', 'Exora', 'X50', 'X70', 'X90', 'S70'],
   Honda: ['City', 'Civic', 'HR-V', 'CR-V', 'Jazz', 'City Hatchback', 'WR-V', 'Accord'],
   Toyota: ['Vios', 'Yaris', 'Corolla Cross', 'Hilux', 'Veloz', 'Camry', 'Innova', 'Fortuner'],
@@ -220,18 +220,26 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
   const { extractData, isExtracting } = useAiExtraction();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
   // Step 5 Evidence States
   const [previewPhotoIndex, setPreviewPhotoIndex] = useState<number | null>(null);
   const [photoToRemoveIndex, setPhotoToRemoveIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isMapLoading, setIsMapLoading] = useState(true);
 
   // Location Suggestion State
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const addressContainerRef = useRef<HTMLDivElement>(null);
+
+  const [isAiImportActive, setIsAiImportActive] = useState(false);
+  const [aiImportFiles, setAiImportFiles] = useState<{ [key: string]: File | null }>({
+    mykad: null,
+    damaged_evidence: null,
+    police_report: null,
+  });
+  const [aiExtractionError, setAiExtractionError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -383,37 +391,82 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
   // ================= HANDLERS =================
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-    const files = Array.from(fileList);
-    const data = await extractData(files);
+  const handleAiImportSubmit = async () => {
+    const hasFiles = Object.values(aiImportFiles).some(f => f !== null);
+    if (!hasFiles) return;
 
-    setFormData((prev: any) => ({
-      ...prev,
-      claimantId: data.claimantName || prev.claimantId,
-      nric: data.nric || prev.nric,
-      mobileNumber: data.mobileNumber || prev.mobileNumber,
-      vehiclePlate: data.vehiclePlate || prev.vehiclePlate,
-      vehicleMake: data.vehicleMake || prev.vehicleMake,
-      vehicleModel: data.vehicleModel || prev.vehicleModel,
-      incidentDate: data.incidentDate || prev.incidentDate,
-      incidentTime: data.incidentTime || prev.incidentTime,
-      description: data.description || prev.description,
-    }));
+    setAiExtractionError(null);
+    const extraction = await extractData(aiImportFiles);
+
+    // Check if we got any valid extraction data
+    const hasData = Object.keys(extraction).length > 0;
+
+    if (!hasData) {
+      setAiExtractionError(
+        'Extraction failed. Please try again, or use manual entry if the issue persists.'
+      );
+      return;
+    }
 
     const filled = new Set<string>();
-    if (data.claimantName) filled.add('claimantId');
-    if (data.nric) filled.add('nric');
-    if (data.mobileNumber) filled.add('mobileNumber');
-    if (data.vehiclePlate) filled.add('vehiclePlate');
-    if (data.vehicleMake) filled.add('vehicleMake');
-    if (data.vehicleModel) filled.add('vehicleModel');
-    if (data.incidentDate) filled.add('incidentDate');
-    if (data.incidentTime) filled.add('incidentTime');
-    if (data.description) filled.add('description');
-    setAiFilledFields(filled);
+    const newFormData = { ...formData };
 
+    // Process MyKad
+    if (extraction.mykad?.document) {
+      const front = extraction.mykad.document.front;
+      if (front) {
+        if (front.name) {
+          newFormData.claimantId = front.name;
+          filled.add('claimantId');
+        }
+        if (front.nric) {
+          newFormData.nric = front.nric;
+          filled.add('nric');
+        }
+        if (front.address?.full_address) {
+          newFormData.address = front.address.full_address;
+          filled.add('address');
+        }
+      }
+    }
+
+    // Process Damaged Evidence (Vehicle details)
+    if (extraction.damaged_evidence?.document) {
+      const data = extraction.damaged_evidence.document;
+      if (data.vehicle_plate) {
+        newFormData.vehiclePlate = data.vehicle_plate;
+        filled.add('vehiclePlate');
+      }
+      if (data.vehicle_make) {
+        newFormData.vehicleMake = data.vehicle_make;
+        filled.add('vehicleMake');
+      }
+      if (data.vehicle_model) {
+        newFormData.vehicleModel = data.vehicle_model;
+        filled.add('vehicleModel');
+      }
+      if (data.incident_date) {
+        newFormData.incidentDate = data.incident_date;
+        filled.add('incidentDate');
+      }
+      if (data.incident_time) {
+        newFormData.incidentTime = data.incident_time;
+        filled.add('incidentTime');
+      }
+    }
+
+    // Process Police Report
+    if (extraction.police_report?.document) {
+      const data = extraction.police_report.document;
+      if (data.incident_description) {
+        newFormData.description = data.incident_description;
+        filled.add('description');
+      }
+    }
+
+    setFormData(newFormData);
+    setAiFilledFields(filled);
+    setIsAiImportActive(false);
     setStep(mode === 'AGENT' ? 1 : 2);
   };
 
@@ -423,10 +476,17 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       // Validate types
       const validPhotos = newPhotos.filter(f => f.type.startsWith('image/'));
 
-      setFormData((prev: any) => ({
-        ...prev,
-        photos: [...prev.photos, ...validPhotos],
-      }));
+      setFormData((prev: any) => {
+        const totalPhotos = prev.photos.length + validPhotos.length;
+        if (totalPhotos > 10) {
+          setErrors(e => ({ ...e, photos: 'Maximum 10 photos allowed' }));
+          return prev;
+        }
+        return {
+          ...prev,
+          photos: [...prev.photos, ...validPhotos],
+        };
+      });
 
       // Clear error if resolved
       if (formData.photos.length + validPhotos.length >= 2) {
@@ -452,9 +512,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       const query = formData.address;
       if (query && query.length > 2 && showAddressSuggestions) {
         try {
-          const res = await fetch(
-            `http://localhost:3000/api/v1/location/search?q=${encodeURIComponent(query)}`
-          );
+          const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api/v1';
+          const res = await fetch(`${baseUrl}/location/search?q=${encodeURIComponent(query)}`);
           if (res.ok) {
             const json = await res.json();
             // API Gateway Standard Response: { success: true, data: [...], meta: ... }
@@ -501,7 +560,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       vehiclePlate: 'WQX 9988',
       vehicleMake: 'Proton',
       vehicleModel: 'X50',
-      vehicleYear: '2023',
+      vehicleYear: '2025',
       claimType: 'OWN_DAMAGE',
       description:
         'The vehicle was hit from the rear by a motorcycle while waiting at a traffic light in Kuala Lumpur.',
@@ -529,45 +588,152 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           <p className="text-gray-500">Choose how you want to input the claim details</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button
-            onClick={() => setStep(1)}
-            className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gray-100 bg-white hover:border-blue-500 hover:bg-blue-50/50 transition-all group shadow-sm hover:shadow-md"
-          >
-            <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-              <User className="text-gray-500 group-hover:text-blue-600" size={32} />
-            </div>
-            <div className="text-center">
-              <h3 className="font-bold text-lg text-gray-900">Manual Entry</h3>
-              <p className="text-sm text-gray-500 mt-1">Fill in details step-by-step</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isExtracting}
-            className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-blue-100 bg-blue-50/30 hover:border-blue-500 hover:bg-blue-50 transition-all group relative overflow-hidden shadow-sm hover:shadow-md"
-          >
-            {isExtracting && (
-              <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-10 animate-in fade-in">
-                <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">
-                  Extracting Data...
-                </span>
+        {isAiImportActive ? (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {aiExtractionError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700 text-sm animate-in shake duration-300">
+                <AlertCircle size={18} />
+                {aiExtractionError}
               </div>
             )}
-            <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-blue-200 shadow-lg">
-              <Sparkles className="text-white" size={28} />
+            <div className="grid grid-cols-1 gap-4">
+              {[
+                {
+                  id: 'mykad',
+                  label: 'MyKad (Front)',
+                  description: 'Identity verification',
+                  icon: User,
+                  required: true,
+                },
+                {
+                  id: 'damaged_evidence',
+                  label: 'Incident Photo',
+                  description: 'Photo of the scene/damage',
+                  icon: Camera,
+                  required: true,
+                },
+                {
+                  id: 'police_report',
+                  label: 'Police Report',
+                  description: 'Official report document',
+                  icon: ClipboardCheck,
+                  required: false,
+                },
+              ].map(slot => (
+                <div
+                  key={slot.id}
+                  className={cn(
+                    'flex items-center gap-4 p-4 rounded-xl border-2 border-dashed transition-all',
+                    aiImportFiles[slot.id]
+                      ? 'border-green-200 bg-green-50/50'
+                      : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50/50'
+                  )}
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*,.pdf';
+                    input.onchange = (e: any) => {
+                      if (e.target.files?.[0]) {
+                        setAiImportFiles(prev => ({ ...prev, [slot.id]: e.target.files[0] }));
+                      }
+                    };
+                    input.click();
+                  }}
+                >
+                  <div
+                    className={cn(
+                      'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+                      aiImportFiles[slot.id]
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-100 text-gray-400'
+                    )}
+                  >
+                    {aiImportFiles[slot.id] ? <Check size={20} /> : <slot.icon size={20} />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-gray-900">{slot.label}</h4>
+                      {slot.required && (
+                        <span className="text-[10px] text-red-500 font-bold uppercase">
+                          Required
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {aiImportFiles[slot.id] ? aiImportFiles[slot.id]?.name : slot.description}
+                    </p>
+                  </div>
+                  {aiImportFiles[slot.id] && (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setAiImportFiles(prev => ({ ...prev, [slot.id]: null }));
+                      }}
+                      className="p-1 hover:bg-red-100 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="text-center">
-              <h3 className="font-bold text-lg text-gray-900">AI Import</h3>
-              <p className="text-sm text-gray-500 mt-1">Upload MyKad & Incident Photos</p>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <Button variant="ghost" onClick={() => setIsAiImportActive(false)}>
+                Back
+              </Button>
+              <Button
+                onClick={handleAiImportSubmit}
+                disabled={isExtracting || !aiImportFiles.mykad || !aiImportFiles.damaged_evidence}
+                className="min-w-[160px] shadow-lg shadow-blue-200"
+              >
+                {isExtracting ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={18} />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} className="mr-2" />
+                    Process AI Import
+                  </>
+                )}
+              </Button>
             </div>
-            <div className="mt-4 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide rounded-full">
-              Recommended
-            </div>
-          </button>
-        </div>
+          </div>
+        ) : (
+          /* Selection Cards */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button
+              onClick={() => setStep(1)}
+              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gray-100 bg-white hover:border-blue-500 hover:bg-blue-50/50 transition-all group shadow-sm hover:shadow-md"
+            >
+              <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                <User className="text-gray-500 group-hover:text-blue-600" size={32} />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-lg text-gray-900">Manual Entry</h3>
+                <p className="text-sm text-gray-500 mt-1">Fill in details step-by-step</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setIsAiImportActive(true)}
+              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-blue-100 bg-blue-50/30 hover:border-blue-500 hover:bg-blue-50 transition-all group relative overflow-hidden shadow-sm hover:shadow-md"
+            >
+              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-blue-200 shadow-lg">
+                <Sparkles className="text-white" size={28} />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-lg text-gray-900">AI Import</h3>
+                <p className="text-sm text-gray-500 mt-1">Upload MyKad & Incident Photos</p>
+              </div>
+              <div className="mt-4 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide rounded-full">
+                Recommended
+              </div>
+            </button>
+          </div>
+        )}
 
         <div className="flex justify-center">
           <button
@@ -579,16 +745,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           </button>
         </div>
 
-        <input
-          type="file"
-          multiple
-          ref={fileInputRef}
-          className="hidden"
-          onChange={handleFileUpload}
-          accept="image/*,.pdf"
-        />
-
-        <div className="text-center">
+        <div className="text-center pt-2">
           <Button variant="ghost" onClick={onCancel} className="text-gray-400 font-normal">
             Cancel
           </Button>
@@ -603,7 +760,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       <div className="bg-white px-6 py-4 border-b border-gray-100">
         <div className="flex justify-between items-center relative">
           {/* Connecting Line */}
-          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -z-0 translate-y-[-50%]" />
+          <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-100 -z-0 translate-y-[-50%] overflow-hidden">
+            <div
+              className="h-full bg-green-500 transition-all duration-500"
+              style={{ width: `${(currentStepperIndex / (stepStates.length - 1)) * 100}%` }}
+            />
+          </div>
 
           {stepStates.map((s: any, idx: number) => {
             const isActive = idx === currentStepperIndex;
@@ -640,7 +802,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         </div>
       </div>
 
-      <div className="p-8 flex-1 overflow-y-auto">
+      <div className="p-8 flex-1" style={{ minHeight: 'calc(100vh - 350px)' }}>
         {/* Step 1: Claimant (Agent only) */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -652,10 +814,13 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 group-focus-within:text-blue-500 transition-colors"
+                style={{ top: '1.7rem' }}
+              />
               <Input
                 placeholder="Search by NRIC or Phone..."
-                className="pl-10 bg-gray-50 border-transparent focus:bg-white"
+                className="bg-gray-50 border-transparent focus:bg-white pl-9"
               />
             </div>
 
@@ -701,24 +866,22 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               <p className="text-sm text-gray-500 mt-1">Vehicle involved in the incident.</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <Input
-                  label="Plate Number"
-                  placeholder="ABC 1234"
-                  value={formData.vehiclePlate}
-                  error={errors.vehiclePlate}
-                  className="uppercase"
-                  aiFilled={aiFilledFields.has('vehiclePlate')}
-                  onChange={(e: any) =>
-                    setFormData({ ...formData, vehiclePlate: e.target.value.toUpperCase() })
-                  }
-                  onBlur={() => handleBlur('vehiclePlate')}
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Plate Number"
+                placeholder="ABC 1234"
+                value={formData.vehiclePlate}
+                error={errors.vehiclePlate}
+                className="uppercase"
+                aiFilled={aiFilledFields.has('vehiclePlate')}
+                onChange={(e: any) =>
+                  setFormData({ ...formData, vehiclePlate: e.target.value.toUpperCase() })
+                }
+                onBlur={() => handleBlur('vehiclePlate')}
+              />
               <Input
                 label="Year"
-                placeholder="2023"
+                placeholder="2025"
                 value={formData.vehicleYear}
                 onChange={(e: any) => setFormData({ ...formData, vehicleYear: e.target.value })}
               />
@@ -832,7 +995,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="relative" ref={addressContainerRef}>
-              <Search className="absolute left-3 top-3.5 h-4 w-4 text-gray-400 z-10" />
+              <Search
+                className="absolute left-3 h-4 w-4 text-gray-400 z-10"
+                style={{ top: '1.2rem' }}
+              />
               <Input
                 placeholder="Search location (e.g. Jalan Tun Razak)"
                 value={formData.address}
@@ -866,17 +1032,31 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             {/* Google Maps Integration (Embed) */}
-            <div className="aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-inner relative">
+            <div
+              className="aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-inner relative tci-map-container"
+              style={{ width: '100%', height: '220px' }}
+            >
               {formData.address ? (
-                <iframe
-                  width="100%"
-                  height="100%"
-                  className="border-0"
-                  loading="lazy"
-                  allowFullScreen
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                  style={{ filter: 'grayscale(0.2)' }}
-                ></iframe>
+                <>
+                  {isMapLoading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10">
+                      <Loader2 className="animate-spin text-blue-500 mb-2" size={24} />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Loading Map...
+                      </span>
+                    </div>
+                  )}
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    className="border-0"
+                    loading="lazy"
+                    allowFullScreen
+                    onLoad={() => setIsMapLoading(false)}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                    style={{ filter: 'grayscale(0.2)' }}
+                  ></iframe>
+                </>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
                   <div className="bg-white p-4 rounded-full shadow-sm mb-3">
@@ -1052,15 +1232,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </p>
             </div>
 
-            <div className="space-y-4 bg-gray-50/80 p-5 rounded-2xl border border-gray-100">
-              <div className="flex justify-between items-center py-2 border-b border-gray-200/50 last:border-0">
+            <div className="space-y-4 bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
+              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
                 <span className="text-sm text-gray-500">Claimant</span>
                 <div className="text-right">
                   <p className="text-sm font-bold text-gray-900">{formData.claimantId || 'Self'}</p>
                   <p className="text-xs text-gray-400">{formData.nric}</p>
                 </div>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200/50 last:border-0">
+              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
                 <span className="text-sm text-gray-500">Vehicle</span>
                 <div className="text-right">
                   <p className="text-sm font-bold text-gray-900">{formData.vehiclePlate}</p>
@@ -1069,30 +1249,33 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   </p>
                 </div>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200/50 last:border-0">
+              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
                 <span className="text-sm text-gray-500">Claim Type</span>
-                <span className="text-sm font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
-                  {CLAIM_TYPES[formData.claimType]}
-                </span>
+                <div className="text-right">
+                  <p className="text-sm font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
+                    {CLAIM_TYPES[formData.claimType]}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    <span
+                      className="flex items-center gap-1"
+                      style={{ justifyContent: 'flex-end', marginRight: 8, marginTop: 4 }}
+                    >
+                      <ImageIcon size={14} className="text-gray-400" />
+                      {formData.photos.length} evidence{formData.photos.length === 1 ? '' : 's'}
+                    </span>
+                  </p>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500">Incident Time</span>
-                <span className="text-sm font-medium">
-                  {formData.incidentDate} at {formData.incidentTime}
-                </span>
-              </div>
-              <div className="flex justify-between items-start py-2 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500 shrink-0">Location</span>
-                <span className="text-sm font-medium text-right max-w-[200px]">
-                  {formData.address}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-500">Evidence</span>
-                <span className="text-sm font-medium flex items-center gap-1">
-                  <ImageIcon size={14} className="text-gray-400" />
-                  {formData.photos.length} photos
-                </span>
+              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
+                <span className="text-sm text-gray-500">Incident Details</span>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900 max-w-[220px]">
+                    {formData.address}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {formData.incidentDate} at {formData.incidentTime}
+                  </p>
+                </div>
               </div>
             </div>
 
