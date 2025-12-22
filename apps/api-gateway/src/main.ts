@@ -9,6 +9,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
+import multipart from '@fastify/multipart';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -40,6 +41,9 @@ async function bootstrap() {
       fileSize: 10 * 1024 * 1024, // 10MB
     },
   });
+
+  // Enable multipart support
+  await app.register(multipart);
 
   // CORS configuration - allow both adjuster portal and claimant web
   const allowedOrigins = [

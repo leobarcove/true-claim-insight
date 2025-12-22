@@ -245,6 +245,13 @@ export interface Document {
 
 // ============ API TYPES ============
 
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  error?: string;
+}
+
 export interface CreateClaimRequest {
   policyNumber: string;
   claimType: ClaimType;

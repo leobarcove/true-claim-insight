@@ -49,3 +49,15 @@ infrastructure/terraform/**/*.tfvars
 tmp/
 temp/
 *.tmp
+
+# Python
+apps/risk-analyzer/venv/
+apps/risk-analyzer/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg

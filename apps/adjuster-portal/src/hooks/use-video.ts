@@ -113,3 +113,65 @@ export function useEndVideoSession(sessionId: string) {
     },
   });
 }
+
+// --- Risk Assessments ---
+
+export interface RiskAssessment {
+  id: string;
+  sessionId: string;
+  assessmentType: 'VOICE_ANALYSIS' | 'VISUAL_MODERATION' | 'ATTENTION_TRACKING' | 'DEEPFAKE_CHECK';
+  provider: string;
+  riskScore: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  confidence: number;
+  rawResponse: any;
+  createdAt: string;
+}
+
+export const riskKeys = {
+  all: ['risk'] as const,
+  session: (sessionId: string) => [...riskKeys.all, 'session', sessionId] as const,
+};
+
+export function useRiskAssessments(sessionId: string) {
+  return useQuery({
+    queryKey: riskKeys.session(sessionId),
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<RiskAssessment[]>>(
+        `/risk/session/${sessionId}`
+      );
+      return data.data;
+    },
+    enabled: !!sessionId,
+    refetchInterval: 5000, // Poll for live results
+  });
+}
+
+export function useTriggerAssessment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      assessmentType,
+    }: {
+      sessionId: string;
+      assessmentType: string;
+    }) => {
+      const { data } = await apiClient.post<ApiResponse<RiskAssessment>>(
+        '/risk/trigger',
+        { sessionId, assessmentType }
+      );
+      return data.data;
+    },
+    onSuccess: (data, variables) => {
+      // Use variables.sessionId if data.sessionId is not available
+      queryClient.invalidateQueries({
+        queryKey: riskKeys.session(data?.sessionId || variables.sessionId),
+      });
+    },
+    onError: (error: any) => {
+      console.error('[useTriggerAssessment] Error:', error?.message || error);
+      // Error is logged but not thrown to prevent page navigation
+    },
+  });
+}

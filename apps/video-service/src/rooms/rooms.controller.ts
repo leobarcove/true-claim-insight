@@ -81,6 +81,7 @@ export class RoomsController {
     },
   })
   async joinRoom(@Param('id') id: string, @Body() dto: JoinRoomDto) {
+    console.log(`[RoomsController] Join attempt for session ${id}:`, JSON.stringify(dto));
     return this.roomsService.joinRoom(id, dto);
   }
 

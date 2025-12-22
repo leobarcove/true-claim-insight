@@ -12,7 +12,9 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { VideoModule } from './video/video.module';
 import { ClaimsModule } from './claims/claims.module';
+import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
+import { RiskModule } from './risk/risk.module';
 import { OcrModule } from './ocr/ocr.module';
 import configuration from './config/configuration';
 
@@ -52,8 +54,10 @@ import configuration from './config/configuration';
     UsersModule,
     VideoModule,
     ClaimsModule,
+    ClaimantsModule,
     HealthModule,
     LocationModule,
+    RiskModule,
     OcrModule,
   ],
   providers: [

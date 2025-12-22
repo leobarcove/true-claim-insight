@@ -6,7 +6,7 @@ const features = [
   {
     icon: ShieldCheck,
     title: 'Secure Verification',
-    description: 'Quick identity verification with your IC and selfie',
+    description: 'Quick identity verification with your NRIC and selfie',
   },
   {
     icon: Video,
@@ -38,14 +38,12 @@ export function WelcomePage() {
         <div className="space-y-6">
           <div className="space-y-3">
             <h1 className="text-3xl font-bold tracking-tight">
-              Insurance Claims
-              <br />
-              <span className="text-primary">Made Simple</span>
-            </h1>
-            <p className="text-muted-foreground text-lg">
-              Submit and track your motor insurance claim from your phone. 
-              No paperwork, no waiting.
-            </p>
+              <span className="text-primary">Assessments Made Simple</span>
+</h1>
+<p className="text-muted-foreground text-lg">
+  Securely access your motor insurance assessment from your phone. 
+  Fast, digital, and professional.
+</p>
           </div>
 
           {/* Features */}
@@ -71,14 +69,14 @@ export function WelcomePage() {
       <footer className="px-6 py-8 space-y-4">
         <Link to="/login" className="block">
           <Button size="lg" className="w-full text-lg h-14">
-            Start Your Claim
+            Access Your Assessment
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </Link>
         <p className="text-center text-sm text-muted-foreground">
-          Already have a claim?{' '}
+          Need to file a new case?{' '}
           <Link to="/login" className="text-primary font-medium">
-            Sign in
+            Verify identity
           </Link>
         </p>
       </footer>

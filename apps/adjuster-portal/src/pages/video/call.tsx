@@ -1,14 +1,15 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { useVideoSession, useJoinVideoRoom, useEndVideoSession } from '@/hooks/use-video';
+import { useVideoSession, useJoinVideoRoom, useEndVideoSession, useRiskAssessments, useTriggerAssessment } from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
+import { ShieldAlert, ShieldCheck, ShieldMinus, Zap } from 'lucide-react';
 
 export function VideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -23,8 +24,14 @@ export function VideoCallPage() {
   
   const { data: session } = useVideoSession(sessionId || '');
   const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
+  const { data: assessments } = useRiskAssessments(sessionId || '');
+  
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
+  const triggerAssessment = useTriggerAssessment();
+  
+  // Ref to prevent navigation during analysis
+  const isAnalyzingRef = useRef(false);
 
 
   // Effect to trigger join and set data directly
@@ -79,6 +86,16 @@ export function VideoCallPage() {
     hasAttemptedJoin.current = false;
     // The effect will trigger doJoin
   };
+
+  // Memoized callback to prevent component remount
+  const handleVideoLeft = useCallback(() => {
+    console.log('[VideoCallPage] onLeft triggered, isAnalyzing:', isAnalyzingRef.current);
+    if (!isAnalyzingRef.current) {
+      navigate(`/claims/${session?.claimId || ''}`);
+    } else {
+      console.log('[VideoCallPage] Blocked navigation due to analysis in progress');
+    }
+  }, [navigate, session?.claimId]);
 
   // Show error state with retry option
   if (joinError && !joinRoom.isPending) {
@@ -160,10 +177,11 @@ export function VideoCallPage() {
         {/* Remote/Main Video */}
         <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
           <DailyVideoPlayer 
+            key={`daily-${joinData.url}`}
             ref={playerRef}
             url={joinData.url} 
             token={joinData.token} 
-            onLeft={() => navigate(`/claims/${session?.claimId || ''}`)}
+            onLeft={handleVideoLeft}
           />
         </div>
 
@@ -187,11 +205,186 @@ export function VideoCallPage() {
             </div>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 p-4 flex-1">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">Risk Markers</h3>
-            <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-4">
-              <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
-              <p className="text-xs">Risk engine will analyze the stream in real-time once the call is fully established.</p>
+          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Risk Analysis</h3>
+              <Badge variant="outline" className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse">
+                LIVE
+              </Badge>
+            </div>
+            
+            <div className="flex-1 overflow-auto space-y-3 min-h-0">
+              {assessments && assessments.length > 0 ? (
+                assessments.map((marker) => {
+                  const raw = marker.rawResponse as any;
+                  const isVoice = marker.assessmentType === 'VOICE_ANALYSIS';
+                  
+                  return (
+                    <div key={marker.id} className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in slide-in-from-right-2">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {marker.riskScore === 'HIGH' && <ShieldAlert className="h-4 w-4 text-red-500" />}
+                          {marker.riskScore === 'MEDIUM' && <ShieldMinus className="h-4 w-4 text-amber-500" />}
+                          {marker.riskScore === 'LOW' && <ShieldCheck className="h-4 w-4 text-emerald-500" />}
+                          <span className="text-xs font-semibold text-slate-200">
+                            {isVoice ? 'Voice Stress' : 'Visual Behavior'}
+                          </span>
+                        </div>
+                        <Badge 
+                          variant={
+                            marker.riskScore === 'HIGH' ? 'destructive' : 
+                            marker.riskScore === 'MEDIUM' ? 'secondary' : 'default'
+                          }
+                          className="text-[9px] h-5 px-2"
+                        >
+                          {marker.riskScore || 'PENDING'}
+                        </Badge>
+                      </div>
+                      
+                      {/* Metrics Grid */}
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        {isVoice ? (
+                          <>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Jitter</p>
+                              <p className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}>
+                                {raw?.jitter_percent?.toFixed(2) ?? '—'}%
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Shimmer</p>
+                              <p className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                {raw?.shimmer_percent?.toFixed(2) ?? '—'}%
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Pitch SD</p>
+                              <p className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                {raw?.pitch_sd_hz?.toFixed(1) ?? '—'} Hz
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">HNR</p>
+                              <p className="text-sm font-mono text-slate-200">
+                                {raw?.hnr_db?.toFixed(1) ?? '—'} dB
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Blink Rate</p>
+                              <p className={`text-sm font-mono ${
+                                ((raw?.blink_rate_per_min ?? 17) < 10 || (raw?.blink_rate_per_min ?? 17) > 25) 
+                                  ? 'text-amber-400' : 'text-slate-200'
+                              }`}>
+                                {raw?.blink_rate_per_min?.toFixed(1) ?? '—'}/min
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Lip Tension</p>
+                              <p className={`text-sm font-mono ${(raw?.avg_lip_tension ?? 1) < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                {raw?.avg_lip_tension?.toFixed(3) ?? '—'}
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Blink Dur.</p>
+                              <p className="text-sm font-mono text-slate-200">
+                                {raw?.avg_blink_duration_ms?.toFixed(0) ?? '—'} ms
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <p className="text-slate-500 uppercase font-bold">Frames</p>
+                              <p className="text-sm font-mono text-slate-200">
+                                {raw?.frames_analyzed ?? '—'}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      
+                      {/* Footer */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
+                        <span className="text-[9px] text-slate-500">{marker.provider}</span>
+                        <span className="text-[9px] text-slate-500">
+                          Conf: {((marker.confidence ?? 0) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-4 py-8">
+                  <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-xs">Click below to trigger an analysis.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+              <Button 
+                type="button"
+                variant="outline" 
+                size="sm" 
+                className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  
+                  if (playerRef.current) {
+                    console.log('[VideoCallPage] Sending voice analysis request to claimant');
+                    playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
+                    toast({
+                      title: 'Request Sent',
+                      description: 'Asking claimant device to send audio sample...',
+                    });
+                    
+                    // Simulate "pending" state or just wait for polling
+                    isAnalyzingRef.current = true;
+                    setTimeout(() => {
+                      isAnalyzingRef.current = false;
+                    }, 5000); 
+                  } else {
+                    toast({
+                      title: 'Error',
+                      description: 'Video connection not ready.',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                disabled={false} // Always enable if connected
+              >
+                <Zap className="h-3 w-3 mr-2" />
+                Analyze Voice Stress (Live)
+              </Button>
+              <Button 
+                type="button"
+                variant="outline" 
+                size="sm" 
+                className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  isAnalyzingRef.current = true;
+                  console.log('[VideoCallPage] Starting visual analysis, isAnalyzing set to true');
+                  triggerAssessment.mutate(
+                    { sessionId: sessionId || '', assessmentType: 'VISUAL' },
+                    {
+                      onSettled: () => {
+                        setTimeout(() => {
+                          isAnalyzingRef.current = false;
+                          console.log('[VideoCallPage] Visual analysis settled, isAnalyzing set to false');
+                        }, 1000);
+                      }
+                    }
+                  );
+                }}
+                disabled={triggerAssessment.isPending}
+              >
+                <ShieldCheck className="h-3 w-3 mr-2" />
+                Analyze Visual Behavior
+              </Button>
             </div>
           </Card>
         </div>

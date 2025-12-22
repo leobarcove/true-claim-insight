@@ -8,11 +8,13 @@ export interface DailyVideoPlayerProps {
   onJoined?: () => void;
   onLeft?: () => void;
   onError?: (error: string) => void;
+  onAppMessage?: (ev: any) => void;
 }
 
 export interface DailyVideoPlayerRef {
   requestFullscreen: () => void;
   exitFullscreen: () => void;
+  sendAppMessage: (data: any, to?: string) => void;
 }
 
 // Track global destruction promise to handle React Strict Mode async cleanup race conditions
@@ -24,9 +26,11 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
   onJoined,
   onLeft,
   onError,
+  onAppMessage,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const callRef = useRef<DailyCall | null>(null);
+  const hasJoinedMeeting = useRef(false); // Track if user has actually joined the meeting
   const [status, setStatus] = useState<'loading' | 'joined' | 'error'>('loading');
 
   // Expose methods to parent via ref
@@ -54,6 +58,17 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         }
       } else {
         document.exitFullscreen?.();
+      }
+    },
+    sendAppMessage: (data: any, to?: string) => {
+      if (callRef.current) {
+        try {
+          callRef.current.sendAppMessage(data, to || '*');
+        } catch (e) {
+          console.error('[DailyVideoPlayer] Failed to send app message:', e);
+        }
+      } else {
+        console.warn('[DailyVideoPlayer] Cannot send message, call not ready');
       }
     },
   }));
@@ -128,12 +143,24 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         callRef.current = callFrame;
 
         callFrame.on('joined-meeting', () => {
+          console.log('[DailyVideoPlayer] joined-meeting event');
+          hasJoinedMeeting.current = true;
           setStatus('joined');
           onJoined?.();
         });
 
+        // Wire up app-message event
+        callFrame.on('app-message', (ev) => {
+          if (onAppMessage) {
+            onAppMessage(ev);
+          }
+        });
+
         callFrame.on('left-meeting', () => {
-          onLeft?.();
+          console.log('[DailyVideoPlayer] left-meeting event, hasJoined:', hasJoinedMeeting.current);
+          if (hasJoinedMeeting.current) {
+            onLeft?.();
+          }
         });
 
         callFrame.on('error', (e) => {
@@ -143,10 +170,11 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         });
 
         // Use 'joined' status to remove our loader once we are ready to show the iframe
-        // Daily pre-join UI needs to be visible for the user to click 'Join'
         setStatus('joined'); 
         
         await callFrame.join({ url, token });
+        console.log('[DailyVideoPlayer] callFrame.join() completed');
+        hasJoinedMeeting.current = true;
         onJoined?.();
       } catch (err: any) {
         console.error('[DailyVideoPlayer] Initialization failed:', err);
@@ -168,7 +196,7 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
         callRef.current = null;
       }
     };
-  }, [url, token, onJoined, onLeft, onError]);
+  }, [url, token, onJoined, onLeft, onError, onAppMessage]);
 
   return (
     <div className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden border border-slate-800">

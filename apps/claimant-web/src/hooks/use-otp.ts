@@ -45,19 +45,28 @@ export function useVerifyOtp() {
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: async ({ phoneNumber, code }: { phoneNumber: string; code: string }) => {
+    mutationFn: async ({ 
+      phoneNumber, 
+      code, 
+      redirectUrl 
+    }: { 
+      phoneNumber: string; 
+      code: string;
+      redirectUrl?: string;
+    }) => {
       const { data } = await apiClient.post<ApiResponse<VerifyOtpResponse>>(
         '/auth/claimant/verify-otp',
         { phoneNumber, code }
       );
-      return data.data;
+      return { ...data.data, redirectUrl };
     },
     onSuccess: (data) => {
       setAuth(
         data.user,
         data.tokens.accessToken
       );
-      navigate('/dashboard');
+      // Redirect to the original target if available, otherwise go to tracker
+      navigate(data.redirectUrl || '/tracker');
     },
   });
 }

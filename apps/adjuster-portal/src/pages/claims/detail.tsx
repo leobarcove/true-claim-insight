@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -46,6 +47,8 @@ export function ClaimDetailPage() {
   const { data: claim, isLoading } = useClaim(claimId || '');
   const updateClaim = useUpdateClaim(claimId || '');
   const createVideoRoom = useCreateVideoRoom();
+  const [magicLink, setMagicLink] = useState<string | null>(null);
+  const [isNotifying, setIsNotifying] = useState(false);
 
   const handleUpdateStatus = async (status: string) => {
     if (!claimId) return;
@@ -65,18 +68,50 @@ export function ClaimDetailPage() {
     }
   };
 
-  const handleStartVideoSession = async () => {
+  const activeVideoSession = claim?.sessions?.find(
+    (s) => s.status === 'WAITING' || s.status === 'SCHEDULED' || s.status === 'IN_PROGRESS'
+  );
+
+  const handleStartVideoAssessment = async () => {
     if (!claimId) return;
+    setIsNotifying(true);
     
     try {
-      const session = await createVideoRoom.mutateAsync(claimId);
-      navigate(`/video/${session.sessionId}`);
+      let sessionId: string;
+
+      // If there's already an active session, use it; otherwise create one
+      if (activeVideoSession) {
+        sessionId = activeVideoSession.id;
+      } else {
+        const session = await createVideoRoom.mutateAsync(claimId);
+        sessionId = session.sessionId;
+      }
+
+      // Generate magic link for claimant (in production, this would send SMS)
+      const devLink = `http://localhost:4001/video/${sessionId}`;
+      setMagicLink(devLink);
+      
+      // Auto-copy to clipboard for easy testing
+      await navigator.clipboard.writeText(devLink);
+      
+      toast({
+        title: 'Assessment Started',
+        description: 'Magic link copied to clipboard! Joining video room...',
+      });
+
+      // Small delay to show the magic link before navigating
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Navigate adjuster to video call
+      navigate(`/video/${sessionId}`);
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to create a video session. Please try again.',
+        description: 'Failed to start video assessment. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsNotifying(false);
     }
   };
 
@@ -105,9 +140,9 @@ export function ClaimDetailPage() {
             {statusConfig[claim.status].label}
           </Badge>
           {claim.status === 'SCHEDULED' && (
-            <Button size="sm" onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
+            <Button size="sm" onClick={handleStartVideoAssessment} disabled={createVideoRoom.isPending || isNotifying}>
               <Video className="h-4 w-4 mr-2" />
-              {createVideoRoom.isPending ? 'Starting...' : 'Start Session'}
+              {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
             </Button>
           )}
         </div>
@@ -488,10 +523,42 @@ export function ClaimDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Button className="w-full" onClick={handleStartVideoSession} disabled={createVideoRoom.isPending}>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleStartVideoAssessment} 
+                    disabled={createVideoRoom.isPending || isNotifying}
+                  >
                     <Video className="h-4 w-4 mr-2" />
-                    {createVideoRoom.isPending ? 'Starting...' : 'Start Session'}
+                    {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
                   </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Creates room & notifies claimant via SMS
+                  </p>
+
+                  {/* DEV ONLY: Show Magic Link */}
+                  {magicLink && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">
+                        [DEV ONLY] Magic Link
+                      </p>
+                      <div className="flex gap-2">
+                        <code className="text-[10px] bg-white p-1 rounded border flex-1 break-all">
+                          {magicLink}
+                        </code>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => {
+                            navigator.clipboard.writeText(magicLink);
+                            toast({ title: 'Copied to clipboard' });
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

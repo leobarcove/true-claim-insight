@@ -1,0 +1,15 @@
+{
+  "name": "@tci/risk-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Python-based multimodal risk analyzer using Parselmouth and MediaPipe",
+  "scripts": {
+    "dev": "source venv/bin/activate && uvicorn app.main:app --reload --port 3005",
+    "start": "source venv/bin/activate && uvicorn app.main:app --port 3005",
+    "setup": "python3.10 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt",
+    "build": "echo 'Python service - no build step'",
+    "lint": "echo 'TODO: Add Python linting'",
+    "typecheck": "echo 'TODO: Add Python type checking'",
+    "clean": "rm -rf venv __pycache__"
+  }
+}
