@@ -1,12 +1,7 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import crypto from 'crypto';
 
 interface AuditLogEntry {
   timestamp: string;
@@ -56,13 +51,13 @@ export class AuditLogInterceptor implements NestInterceptor {
           // Log successful requests
           this.logger.log(
             `${logEntry.method} ${logEntry.path} ${logEntry.statusCode} ${logEntry.responseTime}ms` +
-              (logEntry.userId ? ` [user:${logEntry.userId}]` : ''),
+              (logEntry.userId ? ` [user:${logEntry.userId}]` : '')
           );
 
           // TODO: In production, persist to database or send to logging service
           // await this.auditService.log(logEntry);
         },
-        error: (error) => {
+        error: error => {
           const logEntry: AuditLogEntry = {
             timestamp: new Date().toISOString(),
             requestId,
@@ -81,10 +76,10 @@ export class AuditLogInterceptor implements NestInterceptor {
           this.logger.error(
             `${logEntry.method} ${logEntry.path} ${logEntry.statusCode} ${logEntry.responseTime}ms` +
               (logEntry.userId ? ` [user:${logEntry.userId}]` : '') +
-              ` - ${error.message}`,
+              ` - ${error.message}`
           );
         },
-      }),
+      })
     );
   }
 }

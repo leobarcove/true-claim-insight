@@ -15,6 +15,7 @@ import { ClaimsModule } from './claims/claims.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
 import { RiskModule } from './risk/risk.module';
+import { OcrModule } from './ocr/ocr.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -57,6 +58,7 @@ import configuration from './config/configuration';
     HealthModule,
     LocationModule,
     RiskModule,
+    OcrModule,
   ],
   providers: [
     // Global rate limiting guard
