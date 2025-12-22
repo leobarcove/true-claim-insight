@@ -22,9 +22,12 @@ export function ClaimantVideoCallPage() {
   // Handle uploading audio for analysis
   const handleUploadAudio = useCallback(async () => {
     try {
+      console.log('Starting audio upload sequence...');
       const blob = await getAudioBlob();
+      console.log('Audio blob retrieved:', blob?.size);
+      
       if (!blob || blob.size === 0) {
-        console.warn('No audio recorded yet');
+        console.error('No audio blob available (recording too short?)');
         return;
       }
 
@@ -200,6 +203,15 @@ export function ClaimantVideoCallPage() {
 
       {/* Mobile Footer / Info */}
       <div className="p-4 bg-slate-950 text-center">
+        <div className="absolute top-4 left-4 z-50 bg-black/50 p-2 rounded text-white">
+          <p>Status: {isRecording ? 'Recording 🔴' : 'Idle ⚪'}</p>
+          <button 
+            className="mt-2 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 font-bold"
+            onClick={handleUploadAudio}
+          >
+            🐞 Test Upload
+          </button>
+        </div>
         <p className="text-[10px] text-slate-500 uppercase tracking-widest">
           End-to-End Encrypted Session
         </p>
@@ -207,3 +219,4 @@ export function ClaimantVideoCallPage() {
     </div>
   );
 }
+

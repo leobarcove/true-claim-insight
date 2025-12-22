@@ -27,20 +27,18 @@ export class RiskService {
   }
 
   async uploadAudio(fileBuffer: Buffer, sessionId: string) {
-    const FormData = require('form-data');
+    // Use native FormData (Node 18+)
     const form = new FormData();
-    
-    form.append('file', fileBuffer, { filename: 'audio.blob' });
+    const blob = new Blob([fileBuffer], { type: 'audio/webm' });
+    form.append('file', blob, 'audio.blob');
     form.append('sessionId', sessionId);
 
     this.logger.log(`Proxying audio upload for session ${sessionId}, size: ${fileBuffer.length}`);
 
     const response = await fetch(`${this.baseUrl}/assessments/upload-audio`, {
       method: 'POST',
-      body: form as any,
-      headers: {
-        ...form.getHeaders(),
-      },
+      body: form,
+      // Native fetch with FormData sets headers automatically
     });
 
     return this.handleResponse(response);

@@ -27,18 +27,17 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
           
-          // Prune old chunks to keep buffer continuously fresh (~10s)
-          // Rough estimate: we can't easily measure time of blobs without storing metadata
-          // But since we request data every 1s, limiting array length works
-          const maxChunks = Math.ceil(bufferDurationMs / 1000); 
-          if (chunksRef.current.length > maxChunks * 2) {
-             // Keep last N chunks. bufferDurationMs / 1000 (timeslice)
-             chunksRef.current = chunksRef.current.slice(-maxChunks);
-          }
+          // Append new data
+          chunksRef.current.push(event.data);
+          
+          // We DO NOT prune old chunks anymore. 
+          // Slicing WebM chunks validation creates invalid files (timestamp gaps).
+          // Memory usage is low enough to keep full session.
+          // If lengthy sessions become common, we should implement proper server-side streaming or client-side re-muxing.
         }
       };
 
-      // Request data every 1 second
+      // Request data every 1 second (sufficient for full session recording)
       mediaRecorder.start(1000);
       setIsRecording(true);
       console.log('Audio recording started');
