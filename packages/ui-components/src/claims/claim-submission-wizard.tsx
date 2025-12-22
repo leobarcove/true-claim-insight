@@ -458,9 +458,17 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     // Process Police Report
     if (extraction.police_report?.document) {
       const data = extraction.police_report.document;
-      if (data.incident_description) {
-        newFormData.description = data.incident_description;
+      if (data.report?.incident?.narrative) {
+        newFormData.description = data.report.incident.narrative;
         filled.add('description');
+      }
+      if (data.report?.incident?.incident_date && !newFormData.incidentDate) {
+        newFormData.incidentDate = data.report.incident.incident_date;
+        filled.add('incidentDate');
+      }
+      if (data.report?.incident?.incident_time && !newFormData.incidentTime) {
+        newFormData.incidentTime = data.report.incident.incident_time;
+        filled.add('incidentTime');
       }
     }
 
@@ -960,7 +968,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 <label className="text-sm font-medium text-gray-700">Description</label>
                 {aiFilledFields.has('description') && (
                   <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                    <Sparkles size={10} /> AI GENERATED
+                    <Sparkles size={10} /> AI FILLED
                   </span>
                 )}
               </div>

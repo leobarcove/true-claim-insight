@@ -6,7 +6,6 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
-import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 import multipart from '@fastify/multipart';
@@ -35,15 +34,12 @@ async function bootstrap() {
     secret: configService.get<string>('COOKIE_SECRET', 'tci-cookie-secret'),
   });
 
-  // Multipart for file uploads (OCR)
+  // Enable multipart support
   await app.register(multipart, {
     limits: {
       fileSize: 10 * 1024 * 1024, // 10MB
     },
   });
-
-  // Enable multipart support
-  await app.register(multipart);
 
   // CORS configuration - allow both adjuster portal and claimant web
   const allowedOrigins = [
