@@ -69,7 +69,7 @@ export class ClaimantsService {
       email?: string;
       nricHash?: string;
       nricEncrypted?: Uint8Array<ArrayBuffer>;
-    },
+    }
   ): Promise<Claimant> {
     return this.prisma.claimant.update({
       where: { id },
@@ -88,7 +88,7 @@ export class ClaimantsService {
    */
   async updateKycStatus(
     id: string,
-    status: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED',
+    status: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED'
   ): Promise<Claimant> {
     return this.prisma.claimant.update({
       where: { id },
@@ -97,5 +97,17 @@ export class ClaimantsService {
         kycVerifiedAt: status === 'VERIFIED' ? new Date() : null,
       },
     });
+  }
+
+  /**
+   * Get the first tenant ID associated with a claimant's claims
+   * This is used to provide a tenant context for the JWT
+   */
+  async getFirstTenantId(claimantId: string): Promise<string | null> {
+    const claim = await this.prisma.claim.findFirst({
+      where: { claimantId },
+      select: { insurerTenantId: true },
+    });
+    return claim?.insurerTenantId || null;
   }
 }

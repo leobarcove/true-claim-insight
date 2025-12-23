@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -17,7 +12,7 @@ export class ClaimsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService,
+    private readonly tenantService: TenantService
   ) {}
 
   /**
@@ -41,7 +36,9 @@ export class ClaimsService {
         vehicleModel: createClaimDto.vehicleModel,
         policeReportNumber: createClaimDto.policeReportNumber,
         policeStation: createClaimDto.policeStation,
-        policeReportDate: createClaimDto.policeReportDate ? new Date(createClaimDto.policeReportDate) : null,
+        policeReportDate: createClaimDto.policeReportDate
+          ? new Date(createClaimDto.policeReportDate)
+          : null,
         isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
       },
       include: {
@@ -93,6 +90,11 @@ export class ClaimsService {
     // Apply tenant isolation filter
     if (tenantContext) {
       where = this.tenantService.buildClaimTenantFilter(tenantContext, where);
+
+      // Enforce claimant isolation - they can only see their own claims
+      if (tenantContext.userRole === 'CLAIMANT') {
+        where.claimantId = tenantContext.userId;
+      }
     }
 
     // Apply search filter (must be after tenant filter to combine properly)
@@ -107,10 +109,7 @@ export class ClaimsService {
       if (where.OR) {
         // If tenant filter already has OR, wrap everything in AND
         where = {
-          AND: [
-            { OR: where.OR },
-            { OR: searchConditions },
-          ],
+          AND: [{ OR: where.OR }, { OR: searchConditions }],
         };
       } else {
         where.OR = searchConditions;
@@ -203,6 +202,11 @@ export class ClaimsService {
 
     // Validate tenant access if context provided
     if (tenantContext) {
+      // Enforce claimant isolation check first
+      if (tenantContext.userRole === 'CLAIMANT' && claim.claimantId !== tenantContext.userId) {
+        throw new NotFoundException(`Claim with ID ${id} not found`); // Obfuscate existence
+      }
+
       await this.tenantService.validateClaimAccess(id, tenantContext);
     }
 
@@ -229,7 +233,9 @@ export class ClaimsService {
         vehicleModel: updateClaimDto.vehicleModel,
         policeReportNumber: updateClaimDto.policeReportNumber,
         policeStation: updateClaimDto.policeStation,
-        policeReportDate: updateClaimDto.policeReportDate ? new Date(updateClaimDto.policeReportDate) : undefined,
+        policeReportDate: updateClaimDto.policeReportDate
+          ? new Date(updateClaimDto.policeReportDate)
+          : undefined,
         workshopName: updateClaimDto.workshopName,
         estimatedRepairCost: updateClaimDto.estimatedRepairCost,
         isPdpaCompliant: updateClaimDto.isPdpaCompliant,
@@ -281,7 +287,9 @@ export class ClaimsService {
       to: status,
     });
 
-    this.logger.log(`Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`);
+    this.logger.log(
+      `Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`
+    );
 
     return claim;
   }
@@ -305,11 +313,7 @@ export class ClaimsService {
 
     // Validate adjuster belongs to the same tenant
     if (tenantContext) {
-      this.tenantService.validateTenantAccess(
-        adjuster.tenantId,
-        tenantContext,
-        'Adjuster',
-      );
+      this.tenantService.validateTenantAccess(adjuster.tenantId, tenantContext, 'Adjuster');
     }
 
     const updatedClaim = await this.prisma.claim.update({
@@ -420,11 +424,7 @@ export class ClaimsService {
   /**
    * Create audit trail entry
    */
-  private async createAuditTrail(
-    entityId: string,
-    action: string,
-    metadata: any,
-  ) {
+  private async createAuditTrail(entityId: string, action: string, metadata: any) {
     await this.prisma.auditTrail.create({
       data: {
         entityId,
@@ -454,7 +454,7 @@ export class ClaimsService {
     const allowed = validTransitions[currentStatus] || [];
     if (!allowed.includes(newStatus)) {
       throw new BadRequestException(
-        `Invalid status transition from ${currentStatus} to ${newStatus}`,
+        `Invalid status transition from ${currentStatus} to ${newStatus}`
       );
     }
   }

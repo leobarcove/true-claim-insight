@@ -1,20 +1,16 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 
 import { UsersService } from '../users/users.service';
+import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 export interface JwtPayload {
   sub: string;
-  email: string;
+  email?: string;
   role: string;
   tenantId: string | null;
   iat?: number;
@@ -45,8 +41,9 @@ export class AuthService {
 
   constructor(
     private readonly usersService: UsersService,
+    private readonly claimantsService: ClaimantsService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
@@ -148,6 +145,14 @@ export class AuthService {
   }
 
   async validateJwtPayload(payload: JwtPayload) {
+    if (payload.role === 'CLAIMANT') {
+      const claimant = await this.claimantsService.findById(payload.sub);
+      if (!claimant) {
+        throw new UnauthorizedException('Claimant not found');
+      }
+      return { ...claimant, role: 'CLAIMANT', tenantId: payload.tenantId };
+    }
+
     const user = await this.usersService.findById(payload.sub);
 
     if (!user) {
@@ -159,7 +164,7 @@ export class AuthService {
 
   private async generateTokens(user: {
     id: string;
-    email: string;
+    email?: string;
     role: string;
     tenantId: string | null;
   }): Promise<TokenPair> {
@@ -170,14 +175,8 @@ export class AuthService {
       tenantId: user.tenantId,
     };
 
-    const accessExpiresIn = this.configService.get<string>(
-      'jwt.accessExpiresIn',
-      '15m',
-    );
-    const refreshExpiresIn = this.configService.get<string>(
-      'jwt.refreshExpiresIn',
-      '7d',
-    );
+    const accessExpiresIn = this.configService.get<string>('jwt.accessExpiresIn', '15m');
+    const refreshExpiresIn = this.configService.get<string>('jwt.refreshExpiresIn', '7d');
 
     const accessExpiresInSeconds = this.parseTimeToSeconds(accessExpiresIn);
     const refreshExpiresInSeconds = this.parseTimeToSeconds(refreshExpiresIn);

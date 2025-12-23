@@ -10,12 +10,7 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { Throttle } from '@nestjs/throttler';
 import { JwtService } from '@nestjs/jwt';
@@ -38,7 +33,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly otpService: OtpService,
     private readonly claimantsService: ClaimantsService,
-    private readonly jwtService: JwtService,
+    private readonly jwtService: JwtService
   ) {}
 
   @Post('register')
@@ -51,7 +46,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Validation error' })
   async register(
     @Body() registerDto: RegisterDto,
-    @Res({ passthrough: true }) response: FastifyReply,
+    @Res({ passthrough: true }) response: FastifyReply
   ) {
     const result = await this.authService.register(registerDto);
     this.setRefreshTokenCookie(response, result.tokens.refreshToken);
@@ -65,10 +60,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(
-    @Body() loginDto: LoginDto,
-    @Res({ passthrough: true }) response: FastifyReply,
-  ) {
+  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) response: FastifyReply) {
     const result = await this.authService.login(loginDto);
     this.setRefreshTokenCookie(response, result.tokens.refreshToken);
     return result;
@@ -80,10 +72,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Tokens refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
-  async refresh(
-    @Req() request: any,
-    @Res({ passthrough: true }) response: FastifyReply,
-  ) {
+  async refresh(@Req() request: any, @Res({ passthrough: true }) response: FastifyReply) {
     const refreshToken = request.cookies?.refreshToken;
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token missing');
@@ -194,23 +183,22 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
-  async verifyOtp(
-    @Body() dto: VerifyOtpDto,
-    @Res({ passthrough: true }) response: FastifyReply,
-  ) {
+  async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) response: FastifyReply) {
     // Verify OTP
     await this.otpService.verifyOtp(dto.phoneNumber, dto.code);
 
     // Find or create claimant
-    const claimant = await this.claimantsService.findOrCreateByPhone(
-      dto.phoneNumber,
-    );
+    const claimant = await this.claimantsService.findOrCreateByPhone(dto.phoneNumber);
+
+    // Get tenant ID for context
+    const tenantId = await this.claimantsService.getFirstTenantId(claimant.id);
 
     // Generate JWT tokens for claimant
     const payload = {
       sub: claimant.id,
       phoneNumber: claimant.phoneNumber,
       role: 'CLAIMANT',
+      tenantId,
     };
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: 900 }); // 15 minutes
@@ -224,6 +212,7 @@ export class AuthController {
         phoneNumber: claimant.phoneNumber,
         fullName: claimant.fullName,
         kycStatus: claimant.kycStatus,
+        tenantId, // Include in response as well
       },
       tokens: {
         accessToken,
@@ -233,4 +222,3 @@ export class AuthController {
     };
   }
 }
-
