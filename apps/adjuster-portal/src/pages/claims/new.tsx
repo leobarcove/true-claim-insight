@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
+import { useToast } from '@/hooks/use-toast';
 
 export function NewClaimPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSuccess = async (data: any) => {
@@ -36,9 +38,10 @@ export function NewClaimPage() {
       console.log('Submitting claim payload:', payload);
 
       await apiClient.post('/claims', payload);
-
-      console.log('Claim created successfully');
-      alert('Claim created successfully!');
+      toast({
+        title: 'Success',
+        description: `Claim created successfully!`,
+      });
 
       navigate('/claims');
     } catch (error: any) {

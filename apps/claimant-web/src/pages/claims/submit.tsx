@@ -1,15 +1,40 @@
 import { useNavigate } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
 import { ArrowLeft } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth-store';
+import { apiClient } from '@/lib/api-client';
 
 export function SubmitClaimPage() {
   const navigate = useNavigate();
 
-  const handleSuccess = (data: any) => {
-    console.log('Claim submitted:', data);
-    // In a real app, we would call an API here
-    // For now, we'll just redirect back to dashboard
-    navigate('/dashboard');
+  const handleSuccess = async (data: any) => {
+    try {
+      const user = useAuthStore.getState().user;
+      
+      const payload = {
+        claimType: data.claimType || 'OWN_DAMAGE',
+        incidentDate: data.incidentDate || new Date().toISOString().split('T')[0],
+        incidentLocation: {
+          address: data.address || 'Unknown Location',
+          latitude: 3.1478,
+          longitude: 101.7128,
+        },
+        description: data.description || 'Claim submitted via Mobile Web',
+        claimantId: user?.id || 'demo-claimant-id',
+        tenantId: 'allianz-id', // Default to Allianz for MVP
+        vehiclePlateNumber: data.vehiclePlate,
+        vehicleMake: data.vehicleMake,
+        vehicleModel: data.vehicleModel,
+      };
+
+      console.log('Submitting claim:', payload);
+      await apiClient.post('/claims', payload);
+      
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Failed to submit claim:', error);
+      alert('Failed to submit claim. Please try again.');
+    }
   };
 
   return (
