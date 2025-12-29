@@ -23,14 +23,11 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
       chunksRef.current = [];
 
       // Collect data in small chunks (e.g. 1s) to manage buffer size
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
-          
-          // Append new data
-          chunksRef.current.push(event.data);
-          
-          // We DO NOT prune old chunks anymore. 
+
+          // We DO NOT prune old chunks anymore.
           // Slicing WebM chunks validation creates invalid files (timestamp gaps).
           // Memory usage is low enough to keep full session.
           // If lengthy sessions become common, we should implement proper server-side streaming or client-side re-muxing.
@@ -65,7 +62,17 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
    */
   const getAudioBlob = useCallback(async (): Promise<Blob | null> => {
     if (chunksRef.current.length === 0) return null;
-    return new Blob(chunksRef.current, { type: 'audio/webm' });
+
+    const header = chunksRef.current[0];
+    const recentChunks = chunksRef.current.slice(-20);
+    
+    // If the recording is shorter than 20s, just return everything once
+    if (chunksRef.current.length <= 20) {
+      return new Blob(chunksRef.current, { type: 'audio/webm' });
+    }
+
+    // Combine header with last 20s
+    return new Blob([header, ...recentChunks], { type: 'audio/webm' });
   }, []);
 
   // Cleanup on unmount

@@ -12,26 +12,28 @@ export class AssessmentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly riskAnalyzerClient: RiskAnalyzerClient,
+    private readonly riskAnalyzerClient: RiskAnalyzerClient
   ) {
     // Robust path resolution for sample audio.
     // We check multiple potential locations because the execution context (CWD)
     // varies depending on how the service is started (root vs package dir).
     const potentialPaths = [
       // If CWD is pkg root (apps/risk-engine)
-      path.join(process.cwd(), 'samples/sample_voice.wav'), 
+      path.join(process.cwd(), 'samples/sample_voice.wav'),
       // If CWD is monorepo root
       path.join(process.cwd(), 'apps/risk-engine/samples/sample_voice.wav'),
       // Relative to dist/assessments/assessments.service.js -> ../../samples
-      path.join(__dirname, '../../samples/sample_voice.wav'), 
+      path.join(__dirname, '../../samples/sample_voice.wav'),
     ];
 
     const existingPath = potentialPaths.find(p => fs.existsSync(p));
     this.sampleAudioPath = existingPath || potentialPaths[0];
-    
+
     // Log the resolved path for debugging
     const logger = new Logger('AssessmentsServiceInit');
-    logger.log(`Sample audio path resolved to: ${this.sampleAudioPath} (Exists: ${!!existingPath})`);
+    logger.log(
+      `Sample audio path resolved to: ${this.sampleAudioPath} (Exists: ${!!existingPath})`
+    );
   }
 
   async getAssessmentsBySession(sessionId: string): Promise<RiskAssessment[]> {
@@ -47,21 +49,21 @@ export class AssessmentsService {
    */
   async triggerMockAssessment(sessionId: string, type: string) {
     const assessmentType = this.mapType(type);
-    
+
     this.logger.log(`Triggering assessment: type=${type} -> mapped=${assessmentType}`);
-    
+
     // For VOICE_ANALYSIS, use real Python analyzer with sample audio
     // Check both Enum and String literal to be robust against import/type issues
     if (
-      (assessmentType as any) === 'VOICE_ANALYSIS' || 
+      (assessmentType as any) === 'VOICE_ANALYSIS' ||
       assessmentType === AssessmentType.VOICE_ANALYSIS
     ) {
       return this.triggerRealVoiceAnalysis(sessionId);
     }
-    
+
     // For other types, still use mock data for now
     this.logger.log(`Creating mock ${assessmentType} assessment for session ${sessionId}...`);
-    
+
     return this.prisma.riskAssessment.upsert({
       where: {
         sessionId_assessmentType: {
@@ -91,15 +93,18 @@ export class AssessmentsService {
    */
   async processUploadedAudio(fileBuffer: Buffer, sessionId: string) {
     try {
-      this.logger.log(`Processing uploaded audio for session ${sessionId}, size: ${fileBuffer.length} bytes`);
-      
-      // Convert WebM to WAV using ffmpeg
+      this.logger.log(
+        `Processing uploaded audio for session ${sessionId}, size: ${fileBuffer.length} bytes`
+      );
+
+      // Convert WebM to WAV using ffmpeg-static
       const util = require('util');
       const exec = util.promisify(require('child_process').exec);
       const fs = require('fs');
       const os = require('os');
       const path = require('path');
-      
+      const ffmpegPath = require('ffmpeg-static');
+
       const tmpDir = os.tmpdir();
       const inputPath = path.join(tmpDir, `input-${sessionId}-${Date.now()}.webm`);
       const outputPath = path.join(tmpDir, `output-${sessionId}-${Date.now()}.wav`);
@@ -107,16 +112,15 @@ export class AssessmentsService {
       await fs.promises.writeFile(inputPath, fileBuffer);
 
       try {
-        this.logger.log(`Converting audio: ${inputPath} -> ${outputPath}`);
-        await exec(`ffmpeg -y -i "${inputPath}" "${outputPath}"`);
-        
+        this.logger.log(
+          `Converting audio using ffmpeg at ${ffmpegPath}: ${inputPath} -> ${outputPath}`
+        );
+        await exec(`"${ffmpegPath}" -y -i "${inputPath}" "${outputPath}"`);
+
         const wavBuffer = await fs.promises.readFile(outputPath);
         this.logger.log(`Conversion complete. WAV size: ${wavBuffer.length}`);
-        
-        const result = await this.riskAnalyzerClient.analyzeAudio(
-          wavBuffer,
-          'claimant-upload.wav'
-        );
+
+        const result = await this.riskAnalyzerClient.analyzeAudio(wavBuffer, 'claimant-upload.wav');
 
         // Cleanup
         setTimeout(() => {
@@ -125,10 +129,14 @@ export class AssessmentsService {
         }, 1000);
 
         // Save result to DB
-        const assessment = await this.prisma.riskAssessment.create({
-          data: {
-            sessionId,
-            assessmentType: 'VOICE_ANALYSIS', // Or enum
+        const assessment = await this.prisma.riskAssessment.upsert({
+          where: {
+            sessionId_assessmentType: {
+              sessionId,
+              assessmentType: AssessmentType.VOICE_ANALYSIS,
+            },
+          },
+          update: {
             provider: 'Parselmouth (Real - Upload)',
             riskScore: result.risk_score as RiskScore,
             confidence: result.confidence,
@@ -136,7 +144,20 @@ export class AssessmentsService {
               ...result.metrics,
               details: result.details,
               timestamp: new Date().toISOString(),
-              analysisMethod: 'live_upload'
+              analysisMethod: 'live_upload',
+            },
+          },
+          create: {
+            sessionId,
+            assessmentType: AssessmentType.VOICE_ANALYSIS,
+            provider: 'Parselmouth (Real - Upload)',
+            riskScore: result.risk_score as RiskScore,
+            confidence: result.confidence,
+            rawResponse: {
+              ...result.metrics,
+              details: result.details,
+              timestamp: new Date().toISOString(),
+              analysisMethod: 'live_upload',
             },
           },
         });
@@ -155,34 +176,36 @@ export class AssessmentsService {
   // Helper mapping method
   private mapType(type: string): AssessmentType {
     const map: Record<string, AssessmentType> = {
-      'VOICE': AssessmentType.VOICE_ANALYSIS,
-      'VISUAL': AssessmentType.VISUAL_MODERATION,
-      'ATTENTION': AssessmentType.ATTENTION_TRACKING,
-      'DEEPFAKE': AssessmentType.DEEPFAKE_CHECK,
+      VOICE: AssessmentType.VOICE_ANALYSIS,
+      VISUAL: AssessmentType.VISUAL_MODERATION,
+      ATTENTION: AssessmentType.ATTENTION_TRACKING,
+      DEEPFAKE: AssessmentType.DEEPFAKE_CHECK,
     };
-    
+
     // Return mapped type or fallback to VOICE_ANALYSIS for simplicity/demos
     // (In production, strict validation would be better)
     return map[type.toUpperCase()] || (type as AssessmentType);
   }
 
-// ... existing code ...
+  // ... existing code ...
 
   /**
    * Trigger real voice analysis using the Python analyzer with sample audio
    */
   private async triggerRealVoiceAnalysis(sessionId: string): Promise<RiskAssessment> {
     this.logger.log(`Triggering REAL voice analysis for session ${sessionId}...`);
-    
+
     try {
       // Read sample audio file
       const audioBuffer = fs.readFileSync(this.sampleAudioPath);
       this.logger.log(`Loaded sample audio: ${audioBuffer.length} bytes`);
-      
+
       // Call Python analyzer
       const result = await this.riskAnalyzerClient.analyzeAudio(audioBuffer, 'sample_voice.wav');
-      this.logger.log(`Python analyzer returned: risk_score=${result.risk_score}, confidence=${result.confidence}`);
-      
+      this.logger.log(
+        `Python analyzer returned: risk_score=${result.risk_score}, confidence=${result.confidence}`
+      );
+
       // Upsert assessment with real results
       return this.prisma.riskAssessment.upsert({
         where: {
@@ -218,7 +241,7 @@ export class AssessmentsService {
       });
     } catch (error: any) {
       this.logger.error(`Real voice analysis failed: ${error.message}`);
-      
+
       // Fallback to mock on error
       return this.prisma.riskAssessment.upsert({
         where: {
@@ -259,15 +282,31 @@ export class AssessmentsService {
   async analyzeAudioFile(
     sessionId: string,
     audioBuffer: Buffer,
-    filename: string,
+    filename: string
   ): Promise<RiskAssessment> {
     this.logger.log(`Analyzing audio for session ${sessionId}...`);
 
     try {
       const result = await this.riskAnalyzerClient.analyzeAudio(audioBuffer, filename);
-      
-      return this.prisma.riskAssessment.create({
-        data: {
+
+      return this.prisma.riskAssessment.upsert({
+        where: {
+          sessionId_assessmentType: {
+            sessionId,
+            assessmentType: AssessmentType.VOICE_ANALYSIS,
+          },
+        },
+        update: {
+          provider: 'Parselmouth',
+          riskScore: this.mapRiskScore(result.risk_score),
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        create: {
           sessionId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
           provider: 'Parselmouth',
@@ -292,15 +331,31 @@ export class AssessmentsService {
   async analyzeVideoFile(
     sessionId: string,
     videoBuffer: Buffer,
-    filename: string,
+    filename: string
   ): Promise<RiskAssessment> {
     this.logger.log(`Analyzing video for session ${sessionId}...`);
 
     try {
       const result = await this.riskAnalyzerClient.analyzeVideo(videoBuffer, filename);
-      
-      return this.prisma.riskAssessment.create({
-        data: {
+
+      return this.prisma.riskAssessment.upsert({
+        where: {
+          sessionId_assessmentType: {
+            sessionId,
+            assessmentType: AssessmentType.VISUAL_MODERATION,
+          },
+        },
+        update: {
+          provider: 'MediaPipe',
+          riskScore: this.mapRiskScore(result.risk_score),
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        create: {
           sessionId,
           assessmentType: AssessmentType.VISUAL_MODERATION,
           provider: 'MediaPipe',
@@ -326,13 +381,14 @@ export class AssessmentsService {
     return this.riskAnalyzerClient.healthCheck();
   }
 
-
-
   private mapRiskScore(score: string): RiskScore {
     switch (score) {
-      case 'HIGH': return RiskScore.HIGH;
-      case 'MEDIUM': return RiskScore.MEDIUM;
-      default: return RiskScore.LOW;
+      case 'HIGH':
+        return RiskScore.HIGH;
+      case 'MEDIUM':
+        return RiskScore.MEDIUM;
+      default:
+        return RiskScore.LOW;
     }
   }
 
@@ -345,7 +401,7 @@ export class AssessmentsService {
 
   private generateMockMetrics(type: AssessmentType): object {
     const timestamp = new Date().toISOString();
-    
+
     if (type === AssessmentType.VOICE_ANALYSIS) {
       return {
         timestamp,

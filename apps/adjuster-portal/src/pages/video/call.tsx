@@ -5,7 +5,13 @@ import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { useVideoSession, useJoinVideoRoom, useEndVideoSession, useRiskAssessments, useTriggerAssessment } from '@/hooks/use-video';
+import {
+  useVideoSession,
+  useJoinVideoRoom,
+  useEndVideoSession,
+  useRiskAssessments,
+  useTriggerAssessment,
+} from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
@@ -17,35 +23,34 @@ export function VideoCallPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const playerRef = useRef<DailyVideoPlayerRef>(null);
-  
+
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const hasAttemptedJoin = useRef(false);
-  
+
   const { data: session } = useVideoSession(sessionId || '');
   const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
   const { data: assessments } = useRiskAssessments(sessionId || '');
-  
+
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
   const triggerAssessment = useTriggerAssessment();
-  
+
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
-
 
   // Effect to trigger join and set data directly
   useEffect(() => {
     const doJoin = async () => {
       if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
-      
+
       hasAttemptedJoin.current = true;
-      
+
       try {
-        const result = await joinRoom.mutateAsync({ 
-          sessionId, 
-          userId: user.id, 
-          role: 'ADJUSTER' 
+        const result = await joinRoom.mutateAsync({
+          sessionId,
+          userId: user.id,
+          role: 'ADJUSTER',
         });
         setJoinData({ url: result.roomUrl, token: result.token });
       } catch (error: any) {
@@ -60,12 +65,12 @@ export function VideoCallPage() {
     };
 
     doJoin();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, user?.id]);
 
   const handleEndCall = async () => {
     if (!sessionId) return;
-    
+
     try {
       await endSession.mutateAsync('Adjuster ended the session');
       toast({
@@ -118,7 +123,6 @@ export function VideoCallPage() {
     );
   }
 
-
   if (!joinData) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
@@ -133,9 +137,9 @@ export function VideoCallPage() {
       {/* Video Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="text-slate-400 hover:text-white"
             onClick={() => navigate(-1)}
           >
@@ -147,18 +151,21 @@ export function VideoCallPage() {
               Video Assessment: {session?.claimId || 'Loading...'}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+              <Badge
+                variant="outline"
+                className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20"
+              >
                 Live Session
               </Badge>
               <span className="text-xs text-slate-500">Secure • Encrypted</span>
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="bg-slate-800 border-slate-700 text-slate-300"
             onClick={() => playerRef.current?.requestFullscreen()}
           >
@@ -176,11 +183,11 @@ export function VideoCallPage() {
       <div className="flex-1 p-4 flex gap-4 overflow-hidden">
         {/* Remote/Main Video */}
         <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
-          <DailyVideoPlayer 
+          <DailyVideoPlayer
             key={`daily-${joinData.url}`}
             ref={playerRef}
-            url={joinData.url} 
-            token={joinData.token} 
+            url={joinData.url}
+            token={joinData.token}
             onLeft={handleVideoLeft}
           />
         </div>
@@ -188,7 +195,9 @@ export function VideoCallPage() {
         {/* Sidebar Info/Tools */}
         <div className="w-80 flex flex-col gap-4">
           <Card className="bg-slate-900 border-slate-800 p-4">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">Session Info</h3>
+            <h3 className="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">
+              Session Info
+            </h3>
             <div className="space-y-3">
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
@@ -207,60 +216,83 @@ export function VideoCallPage() {
 
           <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Risk Analysis</h3>
-              <Badge variant="outline" className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+                Risk Analysis
+              </h3>
+              <Badge
+                variant="outline"
+                className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
+              >
                 LIVE
               </Badge>
             </div>
-            
+
             <div className="flex-1 overflow-auto space-y-3 min-h-0">
               {assessments && assessments.length > 0 ? (
-                assessments.map((marker) => {
+                assessments.map(marker => {
                   const raw = marker.rawResponse as any;
                   const isVoice = marker.assessmentType === 'VOICE_ANALYSIS';
-                  
+
                   return (
-                    <div key={marker.id} className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in slide-in-from-right-2">
+                    <div
+                      key={marker.id}
+                      className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in slide-in-from-right-2"
+                    >
                       {/* Header */}
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          {marker.riskScore === 'HIGH' && <ShieldAlert className="h-4 w-4 text-red-500" />}
-                          {marker.riskScore === 'MEDIUM' && <ShieldMinus className="h-4 w-4 text-amber-500" />}
-                          {marker.riskScore === 'LOW' && <ShieldCheck className="h-4 w-4 text-emerald-500" />}
+                          {marker.riskScore === 'HIGH' && (
+                            <ShieldAlert className="h-4 w-4 text-red-500" />
+                          )}
+                          {marker.riskScore === 'MEDIUM' && (
+                            <ShieldMinus className="h-4 w-4 text-amber-500" />
+                          )}
+                          {marker.riskScore === 'LOW' && (
+                            <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                          )}
                           <span className="text-xs font-semibold text-slate-200">
                             {isVoice ? 'Voice Stress' : 'Visual Behavior'}
                           </span>
                         </div>
-                        <Badge 
+                        <Badge
                           variant={
-                            marker.riskScore === 'HIGH' ? 'destructive' : 
-                            marker.riskScore === 'MEDIUM' ? 'secondary' : 'default'
+                            marker.riskScore === 'HIGH'
+                              ? 'destructive'
+                              : marker.riskScore === 'MEDIUM'
+                                ? 'secondary'
+                                : 'default'
                           }
                           className="text-[9px] h-5 px-2"
                         >
                           {marker.riskScore || 'PENDING'}
                         </Badge>
                       </div>
-                      
+
                       {/* Metrics Grid */}
                       <div className="grid grid-cols-2 gap-2 text-[10px]">
                         {isVoice ? (
                           <>
                             <div className="bg-slate-900/50 rounded p-2">
                               <p className="text-slate-500 uppercase font-bold">Jitter</p>
-                              <p className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}>
+                              <p
+                                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
+                              >
                                 {raw?.jitter_percent?.toFixed(2) ?? '—'}%
                               </p>
                             </div>
                             <div className="bg-slate-900/50 rounded p-2">
                               <p className="text-slate-500 uppercase font-bold">Shimmer</p>
-                              <p className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}>
+                              <p
+                                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
+                              >
                                 {raw?.shimmer_percent?.toFixed(2) ?? '—'}%
                               </p>
                             </div>
                             <div className="bg-slate-900/50 rounded p-2">
                               <p className="text-slate-500 uppercase font-bold">Pitch SD</p>
-                              <p className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}>
+                              <p
+                                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
+                              >
                                 {raw?.pitch_sd_hz?.toFixed(1) ?? '—'} Hz
                               </p>
                             </div>
@@ -275,16 +307,22 @@ export function VideoCallPage() {
                           <>
                             <div className="bg-slate-900/50 rounded p-2">
                               <p className="text-slate-500 uppercase font-bold">Blink Rate</p>
-                              <p className={`text-sm font-mono ${
-                                ((raw?.blink_rate_per_min ?? 17) < 10 || (raw?.blink_rate_per_min ?? 17) > 25) 
-                                  ? 'text-amber-400' : 'text-slate-200'
-                              }`}>
+                              <p
+                                className={`text-sm font-mono ${
+                                  (raw?.blink_rate_per_min ?? 17) < 10 ||
+                                  (raw?.blink_rate_per_min ?? 17) > 25
+                                    ? 'text-amber-400'
+                                    : 'text-slate-200'
+                                }`}
+                              >
                                 {raw?.blink_rate_per_min?.toFixed(1) ?? '—'}/min
                               </p>
                             </div>
                             <div className="bg-slate-900/50 rounded p-2">
                               <p className="text-slate-500 uppercase font-bold">Lip Tension</p>
-                              <p className={`text-sm font-mono ${(raw?.avg_lip_tension ?? 1) < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}>
+                              <p
+                                className={`text-sm font-mono ${(raw?.avg_lip_tension ?? 1) < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
+                              >
                                 {raw?.avg_lip_tension?.toFixed(3) ?? '—'}
                               </p>
                             </div>
@@ -303,7 +341,7 @@ export function VideoCallPage() {
                           </>
                         )}
                       </div>
-                      
+
                       {/* Footer */}
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
                         <span className="text-[9px] text-slate-500">{marker.provider}</span>
@@ -323,15 +361,15 @@ export function VideoCallPage() {
             </div>
 
             <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
-                  
+
                   if (playerRef.current) {
                     console.log('[VideoCallPage] Sending voice analysis request to claimant');
                     playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
@@ -339,12 +377,12 @@ export function VideoCallPage() {
                       title: 'Request Sent',
                       description: 'Asking claimant device to send audio sample...',
                     });
-                    
+
                     // Simulate "pending" state or just wait for polling
                     isAnalyzingRef.current = true;
                     setTimeout(() => {
                       isAnalyzingRef.current = false;
-                    }, 5000); 
+                    }, 5000);
                   } else {
                     toast({
                       title: 'Error',
@@ -358,12 +396,12 @@ export function VideoCallPage() {
                 <Zap className="h-3 w-3 mr-2" />
                 Analyze Voice Stress (Live)
               </Button>
-              <Button 
+              <Button
                 type="button"
-                variant="outline" 
-                size="sm" 
+                variant="outline"
+                size="sm"
                 className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
                   isAnalyzingRef.current = true;
@@ -374,9 +412,11 @@ export function VideoCallPage() {
                       onSettled: () => {
                         setTimeout(() => {
                           isAnalyzingRef.current = false;
-                          console.log('[VideoCallPage] Visual analysis settled, isAnalyzing set to false');
+                          console.log(
+                            '[VideoCallPage] Visual analysis settled, isAnalyzing set to false'
+                          );
                         }, 1000);
-                      }
+                      },
                     }
                   );
                 }}
