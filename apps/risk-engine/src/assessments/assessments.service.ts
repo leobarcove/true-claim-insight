@@ -247,7 +247,7 @@ export class AssessmentsService {
   private mapType(type: string): AssessmentType {
     const map: Record<string, AssessmentType> = {
       VOICE: AssessmentType.VOICE_ANALYSIS,
-      VISUAL: AssessmentType.VISUAL_MODERATION,
+      VISUAL: AssessmentType.ATTENTION_TRACKING,
       ATTENTION: AssessmentType.ATTENTION_TRACKING,
       DEEPFAKE: AssessmentType.DEEPFAKE_CHECK,
     };

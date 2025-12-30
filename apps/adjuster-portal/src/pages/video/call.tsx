@@ -92,6 +92,113 @@ export function VideoCallPage() {
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
 
+  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto'>('manual');
+  const [isJoined, setIsJoined] = useState(false);
+
+  // Trigger functions
+  const triggerVoiceAnalysis = useCallback(
+    (showToast: boolean = false) => {
+      if (!playerRef.current) return;
+
+      if (!isJoined) {
+        if (showToast) {
+          toast({
+            title: 'Not Ready',
+            description: 'Waiting for video connection to be established...',
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+
+      try {
+        playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
+        if (showToast) {
+          toast({
+            title: 'Request Sent',
+            description: 'Asking claimant device to send audio sample...',
+          });
+        }
+
+        isAnalyzingRef.current = true;
+        setTimeout(() => {
+          isAnalyzingRef.current = false;
+        }, 5000);
+      } catch (e) {
+        console.error('Failed to trigger voice analysis:', e);
+      }
+    },
+    [isJoined, toast]
+  );
+
+  const triggerVisualAnalysis = useCallback(() => {
+    if (!isJoined) return;
+
+    isAnalyzingRef.current = true;
+    triggerAssessment.mutate(
+      { sessionId: sessionId || '', assessmentType: 'VISUAL' },
+      {
+        onSettled: () => {
+          setTimeout(() => {
+            isAnalyzingRef.current = false;
+          }, 1000);
+        },
+      }
+    );
+  }, [isJoined, sessionId, triggerAssessment]);
+
+  const triggerExpressionAnalysis = useCallback(
+    (showToast: boolean = false) => {
+      if (!playerRef.current) return;
+
+      if (!isJoined) {
+        if (showToast) {
+          toast({
+            title: 'Not Ready',
+            description: 'Waiting for video connection to be established...',
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+
+      try {
+        isAnalyzingRef.current = true;
+        playerRef.current.sendAppMessage({ type: 'request-expression-analysis' });
+      } catch (error: any) {
+        console.error('[VideoCallPage] Expression analysis request failed:', error);
+        if (showToast) {
+          toast({
+            title: 'Error',
+            description: 'Failed to send analysis request.',
+            variant: 'destructive',
+          });
+        }
+        isAnalyzingRef.current = false;
+      }
+    },
+    [isJoined, toast]
+  );
+
+  // Auto-analysis effect
+  useEffect(() => {
+    if (analysisMode === 'auto' && isJoined) {
+      const interval = setInterval(() => {
+        triggerVoiceAnalysis(false);
+        triggerVisualAnalysis();
+        triggerExpressionAnalysis(false);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }
+  }, [
+    analysisMode,
+    isJoined,
+    triggerVoiceAnalysis,
+    triggerVisualAnalysis,
+    triggerExpressionAnalysis,
+  ]);
+
   // Effect to trigger join and set data directly
   useEffect(() => {
     const doJoin = async () => {
@@ -250,7 +357,11 @@ export function VideoCallPage() {
             ref={playerRef}
             url={joinData.url}
             token={joinData.token}
-            onLeft={handleVideoLeft}
+            onLeft={() => {
+              setIsJoined(false);
+              handleVideoLeft();
+            }}
+            onJoined={() => setIsJoined(true)}
           />
         </div>
 
@@ -281,12 +392,22 @@ export function VideoCallPage() {
               <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
                 Risk Analysis
               </h3>
-              <Badge
-                variant="outline"
-                className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
-              >
-                LIVE
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={analysisMode === 'auto' ? 'default' : 'outline'}
+                  size="sm"
+                  className={`h-5 text-[9px] px-2 ${analysisMode === 'auto' ? 'bg-primary text-primary-foreground' : 'text-slate-400'}`}
+                  onClick={() => setAnalysisMode(prev => (prev === 'auto' ? 'manual' : 'auto'))}
+                >
+                  {analysisMode === 'auto' ? 'AUTO' : 'MANUAL'}
+                </Button>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
+                >
+                  LIVE
+                </Badge>
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto space-y-4 min-h-0">
@@ -296,6 +417,7 @@ export function VideoCallPage() {
                 const latestEmotion = assessments?.find(a => (a.rawResponse as any)?.top_emotions);
                 const latestVisual = assessments?.find(
                   a =>
+                    a.assessmentType === 'ATTENTION_TRACKING' ||
                     (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
                     a.provider?.includes('MediaPipe') ||
                     (a.assessmentType === 'VISUAL_MODERATION' &&
@@ -510,103 +632,51 @@ export function VideoCallPage() {
               })()}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
-                onClick={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  if (playerRef.current) {
-                    playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
-                    toast({
-                      title: 'Request Sent',
-                      description: 'Asking claimant device to send audio sample...',
-                    });
-
-                    // Simulate "pending" state or just wait for polling
-                    isAnalyzingRef.current = true;
-                    setTimeout(() => {
-                      isAnalyzingRef.current = false;
-                    }, 5000);
-                  } else {
-                    toast({
-                      title: 'Error',
-                      description: 'Video connection not ready.',
-                      variant: 'destructive',
-                    });
-                  }
-                }}
-                disabled={false} // Always enable if connected
-              >
-                <Zap className="h-3 w-3 mr-2" />
-                Analyze Voice Stress
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                onClick={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  isAnalyzingRef.current = true;
-                  triggerAssessment.mutate(
-                    { sessionId: sessionId || '', assessmentType: 'VISUAL' },
-                    {
-                      onSettled: () => {
-                        setTimeout(() => {
-                          isAnalyzingRef.current = false;
-                        }, 1000);
-                      },
-                    }
-                  );
-                }}
-                disabled={triggerAssessment.isPending}
-              >
-                <ShieldCheck className="h-3 w-3 mr-2" />
-                Analyze Visual Behavior
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                onClick={async e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  if (!playerRef.current) {
-                    toast({
-                      title: 'Error',
-                      description: 'Video connection not ready.',
-                      variant: 'destructive',
-                    });
-                    return;
-                  }
-
-                  try {
-                    isAnalyzingRef.current = true;
-                    playerRef.current.sendAppMessage({ type: 'request-expression-analysis' });
-                  } catch (error: any) {
-                    console.error('[VideoCallPage] Expression analysis request failed:', error);
-                    toast({
-                      title: 'Error',
-                      description: 'Failed to send analysis request.',
-                      variant: 'destructive',
-                    });
-                    isAnalyzingRef.current = false;
-                  }
-                }}
-                disabled={analyzeExpression.isPending}
-              >
-                <Activity className="h-3 w-3 mr-2" />
-                Analyze Expression
-              </Button>
-            </div>
+            {analysisMode === 'manual' && (
+              <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerVoiceAnalysis(true);
+                  }}
+                >
+                  <Zap className="h-3 w-3 mr-2" />
+                  Analyze Voice Stress
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerVisualAnalysis();
+                  }}
+                  disabled={triggerAssessment.isPending}
+                >
+                  <ShieldCheck className="h-3 w-3 mr-2" />
+                  Analyze Visual Behavior
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerExpressionAnalysis(true);
+                  }}
+                  disabled={analyzeExpression.isPending}
+                >
+                  <Activity className="h-3 w-3 mr-2" />
+                  Analyze Expression
+                </Button>
+              </div>
+            )}
           </Card>
         </div>
       </div>
