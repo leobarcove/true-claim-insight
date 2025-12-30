@@ -30,9 +30,7 @@ export function useVideoSession(sessionId: string) {
   return useQuery({
     queryKey: videoKeys.room(sessionId),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<VideoSession>>(
-        `/video/rooms/${sessionId}`
-      );
+      const { data } = await apiClient.get<ApiResponse<VideoSession>>(`/video/rooms/${sessionId}`);
       return data.data;
     },
     enabled: !!sessionId,
@@ -57,13 +55,10 @@ export function useCreateVideoRoom() {
 
   return useMutation({
     mutationFn: async (claimId: string) => {
-      const { data } = await apiClient.post<ApiResponse<VideoSession>>(
-        '/video/rooms',
-        { claimId }
-      );
+      const { data } = await apiClient.post<ApiResponse<VideoSession>>('/video/rooms', { claimId });
       return data.data;
     },
-    onSuccess: (newSession) => {
+    onSuccess: newSession => {
       queryClient.invalidateQueries({
         queryKey: videoKeys.claimSessions(newSession.claimId),
       });
@@ -157,10 +152,10 @@ export function useTriggerAssessment() {
       sessionId: string;
       assessmentType: string;
     }) => {
-      const { data } = await apiClient.post<ApiResponse<RiskAssessment>>(
-        '/risk/trigger',
-        { sessionId, assessmentType }
-      );
+      const { data } = await apiClient.post<ApiResponse<RiskAssessment>>('/risk/trigger', {
+        sessionId,
+        assessmentType,
+      });
       return data.data;
     },
     onSuccess: (data, variables) => {
@@ -172,6 +167,37 @@ export function useTriggerAssessment() {
     onError: (error: any) => {
       console.error('[useTriggerAssessment] Error:', error?.message || error);
       // Error is logged but not thrown to prevent page navigation
+    },
+  });
+}
+
+export function useAnalyzeExpression() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ sessionId, videoBlob }: { sessionId: string; videoBlob: Blob }) => {
+      const formData = new FormData();
+      formData.append('file', videoBlob, 'expression-analysis.webm');
+      formData.append('sessionId', sessionId);
+
+      const { data } = await apiClient.post<ApiResponse<RiskAssessment>>(
+        '/risk/analyze-expression',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return data.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: riskKeys.session(variables.sessionId),
+      });
+    },
+    onError: (error: any) => {
+      console.error('[useAnalyzeExpression] Error:', error?.message || error);
     },
   });
 }

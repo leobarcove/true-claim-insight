@@ -7,6 +7,7 @@ import os
 
 from app.audio_analyzer import analyze_audio
 from app.video_analyzer import analyze_video
+from app.hume_analyzer import HumeAnalyzer, calculate_hume_risk_score
 from app.fusion import calculate_risk_score
 
 # HumeAI & Supabase Integration
@@ -301,3 +302,40 @@ async def analyze_combined_endpoint(
     finally:
         os.unlink(audio_path)
         os.unlink(video_path)
+
+
+@app.post("/analyze-expression", response_model=AnalysisResponse)
+async def analyze_expression_endpoint(
+    file: UploadFile = File(...),
+    sessionId: str = "unknown"
+):
+    """Analyze video file for facial expressions using HumeAI."""
+    if not file.filename.endswith(('.mp4', '.webm', '.mov')):
+        raise HTTPException(status_code=400, detail="Unsupported video format")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # Analyze using Hume
+        analyzer = HumeAnalyzer()
+        metrics = await analyzer.analyze_video(tmp_path)
+        
+        # Calculate risk score specifically for Hume metrics
+        risk_score, confidence = calculate_hume_risk_score(metrics)
+        
+        return AnalysisResponse(
+            success=True,
+            risk_score=risk_score,
+            confidence=confidence,
+            metrics=metrics,
+            details="Expression analysis complete using HumeAI."
+        )
+    except Exception as e:
+        print(f"[AnalyzeExpression] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)

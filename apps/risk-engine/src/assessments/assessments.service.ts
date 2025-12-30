@@ -173,6 +173,76 @@ export class AssessmentsService {
     }
   }
 
+  async processUploadedExpression(fileBuffer: Buffer, sessionId: string) {
+    const path = require('path');
+    const fs = require('fs');
+
+    const projectRoot = process.cwd();
+    const tmpDir = path.join(projectRoot, '.tmp');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const videoPath = path.join(tmpDir, `expression-${sessionId}-${Date.now()}.webm`);
+
+    try {
+      this.logger.log(
+        `Processing expression analysis for session ${sessionId}, size: ${fileBuffer.length} bytes`
+      );
+
+      await fs.promises.writeFile(videoPath, fileBuffer);
+      this.logger.log(`Video saved to temporary path: ${videoPath}`);
+
+      const result = await this.riskAnalyzerClient.analyzeExpression(videoPath, 'expression.webm');
+      const assessment = await this.prisma.riskAssessment.upsert({
+        where: {
+          sessionId_assessmentType: {
+            sessionId,
+            assessmentType: AssessmentType.VISUAL_MODERATION,
+          },
+        },
+        update: {
+          provider: result.metrics?.provider || 'HumeAI-Expression-Measurement',
+          riskScore: this.mapRiskScore(result.risk_score),
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            analysisMethod: 'expression_measurement',
+            timestamp: new Date().toISOString(),
+          },
+        },
+        create: {
+          sessionId,
+          assessmentType: AssessmentType.VISUAL_MODERATION,
+          provider: result.metrics?.provider || 'HumeAI-Expression-Measurement',
+          riskScore: this.mapRiskScore(result.risk_score),
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            analysisMethod: 'expression_measurement',
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      this.logger.log(`Expression analysis complete for session ${sessionId}`);
+      return assessment;
+    } catch (error: any) {
+      this.logger.error(`Expression analysis failed: ${error.message}`);
+      throw error;
+    } finally {
+      try {
+        if (fs.existsSync(videoPath)) {
+          await fs.promises.unlink(videoPath);
+          this.logger.log(`Temporary video file removed: ${videoPath}`);
+        }
+      } catch (cleanupError: any) {
+        this.logger.warn(`Failed to cleanup temp file ${videoPath}: ${cleanupError.message}`);
+      }
+    }
+  }
+
   // Helper mapping method
   private mapType(type: string): AssessmentType {
     const map: Record<string, AssessmentType> = {

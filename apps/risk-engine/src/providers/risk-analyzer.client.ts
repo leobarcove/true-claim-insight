@@ -38,10 +38,7 @@ export class RiskAnalyzerClient {
   private readonly baseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.baseUrl = this.configService.get<string>(
-      'RISK_ANALYZER_URL',
-      'http://localhost:3005'
-    );
+    this.baseUrl = this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005');
   }
 
   async analyzeAudio(
@@ -66,7 +63,7 @@ export class RiskAnalyzerClient {
         throw new Error(`Audio analysis failed: ${error}`);
       }
 
-      return await response.json() as AudioAnalysisResult;
+      return (await response.json()) as AudioAnalysisResult;
     } catch (error) {
       this.logger.error(`Audio analysis error: ${error}`);
       throw error;
@@ -95,9 +92,35 @@ export class RiskAnalyzerClient {
         throw new Error(`Video analysis failed: ${error}`);
       }
 
-      return await response.json() as VideoAnalysisResult;
+      return (await response.json()) as VideoAnalysisResult;
     } catch (error) {
       this.logger.error(`Video analysis error: ${error}`);
+      throw error;
+    }
+  }
+
+  async analyzeExpression(videoPath: string, filename: string): Promise<any> {
+    const formData = new FormData();
+    const fs = require('fs');
+    const fileBuffer = fs.readFileSync(videoPath);
+    formData.append('file', new Blob([fileBuffer]), filename);
+
+    const url = `${this.baseUrl}/analyze-expression`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Expression analysis failed: ${error}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      this.logger.error(`Expression analysis error: ${error}`);
       throw error;
     }
   }
@@ -105,7 +128,7 @@ export class RiskAnalyzerClient {
   async healthCheck(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/health`);
-      const data = await response.json() as { status: string };
+      const data = (await response.json()) as { status: string };
       return data.status === 'healthy';
     } catch (error) {
       this.logger.warn(`Risk analyzer health check failed: ${error}`);
