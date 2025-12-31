@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   useRiskAssessments,
   useTriggerAssessment,
   useAnalyzeExpression,
+  RiskAssessment,
 } from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
@@ -69,6 +70,169 @@ const DEFAULT_EMOTIONS = [
   'Triumph',
 ];
 
+interface RiskAssessmentCardProps {
+  title: string;
+  data: RiskAssessment | undefined;
+  type: 'voice' | 'visual' | 'emotion';
+}
+
+const RiskAssessmentCard = memo(({ title, data, type }: RiskAssessmentCardProps) => {
+  const marker = data;
+  const raw = marker?.rawResponse as any;
+
+  const topEmotions = useMemo(() => {
+    if (type !== 'emotion') return [];
+
+    const provided = raw?.top_emotions ?? [];
+    const used = new Set(provided.map((e: any) => e.name));
+    return [
+      ...provided,
+      ...DEFAULT_EMOTIONS.filter(n => !used.has(n))
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 4 - provided.length)
+        .map((name: string) => ({ name, score: null })),
+    ].slice(0, 4);
+  }, [type, raw?.top_emotions]);
+
+  return (
+    <div className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {marker?.riskScore === 'HIGH' ? (
+            <ShieldAlert className="h-4 w-4 text-red-500" />
+          ) : marker?.riskScore === 'MEDIUM' ? (
+            <ShieldMinus className="h-4 w-4 text-amber-500" />
+          ) : marker?.riskScore === 'LOW' ? (
+            <ShieldCheck className="h-4 w-4 text-blue-500" />
+          ) : (
+            <Activity className="h-4 w-4 text-slate-500 opacity-50" />
+          )}
+          <span className="text-xs font-semibold text-slate-200">{title}</span>
+        </div>
+        {marker && (
+          <Badge
+            variant={
+              marker.riskScore === 'HIGH'
+                ? 'destructive'
+                : marker.riskScore === 'MEDIUM'
+                  ? 'secondary'
+                  : 'default'
+            }
+            className="text-[9px] h-5 px-2"
+          >
+            {marker.riskScore || 'PENDING'}
+          </Badge>
+        )}
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        {type === 'voice' && (
+          <>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Jitter</p>
+              <p
+                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
+              >
+                {raw?.jitter_percent !== undefined ? `${raw.jitter_percent.toFixed(2)}%` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Shimmer</p>
+              <p
+                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.shimmer_percent !== undefined ? `${raw.shimmer_percent.toFixed(2)}%` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Pitch SD</p>
+              <p
+                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.pitch_sd_hz !== undefined ? `${raw.pitch_sd_hz.toFixed(1)} Hz` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">HNR</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.hnr_db !== undefined ? `${raw.hnr_db.toFixed(1)} dB` : '—'}
+              </p>
+            </div>
+          </>
+        )}
+
+        {type === 'visual' && (
+          <>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Rate</p>
+              <p
+                className={`text-sm font-mono ${
+                  raw?.blink_rate_per_min !== undefined &&
+                  (raw.blink_rate_per_min < 10 || raw.blink_rate_per_min > 25)
+                    ? 'text-amber-400'
+                    : 'text-slate-200'
+                }`}
+              >
+                {raw?.blink_rate_per_min !== undefined
+                  ? `${raw.blink_rate_per_min.toFixed(1)}/min`
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Lip Tension</p>
+              <p
+                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.avg_lip_tension !== undefined ? raw.avg_lip_tension.toFixed(3) : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Dur.</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.avg_blink_duration_ms !== undefined
+                  ? `${raw.avg_blink_duration_ms.toFixed(0)} ms`
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Frames</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.frames_analyzed !== undefined ? raw.frames_analyzed : '—'}
+              </p>
+            </div>
+          </>
+        )}
+
+        {type === 'emotion' && (
+          <>
+            {topEmotions.map((emotion: any, idx: number) => (
+              <div key={idx} className="bg-slate-900/50 rounded p-2">
+                <p className="text-slate-500 uppercase font-bold text-[9px]">{emotion.name}</p>
+                <p className="text-sm font-mono text-slate-200">
+                  {emotion.score !== null && emotion.score !== undefined
+                    ? `${(emotion.score * 100).toFixed(1)}%`
+                    : '—'}
+                </p>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
+        <span className="text-[9px] text-slate-500">
+          {marker?.provider
+            ? `Conf: ${((marker.confidence ?? 0) * 100).toFixed(0)}%`
+            : 'Awaiting Data...'}
+        </span>
+      </div>
+    </div>
+  );
+});
+
 export function VideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -92,8 +256,22 @@ export function VideoCallPage() {
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
 
-  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto'>('manual');
+  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto'>('auto');
   const [isJoined, setIsJoined] = useState(false);
+  const [isClaimantInRoom, setIsClaimantInRoom] = useState(false);
+
+  const handleCallFrameCreated = useCallback((callFrame: any) => {
+    const checkParticipants = () => {
+      const participants = callFrame.participants();
+      const remote = Object.values(participants).find((p: any) => !p.local);
+      setIsClaimantInRoom(!!remote);
+    };
+
+    callFrame.on('participant-joined', checkParticipants);
+    callFrame.on('participant-left', checkParticipants);
+    callFrame.on('joined-meeting', checkParticipants);
+    checkParticipants();
+  }, []);
 
   // Trigger functions
   const triggerVoiceAnalysis = useCallback(
@@ -359,9 +537,11 @@ export function VideoCallPage() {
             token={joinData.token}
             onLeft={() => {
               setIsJoined(false);
+              setIsClaimantInRoom(false);
               handleVideoLeft();
             }}
             onJoined={() => setIsJoined(true)}
+            onCallFrameCreated={handleCallFrameCreated}
           />
         </div>
 
@@ -396,7 +576,7 @@ export function VideoCallPage() {
                 <Button
                   variant={analysisMode === 'auto' ? 'default' : 'outline'}
                   size="sm"
-                  className={`h-5 text-[9px] px-2 ${analysisMode === 'auto' ? 'bg-primary text-primary-foreground' : 'text-slate-400'}`}
+                  className={`hidden h-5 text-[9px] px-2 ${analysisMode === 'auto' ? 'bg-primary text-primary-foreground' : 'text-slate-400'}`}
                   onClick={() => setAnalysisMode(prev => (prev === 'auto' ? 'manual' : 'auto'))}
                 >
                   {analysisMode === 'auto' ? 'AUTO' : 'MANUAL'}
@@ -412,17 +592,25 @@ export function VideoCallPage() {
 
             <div className="flex-1 overflow-auto space-y-4 min-h-0">
               {(() => {
-                // Extract latest assessments for each category
-                const latestVoice = assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS');
-                const latestEmotion = assessments?.find(a => (a.rawResponse as any)?.top_emotions);
-                const latestVisual = assessments?.find(
-                  a =>
-                    a.assessmentType === 'ATTENTION_TRACKING' ||
-                    (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
-                    a.provider?.includes('MediaPipe') ||
-                    (a.assessmentType === 'VISUAL_MODERATION' &&
-                      !(a.rawResponse as any)?.top_emotions)
-                );
+                // Extract latest assessments for each category, but only if claimant is present
+                const latestVoice = isClaimantInRoom
+                  ? assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS')
+                  : undefined;
+
+                const latestEmotion = isClaimantInRoom
+                  ? assessments?.find(a => (a.rawResponse as any)?.top_emotions)
+                  : undefined;
+
+                const latestVisual = isClaimantInRoom
+                  ? assessments?.find(
+                      a =>
+                        a.assessmentType === 'ATTENTION_TRACKING' ||
+                        (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
+                        a.provider?.includes('MediaPipe') ||
+                        (a.assessmentType === 'VISUAL_MODERATION' &&
+                          !(a.rawResponse as any)?.top_emotions)
+                    )
+                  : undefined;
 
                 const sections = [
                   {
@@ -445,190 +633,14 @@ export function VideoCallPage() {
                   },
                 ];
 
-                return sections.map(section => {
-                  const marker = section.data;
-                  const raw = marker?.rawResponse as any;
-                  const displayType = section.type;
-
-                  const topEmotions = (() => {
-                    const provided = raw?.top_emotions ?? [];
-                    const used = new Set(provided.map((e: any) => e.name));
-                    return [
-                      ...provided,
-                      ...DEFAULT_EMOTIONS.filter(n => !used.has(n))
-                        .sort(() => 0.5 - Math.random())
-                        .slice(0, 4 - provided.length)
-                        .map(name => ({ name, score: null })),
-                    ].slice(0, 4);
-                  })();
-
-                  return (
-                    <div
-                      key={section.id}
-                      className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in"
-                    >
-                      {/* Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {marker?.riskScore === 'HIGH' ? (
-                            <ShieldAlert className="h-4 w-4 text-red-500" />
-                          ) : marker?.riskScore === 'MEDIUM' ? (
-                            <ShieldMinus className="h-4 w-4 text-amber-500" />
-                          ) : marker?.riskScore === 'LOW' ? (
-                            <ShieldCheck className="h-4 w-4 text-blue-500" />
-                          ) : (
-                            <Activity className="h-4 w-4 text-slate-500 opacity-50" />
-                          )}
-                          <span className="text-xs font-semibold text-slate-200">
-                            {section.title}
-                          </span>
-                        </div>
-                        {marker && (
-                          <Badge
-                            variant={
-                              marker.riskScore === 'HIGH'
-                                ? 'destructive'
-                                : marker.riskScore === 'MEDIUM'
-                                  ? 'secondary'
-                                  : 'default'
-                            }
-                            className="text-[9px] h-5 px-2"
-                          >
-                            {marker.riskScore || 'PENDING'}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* Metrics Grid */}
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        {displayType === 'voice' && (
-                          <>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Jitter
-                              </p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.jitter_percent !== undefined
-                                  ? `${raw.jitter_percent.toFixed(2)}%`
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Shimmer
-                              </p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.shimmer_percent !== undefined
-                                  ? `${raw.shimmer_percent.toFixed(2)}%`
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Pitch SD
-                              </p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.pitch_sd_hz !== undefined
-                                  ? `${raw.pitch_sd_hz.toFixed(1)} Hz`
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">HNR</p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.hnr_db !== undefined ? `${raw.hnr_db.toFixed(1)} dB` : '—'}
-                              </p>
-                            </div>
-                          </>
-                        )}
-
-                        {displayType === 'visual' && (
-                          <>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Blink Rate
-                              </p>
-                              <p
-                                className={`text-sm font-mono ${
-                                  raw?.blink_rate_per_min !== undefined &&
-                                  (raw.blink_rate_per_min < 10 || raw.blink_rate_per_min > 25)
-                                    ? 'text-amber-400'
-                                    : 'text-slate-200'
-                                }`}
-                              >
-                                {raw?.blink_rate_per_min !== undefined
-                                  ? `${raw.blink_rate_per_min.toFixed(1)}/min`
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Lip Tension
-                              </p>
-                              <p
-                                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.avg_lip_tension !== undefined
-                                  ? raw.avg_lip_tension.toFixed(3)
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Blink Dur.
-                              </p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.avg_blink_duration_ms !== undefined
-                                  ? `${raw.avg_blink_duration_ms.toFixed(0)} ms`
-                                  : '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                Frames
-                              </p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.frames_analyzed !== undefined ? raw.frames_analyzed : '—'}
-                              </p>
-                            </div>
-                          </>
-                        )}
-
-                        {displayType === 'emotion' && (
-                          <>
-                            {topEmotions.map((emotion: any, idx: number) => (
-                              <div key={idx} className="bg-slate-900/50 rounded p-2">
-                                <p className="text-slate-500 uppercase font-bold text-[9px]">
-                                  {emotion.name}
-                                </p>
-                                <p className="text-sm font-mono text-slate-200">
-                                  {emotion.score !== null && emotion.score !== undefined
-                                    ? `${(emotion.score * 100).toFixed(1)}%`
-                                    : '—'}
-                                </p>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
-                        <span className="text-[9px] text-slate-500">
-                          {marker?.provider
-                            ? `Conf: ${((marker.confidence ?? 0) * 100).toFixed(0)}%`
-                            : 'Awaiting Data...'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                });
+                return sections.map(section => (
+                  <RiskAssessmentCard
+                    key={section.id}
+                    title={section.title}
+                    data={section.data}
+                    type={section.type as any}
+                  />
+                ));
               })()}
             </div>
 

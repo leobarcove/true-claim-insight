@@ -72,13 +72,6 @@ async def analyze_audio_endpoint(
     try:
         # Run Parselmouth Analysis (Existing)
         metrics = analyze_audio(tmp_path)
-        
-        # Run HumeAI Analysis (New)
-        hume_results = await analyze_with_hume(tmp_path, session_id=sessionId)
-        
-        # Merge metrics
-        if hume_results:
-            metrics["hume_emotions"] = hume_results
 
         risk_score, confidence = calculate_risk_score(
             audio_metrics=metrics,
