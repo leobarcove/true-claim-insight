@@ -135,4 +135,34 @@ export class RiskAnalyzerClient {
       return false;
     }
   }
+  async generateConsent(payload: any): Promise<{
+    success: boolean;
+    storage_path: string;
+    bucket: string;
+    signed_url: string;
+    file_size: number;
+  }> {
+    const url = `${this.baseUrl}/generate-consent-pdf`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Consent generation failed: ${response.statusText}`);
+      }
+      return (await response.json()) as {
+        success: boolean;
+        storage_path: string;
+        bucket: string;
+        signed_url: string;
+        file_size: number;
+      };
+    } catch (error) {
+      this.logger.error(`Consent generation error: ${error}`);
+      throw error;
+    }
+  }
 }

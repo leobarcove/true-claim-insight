@@ -49,6 +49,32 @@ const CLAIM_TYPES: Record<string, string> = {
   WINDSCREEN: 'Windscreen',
 };
 
+const normalizeDate = (dateStr: string) => {
+  if (!dateStr) return '';
+
+  const parts = dateStr.split(/[/ .-]/);
+  if (parts.length === 3) {
+    // Case 1: DD/MM/YYYY
+    if (parts[0].length <= 2 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    // Case 2: YYYY/MM/DD
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+
+  // Fallback
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch (e) {}
+
+  return dateStr;
+};
+
 // ================= INTERNAL COMPONENTS =================
 
 const Button = ({ children, className, variant = 'default', ...props }: any) => {
@@ -215,6 +241,13 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     description: '',
     address: '',
     photos: [] as File[],
+    panelWorkshop: '',
+    chassisNo: '',
+    engineNo: '',
+    notes: '',
+    policeReportNumber: '',
+    policeReportDate: new Date().toISOString().split('T')[0],
+    policeStation: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -231,7 +264,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   // Location Suggestion State
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [policeStationSuggestions, setPoliceStationSuggestions] = useState<string[]>([]);
+  const [policeStationShowSuggestions, setPoliceStationShowSuggestions] = useState(false);
   const addressContainerRef = useRef<HTMLDivElement>(null);
+  const policeStationContainerRef = useRef<HTMLDivElement>(null);
 
   const [isAiImportActive, setIsAiImportActive] = useState(false);
   const [aiImportFiles, setAiImportFiles] = useState<{ [key: string]: File | null }>({
@@ -248,6 +284,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         !addressContainerRef.current.contains(event.target as Node)
       ) {
         setShowAddressSuggestions(false);
+      }
+      if (
+        policeStationContainerRef.current &&
+        !policeStationContainerRef.current.contains(event.target as Node)
+      ) {
+        setPoliceStationShowSuggestions(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -291,6 +333,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         break;
       case 'vehicleModel':
         if (!value?.trim()) error = 'Model is required';
+        break;
+      case 'chassisNo':
+        if (!value?.trim()) error = 'Chassis number is required';
+        break;
+      case 'engineNo':
+        if (!value?.trim()) error = 'Engine number is required';
         break;
       case 'incidentDate':
         if (!value) error = 'Date is required';
@@ -344,6 +392,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       if (!formData.vehiclePlate.trim()) newErrors.vehiclePlate = 'Plate number is required';
       if (!formData.vehicleMake.trim()) newErrors.vehicleMake = 'Make is required';
       if (!formData.vehicleModel.trim()) newErrors.vehicleModel = 'Model is required';
+      if (!formData.chassisNo.trim()) newErrors.chassisNo = 'Chassis number is required';
+      if (!formData.engineNo.trim()) newErrors.engineNo = 'Engine number is required';
     }
 
     if (currentStep === 3) {
@@ -446,7 +496,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         filled.add('vehicleModel');
       }
       if (data.incident_date) {
-        newFormData.incidentDate = data.incident_date;
+        newFormData.incidentDate = normalizeDate(data.incident_date);
         filled.add('incidentDate');
       }
       if (data.incident_time) {
@@ -463,12 +513,24 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         filled.add('description');
       }
       if (data.report?.incident?.incident_date && !newFormData.incidentDate) {
-        newFormData.incidentDate = data.report.incident.incident_date;
+        newFormData.incidentDate = normalizeDate(data.report.incident.incident_date);
         filled.add('incidentDate');
       }
       if (data.report?.incident?.incident_time && !newFormData.incidentTime) {
         newFormData.incidentTime = data.report.incident.incident_time;
         filled.add('incidentTime');
+      }
+      if (data.report?.report_number) {
+        newFormData.policeReportNumber = data.report.report_number;
+        filled.add('policeReportNumber');
+      }
+      if (data.report?.report_station) {
+        newFormData.policeStation = data.report.report_station;
+        filled.add('policeStation');
+      }
+      if (data.report?.report_date) {
+        newFormData.policeReportDate = normalizeDate(data.report.report_date);
+        filled.add('policeReportDate');
       }
     }
 
@@ -559,6 +621,20 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     });
   };
 
+  const handlePoliceStationSearch = async (query: string) => {
+    try {
+      const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api/v1';
+      const res = await fetch(`${baseUrl}/location/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const json = await res.json();
+        const suggestions = (json.data || []).map((item: any) => item.displayName);
+        setPoliceStationSuggestions(suggestions);
+      }
+    } catch (e) {
+      console.error('Failed to fetch police station suggestions', e);
+    }
+  };
+
   const fillDemoData = () => {
     setFormData({
       ...formData,
@@ -573,6 +649,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       description:
         'The vehicle was hit from the rear by a motorcycle while waiting at a traffic light in Kuala Lumpur.',
       address: 'Jalan Bukit Bintang, Kuala Lumpur, Malaysia',
+      chassisNo: 'MH4RT1234LK567890',
+      engineNo: '1NZFE987654',
+      policeReportNumber: `IPDKL/${Math.floor(Math.random() * 90000) + 10000}/${new Date().getFullYear()}`,
+      policeReportDate: new Date().toISOString().split('T')[0],
+      policeStation: 'Balai Polis Jalan Tun Razak',
       photos: [], // Photos still need manual upload or mock
     });
     setAiFilledFields(new Set());
@@ -763,7 +844,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   }
 
   return (
-    <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[600px]">
+    <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-[600px]">
       {/* Progress Header */}
       <div className="bg-white px-6 py-4 border-b border-gray-100">
         <div className="flex justify-between items-center relative">
@@ -845,7 +926,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="NRIC Number"
-                  placeholder="880101-14-1234"
+                  placeholder="e.g. 880101-14-1234"
                   value={formData.nric}
                   error={errors.nric}
                   aiFilled={aiFilledFields.has('nric')}
@@ -854,7 +935,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 />
                 <Input
                   label="Mobile Number"
-                  placeholder="+60123456789"
+                  placeholder="e.g.+60123456789"
                   value={formData.mobileNumber}
                   error={errors.mobileNumber}
                   aiFilled={aiFilledFields.has('mobileNumber')}
@@ -877,7 +958,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Plate Number"
-                placeholder="ABC 1234"
+                placeholder="e.g. ABC 1234"
                 value={formData.vehiclePlate}
                 error={errors.vehiclePlate}
                 className="uppercase"
@@ -889,7 +970,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               />
               <Input
                 label="Year"
-                placeholder="2025"
+                placeholder="e.g. 2026"
                 value={formData.vehicleYear}
                 onChange={(e: any) => setFormData({ ...formData, vehicleYear: e.target.value })}
               />
@@ -916,6 +997,28 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 aiFilled={aiFilledFields.has('vehicleModel')}
                 onChange={(val: string) => setFormData({ ...formData, vehicleModel: val })}
                 onBlur={() => handleBlur('vehicleModel')}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Chassis Number"
+                placeholder="e.g. MH4RT1234LK567890"
+                value={formData.chassisNo}
+                error={errors.chassisNo}
+                onChange={(e: any) =>
+                  setFormData({ ...formData, chassisNo: e.target.value.toUpperCase() })
+                }
+                onBlur={() => handleBlur('chassisNo')}
+              />
+              <Input
+                label="Engine Number"
+                placeholder="e.g. 1NZFE987654"
+                value={formData.engineNo}
+                error={errors.engineNo}
+                onChange={(e: any) =>
+                  setFormData({ ...formData, engineNo: e.target.value.toUpperCase() })
+                }
+                onBlur={() => handleBlur('engineNo')}
               />
             </div>
           </div>
@@ -990,6 +1093,73 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   <AlertCircle size={10} /> {errors.description}
                 </p>
               )}
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-xl font-bold text-gray-700">Police Report (Optional)</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Report Number"
+                  placeholder="e.g. IPDKL/10234/2025"
+                  value={formData.policeReportNumber}
+                  aiFilled={aiFilledFields.has('policeReportNumber')}
+                  onChange={(e: any) =>
+                    setFormData({ ...formData, policeReportNumber: e.target.value.toUpperCase() })
+                  }
+                  onBlur={() => handleBlur('policeReportNumber')}
+                />
+                <Input
+                  label="Date"
+                  type="date"
+                  value={formData.policeReportDate}
+                  aiFilled={aiFilledFields.has('policeReportDate')}
+                  onChange={(e: any) =>
+                    setFormData({ ...formData, policeReportDate: e.target.value })
+                  }
+                  onBlur={() => handleBlur('policeReportDate')}
+                />
+              </div>
+              <div className="relative" ref={policeStationContainerRef}>
+                <Input
+                  label="Station"
+                  placeholder="e.g. Balai Polis Jalan Tun Razak"
+                  value={formData.policeStation}
+                  aiFilled={aiFilledFields.has('policeStation')}
+                  onChange={(e: any) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, policeStation: val });
+                    if (val.length > 2) {
+                      setPoliceStationShowSuggestions(true);
+                      handlePoliceStationSearch(val);
+                    } else {
+                      setPoliceStationShowSuggestions(false);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (formData.policeStation && formData.policeStation.length > 2) {
+                      setPoliceStationShowSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => handleBlur('policeStation')}
+                />
+                {policeStationShowSuggestions && policeStationSuggestions.length > 0 && (
+                  <div className="absolute z-20 w-full bg-white mt-1 border border-gray-100 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                    {policeStationSuggestions.map(addr => (
+                      <button
+                        key={addr}
+                        className="w-full text-left px-4 py-3 hover:bg-blue-50 text-sm flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                        onClick={() => {
+                          setFormData({ ...formData, policeStation: addr });
+                          setPoliceStationShowSuggestions(false);
+                        }}
+                      >
+                        <MapPin size={14} className="text-gray-400 shrink-0" />
+                        <span className="truncate">{addr}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1255,6 +1425,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   <p className="text-xs text-gray-400">
                     {formData.vehicleYear} {formData.vehicleMake} {formData.vehicleModel}
                   </p>
+                  {formData.engineNo && (
+                    <p className="text-[10px] text-gray-400">Engine: {formData.engineNo}</p>
+                  )}
+                  {formData.chassisNo && (
+                    <p className="text-[10px] text-gray-400">Chassis: {formData.chassisNo}</p>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
@@ -1285,6 +1461,18 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   </p>
                 </div>
               </div>
+              {formData.policeReportNumber && (
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
+                  <span className="text-sm text-gray-500">Police Report</span>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900 max-w-[220px]">
+                      {formData.policeReportNumber}
+                    </p>
+                    <p className="text-xs text-gray-400">{formData.policeStation}</p>
+                    <p className="text-xs text-gray-400">{formData.policeReportDate}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">

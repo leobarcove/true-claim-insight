@@ -137,7 +137,7 @@ export function useRiskAssessments(sessionId: string) {
       return data.data;
     },
     enabled: !!sessionId,
-    refetchInterval: 5000, // Poll for live results
+    refetchInterval: 2500, // Poll for live results
   });
 }
 

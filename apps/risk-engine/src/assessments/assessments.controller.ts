@@ -32,6 +32,13 @@ export class AssessmentsController {
     return this.assessmentsService.getAssessmentsBySession(sessionId);
   }
 
+  @Get('session/:sessionId/deception-score')
+  @ApiOperation({ summary: 'Get deception score for a session' })
+  @SwaggerResponse({ status: 200, description: 'Deception score analysis' })
+  async getDeceptionScore(@Param('sessionId') sessionId: string) {
+    return this.assessmentsService.calculateDeceptionScore(sessionId);
+  }
+
   @Post('trigger')
   @ApiOperation({ summary: 'Trigger a mock risk assessment' })
   @SwaggerResponse({ status: 201, description: 'Assessment triggered' })
@@ -41,6 +48,14 @@ export class AssessmentsController {
   ) {
     this.logger.log(`Triggering ${assessmentType} assessment for session ${sessionId}`);
     return this.assessmentsService.triggerMockAssessment(sessionId, assessmentType);
+  }
+
+  @Post('session/:sessionId/consent-form')
+  @ApiOperation({ summary: 'Generate PIAM Consent Form' })
+  @SwaggerResponse({ status: 201, description: 'Consent form generated' })
+  async generateConsent(@Param('sessionId') sessionId: string) {
+    this.logger.log(`Generating consent form for session ${sessionId}`);
+    return this.assessmentsService.generateConsentForm(sessionId);
   }
 
   @Post('upload-audio')

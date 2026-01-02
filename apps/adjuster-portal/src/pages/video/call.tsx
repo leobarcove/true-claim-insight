@@ -18,6 +18,18 @@ import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { ShieldAlert, ShieldCheck, ShieldMinus, Zap, Activity } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+import { Switch } from '@/components/ui/switch';
 
 const DEFAULT_EMOTIONS = [
   'Admiration',
@@ -256,9 +268,38 @@ export function VideoCallPage() {
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
 
-  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto'>('auto');
+  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto' | 'off'>('off');
   const [isJoined, setIsJoined] = useState(false);
   const [isClaimantInRoom, setIsClaimantInRoom] = useState(false);
+  const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
+
+  // Deception Score Query
+  const { data: deceptionData, refetch: refetchDeception } = useQuery({
+    queryKey: ['deception-score', sessionId],
+    queryFn: async () => {
+      const { data: response } = await apiClient.get(`/risk/session/${sessionId}/deception-score`);
+      return response.data;
+    },
+    enabled: !!sessionId && isJoined && analysisMode !== 'off' && isClaimantInRoom,
+  });
+
+  // Update history when new data arrives
+  useEffect(() => {
+    if (deceptionData) {
+      setMetricsHistory(prev => {
+        const newPoint = {
+          time: new Date().toLocaleTimeString(),
+          deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
+          voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
+          visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+          expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
+        };
+        const newHistory = [...prev, newPoint];
+        if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20); // Keep last 20
+        return newHistory;
+      });
+    }
+  }, [deceptionData]);
 
   const handleCallFrameCreated = useCallback((callFrame: any) => {
     const checkParticipants = () => {
@@ -301,7 +342,7 @@ export function VideoCallPage() {
         isAnalyzingRef.current = true;
         setTimeout(() => {
           isAnalyzingRef.current = false;
-        }, 5000);
+        }, 2500);
       } catch (e) {
         console.error('Failed to trigger voice analysis:', e);
       }
@@ -362,19 +403,24 @@ export function VideoCallPage() {
   useEffect(() => {
     if (analysisMode === 'auto' && isJoined) {
       const interval = setInterval(() => {
-        triggerVoiceAnalysis(false);
-        triggerVisualAnalysis();
-        triggerExpressionAnalysis(false);
-      }, 5000);
+        if (isClaimantInRoom) {
+          triggerVoiceAnalysis(false);
+          triggerVisualAnalysis();
+          triggerExpressionAnalysis(false);
+          refetchDeception();
+        }
+      }, 2500);
 
       return () => clearInterval(interval);
     }
   }, [
     analysisMode,
     isJoined,
+    isClaimantInRoom,
     triggerVoiceAnalysis,
     triggerVisualAnalysis,
     triggerExpressionAnalysis,
+    refetchDeception,
   ]);
 
   // Effect to trigger join and set data directly
@@ -567,20 +613,107 @@ export function VideoCallPage() {
             </div>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col overflow-y-auto">
+          <Card className="bg-slate-900 border-slate-800 p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+                Deception Score
+              </h3>
+              <div className="flex items-center gap-2">
+                {/* Metrics Toggle */}
+                <div className="flex items-center gap-2 mr-2">
+                  <Switch
+                    checked={analysisMode !== 'off'}
+                    onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
+                    className="scale-75"
+                  />
+                  <span className="text-[10px] text-slate-400 uppercase">
+                    {analysisMode === 'off' ? 'Off' : 'On'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-bold text-white">
+                  {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                </span>
+                <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+              </div>
+              {deceptionData?.isHighRisk ? (
+                <Badge variant="outline" className="text-[10px] h-5 border-red-700 text-red-400">
+                  HIGH RISK
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] h-5 border-blue-700 text-blue-400">
+                  NORMAL
+                </Badge>
+              )}
+            </div>
+
+            {/* Metrics Graph */}
+            <div className="mt-4 mb-6 pt-4 border-t border-slate-800 h-40">
+              <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics Trend</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={metricsHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                  <XAxis dataKey="time" hide />
+                  <YAxis domain={[0, 1]} hide />
+                  <Tooltip
+                    contentStyle={{
+                      fontSize: '10px',
+                      borderColor: '#334155',
+                      backgroundColor: '#1e293b',
+                    }}
+                    itemStyle={{ fontSize: '10px' }}
+                    labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="deception"
+                    name="Deception Score"
+                    stroke="#E96161"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="voice"
+                    name="Voice Stress"
+                    stroke="#72B0F2"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="visual"
+                    name="Visual Behavior"
+                    stroke="#2EE797"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expression"
+                    name="Expression Measurement"
+                    stroke="#EEA954"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
                 Risk Analysis
               </h3>
               <div className="flex items-center gap-2">
-                <Button
-                  variant={analysisMode === 'auto' ? 'default' : 'outline'}
-                  size="sm"
-                  className={`hidden h-5 text-[9px] px-2 ${analysisMode === 'auto' ? 'bg-primary text-primary-foreground' : 'text-slate-400'}`}
-                  onClick={() => setAnalysisMode(prev => (prev === 'auto' ? 'manual' : 'auto'))}
-                >
-                  {analysisMode === 'auto' ? 'AUTO' : 'MANUAL'}
-                </Button>
                 <Badge
                   variant="outline"
                   className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"

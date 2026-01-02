@@ -19,6 +19,13 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
+  async getDeceptionScore(sessionId: string) {
+    const response = await fetch(
+      `${this.baseUrl}/assessments/session/${sessionId}/deception-score`
+    );
+    return this.handleResponse(response);
+  }
+
   async triggerAssessment(sessionId: string, assessmentType: string) {
     const response = await fetch(`${this.baseUrl}/assessments/trigger`, {
       method: 'POST',
@@ -62,6 +69,13 @@ export class RiskService {
       body: form,
     });
 
+    return this.handleResponse(response);
+  }
+
+  async generateConsentForm(sessionId: string) {
+    const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}/consent-form`, {
+      method: 'POST',
+    });
     return this.handleResponse(response);
   }
 

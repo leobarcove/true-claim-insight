@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
-import { RiskAssessment, AssessmentType, RiskScore } from '@prisma/client';
+import { RiskAssessment, AssessmentType, RiskScore, DocumentType } from '@prisma/client';
 import { RiskAnalyzerClient } from '../providers/risk-analyzer.client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -44,6 +44,197 @@ export class AssessmentsService {
   }
 
   /**
+   * Calculate Deception Score based on latest assessments
+   * DS = w*VoiceStress + w*VisualBehavior + w*ExpressionMeasurement
+   */
+  async calculateDeceptionScore(sessionId: string): Promise<any> {
+    const assessments = await this.prisma.riskAssessment.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Get latest assessment of each type
+    const latestVoice = assessments.find(a => a.assessmentType === AssessmentType.VOICE_ANALYSIS);
+    // Visual Behavior: using ATTENTION_TRACKING or generic Visual metrics (excluding Expression)
+    const latestVisual = assessments.find(
+      a =>
+        a.assessmentType === AssessmentType.ATTENTION_TRACKING ||
+        (a.assessmentType === AssessmentType.VISUAL_MODERATION &&
+          a.provider !== 'HumeAI-Expression-Measurement')
+    );
+    const latestExpression = assessments.find(
+      a =>
+        a.assessmentType === AssessmentType.VISUAL_MODERATION &&
+        a.provider === 'HumeAI-Expression-Measurement' // Assuming Hume is the provider for expression
+    );
+
+    const w = 0.33; // Equal weights among 3 metrics
+    const wvs = latestVoice ? this.normalizeVoiceStress(latestVoice.rawResponse) : 0;
+    const wvb = latestVisual ? this.normalizeVisualBehavior(latestVisual.rawResponse) : 0;
+    const wem = latestExpression ? this.calculateExpressionScore(latestExpression.rawResponse) : 0;
+
+    const deceptionScore = w * wvs + w * wvb + w * wem;
+    const isHighRisk = deceptionScore > 0.7;
+
+    return {
+      deceptionScore: parseFloat(deceptionScore.toFixed(2)),
+      isHighRisk,
+      breakdown: {
+        voiceStress: parseFloat(wvs.toFixed(2)),
+        visualBehavior: parseFloat(wvb.toFixed(2)),
+        expressionMeasurement: parseFloat(wem.toFixed(2)),
+      },
+      latestDataTimestamp: assessments[0]?.createdAt || null,
+    };
+  }
+
+  async generateConsentForm(sessionId: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        claim: {
+          include: {
+            claimant: true,
+            adjuster: {
+              include: {
+                tenant: true,
+                user: {
+                  select: { fullName: true },
+                },
+              },
+            },
+            documents: true,
+          },
+        },
+      },
+    });
+
+    if (!session || !session.claim || !session.claim.claimant) {
+      throw new Error('Session or Claim Data missing');
+    }
+
+    const scores = await this.calculateDeceptionScore(sessionId);
+    const payload = {
+      sessionId,
+      claimId: session.claimId,
+      claimant: {
+        name: session.claim.claimant.fullName,
+        nric: session.claim.claimant.nricHash || 'HIDDEN',
+        phone: session.claim.claimant.phoneNumber,
+        email: session.claim.claimant.email || 'N/A',
+      },
+      claim: {
+        claimNumber: session.claim.claimNumber,
+        policyNumber: session.claim.policyNumber,
+        incidentDate: session.claim.incidentDate,
+        claimType: session.claim.claimType,
+        vehiclePlate: session.claim.vehiclePlateNumber || 'N/A',
+        vehicleMake: session.claim.vehicleMake || 'N/A',
+        vehicleModel: session.claim.vehicleModel || 'N/A',
+        vehicleYear: session.claim.vehicleYear || 'N/A',
+        engineNumber: session.claim.vehicleEngineNumber || 'N/A',
+        chassisNumber: session.claim.vehicleChassisNumber || 'N/A',
+        location: (session.claim.incidentLocation as any)?.address || 'N/A',
+        description: session.claim.description,
+      },
+      analysis: {
+        riskScore: scores.isHighRisk ? 'HIGH' : 'LOW',
+        deceptionScore: scores.deceptionScore,
+        breakdown: scores.breakdown,
+      },
+      adjuster: {
+        name: session.claim.adjuster?.user?.fullName || 'N/A',
+        firmName: session.claim.adjuster?.tenant?.name || 'True Claim Insight',
+        firmAddress:
+          (session.claim.adjuster?.tenant?.settings as any)?.address || 'Kuala Lumpur, Malaysia',
+        firmPhone: (session.claim.adjuster?.tenant?.settings as any)?.phone || '+60 3-XXXX XXXX',
+        firmWebsite:
+          (session.claim.adjuster?.tenant?.settings as any)?.website || 'www.trueclaim.ai',
+        firmLogo: (session.claim.adjuster?.tenant?.settings as any)?.logoUrl,
+      },
+    };
+
+    const result = await this.riskAnalyzerClient.generateConsent(payload);
+    if (result.success && result.storage_path) {
+      await this.prisma.document.create({
+        data: {
+          claimId: session.claimId,
+          type: DocumentType.SIGNED_STATEMENT,
+          filename: `consent_${sessionId}.pdf`,
+          storageUrl: result.signed_url,
+          fileSize: result.file_size,
+          mimeType: 'application/pdf',
+          metadata: { bucket: result.bucket, sessionId, storage_path: result.storage_path },
+        },
+      });
+      return { success: true, url: result.signed_url };
+    }
+
+    throw new Error('Failed to generate consent form');
+  }
+
+  private normalizeVoiceStress(metrics: any): number {
+    if (!metrics) return 0;
+
+    // (Jitter + Shimmer + Pitch SD + (1 - HNR)) normalized
+    // Jitter: 0.5-2.0% -> map to 0-1
+    // Shimmer: 1.5-4.5% -> map to 0-1
+    // Pitch SD: 10-40Hz -> map to 0-1
+    // HNR: 10-25dB -> 1 - HNR/30
+    const jitter = (metrics.jitter_percent || 0.5) / 5.0; // max expected ~5
+    const shimmer = (metrics.shimmer_percent || 1.5) / 10.0;
+    const pitchSd = (metrics.pitch_sd_hz || 20) / 100.0;
+    const hnr = Math.max(0, 1 - (metrics.hnr_db || 20) / 50.0);
+    return Math.min(1, jitter + shimmer + pitchSd + hnr);
+  }
+
+  private normalizeVisualBehavior(metrics: any): number {
+    if (!metrics) return 0;
+
+    // (Blink Rate deviation + Lip Tension + Blink Duration irregularity)
+    // Blink Rate: 12-22 -> Deviation from norma
+    // Lip Tension: 0.8-1.2
+    const blinkRate = metrics.blink_rate_per_min || 15;
+    const blinkDev = Math.abs(blinkRate - 15) / 10;
+    const lipTension = (metrics.avg_lip_tension || 0.8) - 0.5; // Baseline expected 0.5
+    const blinkDur = metrics.avg_blink_duration_ms || 150;
+    const blinkDurIrreg = Math.abs(blinkDur - 150) / 200;
+    return Math.min(1, blinkDev + lipTension + blinkDurIrreg);
+  }
+
+  private calculateExpressionScore(metrics: any): number {
+    if (!metrics) return 0;
+    // max(Fraud Emotions) - Alignment
+    // Fraud emotions: Guilt, Shame, Anxiety, Doubt, Fear, Embarrassment, Distress
+    // Check if metrics has predictions
+    const fraudEmotions = [
+      'Guilt',
+      'Shame',
+      'Anxiety',
+      'Doubt',
+      'Fear',
+      'Embarrassment',
+      'Distress',
+    ];
+    let maxFraud = 0;
+
+    if (Array.isArray(metrics)) {
+      // handle array
+      metrics.forEach((m: any) => {
+        if (fraudEmotions.includes(m.name)) maxFraud = Math.max(maxFraud, m.score);
+      });
+    } else {
+      // handle object
+      for (const [key, value] of Object.entries(metrics)) {
+        if (fraudEmotions.includes(key)) maxFraud = Math.max(maxFraud, Number(value));
+      }
+    }
+
+    const alignment = 0.2;
+    return Math.max(0, maxFraud - alignment);
+  }
+
+  /**
    * Trigger a real assessment using the Python analyzer
    * Uses sample audio file for voice analysis (simulates live feed)
    */
@@ -64,20 +255,8 @@ export class AssessmentsService {
     // For other types, still use mock data for now
     this.logger.log(`Creating mock ${assessmentType} assessment for session ${sessionId}...`);
 
-    return this.prisma.riskAssessment.upsert({
-      where: {
-        sessionId_assessmentType: {
-          sessionId,
-          assessmentType,
-        },
-      },
-      update: {
-        provider: 'MediaPipe (Mock)',
-        riskScore: this.getRandomRiskScore(),
-        confidence: 0.85 + Math.random() * 0.1,
-        rawResponse: this.generateMockMetrics(assessmentType),
-      },
-      create: {
+    return this.prisma.riskAssessment.create({
+      data: {
         sessionId,
         assessmentType,
         provider: 'MediaPipe (Mock)',
@@ -129,25 +308,8 @@ export class AssessmentsService {
         }, 1000);
 
         // Save result to DB
-        const assessment = await this.prisma.riskAssessment.upsert({
-          where: {
-            sessionId_assessmentType: {
-              sessionId,
-              assessmentType: AssessmentType.VOICE_ANALYSIS,
-            },
-          },
-          update: {
-            provider: 'Parselmouth (Real - Upload)',
-            riskScore: result.risk_score as RiskScore,
-            confidence: result.confidence,
-            rawResponse: {
-              ...result.metrics,
-              details: result.details,
-              timestamp: new Date().toISOString(),
-              analysisMethod: 'live_upload',
-            },
-          },
-          create: {
+        const assessment = await this.prisma.riskAssessment.create({
+          data: {
             sessionId,
             assessmentType: AssessmentType.VOICE_ANALYSIS,
             provider: 'Parselmouth (Real - Upload)',
@@ -193,25 +355,8 @@ export class AssessmentsService {
       this.logger.log(`Video saved to temporary path: ${videoPath}`);
 
       const result = await this.riskAnalyzerClient.analyzeExpression(videoPath, 'expression.webm');
-      const assessment = await this.prisma.riskAssessment.upsert({
-        where: {
-          sessionId_assessmentType: {
-            sessionId,
-            assessmentType: AssessmentType.VISUAL_MODERATION,
-          },
-        },
-        update: {
-          provider: result.metrics?.provider || 'HumeAI-Expression-Measurement',
-          riskScore: this.mapRiskScore(result.risk_score),
-          confidence: result.confidence,
-          rawResponse: {
-            ...result.metrics,
-            details: result.details,
-            analysisMethod: 'expression_measurement',
-            timestamp: new Date().toISOString(),
-          },
-        },
-        create: {
+      const assessment = await this.prisma.riskAssessment.create({
+        data: {
           sessionId,
           assessmentType: AssessmentType.VISUAL_MODERATION,
           provider: result.metrics?.provider || 'HumeAI-Expression-Measurement',
@@ -277,25 +422,8 @@ export class AssessmentsService {
       );
 
       // Upsert assessment with real results
-      return this.prisma.riskAssessment.upsert({
-        where: {
-          sessionId_assessmentType: {
-            sessionId,
-            assessmentType: AssessmentType.VOICE_ANALYSIS,
-          },
-        },
-        update: {
-          provider: 'Parselmouth (Real)',
-          riskScore: this.mapRiskScore(result.risk_score),
-          confidence: result.confidence,
-          rawResponse: {
-            ...result.metrics,
-            details: result.details,
-            analysisMethod: 'sample_audio',
-            timestamp: new Date().toISOString(),
-          },
-        },
-        create: {
+      return this.prisma.riskAssessment.create({
+        data: {
           sessionId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
           provider: 'Parselmouth (Real)',
@@ -313,24 +441,8 @@ export class AssessmentsService {
       this.logger.error(`Real voice analysis failed: ${error.message}`);
 
       // Fallback to mock on error
-      return this.prisma.riskAssessment.upsert({
-        where: {
-          sessionId_assessmentType: {
-            sessionId,
-            assessmentType: AssessmentType.VOICE_ANALYSIS,
-          },
-        },
-        update: {
-          provider: 'Parselmouth (Error - Mock Fallback)',
-          riskScore: RiskScore.MEDIUM,
-          confidence: 0.5,
-          rawResponse: {
-            error: error.message,
-            fallback: true,
-            timestamp: new Date().toISOString(),
-          },
-        },
-        create: {
+      return this.prisma.riskAssessment.create({
+        data: {
           sessionId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
           provider: 'Parselmouth (Error - Mock Fallback)',
@@ -359,24 +471,8 @@ export class AssessmentsService {
     try {
       const result = await this.riskAnalyzerClient.analyzeAudio(audioBuffer, filename);
 
-      return this.prisma.riskAssessment.upsert({
-        where: {
-          sessionId_assessmentType: {
-            sessionId,
-            assessmentType: AssessmentType.VOICE_ANALYSIS,
-          },
-        },
-        update: {
-          provider: 'Parselmouth',
-          riskScore: this.mapRiskScore(result.risk_score),
-          confidence: result.confidence,
-          rawResponse: {
-            ...result.metrics,
-            details: result.details,
-            timestamp: new Date().toISOString(),
-          },
-        },
-        create: {
+      return this.prisma.riskAssessment.create({
+        data: {
           sessionId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
           provider: 'Parselmouth',
@@ -408,24 +504,8 @@ export class AssessmentsService {
     try {
       const result = await this.riskAnalyzerClient.analyzeVideo(videoBuffer, filename);
 
-      return this.prisma.riskAssessment.upsert({
-        where: {
-          sessionId_assessmentType: {
-            sessionId,
-            assessmentType: AssessmentType.VISUAL_MODERATION,
-          },
-        },
-        update: {
-          provider: 'MediaPipe',
-          riskScore: this.mapRiskScore(result.risk_score),
-          confidence: result.confidence,
-          rawResponse: {
-            ...result.metrics,
-            details: result.details,
-            timestamp: new Date().toISOString(),
-          },
-        },
-        create: {
+      return this.prisma.riskAssessment.create({
+        data: {
           sessionId,
           assessmentType: AssessmentType.VISUAL_MODERATION,
           provider: 'MediaPipe',

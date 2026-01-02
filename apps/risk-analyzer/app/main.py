@@ -4,13 +4,16 @@ from pydantic import BaseModel
 from typing import Optional
 import tempfile
 import os
+import asyncio
 
 from app.audio_analyzer import analyze_audio
 from app.video_analyzer import analyze_video
 from app.hume_analyzer import HumeAnalyzer, calculate_hume_risk_score
 from app.fusion import calculate_risk_score
+from app.pdf_generator import generate_consent_form
 
 # HumeAI & Supabase Integration
+import time
 import httpx
 import uuid
 from hume import AsyncHumeClient
@@ -91,47 +94,110 @@ async def analyze_audio_endpoint(
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-async def _upload_to_supabase(file_path: str, session_id: str) -> str:
+async def _upload_to_supabase(file_path: str, session_id: str, claim_id: str = "unknown", bucket_name: str = None) -> str:
     """Upload file to Supabase Storage."""
-    file_name = f"{uuid.uuid4()}{os.path.splitext(file_path)[1]}"
-    # Path: /risk_analysis/audio/:sessionid/:audio
-    storage_path = f"audio/{session_id}/{file_name}"
+    if bucket_name is None:
+        bucket_name = config.SUPABASE_BUCKET_NAME
+
+    if not claim_id:
+        claim_id = "unknown"
+    base_url = config.SUPABASE_URL.rstrip('/')
+    timestamp = int(time.time())
+    ext = os.path.splitext(file_path)[1].lower()
+    file_name = f"{session_id}_{timestamp}{ext}"
+    storage_path = f"document/{claim_id}/{file_name}"
     
-    url = f"{config.SUPABASE_URL}/storage/v1/object/{config.SUPABASE_BUCKET_NAME}/{storage_path}"
-    
+    url = f"{base_url}/storage/v1/object/{bucket_name}/{storage_path}"
     headers = {
         "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
-        "x-upsert": "true"
+        "x-upsert": "true",
+        "Content-Type": "application/pdf" if ext == ".pdf" else "application/octet-stream"
     }
     
     async with httpx.AsyncClient() as client:
         with open(file_path, 'rb') as f:
-            resp = await client.post(url, content=f, headers=headers)
-            resp.raise_for_status()
+            file_content = f.read()
+            
+        resp = await client.post(url, content=file_content, headers=headers)
+        if not resp.is_success:
+            print(f"[_upload_to_supabase] Upload failed: {resp.text}")
+        resp.raise_for_status()
             
     return storage_path
 
-async def _get_signed_url(storage_path: str) -> str:
+
+class GenerateConsentRequest(BaseModel):
+    sessionId: str
+    claimId: Optional[str] = None
+    claimant: dict
+    claim: dict
+    analysis: Optional[dict] = {}
+    adjuster: Optional[dict] = {}
+
+@app.post("/generate-consent-pdf")
+async def generate_consent_pdf_endpoint(request: GenerateConsentRequest):
+    """Generate consent PDF and upload to Supabase."""
+    pdf_path = None
+    try:
+        data = request.dict()
+        pdf_path = generate_consent_form(data)
+        
+        # Ensure bucket exists in Supabase.
+        bucket_name = "consent_form"
+        storage_path = await _upload_to_supabase(pdf_path, request.sessionId, claim_id=request.claimId, bucket_name=bucket_name)
+        file_size = os.path.getsize(pdf_path)
+        signed_url = await _get_signed_url(storage_path, bucket_name=bucket_name)
+        print(f"[GenerateConsent] Uploaded to storage path: {signed_url}, Size: {file_size} bytes")
+        
+        return {
+             "success": True,
+             "storage_path": storage_path,
+             "bucket": bucket_name,
+             "signed_url": signed_url,
+             "file_size": file_size
+        }
+    except httpx.HTTPStatusError as e:
+        print(f"[GenerateConsent] Supabase API Error: {e.response.text}")
+        raise HTTPException(status_code=500, detail=f"Supabase Error: {e.response.text}")
+    except Exception as e:
+        print(f"[GenerateConsent] Unexpected Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            os.unlink(pdf_path)
+
+async def _get_signed_url(storage_path: str, bucket_name: str = None, expires_in: int = 31536000) -> str:
     """Generate a signed URL for a private file in Supabase Storage."""
-    url = f"{config.SUPABASE_URL}/storage/v1/object/sign/{config.SUPABASE_BUCKET_NAME}/{storage_path}"
-    
+    if bucket_name is None:
+        bucket_name = config.SUPABASE_BUCKET_NAME
+        
+    base_url = config.SUPABASE_URL.rstrip('/')
+    url = f"{base_url}/storage/v1/object/sign/{bucket_name}/{storage_path}"    
     headers = {
         "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json"
     }
     
-    # 8 hours = 28800 seconds
-    payload = {"expiresIn": 28800}
+    # Default: 1 year = 31536000 seconds
+    payload = {"expiresIn": expires_in}
     
     async with httpx.AsyncClient() as client:
         resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        if not resp.is_success:
+            print(f"[_get_signed_url] Error Response: {resp.text}")
+            resp.raise_for_status()
+            
         data = resp.json()
         
-    signed_url = data.get("signedURL")
+    signed_url = data.get("signedURL") or data.get("signedUrl")
     if not signed_url:
-        # If it's a full path, ensure it has the base URL
-        signed_url = f"{config.SUPABASE_URL}/storage/v1{data['signedUrl']}" if data.get('signedUrl', '').startswith('/') else data.get('signedUrl')
+        raise ValueError(f"Failed to generate signed URL. Response: {data}")
+
+    # Ensure it's a full URL
+    if signed_url.startswith('/'):
+        signed_url = f"{base_url}/storage/v1{signed_url}"
         
     return signed_url
 
@@ -144,9 +210,9 @@ async def analyze_with_hume(file_path: str, session_id: str = "default"):
         client = AsyncHumeClient(api_key=config.HUME_API_KEY)
         
         # 1. Upload to Supabase and get signed URL
-        storage_path = await _upload_to_supabase(file_path, session_id)
+        storage_path = await _upload_to_supabase(file_path, session_id, claim_id="unknown")
         signed_url = await _get_signed_url(storage_path)
-        print(f"File uploaded to Supabase, signed URL generated (valid for 8h)")
+        print(f"File uploaded to Supabase, signed URL generated (valid for 1 year)")
 
         # 2. Configure Prosody model for Audio
         from hume.expression_measurement.batch import Models

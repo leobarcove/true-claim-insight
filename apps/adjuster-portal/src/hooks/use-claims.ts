@@ -101,9 +101,7 @@ export function useClaim(claimId: string) {
   return useQuery({
     queryKey: claimKeys.detail(claimId),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<Claim>>(
-        `/claims/${claimId}`
-      );
+      const { data } = await apiClient.get<ApiResponse<Claim>>(`/claims/${claimId}`);
       return data.data;
     },
     enabled: !!claimId,
@@ -115,9 +113,7 @@ export function useClaimQueue() {
   return useQuery({
     queryKey: claimKeys.queue(),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>(
-        '/claims/queue'
-      );
+      const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>('/claims/queue');
       return data.data;
     },
   });
@@ -128,9 +124,7 @@ export function useClaimStats() {
   return useQuery({
     queryKey: claimKeys.stats(),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimStats>>(
-        '/claims/stats'
-      );
+      const { data } = await apiClient.get<ApiResponse<ClaimStats>>('/claims/stats');
       return data.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -143,10 +137,7 @@ export function useCreateClaim() {
 
   return useMutation({
     mutationFn: async (input: CreateClaimInput) => {
-      const { data } = await apiClient.post<ApiResponse<Claim>>(
-        '/claims',
-        input
-      );
+      const { data } = await apiClient.post<ApiResponse<Claim>>('/claims', input);
       return data.data;
     },
     onSuccess: () => {
@@ -162,13 +153,28 @@ export function useUpdateClaim(claimId: string) {
 
   return useMutation({
     mutationFn: async (input: UpdateClaimInput) => {
-      const { data } = await apiClient.patch<ApiResponse<Claim>>(
-        `/claims/${claimId}`,
-        input
-      );
+      const { data } = await apiClient.patch<ApiResponse<Claim>>(`/claims/${claimId}`, input);
       return data.data;
     },
-    onSuccess: (updatedClaim) => {
+    onSuccess: updatedClaim => {
+      queryClient.setQueryData(claimKeys.detail(claimId), updatedClaim);
+      queryClient.invalidateQueries({ queryKey: claimKeys.lists() });
+    },
+  });
+}
+
+// Update claim status mutation
+export function useUpdateClaimStatus(claimId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (status: ClaimStatus) => {
+      const { data } = await apiClient.patch<ApiResponse<Claim>>(`/claims/${claimId}/status`, {
+        status,
+      });
+      return data.data;
+    },
+    onSuccess: updatedClaim => {
       queryClient.setQueryData(claimKeys.detail(claimId), updatedClaim);
       queryClient.invalidateQueries({ queryKey: claimKeys.lists() });
     },
@@ -180,17 +186,10 @@ export function useAssignAdjuster() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      claimId,
-      adjusterId,
-    }: {
-      claimId: string;
-      adjusterId: string;
-    }) => {
-      const { data } = await apiClient.post<ApiResponse<Claim>>(
-        `/claims/${claimId}/assign`,
-        { adjusterId }
-      );
+    mutationFn: async ({ claimId, adjusterId }: { claimId: string; adjusterId: string }) => {
+      const { data } = await apiClient.post<ApiResponse<Claim>>(`/claims/${claimId}/assign`, {
+        adjusterId,
+      });
       return data.data;
     },
     onSuccess: (_, variables) => {
@@ -208,17 +207,10 @@ export function useScheduleSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      claimId,
-      scheduledAt,
-    }: {
-      claimId: string;
-      scheduledAt: string;
-    }) => {
-      const { data } = await apiClient.post<ApiResponse<Claim>>(
-        `/claims/${claimId}/schedule`,
-        { scheduledAt }
-      );
+    mutationFn: async ({ claimId, scheduledAt }: { claimId: string; scheduledAt: string }) => {
+      const { data } = await apiClient.post<ApiResponse<Claim>>(`/claims/${claimId}/schedule`, {
+        scheduledAt,
+      });
       return data.data;
     },
     onSuccess: (_, variables) => {

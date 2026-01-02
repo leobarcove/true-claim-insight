@@ -34,6 +34,16 @@ export class RiskController {
     }
   }
 
+  @Get('session/:sessionId/deception-score')
+  @ApiOperation({ summary: 'Get deception score for a session' })
+  async getDeceptionScore(@Param('sessionId') sessionId: string) {
+    try {
+      return await this.riskService.getDeceptionScore(sessionId);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
   @Post('trigger')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Trigger a real-time risk assessment' })
