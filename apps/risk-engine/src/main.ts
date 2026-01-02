@@ -8,11 +8,17 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter()
+    new FastifyAdapter({
+      bodyLimit: 50 * 1024 * 1024, // 50MB
+    })
   );
 
   // Register multipart support for file uploads
-  await app.register(multipart);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB
+    },
+  });
 
   // Global prefixes and pipes
   app.setGlobalPrefix('api/v1');
@@ -25,7 +31,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/v1/docs', app, document);
 

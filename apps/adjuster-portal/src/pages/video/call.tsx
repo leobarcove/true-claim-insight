@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
@@ -11,11 +11,239 @@ import {
   useEndVideoSession,
   useRiskAssessments,
   useTriggerAssessment,
+  useAnalyzeExpression,
+  RiskAssessment,
 } from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
-import { ShieldAlert, ShieldCheck, ShieldMinus, Zap } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, ShieldMinus, Zap, Activity } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+import { Switch } from '@/components/ui/switch';
+
+const DEFAULT_EMOTIONS = [
+  'Admiration',
+  'Adoration',
+  'Aesthetic Appreciation',
+  'Amusement',
+  'Anger',
+  'Anxiety',
+  'Awe',
+  'Awkwardness',
+  'Boredom',
+  'Calmness',
+  'Concentration',
+  'Contemplation',
+  'Confusion',
+  'Contempt',
+  'Contentment',
+  'Craving',
+  'Determination',
+  'Disappointment',
+  'Disgust',
+  'Distress',
+  'Doubt',
+  'Ecstasy',
+  'Embarrassment',
+  'Empathic Pain',
+  'Entrancement',
+  'Envy',
+  'Excitement',
+  'Fear',
+  'Guilt',
+  'Horror',
+  'Interest',
+  'Joy',
+  'Love',
+  'Nostalgia',
+  'Pain',
+  'Pride',
+  'Realization',
+  'Relief',
+  'Romance',
+  'Sadness',
+  'Satisfaction',
+  'Desire',
+  'Shame',
+  'Surprise (negative)',
+  'Surprise (positive)',
+  'Sympathy',
+  'Tiredness',
+  'Triumph',
+];
+
+interface RiskAssessmentCardProps {
+  title: string;
+  data: RiskAssessment | undefined;
+  type: 'voice' | 'visual' | 'emotion';
+}
+
+const RiskAssessmentCard = memo(({ title, data, type }: RiskAssessmentCardProps) => {
+  const marker = data;
+  const raw = marker?.rawResponse as any;
+
+  const topEmotions = useMemo(() => {
+    if (type !== 'emotion') return [];
+
+    const provided = raw?.top_emotions ?? [];
+    const used = new Set(provided.map((e: any) => e.name));
+    return [
+      ...provided,
+      ...DEFAULT_EMOTIONS.filter(n => !used.has(n))
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 4 - provided.length)
+        .map((name: string) => ({ name, score: null })),
+    ].slice(0, 4);
+  }, [type, raw?.top_emotions]);
+
+  return (
+    <div className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {marker?.riskScore === 'HIGH' ? (
+            <ShieldAlert className="h-4 w-4 text-red-500" />
+          ) : marker?.riskScore === 'MEDIUM' ? (
+            <ShieldMinus className="h-4 w-4 text-amber-500" />
+          ) : marker?.riskScore === 'LOW' ? (
+            <ShieldCheck className="h-4 w-4 text-blue-500" />
+          ) : (
+            <Activity className="h-4 w-4 text-slate-500 opacity-50" />
+          )}
+          <span className="text-xs font-semibold text-slate-200">{title}</span>
+        </div>
+        {marker && (
+          <Badge
+            variant={
+              marker.riskScore === 'HIGH'
+                ? 'destructive'
+                : marker.riskScore === 'MEDIUM'
+                  ? 'secondary'
+                  : 'default'
+            }
+            className="text-[9px] h-5 px-2"
+          >
+            {marker.riskScore || 'PENDING'}
+          </Badge>
+        )}
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        {type === 'voice' && (
+          <>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Jitter</p>
+              <p
+                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
+              >
+                {raw?.jitter_percent !== undefined ? `${raw.jitter_percent.toFixed(2)}%` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Shimmer</p>
+              <p
+                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.shimmer_percent !== undefined ? `${raw.shimmer_percent.toFixed(2)}%` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Pitch SD</p>
+              <p
+                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.pitch_sd_hz !== undefined ? `${raw.pitch_sd_hz.toFixed(1)} Hz` : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">HNR</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.hnr_db !== undefined ? `${raw.hnr_db.toFixed(1)} dB` : '—'}
+              </p>
+            </div>
+          </>
+        )}
+
+        {type === 'visual' && (
+          <>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Rate</p>
+              <p
+                className={`text-sm font-mono ${
+                  raw?.blink_rate_per_min !== undefined &&
+                  (raw.blink_rate_per_min < 10 || raw.blink_rate_per_min > 25)
+                    ? 'text-amber-400'
+                    : 'text-slate-200'
+                }`}
+              >
+                {raw?.blink_rate_per_min !== undefined
+                  ? `${raw.blink_rate_per_min.toFixed(1)}/min`
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Lip Tension</p>
+              <p
+                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
+              >
+                {raw?.avg_lip_tension !== undefined ? raw.avg_lip_tension.toFixed(3) : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Dur.</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.avg_blink_duration_ms !== undefined
+                  ? `${raw.avg_blink_duration_ms.toFixed(0)} ms`
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2">
+              <p className="text-slate-500 uppercase font-bold text-[9px]">Frames</p>
+              <p className="text-sm font-mono text-slate-200">
+                {raw?.frames_analyzed !== undefined ? raw.frames_analyzed : '—'}
+              </p>
+            </div>
+          </>
+        )}
+
+        {type === 'emotion' && (
+          <>
+            {topEmotions.map((emotion: any, idx: number) => (
+              <div key={idx} className="bg-slate-900/50 rounded p-2">
+                <p className="text-slate-500 uppercase font-bold text-[9px]">{emotion.name}</p>
+                <p className="text-sm font-mono text-slate-200">
+                  {emotion.score !== null && emotion.score !== undefined
+                    ? `${(emotion.score * 100).toFixed(1)}%`
+                    : '—'}
+                </p>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
+        <span className="text-[9px] text-slate-500">
+          {marker?.provider
+            ? `Conf: ${((marker.confidence ?? 0) * 100).toFixed(0)}%`
+            : 'Awaiting Data...'}
+        </span>
+      </div>
+    </div>
+  );
+});
 
 export function VideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -35,14 +263,172 @@ export function VideoCallPage() {
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
   const triggerAssessment = useTriggerAssessment();
+  const analyzeExpression = useAnalyzeExpression();
 
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
 
+  const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto' | 'off'>('off');
+  const [isJoined, setIsJoined] = useState(false);
+  const [isClaimantInRoom, setIsClaimantInRoom] = useState(false);
+  const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
+
+  // Deception Score Query
+  const { data: deceptionData, refetch: refetchDeception } = useQuery({
+    queryKey: ['deception-score', sessionId],
+    queryFn: async () => {
+      const { data: response } = await apiClient.get(`/risk/session/${sessionId}/deception-score`);
+      return response.data;
+    },
+    enabled: !!sessionId && isJoined && analysisMode !== 'off' && isClaimantInRoom,
+  });
+
+  // Update history when new data arrives
+  useEffect(() => {
+    if (deceptionData) {
+      setMetricsHistory(prev => {
+        const newPoint = {
+          time: new Date().toLocaleTimeString(),
+          deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
+          voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
+          visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+          expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
+        };
+        const newHistory = [...prev, newPoint];
+        if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20); // Keep last 20
+        return newHistory;
+      });
+    }
+  }, [deceptionData]);
+
+  const handleCallFrameCreated = useCallback((callFrame: any) => {
+    const checkParticipants = () => {
+      const participants = callFrame.participants();
+      const remote = Object.values(participants).find((p: any) => !p.local);
+      setIsClaimantInRoom(!!remote);
+    };
+
+    callFrame.on('participant-joined', checkParticipants);
+    callFrame.on('participant-left', checkParticipants);
+    callFrame.on('joined-meeting', checkParticipants);
+    checkParticipants();
+  }, []);
+
+  // Trigger functions
+  const triggerVoiceAnalysis = useCallback(
+    (showToast: boolean = false) => {
+      if (!playerRef.current) return;
+
+      if (!isJoined) {
+        if (showToast) {
+          toast({
+            title: 'Not Ready',
+            description: 'Waiting for video connection to be established...',
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+
+      try {
+        playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
+        if (showToast) {
+          toast({
+            title: 'Request Sent',
+            description: 'Asking claimant device to send audio sample...',
+          });
+        }
+
+        isAnalyzingRef.current = true;
+        setTimeout(() => {
+          isAnalyzingRef.current = false;
+        }, 2500);
+      } catch (e) {
+        console.error('Failed to trigger voice analysis:', e);
+      }
+    },
+    [isJoined, toast]
+  );
+
+  const triggerVisualAnalysis = useCallback(() => {
+    if (!isJoined) return;
+
+    isAnalyzingRef.current = true;
+    triggerAssessment.mutate(
+      { sessionId: sessionId || '', assessmentType: 'VISUAL' },
+      {
+        onSettled: () => {
+          setTimeout(() => {
+            isAnalyzingRef.current = false;
+          }, 1000);
+        },
+      }
+    );
+  }, [isJoined, sessionId, triggerAssessment]);
+
+  const triggerExpressionAnalysis = useCallback(
+    (showToast: boolean = false) => {
+      if (!playerRef.current) return;
+
+      if (!isJoined) {
+        if (showToast) {
+          toast({
+            title: 'Not Ready',
+            description: 'Waiting for video connection to be established...',
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+
+      try {
+        isAnalyzingRef.current = true;
+        playerRef.current.sendAppMessage({ type: 'request-expression-analysis' });
+      } catch (error: any) {
+        console.error('[VideoCallPage] Expression analysis request failed:', error);
+        if (showToast) {
+          toast({
+            title: 'Error',
+            description: 'Failed to send analysis request.',
+            variant: 'destructive',
+          });
+        }
+        isAnalyzingRef.current = false;
+      }
+    },
+    [isJoined, toast]
+  );
+
+  // Auto-analysis effect
+  useEffect(() => {
+    if (analysisMode === 'auto' && isJoined) {
+      const interval = setInterval(() => {
+        if (isClaimantInRoom) {
+          triggerVoiceAnalysis(false);
+          triggerVisualAnalysis();
+          triggerExpressionAnalysis(false);
+          refetchDeception();
+        }
+      }, 2500);
+
+      return () => clearInterval(interval);
+    }
+  }, [
+    analysisMode,
+    isJoined,
+    isClaimantInRoom,
+    triggerVoiceAnalysis,
+    triggerVisualAnalysis,
+    triggerExpressionAnalysis,
+    refetchDeception,
+  ]);
+
   // Effect to trigger join and set data directly
   useEffect(() => {
     const doJoin = async () => {
-      if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
+      if (!sessionId || !user?.id || hasAttemptedJoin.current) {
+        return;
+      }
 
       hasAttemptedJoin.current = true;
 
@@ -94,7 +480,6 @@ export function VideoCallPage() {
 
   // Memoized callback to prevent component remount
   const handleVideoLeft = useCallback(() => {
-    console.log('[VideoCallPage] onLeft triggered, isAnalyzing:', isAnalyzingRef.current);
     if (!isAnalyzingRef.current) {
       navigate(`/claims/${session?.claimId || ''}`);
     } else {
@@ -128,6 +513,14 @@ export function VideoCallPage() {
       <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
         <p className="text-lg font-medium">Preparing your secure video room...</p>
+        <p className="text-xs text-slate-500 mt-2">
+          {joinRoom.isPending ? 'Requesting room access...' : 'Initializing...'}
+        </p>
+        {joinRoom.isError && (
+          <p className="text-xs text-red-400 mt-2">
+            Error: {joinRoom.error?.message || 'Unknown error'}
+          </p>
+        )}
       </div>
     );
   }
@@ -188,7 +581,13 @@ export function VideoCallPage() {
             ref={playerRef}
             url={joinData.url}
             token={joinData.token}
-            onLeft={handleVideoLeft}
+            onLeft={() => {
+              setIsJoined(false);
+              setIsClaimantInRoom(false);
+              handleVideoLeft();
+            }}
+            onJoined={() => setIsJoined(true)}
+            onCallFrameCreated={handleCallFrameCreated}
           />
         </div>
 
@@ -214,218 +613,215 @@ export function VideoCallPage() {
             </div>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
+          <Card className="bg-slate-900 border-slate-800 p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-                Risk Analysis
+                Deception Score
               </h3>
-              <Badge
-                variant="outline"
-                className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
-              >
-                LIVE
-              </Badge>
+              <div className="flex items-center gap-2">
+                {/* Metrics Toggle */}
+                <div className="flex items-center gap-2 mr-2">
+                  <Switch
+                    checked={analysisMode !== 'off'}
+                    onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
+                    className="scale-75"
+                  />
+                  <span className="text-[10px] text-slate-400 uppercase">
+                    {analysisMode === 'off' ? 'Off' : 'On'}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-auto space-y-3 min-h-0">
-              {assessments && assessments.length > 0 ? (
-                assessments.map(marker => {
-                  const raw = marker.rawResponse as any;
-                  const isVoice = marker.assessmentType === 'VOICE_ANALYSIS';
-
-                  return (
-                    <div
-                      key={marker.id}
-                      className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in slide-in-from-right-2"
-                    >
-                      {/* Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {marker.riskScore === 'HIGH' && (
-                            <ShieldAlert className="h-4 w-4 text-red-500" />
-                          )}
-                          {marker.riskScore === 'MEDIUM' && (
-                            <ShieldMinus className="h-4 w-4 text-amber-500" />
-                          )}
-                          {marker.riskScore === 'LOW' && (
-                            <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                          )}
-                          <span className="text-xs font-semibold text-slate-200">
-                            {isVoice ? 'Voice Stress' : 'Visual Behavior'}
-                          </span>
-                        </div>
-                        <Badge
-                          variant={
-                            marker.riskScore === 'HIGH'
-                              ? 'destructive'
-                              : marker.riskScore === 'MEDIUM'
-                                ? 'secondary'
-                                : 'default'
-                          }
-                          className="text-[9px] h-5 px-2"
-                        >
-                          {marker.riskScore || 'PENDING'}
-                        </Badge>
-                      </div>
-
-                      {/* Metrics Grid */}
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        {isVoice ? (
-                          <>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Jitter</p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.jitter_percent?.toFixed(2) ?? '—'}%
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Shimmer</p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.shimmer_percent?.toFixed(2) ?? '—'}%
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Pitch SD</p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.pitch_sd_hz?.toFixed(1) ?? '—'} Hz
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">HNR</p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.hnr_db?.toFixed(1) ?? '—'} dB
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Blink Rate</p>
-                              <p
-                                className={`text-sm font-mono ${
-                                  (raw?.blink_rate_per_min ?? 17) < 10 ||
-                                  (raw?.blink_rate_per_min ?? 17) > 25
-                                    ? 'text-amber-400'
-                                    : 'text-slate-200'
-                                }`}
-                              >
-                                {raw?.blink_rate_per_min?.toFixed(1) ?? '—'}/min
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Lip Tension</p>
-                              <p
-                                className={`text-sm font-mono ${(raw?.avg_lip_tension ?? 1) < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
-                              >
-                                {raw?.avg_lip_tension?.toFixed(3) ?? '—'}
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Blink Dur.</p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.avg_blink_duration_ms?.toFixed(0) ?? '—'} ms
-                              </p>
-                            </div>
-                            <div className="bg-slate-900/50 rounded p-2">
-                              <p className="text-slate-500 uppercase font-bold">Frames</p>
-                              <p className="text-sm font-mono text-slate-200">
-                                {raw?.frames_analyzed ?? '—'}
-                              </p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
-                        <span className="text-[9px] text-slate-500">{marker.provider}</span>
-                        <span className="text-[9px] text-slate-500">
-                          Conf: {((marker.confidence ?? 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-bold text-white">
+                  {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                </span>
+                <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+              </div>
+              {deceptionData?.isHighRisk ? (
+                <Badge variant="outline" className="text-[10px] h-5 border-red-700 text-red-400">
+                  HIGH RISK
+                </Badge>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-4 py-8">
-                  <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
-                  <p className="text-xs">Click below to trigger an analysis.</p>
-                </div>
+                <Badge variant="outline" className="text-[10px] h-5 border-blue-700 text-blue-400">
+                  NORMAL
+                </Badge>
               )}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
-                onClick={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  if (playerRef.current) {
-                    console.log('[VideoCallPage] Sending voice analysis request to claimant');
-                    playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
-                    toast({
-                      title: 'Request Sent',
-                      description: 'Asking claimant device to send audio sample...',
-                    });
-
-                    // Simulate "pending" state or just wait for polling
-                    isAnalyzingRef.current = true;
-                    setTimeout(() => {
-                      isAnalyzingRef.current = false;
-                    }, 5000);
-                  } else {
-                    toast({
-                      title: 'Error',
-                      description: 'Video connection not ready.',
-                      variant: 'destructive',
-                    });
-                  }
-                }}
-                disabled={false} // Always enable if connected
-              >
-                <Zap className="h-3 w-3 mr-2" />
-                Analyze Voice Stress (Live)
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                onClick={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  isAnalyzingRef.current = true;
-                  console.log('[VideoCallPage] Starting visual analysis, isAnalyzing set to true');
-                  triggerAssessment.mutate(
-                    { sessionId: sessionId || '', assessmentType: 'VISUAL' },
-                    {
-                      onSettled: () => {
-                        setTimeout(() => {
-                          isAnalyzingRef.current = false;
-                          console.log(
-                            '[VideoCallPage] Visual analysis settled, isAnalyzing set to false'
-                          );
-                        }, 1000);
-                      },
-                    }
-                  );
-                }}
-                disabled={triggerAssessment.isPending}
-              >
-                <ShieldCheck className="h-3 w-3 mr-2" />
-                Analyze Visual Behavior
-              </Button>
+            {/* Metrics Graph */}
+            <div className="mt-4 mb-6 pt-4 border-t border-slate-800 h-40">
+              <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics Trend</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={metricsHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                  <XAxis dataKey="time" hide />
+                  <YAxis domain={[0, 1]} hide />
+                  <Tooltip
+                    contentStyle={{
+                      fontSize: '10px',
+                      borderColor: '#334155',
+                      backgroundColor: '#1e293b',
+                    }}
+                    itemStyle={{ fontSize: '10px' }}
+                    labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="deception"
+                    name="Deception Score"
+                    stroke="#E96161"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="voice"
+                    name="Voice Stress"
+                    stroke="#72B0F2"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="visual"
+                    name="Visual Behavior"
+                    stroke="#2EE797"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expression"
+                    name="Expression Measurement"
+                    stroke="#EEA954"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeOpacity={0.5}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+                Risk Analysis
+              </h3>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
+                >
+                  LIVE
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto space-y-4 min-h-0">
+              {(() => {
+                // Extract latest assessments for each category, but only if claimant is present
+                const latestVoice = isClaimantInRoom
+                  ? assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS')
+                  : undefined;
+
+                const latestEmotion = isClaimantInRoom
+                  ? assessments?.find(a => (a.rawResponse as any)?.top_emotions)
+                  : undefined;
+
+                const latestVisual = isClaimantInRoom
+                  ? assessments?.find(
+                      a =>
+                        a.assessmentType === 'ATTENTION_TRACKING' ||
+                        (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
+                        a.provider?.includes('MediaPipe') ||
+                        (a.assessmentType === 'VISUAL_MODERATION' &&
+                          !(a.rawResponse as any)?.top_emotions)
+                    )
+                  : undefined;
+
+                const sections = [
+                  {
+                    id: 'voice',
+                    title: 'Voice Stress',
+                    data: latestVoice,
+                    type: 'voice',
+                  },
+                  {
+                    id: 'visual',
+                    title: 'Visual Behavior',
+                    data: latestVisual,
+                    type: 'visual',
+                  },
+                  {
+                    id: 'emotion',
+                    title: 'Expression Measurement',
+                    data: latestEmotion,
+                    type: 'emotion',
+                  },
+                ];
+
+                return sections.map(section => (
+                  <RiskAssessmentCard
+                    key={section.id}
+                    title={section.title}
+                    data={section.data}
+                    type={section.type as any}
+                  />
+                ));
+              })()}
+            </div>
+
+            {analysisMode === 'manual' && (
+              <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerVoiceAnalysis(true);
+                  }}
+                >
+                  <Zap className="h-3 w-3 mr-2" />
+                  Analyze Voice Stress
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerVisualAnalysis();
+                  }}
+                  disabled={triggerAssessment.isPending}
+                >
+                  <ShieldCheck className="h-3 w-3 mr-2" />
+                  Analyze Visual Behavior
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-[11px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                  onClick={e => {
+                    e.preventDefault();
+                    triggerExpressionAnalysis(true);
+                  }}
+                  disabled={analyzeExpression.isPending}
+                >
+                  <Activity className="h-3 w-3 mr-2" />
+                  Analyze Expression
+                </Button>
+              </div>
+            )}
           </Card>
         </div>
       </div>

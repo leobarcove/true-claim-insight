@@ -14,17 +14,32 @@ export interface JoinRoomResponse {
 
 export function useJoinVideoRoom() {
   return useMutation({
-    mutationFn: async ({
-      sessionId,
-      userId,
-    }: {
-      sessionId: string;
-      userId: string;
-    }) => {
+    mutationFn: async ({ sessionId, userId }: { sessionId: string; userId: string }) => {
       // Claimant's role is always CLAIMANT
       const { data } = await apiClient.post<ApiResponse<JoinRoomResponse>>(
         `/video/rooms/${sessionId}/join`,
         { userId, role: 'CLAIMANT' }
+      );
+      return data.data;
+    },
+  });
+}
+
+export function useAnalyzeExpression() {
+  return useMutation({
+    mutationFn: async ({ sessionId, videoBlob }: { sessionId: string; videoBlob: Blob }) => {
+      const formData = new FormData();
+      formData.append('file', videoBlob, 'expression-analysis.webm');
+      formData.append('sessionId', sessionId);
+
+      const { data } = await apiClient.post<ApiResponse<any>>(
+        '/risk/analyze-expression',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
       );
       return data.data;
     },

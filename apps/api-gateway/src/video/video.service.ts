@@ -1,13 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/video.dto';
+import { RiskService } from '../risk/risk.service';
 
 @Injectable()
 export class VideoService {
+  private readonly logger = new Logger(VideoService.name);
   private readonly baseUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
-    const serviceUrl = this.configService.get<string>('services.videoService', 'http://localhost:3002');
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly riskService: RiskService
+  ) {
+    const serviceUrl = this.configService.get<string>(
+      'services.videoService',
+      'http://localhost:3002'
+    );
     this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
@@ -43,7 +51,15 @@ export class VideoService {
       body: JSON.stringify(dto),
     });
 
-    return this.handleResponse(response);
+    const result = await this.handleResponse(response);
+    try {
+      this.logger.log(`Session ${id} ended. Generating consent form...`);
+      this.riskService.generateConsentForm(id);
+    } catch (error: any) {
+      this.logger.error(`Failed to generate consent form for session ${id}: ${error.message}`);
+    }
+
+    return result;
   }
 
   async getSessionsForClaim(claimId: string) {
@@ -60,18 +76,18 @@ export class VideoService {
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = response.statusText;
-      
+
       try {
         const errorJson = JSON.parse(errorText);
         if (errorJson.message) {
-          errorMessage = Array.isArray(errorJson.message) 
-            ? errorJson.message.join(', ') 
+          errorMessage = Array.isArray(errorJson.message)
+            ? errorJson.message.join(', ')
             : errorJson.message;
         }
       } catch (e) {
         errorMessage = errorText || errorMessage;
       }
-      
+
       throw new Error(`Video service error: ${errorMessage}`);
     }
 
