@@ -15,7 +15,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false })
+    new FastifyAdapter({
+      logger: false,
+      bodyLimit: 50 * 1024 * 1024, // 50MB
+    })
   );
 
   const configService = app.get(ConfigService);
@@ -37,7 +40,7 @@ async function bootstrap() {
   // Enable multipart support
   await app.register(multipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB
+      fileSize: 50 * 1024 * 1024, // 50MB
     },
   });
 

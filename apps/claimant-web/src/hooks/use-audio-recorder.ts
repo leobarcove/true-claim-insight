@@ -37,7 +37,6 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
       // Request data every 1 second (sufficient for full session recording)
       mediaRecorder.start(1000);
       setIsRecording(true);
-      console.log('Audio recording started');
     } catch (error) {
       console.error('Error starting audio recording:', error);
     }
@@ -53,7 +52,6 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       setIsRecording(false);
-      console.log('Audio recording stopped');
     }
   }, [isRecording]);
 
@@ -65,7 +63,7 @@ export function useAudioRecorder({ bufferDurationMs = 10000 }: AudioRecorderOpti
 
     const header = chunksRef.current[0];
     const recentChunks = chunksRef.current.slice(-20);
-    
+
     // If the recording is shorter than 20s, just return everything once
     if (chunksRef.current.length <= 20) {
       return new Blob(chunksRef.current, { type: 'audio/webm' });

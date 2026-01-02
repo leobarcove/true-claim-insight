@@ -1,31 +1,44 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { DailyVideoPlayer } from '@tci/ui-components';
-import { useJoinVideoRoom } from '@/hooks/use-video';
+import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
+import { useJoinVideoRoom, useAnalyzeExpression } from '@/hooks/use-video';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { XCircle, Loader2, RefreshCw, ArrowLeft, Mic } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/use-audio-recorder';
+import { useVideoRecorder } from '@/hooks/use-video-recorder';
+import { DailyProvider } from '@daily-co/daily-react';
 
 export function ClaimantVideoCallPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  
+
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [callObject, setCallObject] = useState<any>(null);
   const hasAttemptedJoin = useRef(false);
-  
+
   const joinRoom = useJoinVideoRoom();
-  const { startRecording, stopRecording, getAudioBlob, isRecording } = useAudioRecorder();
+  const analyzeExpression = useAnalyzeExpression();
+  const {
+    startRecording: startAudioRecording,
+    stopRecording: stopAudioRecording,
+    getAudioBlob,
+    isRecording: isAudioRecording,
+  } = useAudioRecorder();
+  const {
+    startRecording: startVideoRecording,
+    stopRecording: stopVideoRecording,
+    getVideoBlob,
+    isRecording: isVideoRecording,
+  } = useVideoRecorder({ bufferDurationMs: 5000 });
+  const playerRef = useRef<DailyVideoPlayerRef>(null);
 
   // Handle uploading audio for analysis
   const handleUploadAudio = useCallback(async () => {
     try {
-      console.log('Starting audio upload sequence...');
       const blob = await getAudioBlob();
-      console.log('Audio blob retrieved:', blob?.size);
-      
       if (!blob || blob.size === 0) {
         console.error('No audio blob available (recording too short?)');
         return;
@@ -35,77 +48,58 @@ export function ClaimantVideoCallPage() {
         console.error('Session ID is missing, cannot upload audio.');
         return;
       }
-      
-      console.log('[VideoCallPage] Uploading audio blob, size:', blob.size);
+
       const formData = new FormData();
       formData.append('file', blob, 'claimant-audio.webm');
       formData.append('sessionId', sessionId);
-      
-      // Use API Gateway endpoint (proxies to Risk Engine)
-      // Since claimant-web runs on 5173 and API Gateway on 3000
-      // We'll trust the proxy setup or use absolute URL for MVP
       const response = await fetch('http://localhost:3000/api/v1/risk/upload-audio', {
         method: 'POST',
         body: formData,
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      console.log('Audio uploaded successfully');
     } catch (err) {
       console.error('Failed to upload audio:', err);
     }
   }, [getAudioBlob, sessionId]);
 
   useEffect(() => {
-    // Setup Daily event listener for "app-message"
-    // This requires access to the daily instance. 
-    // Since DailyVideoPlayer creates its own instance internally, we might need a way to access it 
-    // or rely on window.DailyIframe if exposed.
-    // Ideally, @tci/ui-components would expose the call object via ref or context.
-    // For now, let's assume specific "request-voice-analysis" handling 
-    // OR we put the listener on the window if Daily exposes it globally (it doesn't by default).
-    
-    // WORKAROUND: We'll simulate the listener setup being managed inside Player
-    // OR we can rely on a different signaling mechanism if Player hides the instance.
-    // BUT! daily-js events are dispatched on the call object.
-    
-    // Assuming DailyVideoPlayer might forward events or we attach via a custom prop if we modify it.
-    // Let's modify DailyVideoPlayer in ui-components later to expose the call object?
-    // See next step.
-    
     return () => {
-      stopRecording();
+      stopAudioRecording();
+      stopVideoRecording();
     };
-  }, [stopRecording]);
+  }, [stopAudioRecording, stopVideoRecording]);
 
   useEffect(() => {
     // Check for NRIC verification in sessionStorage
     const isVerified = sessionStorage.getItem(`nric_verified_${sessionId}`) === 'true';
-    
+
     if (!isVerified && sessionId) {
-      console.log(`[ClaimantVideoCallPage] NRIC not verified for session ${sessionId}, redirecting...`);
+      console.log(
+        `[ClaimantVideoCallPage] NRIC not verified for session ${sessionId}, redirecting...`
+      );
       navigate(`/video/${sessionId}/verify-nric`);
       return;
     }
 
     const doJoin = async () => {
       if (!sessionId || !user?.id || hasAttemptedJoin.current) return;
-      
+
       hasAttemptedJoin.current = true;
       setError(null);
-      
+
       try {
-        const result = await joinRoom.mutateAsync({ 
-          sessionId, 
-          userId: user.id 
+        const result = await joinRoom.mutateAsync({
+          sessionId,
+          userId: user.id,
         });
         setJoinData({ url: result.roomUrl, token: result.token });
-        
+
         // Start recording immediately when joining
-        startRecording();
+        startAudioRecording();
+        startVideoRecording();
       } catch (err: any) {
         console.error('[ClaimantVideoCallPage] Join failed:', err);
         setError(err.message || 'Failed to join video room');
@@ -113,34 +107,54 @@ export function ClaimantVideoCallPage() {
     };
 
     doJoin();
-  }, [sessionId, user?.id, joinRoom, startRecording]);
+  }, [sessionId, user?.id, joinRoom, startAudioRecording, startVideoRecording]);
 
   const attemptRetry = () => {
     hasAttemptedJoin.current = false;
     setJoinData(null);
     setError(null);
-    window.location.reload(); 
+    window.location.reload();
   };
 
   const handleEndCall = () => {
-    stopRecording();
+    stopAudioRecording();
+    stopVideoRecording();
     navigate('/tracker');
   };
-  
+
   // Handle Daily app messages (signaling)
-  const handleAppMessage = useCallback((e: any) => {
-    console.log('[VideoCallPage] Received app message full event:', JSON.stringify(e, null, 2));
-    console.log('[VideoCallPage] Message Type:', e?.data?.type);
-    
-    if (e?.data?.type === 'request-voice-analysis') {
-      console.log('[VideoCallPage] Triggering audio upload from signal');
-      try {
-        handleUploadAudio();
-      } catch (err) {
-        console.error('[VideoCallPage] Error calling handleUploadAudio:', err);
+  const handleAppMessage = useCallback(
+    async (e: any) => {
+      if (e?.data?.type === 'request-voice-analysis') {
+        console.log('[VideoCallPage] Triggering audio upload from signal');
+        try {
+          handleUploadAudio();
+        } catch (err) {
+          console.error('[VideoCallPage] Error calling handleUploadAudio:', err);
+        }
       }
-    }
-  }, [handleUploadAudio]);
+
+      if (e?.data?.type === 'request-expression-analysis') {
+        console.log('[VideoCallPage] Triggering expression analysis from signal');
+        try {
+          // Get the most recent 5 seconds from our rolling buffer
+          const blob = await getVideoBlob();
+          if (blob && blob.size > 0) {
+            await analyzeExpression.mutateAsync({
+              sessionId: sessionId || '',
+              videoBlob: blob,
+            });
+            console.log('[VideoCallPage] Expression analysis complete (signal-driven)');
+          } else {
+            console.warn('[VideoCallPage] No video blob available in buffer');
+          }
+        } catch (err) {
+          console.error('[VideoCallPage] Error during signal-driven expression analysis:', err);
+        }
+      }
+    },
+    [handleUploadAudio, sessionId, analyzeExpression, getVideoBlob]
+  );
 
   if (error) {
     return (
@@ -172,51 +186,75 @@ export function ClaimantVideoCallPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col z-50">
-      {/* Mobile Header */}
-      <div className="bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-800">
-        <div>
-          <h1 className="text-white font-semibold text-sm">Remote Assessment</h1>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-slate-400">Secure Professional Connection</p>
-            {isRecording && (
-              <span className="flex items-center text-[10px] text-red-400 gap-1 bg-red-900/20 px-1.5 py-0.5 rounded-full animate-pulse">
-                <Mic className="h-3 w-3" /> REC
-              </span>
-            )}
+    <DailyProvider callObject={callObject}>
+      <div className="fixed inset-0 bg-black flex flex-col z-50">
+        {/* Mobile Header */}
+        <div className="bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-800">
+          <div>
+            <h1 className="text-white font-semibold text-sm">Remote Assessment</h1>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400">Secure Professional Connection</p>
+              {(isAudioRecording || isVideoRecording) && (
+                <span className="flex items-center text-[10px] text-red-400 gap-1 bg-red-900/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                  <Mic className="h-3 w-3" /> REC {isVideoRecording && 'VIDEO'}
+                </span>
+              )}
+            </div>
           </div>
+          <Button variant="destructive" size="sm" onClick={handleEndCall}>
+            Exit
+          </Button>
         </div>
-        <Button variant="destructive" size="sm" onClick={handleEndCall}>
-          Exit
-        </Button>
-      </div>
 
-      {/* Fullscreen Video Area */}
-      <div className="flex-1 relative overflow-hidden">
-        <DailyVideoPlayer 
-          url={joinData.url} 
-          token={joinData.token} 
-          onLeft={handleEndCall}
-          onAppMessage={handleAppMessage}
-        />
-      </div>
-
-      {/* Mobile Footer / Info */}
-      <div className="p-4 bg-slate-950 text-center">
-        <div className="absolute top-4 left-4 z-50 bg-black/50 p-2 rounded text-white">
-          <p>Status: {isRecording ? 'Recording 🔴' : 'Idle ⚪'}</p>
-          <button 
-            className="mt-2 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 font-bold"
-            onClick={handleUploadAudio}
-          >
-            🐞 Test Upload
-          </button>
+        {/* Fullscreen Video Area */}
+        <div className="flex-1 relative overflow-hidden">
+          <DailyVideoPlayer
+            ref={playerRef}
+            url={joinData.url}
+            token={joinData.token}
+            onLeft={handleEndCall}
+            onAppMessage={handleAppMessage}
+            onCallFrameCreated={setCallObject}
+          />
         </div>
-        <p className="text-[10px] text-slate-500 uppercase tracking-widest">
-          End-to-End Encrypted Session
-        </p>
+
+        {/* Mobile Footer / Info */}
+        <div className="p-4 bg-slate-950 text-center">
+          {/* <div className="absolute top-4 left-4 z-50 bg-black/50 p-2 rounded text-white text-left">
+            <p>Audio: {isAudioRecording ? '🔴' : '⚪'}</p>
+            <p>Video: {isVideoRecording ? '🔴' : '⚪'}</p>
+            <button
+              className="mt-2 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 font-bold"
+              onClick={handleUploadAudio}
+            >
+              🐞 Test Upload
+            </button>
+            <button
+              className="mt-2 ml-2 bg-purple-500 px-3 py-1 rounded hover:bg-purple-600 font-bold"
+              onClick={async () => {
+                try {
+                  const blob = await getVideoBlob();
+                  if (blob) {
+                    await analyzeExpression.mutateAsync({
+                      sessionId: sessionId || '',
+                      videoBlob: blob,
+                    });
+                    console.log('Expression analysis triggered manually');
+                  }
+                } catch (err) {
+                  console.error('Expression analysis failed:', err);
+                }
+              }}
+              disabled={analyzeExpression.isPending}
+            >
+              {analyzeExpression.isPending ? 'Analyzing...' : '🐞 Analyze Expression'}
+            </button>
+          </div> */}
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+            End-to-End Encrypted Session
+          </p>
+        </div>
       </div>
-    </div>
+    </DailyProvider>
   );
 }
-

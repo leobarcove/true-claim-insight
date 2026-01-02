@@ -17,18 +17,33 @@ import {
   Download,
   Image,
   User,
+  Eye,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { formatDate, getInitials, cn, getDaysSince } from '@/lib/utils';
-import { useClaim, useUpdateClaim } from '@/hooks/use-claims';
+import {
+  formatDate,
+  getInitials,
+  cn,
+  getDaysSince,
+  formatDateTime,
+  formatFileSize,
+  downloadFile,
+} from '@/lib/utils';
+import { useClaim, useUpdateClaimStatus } from '@/hooks/use-claims';
 import { useCreateVideoRoom } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' }> = {
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    variant: 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive';
+  }
+> = {
   SUBMITTED: { label: 'Submitted', variant: 'secondary' },
   ASSIGNED: { label: 'Assigned', variant: 'info' },
   SCHEDULED: { label: 'Scheduled', variant: 'info' },
@@ -43,18 +58,18 @@ export function ClaimDetailPage() {
   const { id: claimId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const { data: claim, isLoading } = useClaim(claimId || '');
-  const updateClaim = useUpdateClaim(claimId || '');
+  const updateStatus = useUpdateClaimStatus(claimId || '');
   const createVideoRoom = useCreateVideoRoom();
   const [magicLink, setMagicLink] = useState<string | null>(null);
   const [isNotifying, setIsNotifying] = useState(false);
 
   const handleUpdateStatus = async (status: string) => {
     if (!claimId) return;
-    
+
     try {
-      await updateClaim.mutateAsync({ status: status as any });
+      await updateStatus.mutateAsync(status as any);
       toast({
         title: 'Success',
         description: `Claim status updated to ${status}.`,
@@ -69,13 +84,13 @@ export function ClaimDetailPage() {
   };
 
   const activeVideoSession = claim?.sessions?.find(
-    (s) => s.status === 'WAITING' || s.status === 'SCHEDULED' || s.status === 'IN_PROGRESS'
+    s => s.status === 'WAITING' || s.status === 'SCHEDULED' || s.status === 'IN_PROGRESS'
   );
 
   const handleStartVideoAssessment = async () => {
     if (!claimId) return;
     setIsNotifying(true);
-    
+
     try {
       let sessionId: string;
 
@@ -90,10 +105,10 @@ export function ClaimDetailPage() {
       // Generate magic link for claimant (in production, this would send SMS)
       const devLink = `http://localhost:4001/video/${sessionId}`;
       setMagicLink(devLink);
-      
+
       // Auto-copy to clipboard for easy testing
       await navigator.clipboard.writeText(devLink);
-      
+
       toast({
         title: 'Assessment Started',
         description: 'Magic link copied to clipboard! Joining video room...',
@@ -101,7 +116,7 @@ export function ClaimDetailPage() {
 
       // Small delay to show the magic link before navigating
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // Navigate adjuster to video call
       navigate(`/video/${sessionId}`);
     } catch (error: any) {
@@ -140,16 +155,19 @@ export function ClaimDetailPage() {
             {statusConfig[claim.status].label}
           </Badge>
           {claim.status === 'SCHEDULED' && (
-            <Button size="sm" onClick={handleStartVideoAssessment} disabled={createVideoRoom.isPending || isNotifying}>
+            <Button
+              size="sm"
+              onClick={handleStartVideoAssessment}
+              disabled={createVideoRoom.isPending || isNotifying}
+            >
               <Video className="h-4 w-4 mr-2" />
-              {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
+              {createVideoRoom.isPending || isNotifying ? 'Starting...' : 'Start Video Assessment'}
             </Button>
           )}
         </div>
       </Header>
 
       <div className="flex-1 overflow-auto p-6">
-
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
@@ -193,19 +211,25 @@ export function ClaimDetailPage() {
                       {(claim.otherParty as any).name && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Name:</span>
-                          <span className="font-medium">{String((claim.otherParty as any).name)}</span>
+                          <span className="font-medium">
+                            {String((claim.otherParty as any).name)}
+                          </span>
                         </div>
                       )}
                       {(claim.otherParty as any).vehiclePlate && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Vehicle:</span>
-                          <span className="font-medium">{String((claim.otherParty as any).vehiclePlate)}</span>
+                          <span className="font-medium">
+                            {String((claim.otherParty as any).vehiclePlate)}
+                          </span>
                         </div>
                       )}
                       {(claim.otherParty as any).insurerName && (
                         <div className="flex justify-between col-span-2">
                           <span className="text-muted-foreground">Insurer:</span>
-                          <span className="font-medium">{String((claim.otherParty as any).insurerName)}</span>
+                          <span className="font-medium">
+                            {String((claim.otherParty as any).insurerName)}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -248,7 +272,9 @@ export function ClaimDetailPage() {
                   </div>
                   <div className="flex justify-between border-b pb-2">
                     <span className="text-muted-foreground text-sm">Panel Workshop</span>
-                    <span className="font-medium text-sm">{claim.workshopName || 'Not Assigned'}</span>
+                    <span className="font-medium text-sm">
+                      {claim.workshopName || 'Not Assigned'}
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -267,16 +293,16 @@ export function ClaimDetailPage() {
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Estimated Loss</p>
                     <p className="text-2xl font-bold">
-                      {claim.estimatedLossAmount 
-                        ? `RM ${claim.estimatedLossAmount.toLocaleString()}` 
+                      {claim.estimatedLossAmount
+                        ? `RM ${claim.estimatedLossAmount.toLocaleString()}`
                         : 'Pending'}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Repair Cost (Final)</p>
                     <p className="text-2xl font-bold text-muted-foreground">
-                      {claim.estimatedRepairCost 
-                        ? `RM ${claim.estimatedRepairCost.toLocaleString()}` 
+                      {claim.estimatedRepairCost
+                        ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
                         : 'Pending'}
                     </p>
                   </div>
@@ -317,24 +343,64 @@ export function ClaimDetailPage() {
               <CardContent>
                 {claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-2">
-                    {claim.documents.map((doc: any) => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          {doc.type === 'DAMAGE_PHOTO' ? (
-                            <Image className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <FileText className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          <div>
-                            <p className="text-sm font-medium">{doc.filename}</p>
-                            <p className="text-xs text-muted-foreground">{doc.type.replace('_', ' ')}</p>
+                    {claim.documents
+                      .slice()
+                      .sort(
+                        (a: any, b: any) =>
+                          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                      )
+                      .map((doc: any) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            {doc.type === 'DAMAGE_PHOTO' ? (
+                              <Image className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium">{doc.filename}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{doc.type.replace('_', ' ')}</span>
+                                <span>•</span>
+                                <span>{formatFileSize(doc.fileSize)}</span>
+                                <span>•</span>
+                                <span>{formatDateTime(doc.createdAt)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="View document"
+                              onClick={() => {
+                                if (doc.storageUrl) {
+                                  window.open(doc.storageUrl, '_blank');
+                                }
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Download document"
+                              onClick={() => {
+                                if (doc.storageUrl) {
+                                  downloadFile(doc.storageUrl, doc.filename);
+                                }
+                              }}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
@@ -343,38 +409,28 @@ export function ClaimDetailPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Notes placeholder */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center p-4 text-muted-foreground">
-                  <p className="text-sm">No notes available.</p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
             {/* SLA Status */}
-            <Card className={cn(
-              "border-l-4",
-              getDaysSince(claim.createdAt) > 7 ? "border-l-destructive" : "border-l-success"
-            )}>
+            <Card
+              className={cn(
+                'border-l-4',
+                getDaysSince(claim.createdAt) > 7 ? 'border-l-destructive' : 'border-l-success'
+              )}
+            >
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">SLA Status (BNM)</span>
-                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? "destructive" : "success"}>
+                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? 'destructive' : 'success'}>
                     {getDaysSince(claim.createdAt)} Days Active
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {getDaysSince(claim.createdAt) > 7 
-                    ? "SLA breach: Recommended TAT is 7 working days for acknowledgement." 
-                    : "Within recommended turnaround time."}
+                  {getDaysSince(claim.createdAt) > 7
+                    ? 'SLA breach: Recommended TAT is 7 working days for acknowledgement.'
+                    : 'Within recommended turnaround time.'}
                 </p>
               </CardContent>
             </Card>
@@ -385,17 +441,17 @@ export function ClaimDetailPage() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button 
-                  className="w-full bg-success hover:bg-success/90" 
+                <Button
+                  className="w-full bg-success hover:bg-success/90"
                   onClick={() => handleUpdateStatus('APPROVED')}
                   disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                   Approve Claim
                 </Button>
-                <Button 
-                  variant="destructive" 
-                  className="w-full" 
+                <Button
+                  variant="destructive"
+                  className="w-full"
                   onClick={() => handleUpdateStatus('REJECTED')}
                   disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
                 >
@@ -480,11 +536,15 @@ export function ClaimDetailPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar>
-                    <AvatarFallback>{getInitials(claim.claimant?.fullName || claim.claimantId)}</AvatarFallback>
+                    <AvatarFallback>
+                      {getInitials(claim.claimant?.fullName || claim.claimantId)}
+                    </AvatarFallback>
                   </Avatar>
                   <div>
                     <p className="font-medium text-sm">{claim.claimant?.fullName || 'Unknown'}</p>
-                    <p className="text-xs text-muted-foreground">{claim.claimant?.phoneNumber || 'No phone'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {claim.claimant?.phoneNumber || 'No phone'}
+                    </p>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {claim.claimant?.kycStatus === 'VERIFIED' ? (
                         <Badge variant="success" className="text-[10px] w-fit">
@@ -496,7 +556,10 @@ export function ClaimDetailPage() {
                         </Badge>
                       )}
                       {claim.isPdpaCompliant ? (
-                        <Badge variant="info" className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">
+                        <Badge
+                          variant="info"
+                          className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
+                        >
                           PDPA Consented
                         </Badge>
                       ) : (
@@ -523,13 +586,15 @@ export function ClaimDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Button 
-                    className="w-full" 
-                    onClick={handleStartVideoAssessment} 
+                  <Button
+                    className="w-full"
+                    onClick={handleStartVideoAssessment}
                     disabled={createVideoRoom.isPending || isNotifying}
                   >
                     <Video className="h-4 w-4 mr-2" />
-                    {(createVideoRoom.isPending || isNotifying) ? 'Starting...' : 'Start Video Assessment'}
+                    {createVideoRoom.isPending || isNotifying
+                      ? 'Starting...'
+                      : 'Start Video Assessment'}
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
                     Creates room & notifies claimant via SMS
@@ -545,9 +610,9 @@ export function ClaimDetailPage() {
                         <code className="text-[10px] bg-white p-1 rounded border flex-1 break-all">
                           {magicLink}
                         </code>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-6 px-2 text-[10px]"
                           onClick={() => {
                             navigator.clipboard.writeText(magicLink);
@@ -578,11 +643,11 @@ export function ClaimDetailPage() {
                       <div key={session.id} className="flex items-start gap-3">
                         <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
                         <div>
-                          <p className="text-xs font-medium">
-                            Video Session - {session.status}
-                          </p>
+                          <p className="text-xs font-medium">Video Session - {session.status}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {session.scheduledTime ? formatDate(session.scheduledTime) : formatDate(session.createdAt)}
+                            {session.scheduledTime
+                              ? formatDate(session.scheduledTime)
+                              : formatDate(session.createdAt)}
                           </p>
                         </div>
                       </div>

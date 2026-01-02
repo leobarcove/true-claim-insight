@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import DailyIframe, { DailyCall } from '@daily-co/daily-js';
+import { useState, forwardRef, useImperativeHandle, useEffect, useRef, useMemo } from 'react';
+import { useCallFrame } from '@daily-co/daily-react';
 import { Loader2, VideoOff } from 'lucide-react';
 
 export interface DailyVideoPlayerProps {
@@ -9,217 +9,235 @@ export interface DailyVideoPlayerProps {
   onLeft?: () => void;
   onError?: (error: string) => void;
   onAppMessage?: (ev: any) => void;
+  onCallFrameCreated?: (callFrame: any) => void;
 }
 
 export interface DailyVideoPlayerRef {
   requestFullscreen: () => void;
   exitFullscreen: () => void;
   sendAppMessage: (data: any, to?: string) => void;
+  getCallInstance: () => any;
+  captureVideoBuffer: (durationMs?: number, participantId?: string) => Promise<Blob>;
 }
 
-// Track global destruction promise to handle React Strict Mode async cleanup race conditions
-let dailyDestroyPromise: Promise<void> | null = null;
-
 export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayerProps>(
-  ({ url, token, onJoined, onLeft, onError, onAppMessage }, ref) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const callRef = useRef<DailyCall | null>(null);
-    const hasJoinedMeeting = useRef(false); // Track if user has actually joined the meeting
-    const [status, setStatus] = useState<'loading' | 'joined' | 'error'>('loading');
+  ({ url, token, onJoined, onLeft, onError, onAppMessage, onCallFrameCreated }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null!);
+    const [status, setStatus] = useState<'loading' | 'ready' | 'joined' | 'error'>('loading');
 
-    // Use refs for callbacks to avoid re-initializing the call when parents re-render
-    const onJoinedRef = useRef(onJoined);
-    const onLeftRef = useRef(onLeft);
-    const onErrorRef = useRef(onError);
-    const onAppMessageRef = useRef(onAppMessage);
+    // Memoize options to ensure stability
+    const callOptions = useMemo(
+      () => ({
+        parentElRef: containerRef,
+        options: {
+          url,
+          token,
+          iframeStyle: {
+            width: '100%',
+            height: '100%',
+            border: '0',
+            borderRadius: '8px',
+          },
+          showLeaveButton: true,
+          showFullscreenButton: true,
+        },
+      }),
+      [url, token]
+    );
 
-    // Keep refs up to date
+    const callFrame = useCallFrame(callOptions);
+
+    // Pass the call instance back to the parent for DailyProvider
     useEffect(() => {
-      onJoinedRef.current = onJoined;
-      onLeftRef.current = onLeft;
-      onErrorRef.current = onError;
-      onAppMessageRef.current = onAppMessage;
-    }, [onJoined, onLeft, onError, onAppMessage]);
+      if (callFrame && onCallFrameCreated) {
+        onCallFrameCreated(callFrame);
+      }
+    }, [callFrame, onCallFrameCreated]);
 
-    // Expose methods to parent via ref
+    const tracksRef = useRef<Record<string, MediaStreamTrack>>({});
+
+    // Handle events via the callFrame instance
+    useEffect(() => {
+      if (!callFrame) return;
+
+      const handleAppMessage = (e: any) => {
+        onAppMessage?.(e);
+      };
+
+      const syncTracks = () => {
+        const participants = callFrame.participants();
+        Object.entries(participants).forEach(([id, p]) => {
+          const track =
+            (p as any).videoTrack ||
+            (p as any).tracks?.video?.track ||
+            (p as any).tracks?.video?.persistentTrack;
+          if (track) {
+            tracksRef.current[id] = track;
+          }
+        });
+      };
+
+      const handleTrackStarted = (e: any) => {
+        if (e.participant && e.track.kind === 'video') {
+          const id = e.participant.local ? 'local' : e.participant.session_id;
+          tracksRef.current[id] = e.track;
+        }
+      };
+
+      const handleTrackStopped = (e: any) => {
+        if (e.participant && e.track.kind === 'video') {
+          const id = e.participant.local ? 'local' : e.participant.session_id;
+          delete tracksRef.current[id];
+        }
+      };
+
+      const updateStatus = () => {
+        const state = callFrame.meetingState();
+        if (state === 'joined-meeting') {
+          setStatus('joined');
+          syncTracks();
+          onJoined?.();
+        } else if (state === 'loaded' || state === 'joining-meeting') {
+          setStatus('ready');
+          syncTracks();
+        } else if (state === 'error') {
+          setStatus('error');
+        }
+
+        // Auto-join if in a joinable state
+        if (url && (state === 'new' || state === 'loaded')) {
+          callFrame.join({ url, token }).catch(e => {
+            console.error('[DailyVideoPlayer] join() failed:', e);
+            setStatus('error');
+          });
+        }
+      };
+
+      const handleLeft = () => {
+        tracksRef.current = {};
+        onLeft?.();
+      };
+
+      const handleError = (e: any) => {
+        setStatus('error');
+        onError?.(e.errorMsg || 'An unknown error occurred');
+      };
+
+      callFrame.on('loading', updateStatus);
+      callFrame.on('loaded', updateStatus);
+      callFrame.on('joining-meeting', updateStatus);
+      callFrame.on('joined-meeting', updateStatus);
+      callFrame.on('left-meeting', handleLeft);
+      callFrame.on('error', handleError);
+      callFrame.on('app-message', handleAppMessage);
+      callFrame.on('track-started', handleTrackStarted);
+      callFrame.on('track-stopped', handleTrackStopped);
+
+      // Initial check
+      syncTracks();
+      updateStatus();
+
+      // Timeout detection - if stuck in loading for too long
+      const loadingTimeout = setTimeout(() => {
+        const currentState = callFrame.meetingState();
+        if (currentState === 'loading' || currentState === 'new') {
+          console.error('[DailyVideoPlayer] Stuck in loading state, forcing error');
+          setStatus('error');
+          onError?.('Connection timeout - please try again');
+        }
+      }, 15000); // 15 second timeout
+
+      return () => {
+        clearTimeout(loadingTimeout);
+        callFrame.off('loading', updateStatus);
+        callFrame.off('loaded', updateStatus);
+        callFrame.off('joining-meeting', updateStatus);
+        callFrame.off('joined-meeting', updateStatus);
+        callFrame.off('left-meeting', handleLeft);
+        callFrame.off('error', handleError);
+        callFrame.off('app-message', handleAppMessage);
+        callFrame.off('track-started', handleTrackStarted);
+        callFrame.off('track-stopped', handleTrackStopped);
+      };
+    }, [callFrame, url, token, onJoined, onLeft, onError, onAppMessage]);
+
     useImperativeHandle(ref, () => ({
       requestFullscreen: () => {
-        if (callRef.current) {
-          try {
-            callRef.current.requestFullscreen();
-          } catch (e) {
-            console.error('[DailyVideoPlayer] Daily requestFullscreen failed:', e);
-            // Fallback to browser native fullscreen on the container
-            containerRef.current?.requestFullscreen?.();
-          }
-        } else {
-          // Direct fallback if call isn't ready
-          containerRef.current?.requestFullscreen?.();
+        try {
+          callFrame?.requestFullscreen();
+        } catch (e) {
+          console.error('[DailyVideoPlayer] requestFullscreen failed:', e);
         }
       },
       exitFullscreen: () => {
-        if (callRef.current) {
-          try {
-            callRef.current.exitFullscreen();
-          } catch (e) {
-            document.exitFullscreen?.();
-          }
-        } else {
-          document.exitFullscreen?.();
+        try {
+          callFrame?.exitFullscreen();
+        } catch (e) {
+          console.error('[DailyVideoPlayer] exitFullscreen failed:', e);
         }
       },
       sendAppMessage: (data: any, to?: string) => {
-        const callInstance = callRef.current || DailyIframe.getCallInstance();
-
-        if (callInstance) {
-          try {
-            console.log(
-              '[DailyVideoPlayer] Sending app message via instance:',
-              callInstance === callRef.current ? 'ref' : 'global lookup'
-            );
-            callInstance.sendAppMessage(data, to || '*');
-          } catch (e) {
-            console.error('[DailyVideoPlayer] Failed to send app message:', e);
-          }
-        } else {
-          console.warn(
-            '[DailyVideoPlayer] Cannot send message, call not ready (ref is null, global is null)'
-          );
-          console.warn('[DailyVideoPlayer] Current status:', status);
+        try {
+          callFrame?.sendAppMessage(data, to || '*');
+        } catch (e) {
+          console.error('[DailyVideoPlayer] sendAppMessage failed:', e);
         }
       },
+      getCallInstance: () => callFrame,
+      captureVideoBuffer: async (
+        durationMs: number = 5000,
+        participantId?: string
+      ): Promise<Blob> => {
+        if (!callFrame) throw new Error('Call frame not initialized');
+
+        const participants = callFrame.participants();
+        const targetId =
+          participantId || Object.keys(participants).find(id => id !== 'local') || 'local';
+        const participant = (participants as any)[targetId];
+
+        let videoTrack =
+          (targetId === 'local' ? participant?.videoTrack : tracksRef.current[targetId]) ||
+          participant?.videoTrack ||
+          participant?.tracks?.video?.track;
+
+        if (!videoTrack && targetId === 'local') {
+          videoTrack = participant?.tracks?.video?.persistentTrack;
+        }
+
+        if (!videoTrack) {
+          console.error(
+            `[DailyVideoPlayer] Failed to find video track for participant: ${targetId}`,
+            {
+              participant,
+              tracks: Object.keys(tracksRef.current),
+            }
+          );
+          throw new Error('Video track not available for analysis');
+        }
+
+        const stream = new MediaStream([videoTrack]);
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        const chunks: Blob[] = [];
+
+        return new Promise((resolve, reject) => {
+          mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            resolve(blob);
+          };
+          mediaRecorder.onerror = e => reject(e);
+
+          mediaRecorder.start();
+          setTimeout(() => {
+            if (mediaRecorder.state === 'recording') {
+              mediaRecorder.stop();
+            }
+          }, durationMs);
+        });
+      },
     }));
-
-    useEffect(() => {
-      if (!containerRef.current || callRef.current) return;
-
-      const initCall = async () => {
-        try {
-          let callFrame: DailyCall | null = null;
-          let retryCount = 0;
-          const maxRetries = 3;
-
-          while (retryCount < maxRetries) {
-            try {
-              // 1. Check for global instance and destroy if it exists
-              const existingCall = DailyIframe.getCallInstance();
-              if (existingCall) {
-                await existingCall.destroy();
-                // Small pause to let Daily JS internal state update
-                await new Promise(r => setTimeout(r, 200));
-              }
-
-              // 2. Wait for any pending local destroy promise
-              if (dailyDestroyPromise) {
-                const timeoutPromise = new Promise<void>((_, reject) =>
-                  setTimeout(() => reject(new Error('Destroy timeout')), 2000)
-                );
-                try {
-                  await Promise.race([dailyDestroyPromise, timeoutPromise]);
-                } catch (e) {
-                  console.warn('[DailyVideoPlayer] Wait for destroy timed out, proceeding...');
-                }
-                dailyDestroyPromise = null;
-              }
-
-              // 3. Clear container to ensure fresh start
-              if (containerRef.current) {
-                containerRef.current.innerHTML = '';
-              } else {
-                return; // Unmounted
-              }
-
-              // 4. Attempt to create the frame
-              callFrame = DailyIframe.createFrame(containerRef.current!, {
-                iframeStyle: {
-                  width: '100%',
-                  height: '100%',
-                  border: '0',
-                  borderRadius: '8px',
-                },
-                showLeaveButton: true,
-                showFullscreenButton: true,
-              });
-
-              // Success! Break out of retry loop
-              break;
-            } catch (e: any) {
-              const isDuplicate =
-                e.message?.includes('Duplicate') || e.toString().includes('Duplicate');
-              if (isDuplicate && retryCount < maxRetries - 1) {
-                console.warn(
-                  `[DailyVideoPlayer] Duplicate error on attempt ${retryCount + 1}, retrying...`
-                );
-                retryCount++;
-                await new Promise(r => setTimeout(r, 500));
-              } else {
-                throw e;
-              }
-            }
-          }
-
-          if (!callFrame) throw new Error('Failed to create Daily call frame');
-          console.log('[DailyVideoPlayer] callFrame created successfully');
-          callRef.current = callFrame;
-
-          callFrame.on('joined-meeting', () => {
-            console.log('[DailyVideoPlayer] joined-meeting event');
-            hasJoinedMeeting.current = true;
-            setStatus('joined');
-            onJoinedRef.current?.();
-          });
-
-          // Wire up app-message event
-          callFrame.on('app-message', ev => {
-            if (onAppMessageRef.current) {
-              onAppMessageRef.current(ev);
-            }
-          });
-
-          callFrame.on('left-meeting', () => {
-            console.log(
-              '[DailyVideoPlayer] left-meeting event, hasJoined:',
-              hasJoinedMeeting.current
-            );
-            if (hasJoinedMeeting.current) {
-              onLeftRef.current?.();
-            }
-          });
-
-          callFrame.on('error', e => {
-            console.error('[DailyVideoPlayer] Daily event error:', e);
-            setStatus('error');
-            onErrorRef.current?.(e.errorMsg || 'An unknown error occurred');
-          });
-
-          // Use 'joined' status to remove our loader once we are ready to show the iframe
-          setStatus('joined');
-
-          await callFrame.join({ url, token });
-          console.log('[DailyVideoPlayer] callFrame.join() completed');
-          hasJoinedMeeting.current = true;
-          onJoinedRef.current?.();
-        } catch (err: any) {
-          console.error('[DailyVideoPlayer] Initialization failed:', err);
-          setStatus('error');
-          onErrorRef.current?.(err.message || 'Failed to initialize video call');
-        }
-      };
-
-      initCall();
-
-      return () => {
-        if (callRef.current) {
-          dailyDestroyPromise = callRef.current
-            .destroy()
-            .then(() => {})
-            .catch(err => {
-              console.error('[DailyVideoPlayer] Error destroying instance:', err);
-            });
-          callRef.current = null;
-        }
-      };
-    }, [url, token]); // Only re-run if URL or token changes
 
     return (
       <div className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden border border-slate-800">

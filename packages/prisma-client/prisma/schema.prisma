@@ -198,7 +198,7 @@ model RiskAssessment {
   createdAt      DateTime       @default(now())
   session        Session        @relation(fields: [sessionId], references: [id])
 
-  @@unique([sessionId, assessmentType])
+  @@index([sessionId, assessmentType])
   @@index([sessionId])
   @@map("risk_assessments")
 }
