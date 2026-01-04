@@ -34,6 +34,9 @@ export class ClaimsService {
         vehiclePlateNumber: createClaimDto.vehiclePlateNumber,
         vehicleMake: createClaimDto.vehicleMake,
         vehicleModel: createClaimDto.vehicleModel,
+        vehicleChassisNumber: createClaimDto.vehicleChassisNumber,
+        vehicleEngineNumber: createClaimDto.vehicleEngineNumber,
+        vehicleYear: createClaimDto.vehicleYear ? Number(createClaimDto.vehicleYear) : null,
         policeReportNumber: createClaimDto.policeReportNumber,
         policeStation: createClaimDto.policeStation,
         policeReportDate: createClaimDto.policeReportDate

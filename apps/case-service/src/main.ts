@@ -1,13 +1,11 @@
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -20,7 +18,7 @@ async function bootstrap() {
     new FastifyAdapter({
       logger: process.env.NODE_ENV !== 'production',
       trustProxy: true,
-    }),
+    })
   );
 
   const configService = app.get(ConfigService);
@@ -34,6 +32,9 @@ async function bootstrap() {
 
   // Compression for responses
   await app.register(compression, { encodings: ['gzip', 'deflate'] });
+
+  // Multipart for file uploads
+  await app.register(multipart);
 
   // API versioning
   app.enableVersioning({
@@ -60,7 +61,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-    }),
+    })
   );
 
   // Global exception filter

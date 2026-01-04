@@ -8,19 +8,19 @@ import {
   ParseUUIDPipe,
   HttpStatus,
   HttpCode,
+  UseGuards,
+  Req,
+  BadRequestException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { TenantGuard } from '../common/guards/tenant.guard';
 
 @ApiTags('documents')
 @ApiBearerAuth()
+@UseGuards(InternalAuthGuard, TenantGuard)
 @Controller('claims/:claimId/documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
@@ -34,9 +34,24 @@ export class DocumentsController {
   })
   async create(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Body() createDocumentDto: CreateDocumentDto,
+    @Body() createDocumentDto: CreateDocumentDto
   ) {
     return this.documentsService.create(claimId, createDocumentDto);
+  }
+
+  @Post('upload')
+  @ApiOperation({ summary: 'Upload a document file' })
+  @ApiParam({ name: 'claimId', description: 'Claim UUID' })
+  async upload(@Param('claimId', ParseUUIDPipe) claimId: string, @Req() req: any) {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Extract additional fields from form data if needed
+    const type = file.fields?.type?.value || 'OTHER';
+
+    return this.documentsService.upload(claimId, file, type);
   }
 
   @Get()
@@ -60,7 +75,7 @@ export class DocumentsController {
   })
   async findOne(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string
   ) {
     return this.documentsService.findOne(claimId, id);
   }
@@ -75,7 +90,7 @@ export class DocumentsController {
   })
   async getDownloadUrl(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string
   ) {
     return this.documentsService.getDownloadUrl(claimId, id);
   }
@@ -91,7 +106,7 @@ export class DocumentsController {
   })
   async remove(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string
   ) {
     return this.documentsService.remove(claimId, id);
   }
