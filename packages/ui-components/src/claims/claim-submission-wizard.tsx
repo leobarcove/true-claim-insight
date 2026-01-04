@@ -248,6 +248,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     policeReportNumber: '',
     policeReportDate: new Date().toISOString().split('T')[0],
     policeStation: '',
+    policyNumber: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -325,6 +326,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       case 'mobileNumber':
         if (!value?.trim()) error = 'Mobile number is required';
         break;
+      case 'policyNumber':
+        if (!value?.trim()) error = 'Policy number is required';
+        break;
       case 'vehiclePlate':
         if (!value?.trim()) error = 'Plate number is required';
         break;
@@ -385,6 +389,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         newErrors.nric = 'Invalid NRIC format (e.g. 880101-12-1234)';
 
       if (!formData.mobileNumber.trim()) newErrors.mobileNumber = 'Mobile number is required';
+      if (!formData.policyNumber.trim()) newErrors.policyNumber = 'Policy number is required';
     }
 
     if (currentStep === 2) {
@@ -641,6 +646,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       claimantId: 'Ahmad bin Zulkifli',
       nric: '850512-14-5567',
       mobileNumber: '+60123456789',
+      policyNumber: 'POL-2026-991234',
       vehiclePlate: 'WQX 9988',
       vehicleMake: 'Proton',
       vehicleModel: 'X50',
@@ -943,6 +949,14 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   onBlur={() => handleBlur('mobileNumber')}
                 />
               </div>
+              <Input
+                label="Policy Number"
+                placeholder="e.g. POL-2025-001234"
+                value={formData.policyNumber}
+                error={errors.policyNumber}
+                onChange={(e: any) => setFormData({ ...formData, policyNumber: e.target.value })}
+                onBlur={() => handleBlur('policyNumber')}
+              />
             </div>
           </div>
         )}
@@ -1416,6 +1430,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 <div className="text-right">
                   <p className="text-sm font-bold text-gray-900">{formData.claimantId || 'Self'}</p>
                   <p className="text-xs text-gray-400">{formData.nric}</p>
+                  <p className="text-[10px] text-gray-400">Policy: {formData.policyNumber}</p>
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">

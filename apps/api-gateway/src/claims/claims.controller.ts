@@ -6,6 +6,7 @@ import {
   Body,
   Param,
   Req,
+  Delete,
   UseGuards,
   HttpException,
   HttpStatus,
@@ -265,6 +266,105 @@ export class ClaimsController {
         catchError(e => {
           throw new HttpException(
             e.response?.data || 'Failed to add note',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  // Document Endpoints
+  @Post(':id/documents')
+  @ApiOperation({ summary: 'Add a document to a claim' })
+  addDocument(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+    };
+
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/${id}/documents`, body, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to add document',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Post(':id/documents/upload')
+  @ApiOperation({ summary: 'Upload a document file' })
+  async uploadDocument(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+      'Content-Type': req.headers['content-type'],
+    };
+
+    // Forward the multipart request as a stream
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/${id}/documents/upload`, req.raw, {
+        headers,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to upload document',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get(':id/documents')
+  @ApiOperation({ summary: 'Get documents for a claim' })
+  getDocuments(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+    };
+
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/documents`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch documents',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Delete(':id/documents/:docId')
+  @ApiOperation({ summary: 'Delete a document' })
+  deleteDocument(@Param('id') id: string, @Param('docId') docId: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+    };
+
+    return this.httpService
+      .delete(`${this.caseServiceUrl}/api/v1/claims/${id}/documents/${docId}`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to delete document',
             e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
           );
         })

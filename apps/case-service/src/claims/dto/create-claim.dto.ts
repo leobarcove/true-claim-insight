@@ -89,6 +89,15 @@ export class CreateClaimDto {
   @IsOptional()
   vehicleChassisNumber?: string;
 
+  @ApiPropertyOptional({ example: 'ENG123456' })
+  @IsString()
+  @IsOptional()
+  vehicleEngineNumber?: string;
+
+  @ApiPropertyOptional({ example: 2025 })
+  @IsOptional()
+  vehicleYear?: number;
+
   @ApiPropertyOptional({ example: 0.55 })
   @IsOptional()
   ncdRate?: number;

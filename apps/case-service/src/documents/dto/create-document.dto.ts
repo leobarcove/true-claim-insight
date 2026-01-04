@@ -36,4 +36,8 @@ export class CreateDocumentDto {
   @Min(0)
   @IsOptional()
   fileSize?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  metadata?: any;
 }

@@ -1,10 +1,39 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { StorageService } from '../common/services/storage.service';
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DocumentsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService
+  ) {}
+
+  /**
+   * Upload and create a document
+   */
+  async upload(claimId: string, file: any, type: string) {
+    const buffer = await file.toBuffer();
+    const storagePath = await this.storageService.uploadFile(
+      buffer,
+      file.filename,
+      file.mimetype,
+      `claims/${claimId}`
+    );
+
+    const signedUrl = await this.storageService.getSignedUrl(storagePath);
+    return this.create(claimId, {
+      type: type as any,
+      filename: file.filename,
+      storageUrl: signedUrl,
+      mimeType: file.mimetype,
+      fileSize: buffer.length,
+      metadata: { storagePath },
+    });
+  }
 
   /**
    * Add a document to a claim
@@ -27,6 +56,7 @@ export class DocumentsService {
         storageUrl: createDocumentDto.storageUrl,
         mimeType: createDocumentDto.mimeType,
         fileSize: createDocumentDto.fileSize,
+        metadata: createDocumentDto.metadata || {},
       },
     });
 
@@ -92,15 +122,23 @@ export class DocumentsService {
    */
   async getDownloadUrl(claimId: string, id: string) {
     const document = await this.findOne(claimId, id);
+    const storagePath = (document.metadata as any)?.storagePath;
+    let downloadUrl = document.storageUrl;
 
-    // In production, generate a presigned S3 URL
-    // For now, return the storage URL
+    if (storagePath) {
+      try {
+        downloadUrl = await this.storageService.getSignedUrl(storagePath);
+      } catch (error: any) {
+        this.logger.error(`Failed to refresh signed URL: ${error.message}`);
+      }
+    }
+
     const expiresIn = 3600; // 1 hour
 
     return {
       documentId: document.id,
       filename: document.filename,
-      downloadUrl: document.storageUrl,
+      downloadUrl,
       expiresIn,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
     };

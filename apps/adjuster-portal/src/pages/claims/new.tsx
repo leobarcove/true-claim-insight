@@ -32,12 +32,39 @@ export function NewClaimPage() {
         description: data.description || 'Claim submitted via AI Import',
         claimantId: 'demo-claimant-id', // Using actual claimant UUID from the database seed
         tenantId: user?.tenantId || 'allianz-id', // Use current user's tenant or fallback to seed
-        policyNumber: data.vehiclePlate || '',
+        policyNumber: data.policyNumber || '',
+        vehiclePlateNumber: data.vehiclePlate || '',
+        vehicleMake: data.vehicleMake || '',
+        vehicleModel: data.vehicleModel || '',
+        vehicleYear: data.vehicleYear ? parseInt(data.vehicleYear) : undefined,
+        vehicleChassisNumber: data.chassisNo || '',
+        vehicleEngineNumber: data.engineNo || '',
+        policeReportNumber: data.policeReportNumber || '',
+        policeReportDate: data.policeReportDate || '',
+        policeStation: data.policeStation || '',
+        isPdpaCompliant: true, // Default to true for agent manual entry
       };
 
       console.log('Submitting claim payload:', payload);
 
-      await apiClient.post('/claims', payload);
+      const response = await apiClient.post('/claims', payload);
+      const claim = response.data.data;
+
+      // Handle document/photo uploads if any
+      if (data.photos && data.photos.length > 0) {
+        console.log(`Uploading ${data.photos.length} photos for claim ${claim.id}`);
+        for (const photo of data.photos) {
+          const formData = new FormData();
+          formData.append('type', 'DAMAGE_PHOTO'); // Append fields before files
+          formData.append('file', photo);
+          await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+        }
+      }
+
       toast({
         title: 'Success',
         description: `Claim created successfully!`,

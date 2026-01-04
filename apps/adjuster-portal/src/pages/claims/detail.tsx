@@ -142,7 +142,7 @@ export function ClaimDetailPage() {
     <div className="flex flex-col h-full">
       <Header
         title={claim.claimNumber}
-        description={`${claim.claimantId} • ${claim.claimType.replace('_', ' ')}`}
+        description={`${claim.claimant?.fullName || claim.claimantId} • ${claim.claimType.replace(/_/g, ' ')}`}
       >
         <div className="flex items-center gap-3">
           <Link to="/claims">
@@ -480,11 +480,15 @@ export function ClaimDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Chassis No:</span>
-                  <span className="font-medium">{claim.vehicleChassisNumber || 'N/A'}</span>
+                  <span className="font-medium text-uppercase">
+                    {claim.vehicleChassisNumber || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Engine No:</span>
-                  <span className="font-medium">{claim.vehicleEngineNumber || 'N/A'}</span>
+                  <span className="font-medium text-uppercase">
+                    {claim.vehicleEngineNumber || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Make/Model:</span>

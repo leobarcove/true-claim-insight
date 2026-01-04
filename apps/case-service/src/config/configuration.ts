@@ -26,7 +26,11 @@ export default () => ({
       recordingsBucket: process.env.S3_BUCKET_RECORDINGS || 'tci-recordings',
     },
   },
-
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    bucketName: process.env.SUPABASE_BUCKET_NAME,
+  },
   cors: {
     origins: process.env.CORS_ORIGINS || '*',
   },
