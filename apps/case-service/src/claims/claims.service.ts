@@ -443,10 +443,10 @@ export class ClaimsService {
    */
   private validateStatusTransition(currentStatus: string, newStatus: string) {
     const validTransitions: Record<string, string[]> = {
-      SUBMITTED: ['ASSIGNED', 'CLOSED'],
-      ASSIGNED: ['SCHEDULED', 'CLOSED'],
-      SCHEDULED: ['IN_ASSESSMENT', 'CANCELLED', 'CLOSED'],
-      IN_ASSESSMENT: ['REPORT_PENDING', 'ESCALATED_SIU', 'CLOSED'],
+      SUBMITTED: ['ASSIGNED', 'CLOSED', 'APPROVED', 'REJECTED'],
+      ASSIGNED: ['SCHEDULED', 'CLOSED', 'APPROVED', 'REJECTED'],
+      SCHEDULED: ['IN_ASSESSMENT', 'CANCELLED', 'CLOSED', 'APPROVED', 'REJECTED'],
+      IN_ASSESSMENT: ['REPORT_PENDING', 'ESCALATED_SIU', 'CLOSED', 'APPROVED', 'REJECTED'],
       REPORT_PENDING: ['APPROVED', 'REJECTED', 'ESCALATED_SIU'],
       APPROVED: ['CLOSED'],
       REJECTED: ['CLOSED'],

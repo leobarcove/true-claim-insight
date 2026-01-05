@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw, HelpCircle } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -107,7 +107,7 @@ const RiskAssessmentCard = memo(({ title, data, type }: RiskAssessmentCardProps)
   }, [type, raw?.top_emotions]);
 
   return (
-    <div className="p-3 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
+    <div className="p-2 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -528,7 +528,7 @@ export function VideoCallPage() {
   return (
     <div className="flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Video Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900/50">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -540,7 +540,7 @@ export function VideoCallPage() {
             Back
           </Button>
           <div>
-            <h1 className="text-lg font-semibold text-white">
+            <h1 className="text-md font-semibold text-white">
               Video Assessment: {session?.claimId || 'Loading...'}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
@@ -559,13 +559,13 @@ export function VideoCallPage() {
           <Button
             variant="outline"
             size="sm"
-            className="bg-slate-800 border-slate-700 text-slate-300"
+            className="bg-slate-800 border-slate-700 text-slate-300 text-xs"
             onClick={() => playerRef.current?.requestFullscreen()}
           >
             <Maximize2 className="h-4 w-4 mr-2" />
             Fullscreen
           </Button>
-          <Button variant="destructive" size="sm" onClick={handleEndCall}>
+          <Button variant="destructive" size="sm" onClick={handleEndCall} className="text-xs">
             <XCircle className="h-4 w-4 mr-2" />
             End Assessment
           </Button>
@@ -574,7 +574,7 @@ export function VideoCallPage() {
 
       {/* Main Video Area */}
       <div className="flex-1 p-4 flex gap-4 overflow-hidden">
-        {/* Remote/Main Video */}
+        {/* Left Column: Remote/Main Video */}
         <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
           <DailyVideoPlayer
             key={`daily-${joinData.url}`}
@@ -591,238 +591,277 @@ export function VideoCallPage() {
           />
         </div>
 
-        {/* Sidebar Info/Tools */}
-        <div className="w-80 flex flex-col gap-4">
-          <Card className="bg-slate-900 border-slate-800 p-4">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">
+        {/* Right Sidebar */}
+        <div className="flex flex-col gap-4 w-128">
+          {/* Session Info */}
+          <Card className="bg-slate-900 border-slate-800 p-2 shrink-0">
+            <h3 className="text-xs font-semibold text-slate-200 mb-2 uppercase tracking-wider">
               Session Info
             </h3>
-            <div className="space-y-3">
+            <div className="flex items-center gap-8">
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Claim ID</p>
+                <p className="text-xs text-slate-300">
+                  {isClaimLoading ? 'Loading...' : claim?.id || 'N/A'}
+                </p>
+              </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
-                <p className="text-sm text-slate-300">
+                <p className="text-xs text-slate-300">
                   {isClaimLoading ? 'Loading...' : claim?.claimant?.fullName || 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Location</p>
-                <p className="text-sm text-slate-300 truncate">
-                  {isClaimLoading ? 'Loading...' : claim?.incidentLocation?.address || 'N/A'}
-                </p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Policy Number</p>
+                <p className="text-xs text-slate-300">{claim?.policyNumber || 'N/A'}</p>
               </div>
             </div>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-                Deception Score
-              </h3>
-              <div className="flex items-center gap-2">
-                {/* Metrics Toggle */}
-                <div className="flex items-center gap-2 mr-2">
-                  <Switch
-                    checked={analysisMode !== 'off'}
-                    onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
-                    className="scale-75"
-                  />
-                  <span className="text-[10px] text-slate-400 uppercase">
-                    {analysisMode === 'off' ? 'Off' : 'On'}
-                  </span>
+          {/* Analysis Columns */}
+          <div className="flex flex-1 gap-4 min-h-0">
+            {/* Deception Score */}
+            <div className="w-60 flex flex-col">
+              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                      Deception Score
+                    </h3>
+                    {/* Custom Styled Tooltip */}
+                    <div className="group relative flex items-center">
+                      <HelpCircle className="h-3 w-3 text-slate-500 cursor-help" />
+                      <div className="invisible group-hover:visible absolute right-full mr-2 z-50 w-64 p-3 text-[10px] leading-relaxed text-slate-200 bg-slate-900 border border-slate-700 rounded-md shadow-xl whitespace-normal pointer-events-none transition-opacity duration-200 opacity-0 group-hover:opacity-100">
+                        <p className="font-semibold mb-1 text-slate-100">Analysis Info</p>
+                        Metrics are calculated only from claimant footage. Use the toggle to turn
+                        analysis on or off.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={analysisMode !== 'off'}
+                      onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
+                      className="scale-75 origin-right"
+                    />
+                  </div>
                 </div>
-              </div>
+
+                <div className="flex items-end gap-2 mb-4">
+                  <span className="text-md font-bold text-white">
+                    {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+                </div>
+
+                {/* Metrics Graph */}
+                <div className="pt-4 border-t border-slate-800 h-40">
+                  <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics</p>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={metricsHistory}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                      <XAxis dataKey="time" hide />
+                      <YAxis domain={[0, 1]} hide />
+                      <Tooltip
+                        contentStyle={{
+                          fontSize: '9px',
+                          borderColor: '#334155',
+                          backgroundColor: '#1e293b',
+                        }}
+                        itemStyle={{ fontSize: '9px' }}
+                        labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="deception"
+                        name="Deception Score"
+                        stroke="#A855F7"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="voice"
+                        name="Voice Stress"
+                        stroke="#72B0F2"
+                        strokeWidth={1}
+                        dot={false}
+                        strokeOpacity={0.5}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="visual"
+                        name="Visual Behavior"
+                        stroke="#2EE797"
+                        strokeWidth={1}
+                        dot={false}
+                        strokeOpacity={0.5}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="expression"
+                        name="Expression Measurement"
+                        stroke="#E884B6"
+                        strokeWidth={1}
+                        dot={false}
+                        strokeOpacity={0.5}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Progress Bars */}
+                <div className="mt-auto space-y-3">
+                  {[
+                    {
+                      label: 'Deception Score',
+                      value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
+                      color: '#A855F7',
+                    },
+                    {
+                      label: 'Voice Stress',
+                      value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
+                      color: '#72B0F2',
+                    },
+                    {
+                      label: 'Visual Behavior',
+                      value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+                      color: '#2EE797',
+                    },
+                    {
+                      label: 'Expression Measurement',
+                      value: ((deceptionData?.breakdown?.expressionMeasurement || 0) * 100).toFixed(
+                        2
+                      ),
+                      color: '#E884B6',
+                    },
+                  ].map(metric => (
+                    <div key={metric.label} className="mb-2">
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-slate-400">{metric.label}</span>
+                        <span className="text-slate-200 font-mono">{metric.value}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full transition-all duration-500"
+                          style={{
+                            width: `${metric.value}%`,
+                            backgroundColor: metric.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </div>
 
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold text-white">
-                  {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
-                </span>
-                <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
-              </div>
-              {deceptionData?.isHighRisk ? (
-                <Badge variant="outline" className="text-[10px] h-5 border-red-700 text-red-400">
-                  HIGH RISK
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] h-5 border-blue-700 text-blue-400">
-                  NORMAL
-                </Badge>
-              )}
+            {/* Risk Analysis */}
+            <div className="w-60 flex flex-col overflow-hidden">
+              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4 shrink-0">
+                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                    Risk Analysis
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
+                  >
+                    LIVE
+                  </Badge>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                  {(() => {
+                    const latestVoice = isClaimantInRoom
+                      ? assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS')
+                      : undefined;
+
+                    const latestEmotion = isClaimantInRoom
+                      ? assessments?.find(a => (a.rawResponse as any)?.top_emotions)
+                      : undefined;
+
+                    const latestVisual = isClaimantInRoom
+                      ? assessments?.find(
+                          a =>
+                            a.assessmentType === 'ATTENTION_TRACKING' ||
+                            (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
+                            a.provider?.includes('MediaPipe') ||
+                            (a.assessmentType === 'VISUAL_MODERATION' &&
+                              !(a.rawResponse as any)?.top_emotions)
+                        )
+                      : undefined;
+
+                    const sections = [
+                      { id: 'voice', title: 'Voice Stress', data: latestVoice, type: 'voice' },
+                      {
+                        id: 'visual',
+                        title: 'Visual Behavior',
+                        data: latestVisual,
+                        type: 'visual',
+                      },
+                      { id: 'emotion', title: 'Expression', data: latestEmotion, type: 'emotion' },
+                    ];
+
+                    return sections.map(section => (
+                      <RiskAssessmentCard
+                        key={section.id}
+                        title={section.title}
+                        data={section.data}
+                        type={section.type as any}
+                      />
+                    ));
+                  })()}
+                </div>
+
+                {analysisMode === 'manual' && (
+                  <div className="mt-4 pt-4 border-t border-slate-800 space-y-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-[10px] h-8 border-primary/30 text-primary hover:bg-primary/10"
+                      onClick={e => {
+                        e.preventDefault();
+                        triggerVoiceAnalysis(true);
+                      }}
+                    >
+                      <Zap className="h-3 w-3 mr-2" />
+                      Voice Stress
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-[10px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                      onClick={e => {
+                        e.preventDefault();
+                        triggerVisualAnalysis();
+                      }}
+                      disabled={triggerAssessment.isPending}
+                    >
+                      <ShieldCheck className="h-3 w-3 mr-2" />
+                      Visual Behavior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-[10px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                      onClick={e => {
+                        e.preventDefault();
+                        triggerExpressionAnalysis(true);
+                      }}
+                      disabled={analyzeExpression.isPending}
+                    >
+                      <Activity className="h-3 w-3 mr-2" />
+                      Expression
+                    </Button>
+                  </div>
+                )}
+              </Card>
             </div>
-
-            {/* Metrics Graph */}
-            <div className="mt-4 mb-6 pt-4 border-t border-slate-800 h-40">
-              <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics Trend</p>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={metricsHistory}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                  <XAxis dataKey="time" hide />
-                  <YAxis domain={[0, 1]} hide />
-                  <Tooltip
-                    contentStyle={{
-                      fontSize: '10px',
-                      borderColor: '#334155',
-                      backgroundColor: '#1e293b',
-                    }}
-                    itemStyle={{ fontSize: '10px' }}
-                    labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="deception"
-                    name="Deception Score"
-                    stroke="#E96161"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="voice"
-                    name="Voice Stress"
-                    stroke="#72B0F2"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="visual"
-                    name="Visual Behavior"
-                    stroke="#2EE797"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="expression"
-                    name="Expression Measurement"
-                    stroke="#EEA954"
-                    strokeWidth={1}
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-                Risk Analysis
-              </h3>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="text-[10px] h-5 border-emerald-700 text-emerald-400 animate-pulse"
-                >
-                  LIVE
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto space-y-4 min-h-0">
-              {(() => {
-                // Extract latest assessments for each category, but only if claimant is present
-                const latestVoice = isClaimantInRoom
-                  ? assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS')
-                  : undefined;
-
-                const latestEmotion = isClaimantInRoom
-                  ? assessments?.find(a => (a.rawResponse as any)?.top_emotions)
-                  : undefined;
-
-                const latestVisual = isClaimantInRoom
-                  ? assessments?.find(
-                      a =>
-                        a.assessmentType === 'ATTENTION_TRACKING' ||
-                        (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
-                        a.provider?.includes('MediaPipe') ||
-                        (a.assessmentType === 'VISUAL_MODERATION' &&
-                          !(a.rawResponse as any)?.top_emotions)
-                    )
-                  : undefined;
-
-                const sections = [
-                  {
-                    id: 'voice',
-                    title: 'Voice Stress',
-                    data: latestVoice,
-                    type: 'voice',
-                  },
-                  {
-                    id: 'visual',
-                    title: 'Visual Behavior',
-                    data: latestVisual,
-                    type: 'visual',
-                  },
-                  {
-                    id: 'emotion',
-                    title: 'Expression Measurement',
-                    data: latestEmotion,
-                    type: 'emotion',
-                  },
-                ];
-
-                return sections.map(section => (
-                  <RiskAssessmentCard
-                    key={section.id}
-                    title={section.title}
-                    data={section.data}
-                    type={section.type as any}
-                  />
-                ));
-              })()}
-            </div>
-
-            {analysisMode === 'manual' && (
-              <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-[11px] h-8 border-primary/30 text-primary hover:bg-primary/10"
-                  onClick={e => {
-                    e.preventDefault();
-                    triggerVoiceAnalysis(true);
-                  }}
-                >
-                  <Zap className="h-3 w-3 mr-2" />
-                  Analyze Voice Stress
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-[11px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                  onClick={e => {
-                    e.preventDefault();
-                    triggerVisualAnalysis();
-                  }}
-                  disabled={triggerAssessment.isPending}
-                >
-                  <ShieldCheck className="h-3 w-3 mr-2" />
-                  Analyze Visual Behavior
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-[11px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-                  onClick={e => {
-                    e.preventDefault();
-                    triggerExpressionAnalysis(true);
-                  }}
-                  disabled={analyzeExpression.isPending}
-                >
-                  <Activity className="h-3 w-3 mr-2" />
-                  Analyze Expression
-                </Button>
-              </div>
-            )}
-          </Card>
+          </div>
         </div>
       </div>
 

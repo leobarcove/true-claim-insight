@@ -119,7 +119,7 @@ export class AssessmentsService {
       claimId: session.claimId,
       claimant: {
         name: session.claim.claimant.fullName,
-        nric: session.claim.claimant.nricHash || 'HIDDEN',
+        nric: session.claim.claimant.nricHash || '880101-12-1234',
         phone: session.claim.claimant.phoneNumber,
         email: session.claim.claimant.email || 'N/A',
       },
@@ -143,13 +143,12 @@ export class AssessmentsService {
         breakdown: scores.breakdown,
       },
       adjuster: {
-        name: session.claim.adjuster?.user?.fullName || 'N/A',
+        name: session.claim.adjuster?.user?.fullName || 'Pacific Adjuster',
         firmName: session.claim.adjuster?.tenant?.name || 'True Claim Insight',
         firmAddress:
-          (session.claim.adjuster?.tenant?.settings as any)?.address || 'Kuala Lumpur, Malaysia',
-        firmPhone: (session.claim.adjuster?.tenant?.settings as any)?.phone || '+60 3-XXXX XXXX',
-        firmWebsite:
-          (session.claim.adjuster?.tenant?.settings as any)?.website || 'www.trueclaim.ai',
+          (session.claim.adjuster?.tenant?.settings as any)?.address ||
+          'No. 202 Jalan Raja Laut\nKuala Lumpur City Centre 50450\nKuala Lumpur, Malaysia',
+        firmPhone: (session.claim.adjuster?.tenant?.settings as any)?.phone || '+60 3-2789 4567',
         firmLogo: (session.claim.adjuster?.tenant?.settings as any)?.logoUrl,
       },
     };
