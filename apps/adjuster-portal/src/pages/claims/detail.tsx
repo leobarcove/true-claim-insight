@@ -458,10 +458,6 @@ export function ClaimDetailPage() {
                   <XCircle className="h-4 w-4 mr-2" />
                   Reject Claim
                 </Button>
-                <Button variant="outline" className="w-full">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Request Documents
-                </Button>
               </CardContent>
             </Card>
 
