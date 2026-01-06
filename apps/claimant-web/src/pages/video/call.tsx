@@ -1,7 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
-import { useJoinVideoRoom, useAnalyzeExpression } from '@/hooks/use-video';
+import {
+  useJoinVideoRoom,
+  useAnalyzeExpression,
+  useAnalyzeVisualBehavior,
+} from '@/hooks/use-video';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { XCircle, Loader2, RefreshCw, ArrowLeft, Mic } from 'lucide-react';
@@ -21,6 +25,7 @@ export function ClaimantVideoCallPage() {
 
   const joinRoom = useJoinVideoRoom();
   const analyzeExpression = useAnalyzeExpression();
+  const analyzeVisualBehavior = useAnalyzeVisualBehavior();
   const {
     startRecording: startAudioRecording,
     stopRecording: stopAudioRecording,
@@ -152,8 +157,24 @@ export function ClaimantVideoCallPage() {
           console.error('[VideoCallPage] Error during signal-driven expression analysis:', err);
         }
       }
+
+      if (e?.data?.type === 'request-visual-analysis') {
+        console.log('[VideoCallPage] Triggering visual behavior analysis from signal');
+        try {
+          const blob = await getVideoBlob();
+          if (blob && blob.size > 0) {
+            await analyzeVisualBehavior.mutateAsync({
+              sessionId: sessionId || '',
+              videoBlob: blob,
+            });
+            console.log('[VideoCallPage] Visual analysis uploaded (signal-driven)');
+          }
+        } catch (err) {
+          console.error('[VideoCallPage] Error during signal-driven visual analysis:', err);
+        }
+      }
     },
-    [handleUploadAudio, sessionId, analyzeExpression, getVideoBlob]
+    [handleUploadAudio, sessionId, analyzeExpression, analyzeVisualBehavior, getVideoBlob]
   );
 
   if (error) {

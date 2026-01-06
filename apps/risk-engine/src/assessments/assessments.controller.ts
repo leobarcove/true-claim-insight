@@ -166,6 +166,52 @@ export class AssessmentsController {
     return this.assessmentsService.processUploadedExpression(videoBuffer, sessionId as string);
   }
 
+  @Post('analyze-video')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        sessionId: { type: 'string' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Analyze visual behavior from video buffer' })
+  async analyzeVideo(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new BadRequestException('Request is not multipart');
+    }
+
+    let videoBuffer: Buffer | null = null;
+    let sessionId: string | null = null;
+
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname === 'file') {
+          videoBuffer = await part.toBuffer();
+        } else {
+          await part.toBuffer();
+        }
+      } else {
+        if (part.fieldname === 'sessionId') {
+          sessionId = part.value as string;
+        }
+      }
+    }
+
+    if (!videoBuffer) {
+      throw new BadRequestException('No video file uploaded');
+    }
+
+    if (!sessionId) {
+      const query = req.query as any;
+      sessionId = query.sessionId || 'unknown';
+    }
+
+    return this.assessmentsService.processUploadedVideo(videoBuffer, sessionId as string);
+  }
+
   @Get('analyzer-health')
   // ...
   @ApiOperation({ summary: 'Check if Python analyzer service is healthy' })

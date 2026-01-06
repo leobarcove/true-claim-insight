@@ -13,9 +13,18 @@ import mediapipe as mp
 import numpy as np
 from typing import Dict, Any, Tuple
 
-
-# MediaPipe Face Mesh
-mp_face_mesh = mp.solutions.face_mesh
+# MediaPipe Initialization with Robust Import
+mp_face_mesh = None
+try:
+    if hasattr(mp, "solutions"):
+        mp_face_mesh = mp.solutions.face_mesh
+    else:
+        # Fallback for environments where mp.solutions is not auto-loaded
+        import mediapipe.python.solutions.face_mesh
+        mp_face_mesh = mediapipe.python.solutions.face_mesh
+except (ImportError, AttributeError) as e:
+    print(f"ERROR: MediaPipe Solutions (FaceMesh) import failed: {e}")
+    mp_face_mesh = None
 
 # Eye landmarks for EAR calculation (Right and Left eyes)
 # See: https://google.github.io/mediapipe/solutions/face_mesh.html
@@ -92,9 +101,57 @@ def analyze_video(video_path: str) -> Dict[str, Any]:
         raise ValueError(f"Could not open video: {video_path}")
     
     fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration_seconds = total_frames / fps if fps > 0 else 0
+    total_frames_raw = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    metadata_valid = True
+
+    try:
+        total_frames = int(total_frames_raw)
+        if total_frames < 0 or total_frames > 100000:  # Max 100k frames (~1 hr at 30fps)
+            metadata_valid = False
+            total_frames = 0
+    except (ValueError, OverflowError):
+        metadata_valid = False
+        total_frames = 0
     
+    # Validate FPS - many webcams report 0 or garbage in webm
+    if fps <= 0 or fps > 240:
+        print(f"WARNING: Invalid FPS from metadata ({fps}). Defaulting to 30.0")
+        fps = 30.0
+    
+    duration_seconds = total_frames / fps if (metadata_valid and total_frames > 0) else 0.0
+    cap.release()
+
+
+    EAR_THRESHOLD = 0.21
+
+    # If MediaPipe is unavailable, return empty/error result as requested
+    if mp_face_mesh is None:
+        print("ERROR: MediaPipe unavailable. Returning empty analysis.")
+        return {
+            "blink_count": 0,
+            "blink_rate_per_min": 0,
+            "avg_blink_duration_ms": 0,
+            "avg_lip_tension": 0,
+            "avg_ear": 0,
+            "duration_s": round(duration_seconds, 2),
+            "frames_analyzed": 0,
+            "analysis_type": "error_mediapipe_unavailable"
+        }
+
+    # REAL ANALYSIS
+    cap = cv2.VideoCapture(video_path) # Re-open
+    
+    # Skip length check if metadata is missing/suspicious, we'll check after processing
+    if metadata_valid and (total_frames < 5 or duration_seconds < 0.5):
+        print(f"WARNING: Video too short for analysis ({duration_seconds}s).")
+        cap.release()
+        return {
+             "blink_count": 0, "blink_rate_per_min": 0, "avg_blink_duration_ms": 0,
+             "avg_lip_tension": 0, "avg_ear": 0, "duration_s": round(duration_seconds, 2), 
+             "frames_analyzed": 0,
+             "analysis_type": "error_video_too_short"
+        }
+
     blink_count = 0
     blink_durations = []
     lip_tensions = []
@@ -102,61 +159,70 @@ def analyze_video(video_path: str) -> Dict[str, Any]:
     
     in_blink = False
     blink_start_frame = 0
-    EAR_THRESHOLD = 0.21  # Below this = blink
     
-    with mp_face_mesh.FaceMesh(
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
-    ) as face_mesh:
+    try:
+        with mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        ) as face_mesh:
+            
+            frame_count = 0
+            while cap.isOpened():
+                success, frame = cap.read()
+                if not success:
+                    break
+                
+                frame_count += 1
+                
+                # Process every 3rd frame for performance
+                if frame_count % 3 != 0:
+                    continue
+                
+                # Convert to RGB
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(rgb_frame)
+                
+                if results and results.multi_face_landmarks:
+                    # Get landmarks for the first face detected
+                    face_landmarks = results.multi_face_landmarks[0]
+                    landmarks = face_landmarks.landmark
+                    
+                    if landmarks:
+                        # Calculate EAR for both eyes
+                        left_ear = calculate_ear(landmarks, LEFT_EYE_INDICES)
+                        right_ear = calculate_ear(landmarks, RIGHT_EYE_INDICES)
+                        avg_ear = (left_ear + right_ear) / 2
+                        ear_values.append(avg_ear)
+                        
+                        # Blink detection
+                        if avg_ear < EAR_THRESHOLD:
+                            if not in_blink:
+                                in_blink = True
+                                blink_start_frame = frame_count
+                        else:
+                            if in_blink:
+                                in_blink = False
+                                blink_count += 1
+                                blink_duration_frames = frame_count - blink_start_frame
+                                blink_duration_ms = (blink_duration_frames / fps) * 1000 if fps > 0 else 0
+                                blink_durations.append(blink_duration_ms)
+                        
+                        # Lip tension
+                        tension = calculate_lip_tension(landmarks)
+                        lip_tensions.append(tension)
+
+    except Exception as e:
+        print(f"ERROR during FaceMesh processing: {e}")
+    finally:
+        cap.release()
+    
+    # Calculate final metrics using actual frame count if metadata was missing
+    if frame_count > 0:
+        duration_seconds = frame_count / fps
         
-        frame_count = 0
-        while cap.isOpened():
-            success, frame = cap.read()
-            if not success:
-                break
-            
-            frame_count += 1
-            
-            # Process every 3rd frame for performance
-            if frame_count % 3 != 0:
-                continue
-            
-            # Convert to RGB
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = face_mesh.process(rgb_frame)
-            
-            if results.multi_face_landmarks:
-                landmarks = results.multi_face_landmarks[0].landmark
-                
-                # Calculate EAR for both eyes
-                left_ear = calculate_ear(landmarks, LEFT_EYE_INDICES)
-                right_ear = calculate_ear(landmarks, RIGHT_EYE_INDICES)
-                avg_ear = (left_ear + right_ear) / 2
-                ear_values.append(avg_ear)
-                
-                # Blink detection
-                if avg_ear < EAR_THRESHOLD:
-                    if not in_blink:
-                        in_blink = True
-                        blink_start_frame = frame_count
-                else:
-                    if in_blink:
-                        in_blink = False
-                        blink_count += 1
-                        blink_duration_frames = frame_count - blink_start_frame
-                        blink_duration_ms = (blink_duration_frames / fps) * 1000 if fps > 0 else 0
-                        blink_durations.append(blink_duration_ms)
-                
-                # Lip tension
-                tension = calculate_lip_tension(landmarks)
-                lip_tensions.append(tension)
-    
-    cap.release()
-    
-    # Calculate metrics
-    duration_minutes = duration_seconds / 60 if duration_seconds > 0 else 1
+    duration_minutes = duration_seconds / 60 if duration_seconds > 0 else 1.0/60.0
     blink_rate = blink_count / duration_minutes  # blinks per minute
     
     avg_blink_duration = float(np.mean(blink_durations)) if blink_durations else 0.0
@@ -171,4 +237,5 @@ def analyze_video(video_path: str) -> Dict[str, Any]:
         "avg_ear": round(avg_ear, 4),
         "duration_s": round(duration_seconds, 2),
         "frames_analyzed": frame_count // 3,
+        "analysis_type": "real_mediapipe"
     }

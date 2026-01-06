@@ -283,8 +283,9 @@ async def analyze_with_hume(file_path: str, session_id: str = "default"):
 async def analyze_video_endpoint(
     file: UploadFile = File(...),
     baseline_blink_rate: float = 17.0,
-    baseline_lip_tension: float = 1.0,
+    baseline_lip_tension: float = 0.45,
 ):
+
     """Analyze video file for visual risk indicators (Blink Rate, Lip Tension)."""
     if not file.filename.endswith(('.mp4', '.webm', '.mov')):
         raise HTTPException(status_code=400, detail="Unsupported video format")
