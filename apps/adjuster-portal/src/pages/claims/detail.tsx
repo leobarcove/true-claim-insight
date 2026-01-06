@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -18,7 +18,11 @@ import {
   Image,
   User,
   Eye,
+  Activity,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +38,18 @@ import {
   downloadFile,
 } from '@/lib/utils';
 import { useClaim, useUpdateClaimStatus } from '@/hooks/use-claims';
-import { useCreateVideoRoom } from '@/hooks/use-video';
+import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
+import { useMemo } from 'react';
 
 const statusConfig: Record<
   string,
@@ -54,6 +68,172 @@ const statusConfig: Record<
   CLOSED: { label: 'Closed', variant: 'secondary' },
 };
 
+const SessionChart = ({ sessionId, assessments }: { sessionId: string; assessments: any[] }) => {
+  const { data: deception, isLoading: isDeceptionLoading } = useSessionDeceptionScore(sessionId);
+
+  const chartData = useMemo(() => {
+    if (!assessments || assessments.length === 0) return [];
+
+    // Group assessments by creation time period (e.g., 5-second buckets)
+    // to build a chronological timeline of the session metrics
+    const sorted = [...assessments].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    // Filter to only those with scores and map to timeline points
+    // We group by timestamps that are close to each other
+    const timeline: any[] = [];
+    let currentPoint: any = null;
+
+    sorted.forEach(a => {
+      const timeStr = new Date(a.createdAt).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      if (!currentPoint || currentPoint.time !== timeStr) {
+        if (currentPoint) timeline.push(currentPoint);
+        currentPoint = { time: timeStr, deception: 0, voice: 0, visual: 0, expression: 0 };
+      }
+
+      const score = a.riskScore === 'HIGH' ? 80 : a.riskScore === 'MEDIUM' ? 50 : 20;
+
+      if (a.assessmentType === 'VOICE_ANALYSIS') currentPoint.voice = score;
+      if (a.assessmentType === 'ATTENTION_TRACKING' || a.provider.includes('MediaPipe'))
+        currentPoint.visual = score;
+      if (a.provider.includes('HumeAI')) currentPoint.expression = score;
+
+      // Weighted aggregate for the timeline deception score
+      currentPoint.deception =
+        (currentPoint.voice + currentPoint.visual + currentPoint.expression) / 3;
+    });
+
+    if (currentPoint) timeline.push(currentPoint);
+    return timeline;
+  }, [assessments]);
+
+  if (isDeceptionLoading && !deception) {
+    return (
+      <div className="h-40 flex items-center justify-center text-xs text-slate-500">
+        Loading metrics...
+      </div>
+    );
+  }
+
+  if (!assessments || assessments.length === 0) {
+    return (
+      <div className="h-40 flex flex-col items-center justify-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed">
+        <Activity className="h-5 w-5 mb-2 opacity-20" />
+        No risk data captured for this session.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* <div className="grid grid-cols-4 gap-2 mb-4">
+        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
+          <p className="text-[10px] text-slate-500 uppercase font-bold">Deception Score</p>
+          <p className="text-sm font-bold" style={{ color: '#A855F7' }}>
+            {deception?.deceptionScore ? `${(deception.deceptionScore * 100).toFixed(0)}%` : '—'}
+          </p>
+        </div>
+        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
+          <p className="text-[10px] text-slate-500 uppercase font-bold">Voice Stress</p>
+          <p className="text-sm font-semibold" style={{ color: '#72B0F2' }}>
+            {deception?.breakdown?.voiceStress
+              ? `${(deception.breakdown.voiceStress * 100).toFixed(0)}%`
+              : '—'}
+          </p>
+        </div>
+        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
+          <p className="text-[10px] text-slate-500 uppercase font-bold">Visual Behavior</p>
+          <p className="text-sm font-semibold" style={{ color: '#2EE797' }}>
+            {deception?.breakdown?.visualBehavior
+              ? `${(deception.breakdown.visualBehavior * 100).toFixed(0)}%`
+              : '—'}
+          </p>
+        </div>
+        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
+          <p className="text-[10px] text-slate-500 uppercase font-bold">Expression Measurement</p>
+          <p className="text-sm font-semibold" style={{ color: '#E884B6' }}>
+            {deception?.breakdown?.expressionMeasurement
+              ? `${(deception.breakdown.expressionMeasurement * 100).toFixed(0)}%`
+              : '—'}
+          </p>
+        </div>
+      </div> */}
+
+      <div className="h-40 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis
+              dataKey="time"
+              fontSize={9}
+              tickMargin={10}
+              axisLine={false}
+              tickLine={false}
+              hide
+            />
+            <YAxis hide domain={[0, 100]} />
+            <Tooltip
+              formatter={(value: any, name: string) => [`${parseFloat(value).toFixed(2)}%`, name]}
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                fontSize: '10px',
+                color: '#000',
+                textAlign: 'center',
+                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+              }}
+              labelStyle={{ color: '#000', fontWeight: 'bold', marginBottom: '4px' }}
+              itemStyle={{ padding: '0 2px' }}
+            />
+            <Line
+              type="monotone"
+              dataKey="deception"
+              stroke="#A855F7"
+              strokeWidth={2}
+              dot={false}
+              name="Deception Score"
+            />
+            <Line
+              type="monotone"
+              dataKey="voice"
+              stroke="#72B0F2"
+              strokeWidth={1.5}
+              dot={false}
+              strokeOpacity={0.4}
+              name="Voice Stress"
+            />
+            <Line
+              type="monotone"
+              dataKey="visual"
+              stroke="#2EE797"
+              strokeWidth={1.5}
+              dot={false}
+              strokeOpacity={0.4}
+              name="Visual Behavior"
+            />
+            <Line
+              type="monotone"
+              dataKey="expression"
+              stroke="#E884B6"
+              strokeWidth={1.5}
+              dot={false}
+              strokeOpacity={0.4}
+              name="Expression Measurement"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
 export function ClaimDetailPage() {
   const { id: claimId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -64,6 +244,28 @@ export function ClaimDetailPage() {
   const createVideoRoom = useCreateVideoRoom();
   const [magicLink, setMagicLink] = useState<string | null>(null);
   const [isNotifying, setIsNotifying] = useState(false);
+
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+
+  // Initialize expanded sessions with the most recent one
+  useEffect(() => {
+    if (claim?.sessions && claim.sessions.length > 0 && expandedSessions.size === 0) {
+      const sorted = [...claim.sessions].sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setExpandedSessions(new Set([sorted[0].id]));
+    }
+  }, [claim?.sessions]);
+
+  const toggleSession = (id: string) => {
+    const next = new Set(expandedSessions);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setExpandedSessions(next);
+  };
 
   const handleUpdateStatus = async (status: string) => {
     if (!claimId) return;
@@ -409,29 +611,127 @@ export function ClaimDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Timeline (Sessions Analysis) */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Timeline
+                </CardTitle>
+                <span className="text-xs text-muted-foreground">Historical Analysis</span>
+              </CardHeader>
+
+              <CardContent className="space-y-8">
+                {claim.sessions && claim.sessions.length > 0 ? (
+                  [...claim.sessions]
+                    .sort(
+                      (a: any, b: any) =>
+                        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                    )
+                    .map((session: any) => (
+                      <div
+                        key={session.id}
+                        className="space-y-4 border-b pb-8 last:border-0 last:pb-0"
+                      >
+                        <div
+                          className="flex items-center justify-between cursor-pointer group"
+                          onClick={() => toggleSession(session.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                'w-2 h-2 rounded-full',
+                                session.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-blue-500'
+                              )}
+                            />
+                            <h4 className="text-sm font-semibold transition-colors">
+                              Session: {formatDateTime(session.createdAt)}
+                            </h4>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge
+                              variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
+                              className="text-[10px]"
+                            >
+                              {session.status}
+                            </Badge>
+                            {expandedSessions.has(session.id) ? (
+                              <ChevronUp className="h-4 w-4 text-slate-400" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-slate-400" />
+                            )}
+                          </div>
+                        </div>
+
+                        {expandedSessions.has(session.id) && (
+                          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                            <SessionChart
+                              sessionId={session.id}
+                              assessments={session.riskAssessments || []}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <Activity className="h-8 w-8 mb-2 opacity-20" />
+                    <p className="text-sm">No analysis sessions found for this claim.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* SLA Status */}
-            <Card
-              className={cn(
-                'border-l-4',
-                getDaysSince(claim.createdAt) > 7 ? 'border-l-destructive' : 'border-l-success'
-              )}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">SLA Status (BNM)</span>
-                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? 'destructive' : 'success'}>
-                    {getDaysSince(claim.createdAt)} Days Active
-                  </Badge>
+            {/* Video Session button */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Video Session</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Button
+                    className="w-full"
+                    onClick={handleStartVideoAssessment}
+                    disabled={createVideoRoom.isPending || isNotifying}
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    {createVideoRoom.isPending || isNotifying
+                      ? 'Starting...'
+                      : 'Start Video Assessment'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Creates room & notifies claimant via SMS
+                  </p>
+
+                  {/* DEV ONLY: Show Magic Link */}
+                  {magicLink && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">
+                        [DEV ONLY] Magic Link
+                      </p>
+                      <div className="flex gap-2">
+                        <code className="text-[10px] bg-white p-1 rounded border flex-1 break-all">
+                          {magicLink}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => {
+                            navigator.clipboard.writeText(magicLink);
+                            toast({ title: 'Copied to clipboard' });
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {getDaysSince(claim.createdAt) > 7
-                    ? 'SLA breach: Recommended TAT is 7 working days for acknowledgement.'
-                    : 'Within recommended turnaround time.'}
-                </p>
               </CardContent>
             </Card>
 
@@ -458,6 +758,82 @@ export function ClaimDetailPage() {
                   <XCircle className="h-4 w-4 mr-2" />
                   Reject Claim
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* SLA Status */}
+            <Card
+              className={cn(
+                'border-l-4',
+                getDaysSince(claim.createdAt) > 7 ? 'border-l-destructive' : 'border-l-success'
+              )}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">SLA Status (BNM)</span>
+                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? 'destructive' : 'success'}>
+                    {getDaysSince(claim.createdAt)} Days Active
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {getDaysSince(claim.createdAt) > 7
+                    ? 'SLA breach: Recommended TAT is 7 working days for acknowledgement.'
+                    : 'Within recommended turnaround time.'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Claimant Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Claimant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Avatar>
+                    <AvatarFallback>
+                      {getInitials(claim.claimant?.fullName || claim.claimantId)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium text-sm">{claim.claimant?.fullName || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {claim.claimant?.phoneNumber || 'No phone'}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {claim.claimant?.kycStatus === 'VERIFIED' ? (
+                        <Badge variant="success" className="text-[10px] w-fit">
+                          eKYC Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" className="text-[10px] w-fit">
+                          KYC {claim.claimant?.kycStatus || 'PENDING'}
+                        </Badge>
+                      )}
+                      {claim.isPdpaCompliant ? (
+                        <Badge
+                          variant="info"
+                          className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
+                        >
+                          PDPA Consented
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="text-[10px] w-fit">
+                          PDPA PENDING
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {claim.siuInvestigatorId && (
+                  <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-medium text-amber-700">Escalated to SIU</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -523,141 +899,6 @@ export function ClaimDetailPage() {
                   <span className="text-muted-foreground">Station:</span>
                   <span className="font-medium">{claim.policeStation || 'Not provided'}</span>
                 </div>
-              </CardContent>
-            </Card>
-            {/* Claimant Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Claimant
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback>
-                      {getInitials(claim.claimant?.fullName || claim.claimantId)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium text-sm">{claim.claimant?.fullName || 'Unknown'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {claim.claimant?.phoneNumber || 'No phone'}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {claim.claimant?.kycStatus === 'VERIFIED' ? (
-                        <Badge variant="success" className="text-[10px] w-fit">
-                          eKYC Verified
-                        </Badge>
-                      ) : (
-                        <Badge variant="warning" className="text-[10px] w-fit">
-                          KYC {claim.claimant?.kycStatus || 'PENDING'}
-                        </Badge>
-                      )}
-                      {claim.isPdpaCompliant ? (
-                        <Badge
-                          variant="info"
-                          className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
-                        >
-                          PDPA Consented
-                        </Badge>
-                      ) : (
-                        <Badge variant="destructive" className="text-[10px] w-fit">
-                          PDPA PENDING
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {claim.siuInvestigatorId && (
-                  <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <span className="text-xs font-medium text-amber-700">Escalated to SIU</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Video Session button */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Video Session</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Button
-                    className="w-full"
-                    onClick={handleStartVideoAssessment}
-                    disabled={createVideoRoom.isPending || isNotifying}
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    {createVideoRoom.isPending || isNotifying
-                      ? 'Starting...'
-                      : 'Start Video Assessment'}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Creates room & notifies claimant via SMS
-                  </p>
-
-                  {/* DEV ONLY: Show Magic Link */}
-                  {magicLink && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
-                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">
-                        [DEV ONLY] Magic Link
-                      </p>
-                      <div className="flex gap-2">
-                        <code className="text-[10px] bg-white p-1 rounded border flex-1 break-all">
-                          {magicLink}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-[10px]"
-                          onClick={() => {
-                            navigator.clipboard.writeText(magicLink);
-                            toast({ title: 'Copied to clipboard' });
-                          }}
-                        >
-                          Copy
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Timeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {claim.sessions && claim.sessions.length > 0 ? (
-                  <div className="space-y-3">
-                    {claim.sessions.map((session: any) => (
-                      <div key={session.id} className="flex items-start gap-3">
-                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
-                        <div>
-                          <p className="text-xs font-medium">Video Session - {session.status}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {session.scheduledTime
-                              ? formatDate(session.scheduledTime)
-                              : formatDate(session.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center p-4 text-muted-foreground text-center">
-                    <p className="text-xs">No timeline events yet.</p>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>
