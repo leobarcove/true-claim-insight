@@ -210,7 +210,7 @@ class HumeAnalyzer:
         
         # Calculate risk indicators
         high_risk_emotions = ['Anger', 'Fear', 'Anxiety', 'Distress', 'Contempt', 'Disgust']
-        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions)
+        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions if avg_emotions.get(e, 0) >= 0.15)
         
         return {
             "provider": f"HumeAI-Stream-{primary_model.capitalize()}",
@@ -272,7 +272,7 @@ class HumeAnalyzer:
         
         # Calculate risk indicators
         high_risk_emotions = ['Anger', 'Fear', 'Anxiety', 'Distress', 'Contempt', 'Disgust']
-        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions)
+        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions if avg_emotions.get(e, 0) >= 0.15)
         
         return {
             "provider": "HumeAI-Prosody",
@@ -336,7 +336,7 @@ class HumeAnalyzer:
         
         # Calculate risk indicators
         high_risk_emotions = ['Anger', 'Fear', 'Anxiety', 'Distress', 'Contempt', 'Disgust']
-        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions)
+        risk_sum = sum(avg_emotions.get(e, 0) for e in high_risk_emotions if avg_emotions.get(e, 0) >= 0.15)
         
         return {
             "provider": "HumeAI-Face",
@@ -363,16 +363,18 @@ def calculate_hume_risk_score(metrics: Dict[str, Any]) -> Tuple[str, float]:
     risk_sum = metrics.get("risk_emotion_sum", 0)
     emotion_count = metrics.get("emotion_count", 1)
     
-    # Confidence based on number of emotions detected
-    confidence = min(0.95, 0.5 + (emotion_count / 100))
+    # Confidence based on number of emotions Detected with significance
+    significant_emotions = sum(1 for s in metrics.get("all_emotions", {}).values() if s > 0.1)
+    confidence = min(0.95, 0.4 + (significant_emotions / 50))
     
-    # Risk score thresholds
-    if risk_sum > config.HIGH_RISK_EMOTION_THRESHOLD:
+    # Risk score thresholds (MEDIUM=0.4, HIGH=0.7)
+    if risk_sum >= config.HIGH_RISK_EMOTION_THRESHOLD:
         return "HIGH", confidence
-    elif risk_sum > config.MEDIUM_RISK_EMOTION_THRESHOLD:
+    elif risk_sum >= config.MEDIUM_RISK_EMOTION_THRESHOLD:
         return "MEDIUM", confidence
     else:
         return "LOW", confidence
+
 
 
 # Synchronous wrapper for FastAPI

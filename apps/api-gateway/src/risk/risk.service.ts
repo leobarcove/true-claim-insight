@@ -72,6 +72,24 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
+  async analyzeVideo(fileBuffer: Buffer, sessionId: string) {
+    const form = new FormData();
+    const blob = new Blob([fileBuffer], { type: 'video/webm' });
+    form.append('file', blob, 'visual-behavior.webm');
+    form.append('sessionId', sessionId);
+
+    this.logger.log(
+      `Proxying visual analysis for session ${sessionId}, size: ${fileBuffer.length}`
+    );
+
+    const response = await fetch(`${this.baseUrl}/assessments/analyze-video`, {
+      method: 'POST',
+      body: form,
+    });
+
+    return this.handleResponse(response);
+  }
+
   async generateConsentForm(sessionId: string) {
     const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}/consent-form`, {
       method: 'POST',

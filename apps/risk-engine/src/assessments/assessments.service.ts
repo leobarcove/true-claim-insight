@@ -3,7 +3,14 @@ import { PrismaService } from '../config/prisma.service';
 import { RiskAssessment, AssessmentType, RiskScore, DocumentType } from '@prisma/client';
 import { RiskAnalyzerClient } from '../providers/risk-analyzer.client';
 import * as fs from 'fs';
+
 import * as path from 'path';
+import * as os from 'os';
+import * as util from 'util';
+import { exec } from 'child_process';
+const ffmpegPath = require('ffmpeg-static');
+
+const execAsync = util.promisify(exec);
 
 @Injectable()
 export class AssessmentsService {
@@ -59,13 +66,10 @@ export class AssessmentsService {
     const latestVisual = assessments.find(
       a =>
         a.assessmentType === AssessmentType.ATTENTION_TRACKING ||
-        (a.assessmentType === AssessmentType.VISUAL_MODERATION &&
-          a.provider !== 'HumeAI-Expression-Measurement')
+        (a.assessmentType === AssessmentType.VISUAL_MODERATION && !a.provider.startsWith('HumeAI'))
     );
     const latestExpression = assessments.find(
-      a =>
-        a.assessmentType === AssessmentType.VISUAL_MODERATION &&
-        a.provider === 'HumeAI-Expression-Measurement' // Assuming Hume is the provider for expression
+      a => a.assessmentType === AssessmentType.VISUAL_MODERATION && a.provider.startsWith('HumeAI')
     );
 
     const w = 0.33; // Equal weights among 3 metrics
@@ -175,37 +179,61 @@ export class AssessmentsService {
   private normalizeVoiceStress(metrics: any): number {
     if (!metrics) return 0;
 
-    // (Jitter + Shimmer + Pitch SD + (1 - HNR)) normalized
-    // Jitter: 0.5-2.0% -> map to 0-1
-    // Shimmer: 1.5-4.5% -> map to 0-1
-    // Pitch SD: 10-40Hz -> map to 0-1
-    // HNR: 10-25dB -> 1 - HNR/30
-    const jitter = (metrics.jitter_percent || 0.5) / 5.0; // max expected ~5
-    const shimmer = (metrics.shimmer_percent || 1.5) / 10.0;
-    const pitchSd = (metrics.pitch_sd_hz || 20) / 100.0;
-    const hnr = Math.max(0, 1 - (metrics.hnr_db || 20) / 50.0);
-    return Math.min(1, jitter + shimmer + pitchSd + hnr);
+    // Normalize each metric to 0-1 range where 1 = high stress
+    // Jitter: 0.5-6.0% normal, >6.0% stressed
+    // Shimmer: 1.5-12.0% normal, >12.0% stressed
+    // Pitch SD: 10-120 Hz normal, >120 Hz stressed
+    // HNR: >12 dB good, <8 dB poor (inverse: lower HNR = higher stress)
+
+    const jitterNorm = Math.min(1, Math.max(0, (metrics.jitter_percent - 0.8) / 7.0));
+    const shimmerNorm = Math.min(1, Math.max(0, (metrics.shimmer_percent - 2.0) / 15.0));
+    const pitchSdNorm = Math.min(1, Math.max(0, (metrics.pitch_sd_hz - 15) / 150));
+    const hnrNorm = Math.min(1, Math.max(0, (15 - metrics.hnr_db) / 20));
+
+    // Reduced weights to make overall score less sensitive
+    const weights = { jitter: 0.25, shimmer: 0.25, pitchSd: 0.2, hnr: 0.1 };
+    const rawScore =
+      jitterNorm * weights.jitter +
+      shimmerNorm * weights.shimmer +
+      pitchSdNorm * weights.pitchSd +
+      hnrNorm * weights.hnr;
+
+    // Use a steeper power curve (square) to make it less sensitive to low-level noise/variations
+    return Math.pow(rawScore, 2);
   }
 
   private normalizeVisualBehavior(metrics: any): number {
     if (!metrics) return 0;
 
-    // (Blink Rate deviation + Lip Tension + Blink Duration irregularity)
-    // Blink Rate: 12-22 -> Deviation from norma
-    // Lip Tension: 0.8-1.2
-    const blinkRate = metrics.blink_rate_per_min || 15;
-    const blinkDev = Math.abs(blinkRate - 15) / 10;
-    const lipTension = (metrics.avg_lip_tension || 0.8) - 0.5; // Baseline expected 0.5
+    // Components: Blink Rate deviation + Lip Compression + Blink Duration irregularity
+
+    // 1. Blink Rate: Normal is 12-25. Risk increases as it deviates from ~18.
+    const blinkRate = metrics.blink_rate_per_min || 18;
+    const blinkDev = Math.min(0.4, Math.abs(blinkRate - 18) / 20);
+
+    // 2. Lip Tension: In video_analyzer, lower ratio = more compressed lips (stress/suppression).
+    // Normal ratio is around 0.4 - 0.5. Ratios below 0.3 indicate tension.
+    const lipRatio = metrics.avg_lip_tension || 0.45;
+    const lipCompressionRisk = Math.min(0.4, Math.max(0, 0.4 - lipRatio) * 1.5);
+
+    // 3. Blink Duration: Normal is ~100-250ms.
     const blinkDur = metrics.avg_blink_duration_ms || 150;
-    const blinkDurIrreg = Math.abs(blinkDur - 150) / 200;
-    return Math.min(1, blinkDev + lipTension + blinkDurIrreg);
+    const blinkDurRisk = Math.min(0.2, Math.abs(blinkDur - 150) / 500);
+
+    const combinedScore = blinkDev + lipCompressionRisk + blinkDurRisk;
+
+    // Ensure final score is between 0 and 1
+    return Math.min(1, Math.max(0, combinedScore));
   }
 
   private calculateExpressionScore(metrics: any): number {
     if (!metrics) return 0;
-    // max(Fraud Emotions) - Alignment
-    // Fraud emotions: Guilt, Shame, Anxiety, Doubt, Fear, Embarrassment, Distress
-    // Check if metrics has predictions
+
+    let emotionsArray = metrics;
+    if (metrics.top_emotions && Array.isArray(metrics.top_emotions)) {
+      emotionsArray = metrics.top_emotions;
+    }
+
     const fraudEmotions = [
       'Guilt',
       'Shame',
@@ -217,20 +245,37 @@ export class AssessmentsService {
     ];
     let maxFraud = 0;
 
-    if (Array.isArray(metrics)) {
-      // handle array
-      metrics.forEach((m: any) => {
-        if (fraudEmotions.includes(m.name)) maxFraud = Math.max(maxFraud, m.score);
+    if (Array.isArray(emotionsArray)) {
+      emotionsArray.forEach((m: any) => {
+        if (m.name && fraudEmotions.includes(m.name)) {
+          maxFraud = Math.max(maxFraud, m.score || 0);
+        }
       });
-    } else {
-      // handle object
-      for (const [key, value] of Object.entries(metrics)) {
-        if (fraudEmotions.includes(key)) maxFraud = Math.max(maxFraud, Number(value));
+    } else if (typeof emotionsArray === 'object') {
+      for (const [key, value] of Object.entries(emotionsArray)) {
+        if (fraudEmotions.includes(key)) {
+          maxFraud = Math.max(maxFraud, Number(value) || 0);
+        }
       }
     }
 
-    const alignment = 0.2;
-    return Math.max(0, maxFraud - alignment);
+    // Subtract alignment threshold (only flag if significantly elevated)
+    const alignment = 0.1;
+    const score = Math.max(0, maxFraud - alignment);
+    this.logger.log(
+      `Expression calculation: maxFraud=${maxFraud.toFixed(3)}, score=${score.toFixed(3)}, ` +
+        `hasData=${!!emotionsArray}, isArray=${Array.isArray(emotionsArray)}`
+    );
+
+    if (Array.isArray(emotionsArray) && emotionsArray.length > 0) {
+      const sample = emotionsArray
+        .slice(0, 3)
+        .map((e: any) => `${e.name}:${(e.score || 0).toFixed(2)}`)
+        .join(', ');
+      this.logger.log(`Top emotions: ${sample}`);
+    }
+
+    return score;
   }
 
   /**
@@ -275,14 +320,6 @@ export class AssessmentsService {
         `Processing uploaded audio for session ${sessionId}, size: ${fileBuffer.length} bytes`
       );
 
-      // Convert WebM to WAV using ffmpeg-static
-      const util = require('util');
-      const exec = util.promisify(require('child_process').exec);
-      const fs = require('fs');
-      const os = require('os');
-      const path = require('path');
-      const ffmpegPath = require('ffmpeg-static');
-
       const tmpDir = os.tmpdir();
       const inputPath = path.join(tmpDir, `input-${sessionId}-${Date.now()}.webm`);
       const outputPath = path.join(tmpDir, `output-${sessionId}-${Date.now()}.wav`);
@@ -293,7 +330,7 @@ export class AssessmentsService {
         this.logger.log(
           `Converting audio using ffmpeg at ${ffmpegPath}: ${inputPath} -> ${outputPath}`
         );
-        await exec(`"${ffmpegPath}" -y -i "${inputPath}" "${outputPath}"`);
+        await execAsync(`"${ffmpegPath}" -y -i "${inputPath}" "${outputPath}"`);
 
         const wavBuffer = await fs.promises.readFile(outputPath);
         this.logger.log(`Conversion complete. WAV size: ${wavBuffer.length}`);
@@ -335,25 +372,26 @@ export class AssessmentsService {
   }
 
   async processUploadedExpression(fileBuffer: Buffer, sessionId: string) {
-    const path = require('path');
-    const fs = require('fs');
-
-    const projectRoot = process.cwd();
-    const tmpDir = path.join(projectRoot, '.tmp');
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-    const videoPath = path.join(tmpDir, `expression-${sessionId}-${Date.now()}.webm`);
+    const tempInputPath = path.join(os.tmpdir(), `input-expr-${sessionId}-${Date.now()}.webm`);
+    const tempOutputPath = path.join(os.tmpdir(), `output-expr-${sessionId}-${Date.now()}.webm`);
 
     try {
       this.logger.log(
         `Processing expression analysis for session ${sessionId}, size: ${fileBuffer.length} bytes`
       );
 
-      await fs.promises.writeFile(videoPath, fileBuffer);
-      this.logger.log(`Video saved to temporary path: ${videoPath}`);
+      await fs.promises.writeFile(tempInputPath, fileBuffer);
+      this.logger.log(`Repairing video container: ${tempInputPath} -> ${tempOutputPath}`);
 
-      const result = await this.riskAnalyzerClient.analyzeExpression(videoPath, 'expression.webm');
+      // Remux to fix truncated container
+      await execAsync(`"${ffmpegPath}" -y -i "${tempInputPath}" -c copy "${tempOutputPath}"`);
+
+      this.logger.log(`Video container repaired successfully`);
+
+      const result = await this.riskAnalyzerClient.analyzeExpression(
+        tempOutputPath,
+        'expression.webm'
+      );
       const assessment = await this.prisma.riskAssessment.create({
         data: {
           sessionId,
@@ -376,14 +414,72 @@ export class AssessmentsService {
       this.logger.error(`Expression analysis failed: ${error.message}`);
       throw error;
     } finally {
+      // Cleanup temp files
       try {
-        if (fs.existsSync(videoPath)) {
-          await fs.promises.unlink(videoPath);
-          this.logger.log(`Temporary video file removed: ${videoPath}`);
-        }
+        if (fs.existsSync(tempInputPath)) await fs.promises.unlink(tempInputPath);
+        if (fs.existsSync(tempOutputPath)) await fs.promises.unlink(tempOutputPath);
+        this.logger.log(`Temporary repair files removed for session ${sessionId}`);
       } catch (cleanupError: any) {
-        this.logger.warn(`Failed to cleanup temp file ${videoPath}: ${cleanupError.message}`);
+        this.logger.warn(`Failed to cleanup temp files: ${cleanupError.message}`);
       }
+    }
+  }
+
+  async processUploadedVideo(fileBuffer: Buffer, sessionId: string) {
+    const tempInputPath = path.join(os.tmpdir(), `input-video-${sessionId}-${Date.now()}.webm`);
+    const tempOutputPath = path.join(os.tmpdir(), `output-video-${sessionId}-${Date.now()}.webm`);
+
+    try {
+      this.logger.log(
+        `Processing uploaded video for session ${sessionId}, size: ${fileBuffer.length} bytes`
+      );
+
+      await fs.promises.writeFile(tempInputPath, fileBuffer);
+      this.logger.log(`Repairing video container: ${tempInputPath} -> ${tempOutputPath}`);
+
+      // Remux to fix truncated container
+      await execAsync(`"${ffmpegPath}" -y -i "${tempInputPath}" -c copy "${tempOutputPath}"`);
+
+      const fixedBuffer = await fs.promises.readFile(tempOutputPath);
+      this.logger.log(`Video container repaired. Final size: ${fixedBuffer.length}`);
+
+      const result = await this.riskAnalyzerClient.analyzeVideo(
+        fixedBuffer,
+        'visual-behavior.webm'
+      );
+
+      const analysisType = (result.metrics as any).analysis_type;
+      const provider =
+        analysisType === 'error_mediapipe_unavailable'
+          ? 'MediaPipe (Error: Unavailable)'
+          : 'MediaPipe (Real - Upload)';
+
+      const assessment = await this.prisma.riskAssessment.create({
+        data: {
+          sessionId,
+          assessmentType: AssessmentType.VISUAL_MODERATION,
+          provider,
+          riskScore: this.mapRiskScore(result.risk_score),
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            timestamp: new Date().toISOString(),
+            analysisMethod: 'live_upload_video',
+          },
+        },
+      });
+
+      // Cleanup temp files
+      setTimeout(() => {
+        if (fs.existsSync(tempInputPath)) fs.unlink(tempInputPath, () => {});
+        if (fs.existsSync(tempOutputPath)) fs.unlink(tempOutputPath, () => {});
+      }, 1000);
+
+      return assessment;
+    } catch (error: any) {
+      this.logger.error(`Failed to process uploaded video: ${error.message}`);
+      throw error;
     }
   }
 

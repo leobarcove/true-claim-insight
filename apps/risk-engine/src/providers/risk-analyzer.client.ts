@@ -74,7 +74,7 @@ export class RiskAnalyzerClient {
     videoBuffer: Buffer,
     filename: string,
     baselineBlinkRate: number = 17.0,
-    baselineLipTension: number = 1.0
+    baselineLipTension: number = 0.45
   ): Promise<VideoAnalysisResult> {
     const formData = new FormData();
     formData.append('file', new Blob([videoBuffer]), filename);

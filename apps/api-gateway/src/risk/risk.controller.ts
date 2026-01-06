@@ -160,4 +160,55 @@ export class RiskController {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
   }
+
+  @Post('analyze-video')
+  @Public()
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        sessionId: { type: 'string' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Analyze visual behavior from video' })
+  async analyzeVideo(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new HttpException('Request is not multipart', HttpStatus.BAD_REQUEST);
+    }
+
+    let videoBuffer: Buffer | null = null;
+    let sessionId: string | null = null;
+
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === 'file') {
+          if (part.fieldname === 'file') {
+            videoBuffer = await part.toBuffer();
+          } else {
+            await part.toBuffer();
+          }
+        } else {
+          if (part.fieldname === 'sessionId') {
+            sessionId = part.value as string;
+          }
+        }
+      }
+
+      if (!videoBuffer) {
+        throw new HttpException('No video file uploaded', HttpStatus.BAD_REQUEST);
+      }
+
+      if (!sessionId) {
+        const query = req.query as any;
+        sessionId = query.sessionId || 'unknown';
+      }
+
+      return await this.riskService.analyzeVideo(videoBuffer, sessionId as string);
+    } catch (error: any) {
+      throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
+    }
+  }
 }

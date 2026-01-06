@@ -45,3 +45,20 @@ export function useAnalyzeExpression() {
     },
   });
 }
+
+export function useAnalyzeVisualBehavior() {
+  return useMutation({
+    mutationFn: async ({ sessionId, videoBlob }: { sessionId: string; videoBlob: Blob }) => {
+      const formData = new FormData();
+      formData.append('file', videoBlob, 'visual-behavior.webm');
+      formData.append('sessionId', sessionId);
+
+      const { data } = await apiClient.post<ApiResponse<any>>('/risk/analyze-video', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return data.data;
+    },
+  });
+}

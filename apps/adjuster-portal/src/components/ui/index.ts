@@ -10,3 +10,5 @@ export * from './table';
 export * from './dialog';
 export * from './select';
 export * from './skeleton';
+export * from './tooltip';
+export * from './switch';

@@ -201,3 +201,48 @@ export function useAnalyzeExpression() {
     },
   });
 }
+
+export function useAnalyzeVisualBehavior() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ sessionId, videoBlob }: { sessionId: string; videoBlob: Blob }) => {
+      const formData = new FormData();
+      formData.append('file', videoBlob, 'visual-behavior.webm');
+      formData.append('sessionId', sessionId);
+
+      const { data } = await apiClient.post<ApiResponse<any>>('/risk/analyze-video', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return data.data;
+    },
+    onSuccess: (data: any, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: riskKeys.session(variables.sessionId),
+      });
+
+      // Manually add to cache so it shows up in UI immediately
+      queryClient.setQueryData(
+        riskKeys.session(variables.sessionId),
+        (old: RiskAssessment[] | undefined) => {
+          const newAssessment: RiskAssessment = {
+            id: `manual-${Date.now()}`,
+            sessionId: variables.sessionId,
+            assessmentType: 'VISUAL_MODERATION',
+            provider: 'MediaPipe',
+            riskScore: data.risk_score,
+            confidence: data.confidence,
+            rawResponse: data.metrics,
+            createdAt: new Date().toISOString(),
+          };
+          return old ? [...old, newAssessment] : [newAssessment];
+        }
+      );
+    },
+    onError: (error: any) => {
+      console.error('[useAnalyzeVisualBehavior] Error:', error?.message || error);
+    },
+  });
+}

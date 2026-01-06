@@ -73,7 +73,27 @@ def analyze_audio(audio_path: str) -> Dict[str, Any]:
             hnr = 0.0
     except Exception:
         hnr = 0.0
-    
+
+    # --- SILENCE & NOISE DETECTION ---
+    # If the audio is too quiet or too noisy (low HNR), results are unreliable.
+    # In a quiet room, mic static can cause high Jitter/Shimmer if undetected.
+    try:
+        intensity = sound.to_intensity()
+        mean_intensity = call(intensity, "Get mean", 0, 0)
+    except Exception:
+        mean_intensity = 0.0
+
+    # Thresholds: 
+    # - If intensity < 50 dB, it's basically silence/very quiet.
+    # - If HNR < 5 dB, it's mostly noise with no clear speech periodic structure.
+    is_invalid_signal = (mean_intensity < 50.0) or (hnr < 5.0)
+
+    if is_invalid_signal:
+        jitter_percent = 0.0
+        shimmer_percent = 0.0
+        pitch_sd = 0.0
+        # mean_pitch and hnr are kept as raw values
+
     return {
         "jitter_percent": round(jitter_percent, 3),
         "shimmer_percent": round(shimmer_percent, 3),
@@ -81,5 +101,8 @@ def analyze_audio(audio_path: str) -> Dict[str, Any]:
         "mean_pitch_hz": round(mean_pitch, 2),
         "hnr_db": round(hnr, 2),
         "duration_s": round(duration, 2),
+        "intensity_db": round(mean_intensity, 2),
+        "is_noise_only": is_invalid_signal
     }
+
 

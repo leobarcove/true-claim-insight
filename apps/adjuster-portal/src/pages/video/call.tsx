@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,8 @@ import {
   useJoinVideoRoom,
   useEndVideoSession,
   useRiskAssessments,
-  useTriggerAssessment,
   useAnalyzeExpression,
+  useAnalyzeVisualBehavior,
   RiskAssessment,
 } from '@/hooks/use-video';
 import { useClaim } from '@/hooks/use-claims';
@@ -30,6 +30,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Switch } from '@/components/ui/switch';
+import { InfoTooltip } from '@/components/ui/tooltip';
 
 const DEFAULT_EMOTIONS = [
   'Admiration',
@@ -86,9 +87,10 @@ interface RiskAssessmentCardProps {
   title: string;
   data: RiskAssessment | undefined;
   type: 'voice' | 'visual' | 'emotion';
+  tooltip?: string;
 }
 
-const RiskAssessmentCard = memo(({ title, data, type }: RiskAssessmentCardProps) => {
+const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentCardProps) => {
   const marker = data;
   const raw = marker?.rawResponse as any;
 
@@ -121,6 +123,7 @@ const RiskAssessmentCard = memo(({ title, data, type }: RiskAssessmentCardProps)
             <Activity className="h-4 w-4 text-slate-500 opacity-50" />
           )}
           <span className="text-xs font-semibold text-slate-200">{title}</span>
+          {tooltip && <InfoTooltip title={title} content={tooltip} direction="left" />}
         </div>
         {marker && (
           <Badge
@@ -262,8 +265,9 @@ export function VideoCallPage() {
 
   const joinRoom = useJoinVideoRoom();
   const endSession = useEndVideoSession(sessionId || '');
-  const triggerAssessment = useTriggerAssessment();
+
   const analyzeExpression = useAnalyzeExpression();
+  const analyzeVisualBehavior = useAnalyzeVisualBehavior();
 
   // Ref to prevent navigation during analysis
   const isAnalyzingRef = useRef(false);
@@ -350,21 +354,21 @@ export function VideoCallPage() {
     [isJoined, toast]
   );
 
-  const triggerVisualAnalysis = useCallback(() => {
+  const triggerVisualAnalysis = useCallback(async () => {
+    if (!playerRef.current) return;
+
     if (!isJoined) return;
 
-    isAnalyzingRef.current = true;
-    triggerAssessment.mutate(
-      { sessionId: sessionId || '', assessmentType: 'VISUAL' },
-      {
-        onSettled: () => {
-          setTimeout(() => {
-            isAnalyzingRef.current = false;
-          }, 1000);
-        },
-      }
-    );
-  }, [isJoined, sessionId, triggerAssessment]);
+    try {
+      playerRef.current.sendAppMessage({ type: 'request-visual-analysis' });
+      isAnalyzingRef.current = true;
+      setTimeout(() => {
+        isAnalyzingRef.current = false;
+      }, 5000);
+    } catch (error) {
+      console.error('Failed to trigger visual analysis:', error);
+    }
+  }, [isJoined]);
 
   const triggerExpressionAnalysis = useCallback(
     (showToast: boolean = false) => {
@@ -628,15 +632,11 @@ export function VideoCallPage() {
                     <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
                       Deception Score
                     </h3>
-                    {/* Custom Styled Tooltip */}
-                    <div className="group relative flex items-center">
-                      <HelpCircle className="h-3 w-3 text-slate-500 cursor-help" />
-                      <div className="invisible group-hover:visible absolute right-full mr-2 z-50 w-64 p-3 text-[10px] leading-relaxed text-slate-200 bg-slate-900 border border-slate-700 rounded-md shadow-xl whitespace-normal pointer-events-none transition-opacity duration-200 opacity-0 group-hover:opacity-100">
-                        <p className="font-semibold mb-1 text-slate-100">Analysis Info</p>
-                        Metrics are calculated only from claimant footage. Use the toggle to turn
-                        analysis on or off.
-                      </div>
-                    </div>
+                    <InfoTooltip
+                      title="Analysis Info"
+                      content="Metrics are calculated only from claimant footage. Use the toggle to turn analysis on or off."
+                      direction="left"
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
@@ -655,7 +655,7 @@ export function VideoCallPage() {
                 </div>
 
                 {/* Metrics Graph */}
-                <div className="pt-4 border-t border-slate-800 h-40">
+                <div className="pt-4 border-t border-slate-800 h-60">
                   <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics</p>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={metricsHistory}>
@@ -793,14 +793,105 @@ export function VideoCallPage() {
                       : undefined;
 
                     const sections = [
-                      { id: 'voice', title: 'Voice Stress', data: latestVoice, type: 'voice' },
+                      {
+                        id: 'voice',
+                        title: 'Voice Stress',
+                        data: latestVoice,
+                        type: 'voice',
+                        tooltip: (
+                          <div className="space-y-2">
+                            <p>
+                              Analyzes vocal patterns that may indicate stress, tension, or
+                              emotional load during speech.
+                            </p>
+                            <ul className="list-disc pl-3 space-y-1">
+                              <li>
+                                <span className="font-semibold text-slate-100">Jitter (%):</span>{' '}
+                                Measures small, rapid variations in voice pitch. Higher values may
+                                indicate vocal instability or stress.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Shimmer (%):</span>{' '}
+                                Measures variations in voice loudness. Elevated shimmer can be
+                                linked to tension or fatigue.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Pitch SD (Hz):</span>{' '}
+                                Shows how much the speaker's pitch varies. Low variation may
+                                indicate monotone delivery; high variation may signal emotional
+                                arousal.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">HNR (dB):</span>{' '}
+                                Harmonics-to-Noise Ratio. Indicates voice clarity—lower values
+                                suggest more noise or strain in the voice.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Confidence (%):
+                                </span>{' '}
+                                System confidence in the accuracy of the voice stress analysis based
+                                on audio quality and signal consistency.
+                              </li>
+                            </ul>
+                          </div>
+                        ),
+                      },
                       {
                         id: 'visual',
                         title: 'Visual Behavior',
                         data: latestVisual,
                         type: 'visual',
+                        tooltip: (
+                          <div className="space-y-2">
+                            <p>
+                              Tracks facial and eye-related behaviors that can reflect attention,
+                              comfort, or cognitive effort.
+                            </p>
+                            <ul className="list-disc pl-3 space-y-1">
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Blink Rate (per min):
+                                </span>{' '}
+                                Number of blinks per minute. Changes may be associated with stress,
+                                fatigue, or focus level.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Blink Duration (ms):
+                                </span>{' '}
+                                Average length of each blink. Longer blinks may suggest tiredness or
+                                disengagement.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Lip Tension:</span>{' '}
+                                Measures tightness around the mouth. Higher values can indicate
+                                stress, suppression, or concentration.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Frames:</span> Number
+                                of video frames analyzed for this segment. Higher counts generally
+                                improve reliability.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Confidence (%):
+                                </span>{' '}
+                                System confidence in visual behavior detection based on lighting,
+                                face visibility, and tracking quality.
+                              </li>
+                            </ul>
+                          </div>
+                        ),
                       },
-                      { id: 'emotion', title: 'Expression', data: latestEmotion, type: 'emotion' },
+                      {
+                        id: 'emotion',
+                        title: 'Expression',
+                        data: latestEmotion,
+                        type: 'emotion',
+                        tooltip:
+                          'Detects emotional and cognitive states based on facial expressions and micro-expressions.',
+                      },
                     ];
 
                     return sections.map(section => (
@@ -809,6 +900,7 @@ export function VideoCallPage() {
                         title={section.title}
                         data={section.data}
                         type={section.type as any}
+                        tooltip={(section as any).tooltip}
                       />
                     ));
                   })()}
@@ -838,7 +930,7 @@ export function VideoCallPage() {
                         e.preventDefault();
                         triggerVisualAnalysis();
                       }}
-                      disabled={triggerAssessment.isPending}
+                      disabled={analyzeVisualBehavior.isPending}
                     >
                       <ShieldCheck className="h-3 w-3 mr-2" />
                       Visual Behavior

@@ -21,8 +21,9 @@ class Config:
     HUME_POLL_INTERVAL: int = int(os.getenv("HUME_POLL_INTERVAL", "2"))
     
     # Risk thresholds
-    HIGH_RISK_EMOTION_THRESHOLD: float = float(os.getenv("HIGH_RISK_EMOTION_THRESHOLD", "0.6"))
-    MEDIUM_RISK_EMOTION_THRESHOLD: float = float(os.getenv("MEDIUM_RISK_EMOTION_THRESHOLD", "0.3"))
+    HIGH_RISK_EMOTION_THRESHOLD: float = float(os.getenv("HIGH_RISK_EMOTION_THRESHOLD", "0.7"))
+    MEDIUM_RISK_EMOTION_THRESHOLD: float = float(os.getenv("MEDIUM_RISK_EMOTION_THRESHOLD", "0.4"))
+
     
     # Supabase Configuration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
