@@ -11,26 +11,28 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRegister } from '@/hooks/use-auth';
 
-const registerSchema = z.object({
-  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email'),
-  phoneNumber: z
-    .string()
-    .min(10, 'Phone number must be at least 10 digits')
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Please enter a valid phone number (e.g., +60123456789)'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      'Password must contain uppercase, lowercase, and number'
-    ),
-  confirmPassword: z.string(),
-  licenseNumber: z.string().optional(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-});
+const registerSchema = z
+  .object({
+    fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+    email: z.string().email('Please enter a valid email'),
+    phoneNumber: z
+      .string()
+      .min(10, 'Phone number must be at least 10 digits')
+      .regex(/^\+?[1-9]\d{1,14}$/, 'Please enter a valid phone number (e.g., +60123456789)'),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+        'Password must contain uppercase, lowercase, and number'
+      ),
+    confirmPassword: z.string(),
+    licenseNumber: z.string().optional(),
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -94,14 +96,10 @@ export function RegisterPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">TC</span>
-            </div>
+            <img src="/tci-logo.svg" alt="TCI Logo" className="h-10 w-10" />
           </div>
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
-          <CardDescription>
-            Register as a loss adjuster on True Claim Insight
-          </CardDescription>
+          <CardDescription>Register as a loss adjuster on True Claim Insight</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -132,9 +130,7 @@ export function RegisterPage() {
                 placeholder="adjuster@company.com"
                 {...register('email')}
               />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
-              )}
+              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
 
             <div className="space-y-2">
