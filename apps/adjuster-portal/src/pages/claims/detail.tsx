@@ -10,10 +10,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
-  FileCheck,
-  Banknote,
   AlertTriangle,
-  Clock,
   Download,
   Image,
   User,
@@ -40,6 +37,7 @@ import {
 import { useClaim, useUpdateClaimStatus } from '@/hooks/use-claims';
 import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
+import { InfoTooltip } from '@/components/ui/tooltip';
 import {
   LineChart,
   Line,
@@ -68,50 +66,40 @@ const statusConfig: Record<
   CLOSED: { label: 'Closed', variant: 'secondary' },
 };
 
-const SessionChart = ({ sessionId, assessments }: { sessionId: string; assessments: any[] }) => {
-  const { data: deception, isLoading: isDeceptionLoading } = useSessionDeceptionScore(sessionId);
+const SessionChart = ({
+  sessionId,
+  deceptionData,
+  summary,
+}: {
+  sessionId: string;
+  deceptionData: any[];
+  summary?: any;
+}) => {
+  const { data: remoteSummary, isLoading: isDeceptionLoading } = useSessionDeceptionScore(
+    sessionId,
+    !summary // Only enable query if summary is missing
+  );
+
+  const deception = summary || remoteSummary;
 
   const chartData = useMemo(() => {
-    if (!assessments || assessments.length === 0) return [];
+    if (!deceptionData || deceptionData.length === 0) return [];
 
-    // Group assessments by creation time period (e.g., 5-second buckets)
-    // to build a chronological timeline of the session metrics
-    const sorted = [...assessments].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-
-    // Filter to only those with scores and map to timeline points
-    // We group by timestamps that are close to each other
-    const timeline: any[] = [];
-    let currentPoint: any = null;
-
-    sorted.forEach(a => {
-      const timeStr = new Date(a.createdAt).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-
-      if (!currentPoint || currentPoint.time !== timeStr) {
-        if (currentPoint) timeline.push(currentPoint);
-        currentPoint = { time: timeStr, deception: 0, voice: 0, visual: 0, expression: 0 };
-      }
-
-      const score = a.riskScore === 'HIGH' ? 80 : a.riskScore === 'MEDIUM' ? 50 : 20;
-
-      if (a.assessmentType === 'VOICE_ANALYSIS') currentPoint.voice = score;
-      if (a.assessmentType === 'ATTENTION_TRACKING' || a.provider.includes('MediaPipe'))
-        currentPoint.visual = score;
-      if (a.provider.includes('HumeAI')) currentPoint.expression = score;
-
-      // Weighted aggregate for the timeline deception score
-      currentPoint.deception =
-        (currentPoint.voice + currentPoint.visual + currentPoint.expression) / 3;
-    });
-
-    if (currentPoint) timeline.push(currentPoint);
-    return timeline;
-  }, [assessments]);
+    return [...deceptionData]
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .map(d => ({
+        time: new Date(d.createdAt).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          
+        }),
+        deception: d.deception,
+        voice: d.voice,
+        visual: d.visual,
+        expression: d.expression,
+      }));
+  }, [deceptionData]);
 
   if (isDeceptionLoading && !deception) {
     return (
@@ -121,7 +109,7 @@ const SessionChart = ({ sessionId, assessments }: { sessionId: string; assessmen
     );
   }
 
-  if (!assessments || assessments.length === 0) {
+  if (!deceptionData || deceptionData.length === 0) {
     return (
       <div className="h-40 flex flex-col items-center justify-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed">
         <Activity className="h-5 w-5 mb-2 opacity-20" />
@@ -443,10 +431,7 @@ export function ClaimDetailPage() {
             {/* Policy Information (New: Compliance) */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="h-5 w-5" />
-                  Policy Information
-                </CardTitle>
+                <CardTitle className="flex items-center gap-2">Policy Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -485,10 +470,7 @@ export function ClaimDetailPage() {
             {/* Financials (New: Compliance) */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Banknote className="h-5 w-5" />
-                  Financials & Estimates
-                </CardTitle>
+                <CardTitle className="flex items-center gap-2">Financials & Estimates</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -616,7 +598,71 @@ export function ClaimDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
+                  <InfoTooltip
+                    title="Metrics Analysis"
+                    variant="light"
+                    iconSize={4}
+                    fontSize="text-sm"
+                    contentClassName="max-w-[500px]"
+                    content={
+                      <div className="flex gap-8 items-start">
+                        <section className="flex-1 space-y-3 p-2">
+                          <p className="text-slate-600 font-medium mb-3">
+                            This section shows a timeline of past sessions with their deception
+                            metrics, so you can quickly review and compare them over time.
+                          </p>
+                          <ul className="space-y-2.5 mt-2 text-slate-700">
+                            <li>
+                              <strong className="text-slate-900 block mb-0.5">Voice Stress</strong>
+                              Analyzes vocal patterns that may indicate stress, tension, or
+                              emotional load during speech. The scoring is calculated by normalizing
+                              measurements against industry baselines:
+                              <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
+                                <p className="mt-3 text-blue-700 font-semibold">
+                                  Score = (0.25×Jitter + 0.25×Shimmer + 0.2×PitchSD + 0.1×HNR)²
+                                </p>
+                              </div>
+                            </li>
+                            <li>
+                              <strong className="text-slate-900 block mb-0.5">
+                                Visual Behavior:
+                              </strong>
+                              Tracks facial and eye-related behaviors that can reflect attention,
+                              comfort, or cognitive effort. The scoring is calculated by aggregate
+                              risk points from deviations:
+                              <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
+                                <p className="mt-3 text-blue-700 font-semibold">
+                                  Score = BlinkRateDev(40%) + LipTension(40%) + BlinkDurDev(20%)
+                                </p>
+                              </div>
+                            </li>
+                            <li>
+                              <strong className="text-slate-900 block mb-0.5">
+                                Expression Measurement:
+                              </strong>
+                              Detects emotional and cognitive states based on facial expressions and
+                              micro-expressions. The scoring is calculated by peak fraud-linked
+                              emotion with baseline correction:
+                              <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
+                                <p className="mt-3 text-blue-700 font-semibold">
+                                  Score = Max(FraudEmotions) - 10% Noise Threshold
+                                </p>
+                              </div>
+                            </li>
+                          </ul>
+
+                          <div className="pt-2 mt-5 border-t border-slate-200">
+                            <p className="text-slate-900 leading-normal">
+                              The <span className="font-semibold">Deception Score</span> is the
+                              balanced average of the three pillars above, with each category
+                              weighted equally at one-third.
+                            </p>
+                          </div>
+                        </section>
+                      </div>
+                    }
+                    direction="right"
+                  />
                   Timeline
                 </CardTitle>
                 <span className="text-xs text-muted-foreground">Historical Analysis</span>
@@ -668,7 +714,8 @@ export function ClaimDetailPage() {
                           <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                             <SessionChart
                               sessionId={session.id}
-                              assessments={session.riskAssessments || []}
+                              deceptionData={session.deceptionData || []}
+                              summary={session.summary}
                             />
                           </div>
                         )}
