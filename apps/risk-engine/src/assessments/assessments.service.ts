@@ -80,6 +80,17 @@ export class AssessmentsService {
     const deceptionScore = w * wvs + w * wvb + w * wem;
     const isHighRisk = deceptionScore > 0.7;
 
+    // Persist deception calculation
+    await (this.prisma as any).deceptionScore.create({
+      data: {
+        sessionId,
+        deceptionScore: deceptionScore as any,
+        voiceStress: wvs as any,
+        visualBehavior: wvb as any,
+        expressionMeasurement: wem as any,
+      },
+    });
+
     return {
       deceptionScore: parseFloat(deceptionScore.toFixed(2)),
       isHighRisk,

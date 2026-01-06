@@ -178,10 +178,25 @@ model Session {
   createdAt       DateTime         @default(now())
   roomUrl         String?
   riskAssessments RiskAssessment[]
+  deceptionScores DeceptionScore[]
   claim           Claim            @relation(fields: [claimId], references: [id])
 
   @@index([claimId])
   @@map("sessions")
+}
+
+model DeceptionScore {
+  id                    String   @id @default(uuid())
+  sessionId             String
+  deceptionScore        Decimal  @db.Decimal(5, 4)
+  voiceStress           Decimal  @db.Decimal(5, 4)
+  visualBehavior        Decimal  @db.Decimal(5, 4)
+  expressionMeasurement Decimal  @db.Decimal(5, 4)
+  createdAt             DateTime @default(now())
+  session               Session  @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("deception_scores")
 }
 
 model RiskAssessment {

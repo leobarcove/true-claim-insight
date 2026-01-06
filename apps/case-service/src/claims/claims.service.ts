@@ -191,12 +191,15 @@ export class ClaimsService {
           orderBy: { createdAt: 'desc' },
           include: {
             riskAssessments: true,
+            deceptionScores: {
+              orderBy: { createdAt: 'desc' },
+            },
           },
         },
         notes: {
           orderBy: { createdAt: 'desc' },
         },
-      },
+      } as any,
     });
 
     if (!claim) {
@@ -213,7 +216,48 @@ export class ClaimsService {
       await this.tenantService.validateClaimAccess(id, tenantContext);
     }
 
-    return claim;
+    // Transform sessions to include persisted deception data instead of raw assessments
+    const sessions = (claim as any).sessions.map((session: any) => {
+      const { deceptionScores, riskAssessments, ...sessionData } = session as any;
+      const latestScore = deceptionScores?.[0];
+
+      return {
+        ...sessionData,
+        summary: latestScore
+          ? {
+              deceptionScore: Number(latestScore.deceptionScore),
+              isHighRisk: Number(latestScore.deceptionScore) > 0.7,
+              breakdown: {
+                voiceStress: Number(latestScore.voiceStress),
+                visualBehavior: Number(latestScore.visualBehavior),
+                expressionMeasurement: Number(latestScore.expressionMeasurement),
+              },
+            }
+          : {
+              deceptionScore: 0,
+              isHighRisk: false,
+              breakdown: { voiceStress: 0, visualBehavior: 0, expressionMeasurement: 0 },
+            },
+        // Provide the timeline of deception scores directly
+        deceptionData: (deceptionScores || []).map((ds: any) => ({
+          id: ds.id,
+          deception: Number(ds.deceptionScore) * 100,
+          voice: Number(ds.voiceStress) * 100,
+          visual: Number(ds.visualBehavior) * 100,
+          expression: Number(ds.expressionMeasurement) * 100,
+          createdAt: ds.createdAt,
+        })),
+        // Keep risk assessments for detail views
+        riskAssessments: (riskAssessments || []).sort(
+          (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+      };
+    });
+
+    return {
+      ...claim,
+      sessions,
+    };
   }
 
   /**

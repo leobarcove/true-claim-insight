@@ -10,7 +10,11 @@ interface InfoTooltipProps {
   content: React.ReactNode;
   direction?: TooltipDirection;
   className?: string;
+  contentClassName?: string;
   trigger?: React.ReactNode;
+  variant?: 'light' | 'dark';
+  iconSize?: number;
+  fontSize?: string;
 }
 
 /**
@@ -22,7 +26,11 @@ export function InfoTooltip({
   content,
   direction = 'left',
   className,
+  contentClassName,
   trigger,
+  variant = 'dark',
+  iconSize = 3,
+  fontSize = 'text-[10px]',
 }: InfoTooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -71,8 +79,6 @@ export function InfoTooltip({
     };
   }, [isVisible]);
 
-  // Adjust for 'right' and other tweaks
-
   const getTransform = () => {
     switch (direction) {
       case 'left':
@@ -86,6 +92,14 @@ export function InfoTooltip({
     }
   };
 
+  const variantClasses =
+    variant === 'dark'
+      ? 'text-slate-200 bg-slate-900 border-slate-700'
+      : 'text-slate-700 bg-white border-slate-200 shadow-xl';
+
+  const titleClasses = variant === 'dark' ? 'text-slate-100' : 'text-slate-900';
+  const contentClasses = variant === 'dark' ? 'text-slate-300' : 'text-slate-600';
+
   return (
     <div
       className={cn('inline-flex items-center', className)}
@@ -93,13 +107,18 @@ export function InfoTooltip({
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
     >
-      {trigger || <HelpCircle className="h-3 w-3 text-slate-500 cursor-help" />}
+      {trigger || (
+        <HelpCircle className={cn('text-slate-500 cursor-help', `h-${iconSize} w-${iconSize}`)} />
+      )}
 
       {isVisible &&
         createPortal(
           <div
             className={cn(
-              'fixed z-[9999] w-64 p-3 text-[10px] leading-relaxed text-slate-200 bg-slate-900 border border-slate-700 rounded-md shadow-2xl whitespace-normal pointer-events-none'
+              'fixed z-[9999] p-3 leading-relaxed border rounded-md shadow-2xl whitespace-normal break-words pointer-events-none max-w-[320px]',
+              fontSize,
+              variantClasses,
+              contentClassName
             )}
             style={{
               top: coords.top,
@@ -107,8 +126,8 @@ export function InfoTooltip({
               transform: getTransform(),
             }}
           >
-            {title && <p className="font-semibold mb-1 text-slate-100">{title}</p>}
-            <div className="text-slate-300">{content}</div>
+            {title && <p className={cn('font-semibold mb-1', titleClasses)}>{title}</p>}
+            <div className={contentClasses}>{content}</div>
           </div>,
           document.body
         )}

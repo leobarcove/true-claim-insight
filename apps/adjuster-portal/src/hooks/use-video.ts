@@ -141,7 +141,7 @@ export function useRiskAssessments(sessionId: string, refetchInterval: number | 
   });
 }
 
-export function useSessionDeceptionScore(sessionId: string) {
+export function useSessionDeceptionScore(sessionId: string, enabled: boolean = true) {
   return useQuery({
     queryKey: ['risk', 'session', sessionId, 'deception-score'],
     queryFn: async () => {
@@ -150,7 +150,7 @@ export function useSessionDeceptionScore(sessionId: string) {
       );
       return data.data;
     },
-    enabled: !!sessionId,
+    enabled: !!sessionId && enabled,
     staleTime: Infinity,
   });
 }
