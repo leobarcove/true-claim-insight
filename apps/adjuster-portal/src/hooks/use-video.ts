@@ -127,7 +127,7 @@ export const riskKeys = {
   session: (sessionId: string) => [...riskKeys.all, 'session', sessionId] as const,
 };
 
-export function useRiskAssessments(sessionId: string) {
+export function useRiskAssessments(sessionId: string, refetchInterval: number | false = 2500) {
   return useQuery({
     queryKey: riskKeys.session(sessionId),
     queryFn: async () => {
@@ -137,7 +137,21 @@ export function useRiskAssessments(sessionId: string) {
       return data.data;
     },
     enabled: !!sessionId,
-    refetchInterval: 2500, // Poll for live results
+    refetchInterval,
+  });
+}
+
+export function useSessionDeceptionScore(sessionId: string) {
+  return useQuery({
+    queryKey: ['risk', 'session', sessionId, 'deception-score'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<any>>(
+        `/risk/session/${sessionId}/deception-score`
+      );
+      return data.data;
+    },
+    enabled: !!sessionId,
+    staleTime: Infinity,
   });
 }
 
