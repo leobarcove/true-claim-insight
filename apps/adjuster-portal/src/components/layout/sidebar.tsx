@@ -41,16 +41,14 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
         <Link to="/" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">TC</span>
-          </div>
+          <img src="/tci-logo.svg" alt="TCI Logo" className="h-8 w-8" />
           <span className="font-semibold text-lg">True Claim</span>
         </Link>
       </div>
 
       {/* Main navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
+        {navigation.map(item => {
           const isActive = location.pathname === item.href;
           return (
             <Link
@@ -72,7 +70,7 @@ export function Sidebar() {
 
       {/* Secondary navigation */}
       <div className="border-t px-3 py-4">
-        {secondaryNavigation.map((item) => {
+        {secondaryNavigation.map(item => {
           const isActive = location.pathname === item.href;
           return (
             <Link
@@ -96,24 +94,13 @@ export function Sidebar() {
       <div className="border-t p-4">
         <div className="flex items-center gap-3">
           <Avatar>
-            <AvatarFallback>
-              {user ? getInitials(user.fullName) : 'U'}
-            </AvatarFallback>
+            <AvatarFallback>{user ? getInitials(user.fullName) : 'U'}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">
-              {user?.fullName || 'User'}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {user?.email || ''}
-            </p>
+            <p className="text-sm font-medium truncate">{user?.fullName || 'User'}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className="shrink-0"
-          >
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="shrink-0">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

@@ -26,9 +26,7 @@ export function WelcomePage() {
       {/* Header */}
       <header className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-lg">TC</span>
-          </div>
+          <img src="/tci-logo.svg" alt="TCI Logo" className="h-10 w-10" />
           <span className="font-semibold text-xl">True Claim</span>
         </div>
       </header>
@@ -39,25 +37,23 @@ export function WelcomePage() {
           <div className="space-y-3">
             <h1 className="text-3xl font-bold tracking-tight">
               <span className="text-primary">Assessments Made Simple</span>
-</h1>
-<p className="text-muted-foreground text-lg">
-  Securely access your motor insurance assessment from your phone. 
-  Fast, digital, and professional.
-</p>
+            </h1>
+            <p className="text-muted-foreground text-lg">
+              Securely access your motor insurance assessment from your phone. Fast, digital, and
+              professional.
+            </p>
           </div>
 
           {/* Features */}
           <div className="space-y-4 py-6">
-            {features.map((feature) => (
+            {features.map(feature => (
               <div key={feature.title} className="flex items-start gap-4">
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <feature.icon className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <h3 className="font-medium">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {feature.description}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
                 </div>
               </div>
             ))}

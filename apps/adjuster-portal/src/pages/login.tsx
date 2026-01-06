@@ -49,7 +49,7 @@ export function LoginPage() {
     } catch (err) {
       const axiosError = err as AxiosError<ApiErrorResponse>;
       const message = axiosError.response?.data?.message;
-      
+
       if (Array.isArray(message)) {
         setError(message[0]);
       } else if (message) {
@@ -67,14 +67,10 @@ export function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xl">TC</span>
-            </div>
+            <img src="/tci-logo.svg" alt="TCI Logo" className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-          <CardDescription>
-            Sign in to your True Claim Insight account
-          </CardDescription>
+          <CardDescription>Sign in to your True Claim Insight account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -92,9 +88,7 @@ export function LoginPage() {
                 placeholder="adjuster@example.com"
                 {...register('email')}
               />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
-              )}
+              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
 
             <div className="space-y-2">

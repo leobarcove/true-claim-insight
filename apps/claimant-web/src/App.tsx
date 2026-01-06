@@ -26,22 +26,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AssessmentTrackerPage() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  
+
   // Fetch claimant's claims
   const { data: claimsData, isLoading: isLoadingClaims } = useClaims();
   const activeClaim = claimsData?.claims?.[0];
-  
+
   // Fetch sessions for the active claim
   const { data: sessions } = useClaimSessions(activeClaim?.id || '');
   const activeSession = sessions?.find(s => s.status === 'ACTIVE' || s.status === 'SCHEDULED');
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'SUBMITTED': return 'bg-blue-100 text-blue-700';
-      case 'ASSIGNED': return 'bg-purple-100 text-purple-700';
-      case 'SCHEDULED': return 'bg-amber-100 text-amber-700';
-      case 'IN_ASSESSMENT': return 'bg-green-100 text-green-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'SUBMITTED':
+        return 'bg-blue-100 text-blue-700';
+      case 'ASSIGNED':
+        return 'bg-purple-100 text-purple-700';
+      case 'SCHEDULED':
+        return 'bg-amber-100 text-amber-700';
+      case 'IN_ASSESSMENT':
+        return 'bg-green-100 text-green-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -49,10 +54,13 @@ function AssessmentTrackerPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="bg-white px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10">
         <div className="font-bold text-primary flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-white text-xs font-black">TC</div>
+          <img src="/tci-logo.svg" alt="TCI Logo" className="h-8 w-8" />
           True Claim
         </div>
-        <button onClick={logout} className="p-2 text-gray-400 hover:text-destructive transition-colors">
+        <button
+          onClick={logout}
+          className="p-2 text-gray-400 hover:text-destructive transition-colors"
+        >
           <LogOut size={20} />
         </button>
       </header>
@@ -77,7 +85,7 @@ function AssessmentTrackerPage() {
             <CheckCircle2 size={18} className="text-primary" />
             Active Case Status
           </h3>
-          
+
           {isLoadingClaims ? (
             <div className="bg-white rounded-2xl p-8 border border-gray-100 flex flex-center justify-center">
               <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -87,10 +95,19 @@ function AssessmentTrackerPage() {
               <div className="p-6 space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Vehicle Plate</div>
-                    <div className="text-2xl font-black text-gray-900 tracking-tight">{activeClaim.vehiclePlateNumber || 'N/A'}</div>
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+                      Vehicle Plate
+                    </div>
+                    <div className="text-2xl font-black text-gray-900 tracking-tight">
+                      {activeClaim.vehiclePlateNumber || 'N/A'}
+                    </div>
                   </div>
-                  <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider", getStatusColor(activeClaim.status))}>
+                  <div
+                    className={cn(
+                      'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider',
+                      getStatusColor(activeClaim.status)
+                    )}
+                  >
                     {activeClaim.status.replace('_', ' ')}
                   </div>
                 </div>
@@ -102,14 +119,16 @@ function AssessmentTrackerPage() {
                     </div>
                     <div>
                       <p className="font-medium">Claim Type</p>
-                      <p className="text-xs text-gray-400">{activeClaim.claimType.replace('_', ' ')}</p>
+                      <p className="text-xs text-gray-400">
+                        {activeClaim.claimType.replace('_', ' ')}
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 {activeSession && (
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <button 
+                    <button
                       onClick={() => navigate(`/video/${activeSession.id}`)}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-lg shadow-blue-200 active:scale-[0.98]"
                     >
@@ -122,9 +141,11 @@ function AssessmentTrackerPage() {
                   </div>
                 )}
               </div>
-              
+
               <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center">
-                <span className="text-xs text-gray-400 font-medium italic">Case ID: {activeClaim.id.slice(0, 8)}...</span>
+                <span className="text-xs text-gray-400 font-medium italic">
+                  Case ID: {activeClaim.id.slice(0, 8)}...
+                </span>
                 <span className="text-xs text-primary font-bold">Details &rarr;</span>
               </div>
             </div>
@@ -133,7 +154,9 @@ function AssessmentTrackerPage() {
               <div className="h-16 w-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
                 <FileText size={24} className="text-gray-300" />
               </div>
-              <p className="text-gray-400 text-sm font-medium">No active cases found for this account.</p>
+              <p className="text-gray-400 text-sm font-medium">
+                No active cases found for this account.
+              </p>
             </div>
           )}
         </div>
@@ -141,7 +164,7 @@ function AssessmentTrackerPage() {
         {/* Quick Actions */}
         <div className="space-y-4">
           <h3 className="font-bold text-gray-700">Self-Service</h3>
-          <button 
+          <button
             onClick={() => navigate('/claims/submit')}
             className="w-full bg-white border border-gray-100 p-6 rounded-2xl flex flex-col items-center gap-3 hover:bg-gray-50 transition-all group"
           >
@@ -210,4 +233,3 @@ function App() {
 }
 
 export default App;
-
