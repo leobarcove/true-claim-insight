@@ -1,13 +1,11 @@
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 
@@ -20,7 +18,7 @@ async function bootstrap() {
       logger: {
         level: process.env.NODE_ENV === 'production' ? 'warn' : 'info',
       },
-    }),
+    })
   );
 
   const configService = app.get(ConfigService);
@@ -32,6 +30,13 @@ async function bootstrap() {
 
   // Compression
   await app.register(compression, { encodings: ['gzip', 'deflate'] });
+
+  // Multipart for file uploads
+  await app.register(multipart, {
+    limits: {
+      fileSize: 500 * 1024 * 1024, // 500MB
+    },
+  });
 
   // CORS - allow frontend apps
   app.enableCors({
@@ -51,7 +56,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-    }),
+    })
   );
 
   // API prefix
@@ -68,7 +73,7 @@ async function bootstrap() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
       },
-      'access-token',
+      'access-token'
     )
     .addTag('rooms', 'Video room management')
     .addTag('health', 'Health check endpoints')

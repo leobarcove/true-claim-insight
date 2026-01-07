@@ -141,6 +141,7 @@ model Claim {
   siuInvestigator         User?       @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
   documents               Document[]
   sessions                Session[]
+  videoUploads            VideoUpload[]
 
   @@index([claimantId])
   @@index([adjusterId])
@@ -365,3 +366,31 @@ enum ActorType {
   ADMIN
   SYSTEM
 }
+
+model VideoUpload {
+  id             String            @id @default(uuid())
+  claimId        String
+  videoUrl       String
+  filename       String
+  fileSize       Int
+  mimeType       String
+  duration       Float?            // in seconds
+  processedUntil Float             @default(0) // seconds processed so far
+  status         VideoUploadStatus @default(PENDING)
+  uploadedBy     String?           // user ID
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  claim          Claim             @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@index([status])
+  @@map("video_uploads")
+}
+
+enum VideoUploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
