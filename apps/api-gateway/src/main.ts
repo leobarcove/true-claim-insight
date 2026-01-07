@@ -17,7 +17,7 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({
       logger: false,
-      bodyLimit: 50 * 1024 * 1024, // 50MB
+      bodyLimit: 500 * 1024 * 1024, // 500MB
     })
   );
 
@@ -40,7 +40,7 @@ async function bootstrap() {
   // Enable multipart support
   await app.register(multipart, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB
+      fileSize: 500 * 1024 * 1024, // 500MB
     },
   });
 

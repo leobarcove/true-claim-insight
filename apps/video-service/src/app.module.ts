@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module';
 import { DailyModule } from './daily/daily.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     DailyModule,
     RoomsModule,
     WebhooksModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}
-

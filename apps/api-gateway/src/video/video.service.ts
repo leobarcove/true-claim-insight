@@ -72,6 +72,61 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
+  // --- Video Upload Methods ---
+
+  async uploadAssessment(req: any) {
+    const response = await fetch(`${this.baseUrl}/uploads/upload-assessment`, {
+      method: 'POST',
+      headers: {
+        'content-type': req.headers['content-type'],
+        'content-length': req.headers['content-length'],
+      },
+      body: req.raw, // Pass the raw stream through
+      // @ts-ignore - duplex is needed for streaming bodies in undici/fetch
+      duplex: 'half',
+    });
+    return this.handleResponse(response);
+  }
+
+  async getUpload(uploadId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`);
+    return this.handleResponse(response);
+  }
+
+  async processSegment(uploadId: string, dto: { startTime: number; endTime: number }) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/process-segment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dto),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getDeceptionScore(uploadId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/deception-score`);
+    return this.handleResponse(response);
+  }
+
+  async generateConsent(uploadId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/generate-consent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return this.handleResponse(response);
+  }
+
+  async getClaimUploads(claimId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/claim/${claimId}`);
+    return this.handleResponse(response);
+  }
+
+  async deleteUpload(uploadId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`, {
+      method: 'DELETE',
+    });
+    return this.handleResponse(response);
+  }
+
   private async handleResponse(response: Response) {
     if (!response.ok) {
       const errorText = await response.text();
