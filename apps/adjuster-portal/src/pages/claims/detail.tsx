@@ -92,7 +92,6 @@ const SessionChart = ({
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          
         }),
         deception: d.deception,
         voice: d.voice,
@@ -602,14 +601,14 @@ export function ClaimDetailPage() {
                     title="Metrics Analysis"
                     variant="light"
                     iconSize={4}
-                    fontSize="text-sm"
-                    contentClassName="max-w-[500px]"
+                    fontSize="text-xs"
+                    contentClassName="max-w-[450px]"
                     content={
                       <div className="flex gap-8 items-start">
                         <section className="flex-1 space-y-3 p-2">
                           <p className="text-slate-600 font-medium mb-3">
                             This section shows a timeline of past sessions with their deception
-                            metrics, so you can quickly review and compare them over time.
+                            metrics.
                           </p>
                           <ul className="space-y-2.5 mt-2 text-slate-700">
                             <li>
@@ -618,7 +617,7 @@ export function ClaimDetailPage() {
                               emotional load during speech. The scoring is calculated by normalizing
                               measurements against industry baselines:
                               <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
-                                <p className="mt-3 text-blue-700 font-semibold">
+                                <p className="mt-2 text-blue-700 font-semibold">
                                   Score = (0.25×Jitter + 0.25×Shimmer + 0.2×PitchSD + 0.1×HNR)²
                                 </p>
                               </div>
@@ -629,9 +628,9 @@ export function ClaimDetailPage() {
                               </strong>
                               Tracks facial and eye-related behaviors that can reflect attention,
                               comfort, or cognitive effort. The scoring is calculated by aggregate
-                              risk points from deviations:
+                              risk points:
                               <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
-                                <p className="mt-3 text-blue-700 font-semibold">
+                                <p className="mt-2 text-blue-700 font-semibold">
                                   Score = BlinkRateDev(40%) + LipTension(40%) + BlinkDurDev(20%)
                                 </p>
                               </div>
@@ -640,11 +639,11 @@ export function ClaimDetailPage() {
                               <strong className="text-slate-900 block mb-0.5">
                                 Expression Measurement:
                               </strong>
-                              Detects emotional and cognitive states based on facial expressions and
-                              micro-expressions. The scoring is calculated by peak fraud-linked
-                              emotion with baseline correction:
+                              Detects emotional and cognitive states based on facial expressions.
+                              The scoring is calculated by peak fraud-linked emotion with baseline
+                              correction:
                               <div className="space-y-3 font-mono text-[11px] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-slate-600 leading-relaxed pt-1 pb-3">
-                                <p className="mt-3 text-blue-700 font-semibold">
+                                <p className="mt-2 text-blue-700 font-semibold">
                                   Score = Max(FraudEmotions) - 10% Noise Threshold
                                 </p>
                               </div>
@@ -809,7 +808,7 @@ export function ClaimDetailPage() {
             </Card>
 
             {/* SLA Status */}
-            <Card
+            {/* <Card
               className={cn(
                 'border-l-4',
                 getDaysSince(claim.createdAt) > 7 ? 'border-l-destructive' : 'border-l-success'
@@ -828,7 +827,7 @@ export function ClaimDetailPage() {
                     : 'Within recommended turnaround time.'}
                 </p>
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Claimant Info */}
             <Card>
