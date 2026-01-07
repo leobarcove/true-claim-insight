@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Eye, Video, FileText, PlusCircle } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { useClaims } from '@/hooks/use-claims';
+import { useDebounce } from '@/hooks/use-debounce';
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive' }> = {
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    variant: 'default' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive';
+  }
+> = {
   SUBMITTED: { label: 'Submitted', variant: 'secondary' },
   DOCUMENTS_PENDING: { label: 'Docs Pending', variant: 'warning' },
   PENDING_ASSIGNMENT: { label: 'Pending Assignment', variant: 'info' },
@@ -32,22 +39,41 @@ const typeLabels: Record<string, string> = {
 };
 
 export function ClaimsListPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchFromUrl = searchParams.get('search') || '';
+  const [searchQuery, setSearchQuery] = useState(searchFromUrl);
+  const debouncedSearchQuery = useDebounce(searchQuery, 400);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
+  // Sync searchQuery with URL
+  useEffect(() => {
+    setSearchQuery(searchFromUrl);
+  }, [searchFromUrl]);
+
+  // Update URL when debounced search query changes
+  useEffect(() => {
+    const currentSearch = searchParams.get('search') || '';
+    if (debouncedSearchQuery !== currentSearch) {
+      if (debouncedSearchQuery) {
+        setSearchParams({ ...Object.fromEntries(searchParams), search: debouncedSearchQuery });
+      } else if (currentSearch) {
+        const nextParams = Object.fromEntries(searchParams);
+        delete nextParams.search;
+        setSearchParams(nextParams);
+      }
+    }
+  }, [debouncedSearchQuery, searchParams, setSearchParams]);
+
   const { data, isLoading } = useClaims({
-    search: searchQuery,
-    status: statusFilter as any || undefined,
+    search: searchFromUrl,
+    status: (statusFilter as any) || undefined,
   });
 
   const claims = data?.claims || [];
 
   return (
     <div className="flex flex-col h-full">
-      <Header
-        title="Claims"
-        description="Manage and process your assigned claims"
-      >
+      <Header title="Claims" description="Manage and process your assigned claims">
         <Link to="/claims/new">
           <Button>
             <PlusCircle className="h-4 w-4 mr-2" />
@@ -66,7 +92,7 @@ export function ClaimsListPage() {
               placeholder="Search by claim ID or claimant name..."
               className="pl-9"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
           <Button variant="outline" size="icon">
@@ -83,7 +109,7 @@ export function ClaimsListPage() {
           >
             All
           </Button>
-          {['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'].map((status) => (
+          {['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'].map(status => (
             <Button
               key={status}
               variant={statusFilter === status ? 'default' : 'outline'}
@@ -100,7 +126,7 @@ export function ClaimsListPage() {
           {isLoading ? (
             <div className="text-center py-12">Loading claims...</div>
           ) : (
-            claims.map((claim) => (
+            claims.map(claim => (
               <Card key={claim.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
@@ -112,7 +138,9 @@ export function ClaimsListPage() {
                         <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
                           {statusConfig[claim.status]?.label || claim.status}
                         </Badge>
-                        <Badge variant="outline">{typeLabels[claim.claimType] || claim.claimType}</Badge>
+                        <Badge variant="outline">
+                          {typeLabels[claim.claimType] || claim.claimType}
+                        </Badge>
                       </div>
 
                       <div>

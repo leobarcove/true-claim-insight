@@ -475,7 +475,7 @@ export function ClaimDetailPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Estimated Loss</p>
-                    <p className="text-2xl font-bold">
+                    <p className="text-xl font-bold">
                       {claim.estimatedLossAmount
                         ? `RM ${claim.estimatedLossAmount.toLocaleString()}`
                         : 'Pending'}
@@ -483,7 +483,7 @@ export function ClaimDetailPage() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Repair Cost (Final)</p>
-                    <p className="text-2xl font-bold text-muted-foreground">
+                    <p className="text-xl font-bold text-muted-foreground">
                       {claim.estimatedRepairCost
                         ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
                         : 'Pending'}
@@ -742,14 +742,19 @@ export function ClaimDetailPage() {
                   <Button
                     className="w-full"
                     onClick={handleStartVideoAssessment}
-                    disabled={createVideoRoom.isPending || isNotifying}
+                    disabled={
+                      createVideoRoom.isPending ||
+                      isNotifying ||
+                      claim.status === 'APPROVED' ||
+                      claim.status === 'REJECTED'
+                    }
                   >
                     <Video className="h-4 w-4 mr-2" />
                     {createVideoRoom.isPending || isNotifying
                       ? 'Starting...'
                       : 'Start Video Assessment'}
                   </Button>
-                  <p className="text-xs text-muted-foreground text-center">
+                  <p className="text-xs text-muted-foreground text-center mt-5">
                     Creates room & notifies claimant via SMS
                   </p>
 
