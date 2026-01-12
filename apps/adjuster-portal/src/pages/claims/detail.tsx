@@ -697,6 +697,17 @@ export function ClaimDetailPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[10px]',
+                                session.roomUrl
+                                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600'
+                              )}
+                            >
+                              {session.roomUrl ? 'Live' : 'Upload'}
+                            </Badge>
+                            <Badge
                               variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
                               className="text-[10px]"
                             >

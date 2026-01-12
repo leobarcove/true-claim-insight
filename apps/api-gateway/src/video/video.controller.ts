@@ -8,6 +8,7 @@ import {
   HttpException,
   HttpStatus,
   Req,
+  Res,
   Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -111,6 +112,16 @@ export class VideoController {
     }
   }
 
+  @Get('uploads/:uploadId/stream')
+  @ApiOperation({ summary: 'Stream video from local storage' })
+  async streamUpload(@Param('uploadId') uploadId: string, @Res() res: any, @Req() req: any) {
+    try {
+      return await this.videoService.streamUpload(uploadId, res, req);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
   @Post('uploads/:uploadId/process-segment')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Process a video segment' })
@@ -120,6 +131,17 @@ export class VideoController {
   ) {
     try {
       return await this.videoService.processSegment(uploadId, dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('uploads/:uploadId/prepare')
+  @Roles('ADJUSTER', 'ADMIN')
+  @ApiOperation({ summary: 'Prepare video locally for processing' })
+  async prepareUpload(@Param('uploadId') uploadId: string) {
+    try {
+      return await this.videoService.prepareUpload(uploadId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -138,7 +160,7 @@ export class VideoController {
   @Post('uploads/:uploadId/generate-consent')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Generate consent form after processing' })
-  async generateConsent(@Param('uploadId') uploadId: string) {
+  async generateConsent(@Param('uploadId') uploadId: string, @Body() _body?: any) {
     try {
       return await this.videoService.generateConsent(uploadId);
     } catch (error: any) {

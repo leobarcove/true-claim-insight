@@ -34,6 +34,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Singleton client
+hume_analyzer = HumeAnalyzer()
+
+@app.on_event("startup")
+async def startup_event():
+    """Connect to Hume AI Stream on startup."""
+    try:
+        global hume_analyzer
+        await hume_analyzer._connect()
+    except Exception as e:
+        print(f"Warning: Failed to connect to Hume on startup: {e}")
 
 class AnalysisResponse(BaseModel):
     success: bool
@@ -380,8 +391,7 @@ async def analyze_expression_endpoint(
 
     try:
         # Analyze using Hume
-        analyzer = HumeAnalyzer()
-        metrics = await analyzer.analyze_video(tmp_path)
+        metrics = await hume_analyzer.analyze_video(tmp_path)
         
         # Calculate risk score specifically for Hume metrics
         risk_score, confidence = calculate_hume_risk_score(metrics)

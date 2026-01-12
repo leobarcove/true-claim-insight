@@ -9,6 +9,8 @@ import {
   HttpStatus,
   BadRequestException,
   Req,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
@@ -48,8 +50,10 @@ export class UploadsController {
       throw new BadRequestException('Only video files are allowed');
     }
 
-    // claimId is usually sent as a field in multipart
-    const claimId = data.fields?.claimId?.value;
+    // claimId is usually sent as a field in multipart, but we also check query params as a fallback
+    const claimIdField = data.fields?.claimId;
+    const claimId = claimIdField?.value || claimIdField || (req.query as any)?.claimId;
+
     if (!claimId) {
       throw new BadRequestException('Claim ID is required');
     }
@@ -73,14 +77,12 @@ export class UploadsController {
     );
 
     return {
-      data: {
-        id: upload.id,
-        videoUrl: `/uploads/videos/${filename}`,
-        duration: upload.duration || 0,
-        status: upload.status,
-        claimId: upload.claimId,
-        createdAt: upload.createdAt,
-      },
+      id: upload.id,
+      videoUrl: upload.videoUrl,
+      duration: upload.duration || 0,
+      status: upload.status,
+      claimId: upload.claimId,
+      createdAt: upload.createdAt,
     };
   }
 
@@ -90,9 +92,15 @@ export class UploadsController {
   @ApiResponse({ status: 404, description: 'Upload not found' })
   async getUpload(@Param('uploadId') uploadId: string) {
     const upload = await this.uploadsService.getUpload(uploadId);
-    return {
-      data: upload,
-    };
+    return upload;
+  }
+
+  @Post(':uploadId/prepare')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Prepare video locally for processing' })
+  @ApiResponse({ status: 200, description: 'Video prepared locally' })
+  async prepareVideo(@Param('uploadId') uploadId: string) {
+    return await this.uploadsService.prepareVideo(uploadId);
   }
 
   @Post(':uploadId/process-segment')
@@ -104,30 +112,16 @@ export class UploadsController {
     @Body() body: { startTime: number; endTime: number }
   ) {
     const result = await this.uploadsService.processSegment(uploadId, body.startTime, body.endTime);
-    return {
-      data: result,
-    };
-  }
-
-  @Get(':uploadId/deception-score')
-  @ApiOperation({ summary: 'Get deception score for uploaded video' })
-  @ApiResponse({ status: 200, description: 'Deception score retrieved' })
-  async getDeceptionScore(@Param('uploadId') uploadId: string) {
-    const score = await this.uploadsService.getDeceptionScore(uploadId);
-    return {
-      data: score,
-    };
+    return result;
   }
 
   @Post(':uploadId/generate-consent')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate consent form after video processing' })
   @ApiResponse({ status: 200, description: 'Consent form generated' })
-  async generateConsent(@Param('uploadId') uploadId: string) {
+  async generateConsent(@Param('uploadId') uploadId: string, @Body() _body?: any) {
     const result = await this.uploadsService.generateConsent(uploadId);
-    return {
-      data: result,
-    };
+    return result;
   }
 
   @Get('claim/:claimId')
@@ -135,9 +129,32 @@ export class UploadsController {
   @ApiResponse({ status: 200, description: 'Uploads retrieved' })
   async getClaimUploads(@Param('claimId') claimId: string) {
     const uploads = await this.uploadsService.getClaimUploads(claimId);
-    return {
-      data: uploads,
-    };
+    return uploads;
+  }
+
+  @Get(':uploadId/stream')
+  @ApiOperation({ summary: 'Stream the locally prepared video' })
+  async streamVideo(
+    @Param('uploadId') uploadId: string,
+    @Res({ passthrough: true }) res: any,
+    @Req() req: any
+  ) {
+    const { stream, size, total, isPartial, start, end } = await this.uploadsService.streamVideo(
+      uploadId,
+      req.headers.range
+    );
+
+    if (isPartial) {
+      res.status(206);
+      res.header('Content-Range', `bytes ${start}-${end}/${total}`);
+    }
+
+    res.header('Content-Type', 'video/mp4');
+    res.header('Content-Length', size);
+    res.header('Content-Disposition', `inline; filename="video-${uploadId}.mp4"`);
+    res.header('Accept-Ranges', 'bytes');
+
+    return new StreamableFile(stream);
   }
 
   @Delete(':uploadId')
@@ -146,8 +163,6 @@ export class UploadsController {
   @ApiResponse({ status: 200, description: 'Upload deleted' })
   async deleteUpload(@Param('uploadId') uploadId: string) {
     const result = await this.uploadsService.deleteUpload(uploadId);
-    return {
-      data: result,
-    };
+    return result;
   }
 }
