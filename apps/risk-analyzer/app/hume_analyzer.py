@@ -10,12 +10,9 @@ Uses async job pattern: submit → poll → extract results
 """
 
 import asyncio
-import tempfile
-import os
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 from hume import AsyncHumeClient
-from hume.expression_measurement.batch import Face, Prosody, Models
 from hume.expression_measurement.batch.types import UnionPredictResult
 from hume.expression_measurement.stream import Config as StreamConfig
 
@@ -33,42 +30,50 @@ class HumeAnalyzer:
         self.api_key = config.HUME_API_KEY
         self.timeout = config.HUME_JOB_TIMEOUT
         self.poll_interval = config.HUME_POLL_INTERVAL
+
+        self.socket = None
+        self.client = AsyncHumeClient(api_key=self.api_key)
+    
+    async def _connect(self):
+        if self.client and not self.socket:
+            self._ctx = self.client.expression_measurement.stream.connect()
+            self.socket = await self._ctx.__aenter__()
+            print("[HumeAnalyzer] Connected to HumeAI")
+
+    async def _disconnect(self):
+        if self._ctx:
+            await self._ctx.__aexit__(None, None, None)
+            self._ctx = None
+            self.socket = None
+            print("[HumeAnalyzer] Disconnected from HumeAI")
     
     async def analyze_audio(self, audio_path: str) -> Dict[str, Any]:
         """
         Analyze audio file for vocal prosody and emotions using Stream API.
-        """
-        client = AsyncHumeClient(api_key=self.api_key)
-        
+        """        
         try:
             model_config = StreamConfig(prosody={})
-            
-            async with client.expression_measurement.stream.connect() as socket:
-                result = await socket.send_file(audio_path, config=model_config)
-                results_list = result if isinstance(result, list) else [result]
-                metrics = self._extract_from_stream_results(results_list, "prosody")
-                return metrics
+            result = await self.socket.send_file(audio_path, config=model_config)
+            results_list = result if isinstance(result, list) else [result]
+            metrics = self._extract_from_stream_results(results_list, "prosody")
+            return metrics
             
         except Exception as e:
             print(f"[HumeAnalyzer] Audio analysis failed: {e}")
             raise
-    
+
     async def analyze_video(self, video_path: str) -> Dict[str, Any]:
         """
         Analyze video file for facial expressions and emotions using Stream API.
         Attempts both face and prosody analysis. Falls back to face only if audio is missing.
         """
-        client = AsyncHumeClient(api_key=self.api_key)
-        
         try:
             # Try with both face and prosody first
             model_config = StreamConfig(face={}, prosody={})
-            
-            async with client.expression_measurement.stream.connect() as socket:
-                result = await socket.send_file(video_path, config=model_config)
-                results_list = result if isinstance(result, list) else [result]
-                metrics = self._extract_from_stream_results(results_list, "face")
-                return metrics
+            result = await self.socket.send_file(video_path, config=model_config)
+            results_list = result if isinstance(result, list) else [result]
+            metrics = self._extract_from_stream_results(results_list, "face")
+            return metrics
             
         except Exception as e:
             error_msg = str(e)
@@ -78,12 +83,11 @@ class HumeAnalyzer:
                 try:
                     # Retry with only face model
                     face_only_config = StreamConfig(face={})
-                    async with client.expression_measurement.stream.connect() as socket:
-                        result = await socket.send_file(video_path, config=face_only_config)
-                        results_list = result if isinstance(result, list) else [result]
-                        metrics = self._extract_from_stream_results(results_list, "face")
-                        metrics["details"] = "Video analysis limited to facial expressions (no audio detected)."
-                        return metrics
+                    result = await self.socket.send_file(video_path, config=face_only_config)
+                    results_list = result if isinstance(result, list) else [result]
+                    metrics = self._extract_from_stream_results(results_list, "face")
+                    metrics["details"] = "Video analysis limited to facial expressions (no audio detected)."
+                    return metrics
                 except Exception as retry_e:
                     print(f"[HumeAnalyzer] Video face-only fallback failed: {retry_e}")
                     raise
@@ -105,7 +109,6 @@ class HumeAnalyzer:
         # Run both analyses concurrently
         audio_task = self.analyze_audio(audio_path)
         video_task = self.analyze_video(video_path)
-        
         audio_metrics, video_metrics = await asyncio.gather(audio_task, video_task)
         
         # Combine results

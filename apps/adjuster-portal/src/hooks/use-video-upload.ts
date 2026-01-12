@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
+import { RiskAssessment } from './use-video';
 
 export const videoUploadKeys = {
   all: ['video-uploads'] as const,
@@ -25,6 +26,7 @@ export interface VideoUploadMetrics {
     visualBehavior: number;
     expressionMeasurement: number;
   };
+  details?: any;
 }
 
 export interface ProcessSegmentResponse {
@@ -80,11 +82,11 @@ export function useUploadVideo() {
       onProgress?: (progress: number) => void;
     }) => {
       const formData = new FormData();
-      formData.append('video', videoFile);
       formData.append('claimId', claimId);
+      formData.append('video', videoFile);
 
       const { data } = await apiClient.post<ApiResponse<VideoUpload>>(
-        '/video/uploads/upload-assessment',
+        `/video/uploads/upload-assessment?claimId=${claimId}`,
         formData,
         {
           headers: {
@@ -124,6 +126,37 @@ export function useProcessVideoSegment(uploadId: string) {
       queryClient.invalidateQueries({ queryKey: videoUploadKeys.upload(uploadId) });
       queryClient.invalidateQueries({ queryKey: videoUploadKeys.deception(uploadId) });
     },
+  });
+}
+
+/**
+ * Hook to prepare video locally
+ */
+export function usePrepareVideo(uploadId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<ApiResponse<{ success: boolean; path: string }>>(
+        `/video/uploads/${uploadId}/prepare`
+      );
+      return data.data;
+    },
+  });
+}
+
+/**
+ * Hook to fetch risk assessments for uploaded video
+ */
+export function useVideoUploadAssessments(uploadId: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...videoUploadKeys.upload(uploadId), 'assessments'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<RiskAssessment[]>>(
+        `/video/uploads/${uploadId}/assessments`
+      );
+      return data.data;
+    },
+    enabled: !!uploadId && enabled,
+    refetchInterval: 2500, // Poll assessments for live feel
   });
 }
 
