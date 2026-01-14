@@ -18,6 +18,7 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Upload,
 } from 'lucide-react';
 
 import { Header } from '@/components/layout/header';
@@ -696,6 +697,17 @@ export function ClaimDetailPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[10px]',
+                                session.roomUrl
+                                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600'
+                              )}
+                            >
+                              {session.roomUrl ? 'Live' : 'Upload'}
+                            </Badge>
+                            <Badge
                               variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
                               className="text-[10px]"
                             >
@@ -754,6 +766,17 @@ export function ClaimDetailPage() {
                       ? 'Starting...'
                       : 'Start Video Assessment'}
                   </Button>
+
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => navigate(`/claims/${claimId}/upload-video`)}
+                    disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Video Upload
+                  </Button>
+
                   <p className="text-xs text-muted-foreground text-center mt-5">
                     Creates room & notifies claimant via SMS
                   </p>

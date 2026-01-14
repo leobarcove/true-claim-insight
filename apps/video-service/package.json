@@ -20,6 +20,7 @@
   "dependencies": {
     "@fastify/compress": "^8.0.0",
     "@fastify/helmet": "^13.0.0",
+    "@fastify/multipart": "^9.3.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
@@ -35,6 +36,8 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "fastify": "^5.6.2",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
@@ -44,6 +47,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
+    "@types/ffprobe-static": "^2.0.3",
     "@types/jest": "^29.5.0",
     "@types/node": "^22.19.3",
     "@types/passport-jwt": "^4.0.1",
@@ -62,13 +66,19 @@
     "typescript": "^5.8.0"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }
