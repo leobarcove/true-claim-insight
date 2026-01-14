@@ -11,6 +11,7 @@ import {
   Req,
   Res,
   StreamableFile,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
@@ -79,6 +80,7 @@ export class UploadsController {
     return {
       id: upload.id,
       videoUrl: upload.videoUrl,
+      recordingUrl: upload.videoUrl,
       duration: upload.duration || 0,
       status: upload.status,
       claimId: upload.claimId,
@@ -122,6 +124,28 @@ export class UploadsController {
   async generateConsent(@Param('uploadId') uploadId: string, @Body() _body?: any) {
     const result = await this.uploadsService.generateConsent(uploadId);
     return result;
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all video uploads' })
+  @ApiResponse({ status: 200, description: 'All uploads retrieved' })
+  async getAllUploads(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
+    const result = await this.uploadsService.getAllUploads(page, limit);
+    return {
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+    };
+  }
+
+  @Get(':uploadId/segments')
+  @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
+  @ApiResponse({ status: 200, description: 'Segments retrieved' })
+  async getUploadSegments(@Param('uploadId') uploadId: string) {
+    const segments = await this.uploadsService.getUploadSegments(uploadId);
+    return segments;
   }
 
   @Get('claim/:claimId')
