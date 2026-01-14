@@ -516,18 +516,62 @@ export class UploadsService {
     const segmentAudioPath = path.join(tempDir, `seg-a-${tempId}.wav`);
 
     try {
-      await execAsync(
-        `"${ffmpegPath}" -y -ss ${start} -i "${localInputPath}" -t ${end - start} ` +
-          `-map 0:v? -c:v libx264 -preset ultrafast -tune zerolatency -vf "scale=480:-2,fps=15" -crf 30 -movflags +faststart "${segmentVideoPath}" ` +
-          `-map 0:a? -vn -acodec pcm_s16le -ar 44100 -ac 1 "${segmentAudioPath}"`
-      );
+      const hasAudio = await this.hasAudioStream(localInputPath);
+      const isUrl = localInputPath.startsWith('http');
+
+      const inputOptions = isUrl
+        ? '-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -timeout 20000000'
+        : '';
+      const commonOutput = `-t ${end - start} -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart`;
+      this.logger.log(`Extracting segment ${start}-${end} from ${isUrl ? 'URL' : 'Local File'}`);
+
+      if (isUrl) {
+        await execAsync(
+          `"${ffmpegPath}" -y ${inputOptions} -i "${localInputPath}" -ss ${start} ${commonOutput} -map 0:v:0? -an "${segmentVideoPath}"`
+        );
+        if (hasAudio) {
+          await execAsync(
+            `"${ffmpegPath}" -y ${inputOptions} -i "${localInputPath}" -ss ${start} -t ${end - start} -map 0:a:0? -vn -acodec pcm_s16le -ar 44100 -ac 1 "${segmentAudioPath}"`
+          );
+        }
+      } else {
+        if (hasAudio) {
+          await execAsync(
+            `"${ffmpegPath}" -y -ss ${start} -i "${localInputPath}" -t ${end - start} ` +
+              `-map 0:v:0? -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart "${segmentVideoPath}" ` +
+              `-map 0:a:0? -vn -acodec pcm_s16le -ar 44100 -ac 1 "${segmentAudioPath}"`
+          );
+        } else {
+          await execAsync(
+            `"${ffmpegPath}" -y -ss ${start} -i "${localInputPath}" -t ${end - start} ` +
+              `-map 0:v:0? -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart "${segmentVideoPath}"`
+          );
+        }
+      }
+
+      try {
+        await fs.access(segmentVideoPath);
+      } catch (e) {
+        throw new Error(
+          `FFmpeg finished but video segment file was not created: ${segmentVideoPath}`
+        );
+      }
+
+      if (hasAudio) {
+        try {
+          await fs.access(segmentAudioPath);
+        } catch (e) {
+          this.logger.warn(`Audio segment missing despite hasAudio=true: ${segmentAudioPath}`);
+        }
+      }
 
       return await this.analyzeAndStoreSegment(
         uploadId,
         segmentVideoPath,
         segmentAudioPath,
         start,
-        end
+        end,
+        !hasAudio
       );
     } finally {
       // Cleanup segment files
@@ -546,15 +590,18 @@ export class UploadsService {
     segmentVideoPath: string,
     segmentAudioPath: string,
     startTime: number,
-    endTime: number
+    endTime: number,
+    noAudio = false
   ) {
     try {
-      const audioBuffer = await fs.readFile(segmentAudioPath);
+      const audioBuffer = !noAudio ? await fs.readFile(segmentAudioPath) : Buffer.alloc(0);
       const videoBuffer = await fs.readFile(segmentVideoPath);
       const [audioResult, videoResult, expressionResult] = await Promise.all([
-        this.callAnalyzer('/analyze-audio', audioBuffer, 'segment.wav'),
+        !noAudio
+          ? this.callAnalyzer('/analyze-audio', audioBuffer, 'segment.wav')
+          : Promise.resolve({ metrics: null, status: 'NO_AUDIO' }),
         this.callAnalyzer('/analyze-video', videoBuffer, 'segment.mp4'),
-        this.callAnalyzer('/analyze-expression', videoBuffer, 'segment.mp4'),
+        this.callAnalyzer(`/analyze-expression?noAudio=${noAudio}`, videoBuffer, 'segment.mp4'),
       ]);
 
       // Debug logging
@@ -901,6 +948,17 @@ export class UploadsService {
       `"${ffprobeStatic.path}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`
     );
     return parseFloat(stdout.trim());
+  }
+
+  private async hasAudioStream(videoPath: string): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync(
+        `"${ffprobeStatic.path}" -v error -select_streams a -show_entries stream=index -of csv=p=0 "${videoPath}"`
+      );
+      return stdout.trim().length > 0;
+    } catch (e) {
+      return false;
+    }
   }
 
   private async storeSegmentAnalysis(uploadId: string, _start: number, _end: number, metrics: any) {

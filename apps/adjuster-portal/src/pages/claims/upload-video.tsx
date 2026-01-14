@@ -165,12 +165,18 @@ export function UploadVideoPage() {
                   {uploadVideo.isPending && (
                     <div className="mt-4">
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Uploading...</span>
-                        <span className="font-medium">{uploadProgress}%</span>
+                        <span className="text-muted-foreground">
+                          {uploadProgress === 100 ? 'Processing...' : 'Uploading...'}
+                        </span>
+                        {uploadProgress < 100 && (
+                          <span className="font-medium">{uploadProgress}%</span>
+                        )}
                       </div>
                       <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary transition-all duration-300"
+                          className={`h-full bg-primary transition-all duration-1500 ease-in-out ${
+                            uploadProgress === 100 ? 'scale-105 opacity-80 animate-pulse-slow' : ''
+                          }`}
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>

@@ -275,7 +275,11 @@ export function VideoReviewPage() {
   const hasInitialSeek = useRef(false); // New: to prevent double seek on refresh
   const isSegmentProcessingRef = useRef(false); // New: explicit lock for segments
 
-  const { data: claim } = useClaim(claimId || '');
+  const { data: claim, isLoading: isClaimLoading } = useClaim(claimId || '');
+
+  const isFullyProcessed = useMemo(() => {
+    return duration > 0 && lastProcessedTime >= duration;
+  }, [duration, lastProcessedTime]);
 
   // 1. Hook declarations (Move up to avoid usage before declaration)
   const prepareVideo = usePrepareVideo(uploadId || '');
@@ -308,9 +312,13 @@ export function VideoReviewPage() {
     if (videoUpload && !hasInitializedState.current) {
       if (videoUpload.duration > 0) setDuration(videoUpload.duration);
       if (videoUpload.processedUntil > 0) {
-        setLastProcessedTime(videoUpload.processedUntil);
-        lastProcessedTimeRef.current = videoUpload.processedUntil;
-        setCurrentTime(videoUpload.processedUntil);
+        const capped =
+          videoUpload.duration > 0
+            ? Math.min(videoUpload.processedUntil, videoUpload.duration)
+            : videoUpload.processedUntil;
+        setLastProcessedTime(capped);
+        lastProcessedTimeRef.current = capped;
+        setCurrentTime(capped);
       }
       hasInitializedState.current = true;
     }
@@ -319,20 +327,41 @@ export function VideoReviewPage() {
   // Update history when new data arrives (Polling behavior)
   useEffect(() => {
     if (deceptionData) {
+      const newPoint = {
+        time: new Date().toLocaleTimeString(),
+        deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
+        voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
+        visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+        expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
+      };
+
       setMetricsHistory(prev => {
-        const newPoint = {
-          time: new Date().toLocaleTimeString(),
-          deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
-          voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
-          visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
-          expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
-        };
+        // If we already have this point (same score and breakdown), don't duplicate
+        const last = prev[prev.length - 1];
+        if (last && last.deception === newPoint.deception && last.voice === newPoint.voice) {
+          return prev;
+        }
+
         const newHistory = [...prev, newPoint];
         if (newHistory.length > 30) return newHistory.slice(newHistory.length - 30);
         return newHistory;
       });
     }
   }, [deceptionData]);
+
+  // Backfill history if already processed but graph is empty
+  useEffect(() => {
+    if (isFullyProcessed && metricsHistory.length === 0 && deceptionData) {
+      const historicalPoint = {
+        time: 'Full Analysis',
+        deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
+        voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
+        visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+        expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
+      };
+      setMetricsHistory([historicalPoint]);
+    }
+  }, [isFullyProcessed, deceptionData, metricsHistory.length]);
 
   // Prepare video on mount - Following call.tsx pattern
   useEffect(() => {
@@ -477,8 +506,9 @@ export function VideoReviewPage() {
   useEffect(() => {
     if (processSegment.isSuccess && processSegment.data) {
       const data = processSegment.data;
-      setLastProcessedTime(data.processedUntil);
-      lastProcessedTimeRef.current = data.processedUntil;
+      const cappedTime = duration ? Math.min(data.processedUntil, duration) : data.processedUntil;
+      setLastProcessedTime(cappedTime);
+      lastProcessedTimeRef.current = cappedTime;
       refetchDeception();
       if (data.metrics?.details) {
         setCurrentMetrics(data.metrics.details);
@@ -502,9 +532,9 @@ export function VideoReviewPage() {
     }
   }, [processSegment.isSuccess, processSegment.data]);
 
-  // Process video segments as it plays (Every 2.5s)
+  // Process video segments as it plays
   useEffect(() => {
-    if (!isPlaying || !videoRef.current) {
+    if (!isPlaying || !videoRef.current || isFullyProcessed) {
       if (processingIntervalRef.current) {
         clearInterval(processingIntervalRef.current);
         processingIntervalRef.current = null;
@@ -520,19 +550,53 @@ export function VideoReviewPage() {
       if (!video) return;
 
       const currentPoint = video.currentTime;
+
+      // If playback is way ahead of processing, it ensures the analysis catches up
+      const SYNC_THRESHOLD = SEGMENT_DURATION * 1.5; // 7.5s (more than one segment + buffer)
+      if (
+        currentPoint - lastProcessedTimeRef.current > SYNC_THRESHOLD &&
+        !isSegmentProcessingRef.current
+      ) {
+        const segmentStart = Math.floor(currentPoint / SEGMENT_DURATION) * SEGMENT_DURATION;
+        const potentialEnd = segmentStart + SEGMENT_DURATION;
+        const segmentEnd = duration ? Math.min(potentialEnd, duration) : potentialEnd;
+
+        // Update markers so we don't trigger the old sequence
+        lastProcessedTimeRef.current = segmentEnd;
+        setLastProcessedTime(segmentEnd);
+
+        // Trigger the latest segment
+        isSegmentProcessingRef.current = true;
+        processSegment.mutate(
+          {
+            startTime: segmentStart,
+            endTime: segmentEnd,
+          },
+          {
+            onSettled: () => {
+              isSegmentProcessingRef.current = false;
+              refetchDeception();
+            },
+          }
+        );
+      }
+
       const nextProcessPoint = lastProcessedTimeRef.current + SEGMENT_DURATION;
 
       // 1. Trigger Deception Calculation (Process Segment)
       // Check if we reached the next point AND we arent already processing
-      if (currentPoint >= nextProcessPoint && !isSegmentProcessingRef.current) {
-        console.log(
-          `VideoReview: Triggering segment processing for ${lastProcessedTimeRef.current}s to ${nextProcessPoint}s`
-        );
-        isSegmentProcessingRef.current = true;
+      if (
+        currentPoint >= nextProcessPoint &&
+        !isSegmentProcessingRef.current &&
+        lastProcessedTimeRef.current < (duration || 1000000)
+      ) {
+        const potentialEnd = nextProcessPoint;
+        const actualEnd = duration ? Math.min(potentialEnd, duration) : potentialEnd;
+
         processSegment.mutate(
           {
             startTime: lastProcessedTimeRef.current,
-            endTime: Math.min(nextProcessPoint, duration || currentPoint),
+            endTime: actualEnd,
           },
           {
             onSettled: () => {
@@ -551,7 +615,7 @@ export function VideoReviewPage() {
         clearInterval(processingIntervalRef.current);
       }
     };
-  }, [isPlaying, duration]);
+  }, [isPlaying, duration, isFullyProcessed]);
 
   const handlePlayPause = async () => {
     const video = videoRef.current;
@@ -566,13 +630,11 @@ export function VideoReviewPage() {
         const current = video.currentTime;
         // Round down to nearest 5s to align with segment grid
         const segmentStart = Math.floor(current / 5) * 5;
-        const segmentEnd = segmentStart + 5;
+        const potentialEnd = segmentStart + 5;
+        const segmentEnd = duration ? Math.min(potentialEnd, duration) : potentialEnd;
 
         // If the upcoming segment hasn't been processed yet (and isn't currently being processed)
         if (segmentStart >= lastProcessedTimeRef.current && !isSegmentProcessingRef.current) {
-          console.log(
-            `VideoReview: Play trigger - Immediate processing for segment ${segmentStart}s to ${segmentEnd}s`
-          );
           isSegmentProcessingRef.current = true;
           processSegment.mutate(
             {
@@ -647,8 +709,9 @@ export function VideoReviewPage() {
 
   const isCompleting = processSegment.isPending || generateConsent.isPending;
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const processedPercentage = duration > 0 ? (lastProcessedTime / duration) * 100 : 0;
+  const progressPercentage = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
+  const processedPercentage =
+    duration > 0 ? Math.min((lastProcessedTime / duration) * 100, 100) : 0;
 
   if (isLoadingUpload || isActuallyPreparing) {
     return (
@@ -712,7 +775,7 @@ export function VideoReviewPage() {
           </div>
         </div>
 
-        {hasWatchedToEnd && (
+        {(hasWatchedToEnd || isFullyProcessed) && (
           <Button variant="default" size="sm" onClick={handleComplete} disabled={isCompleting}>
             {isCompleting ? (
               <span className="animate-spin mr-2">⏳</span>
@@ -757,7 +820,7 @@ export function VideoReviewPage() {
                   />
                 </div>
                 <div className="flex justify-between text-xs text-slate-400 mt-1">
-                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(Math.min(currentTime, duration))}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
               </div>
@@ -786,297 +849,334 @@ export function VideoReviewPage() {
         </div>
 
         {/* Right Sidebar - Metrics & Risk */}
-        <div className="flex gap-4 min-h-0">
-          {/* Deception Score */}
-          <div className="w-60 flex flex-col">
-            <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                    Deception Score
-                  </h3>
-                  <InfoTooltip
-                    title="Analysis Info"
-                    content="Metrics are calculated from the uploaded video as it plays. Processing occurs in real-time."
-                    direction="left"
-                  />
-                </div>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] h-5 border-emerald-700 text-emerald-400"
-                >
-                  {isPlaying ? 'LIVE' : 'PAUSED'}
-                </Badge>
-              </div>
-
-              <div className="flex items-end gap-2 mb-4">
-                <span className="text-2xl font-bold text-white">
-                  {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
-                </span>
-                <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
-              </div>
-
-              {/* Metrics Graph */}
-              <div className="flex-1 min-h-0">
-                <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">
-                  Real-time Metrics
+        <div className="flex flex-col gap-4 w-128 overflow-hidden">
+          {/* Session Info */}
+          <Card className="bg-slate-900 border-slate-800 p-2 shrink-0">
+            <h3 className="text-xs font-semibold text-slate-200 mb-2 uppercase tracking-wider">
+              Session Info
+            </h3>
+            <div className="flex items-center gap-8">
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Claim ID</p>
+                <p className="text-xs text-slate-300">
+                  {isClaimLoading ? 'Loading...' : claim?.id || 'N/A'}
                 </p>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={metricsHistory}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                      <XAxis dataKey="time" hide />
-                      <YAxis domain={[0, 100]} hide />
-                      <Tooltip
-                        contentStyle={{
-                          fontSize: '9px',
-                          borderColor: '#334155',
-                          backgroundColor: '#1e293b',
-                        }}
-                        itemStyle={{ fontSize: '9px' }}
-                        labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="deception"
-                        name="Deception Score"
-                        stroke="#A855F7"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="voice"
-                        name="Voice Stress"
-                        stroke="#72B0F2"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="visual"
-                        name="Visual Behavior"
-                        stroke="#2EE797"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="expression"
-                        name="Expression Measurement"
-                        stroke="#E884B6"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               </div>
-
-              {/* Progress Bars */}
-              <div className="mt-4 space-y-3">
-                {[
-                  {
-                    label: 'Deception Score',
-                    value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
-                    color: '#A855F7',
-                  },
-                  {
-                    label: 'Voice Stress',
-                    value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
-                    color: '#72B0F2',
-                  },
-                  {
-                    label: 'Visual Behavior',
-                    value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
-                    color: '#2EE797',
-                  },
-                  {
-                    label: 'Expression Measurement',
-                    value: ((deceptionData?.breakdown?.expressionMeasurement || 0) * 100).toFixed(
-                      2
-                    ),
-                    color: '#E884B6',
-                  },
-                ].map(metric => (
-                  <div key={metric.label} className="mb-2">
-                    <div className="flex justify-between text-[10px] mb-1">
-                      <span className="text-slate-400">{metric.label}</span>
-                      <span className="text-slate-200 font-mono">{metric.value}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full transition-all duration-500"
-                        style={{
-                          width: `${metric.value}%`,
-                          backgroundColor: metric.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
+                <p className="text-xs text-slate-300">
+                  {isClaimLoading ? 'Loading...' : claim?.claimant?.fullName || 'N/A'}
+                </p>
               </div>
-            </Card>
-          </div>
-
-          {/* Risk Analysis Card */}
-          <div className="w-60 flex flex-col overflow-hidden">
-            <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between mb-4 shrink-0">
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                  Risk Analysis
-                </h3>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Policy Number</p>
+                <p className="text-xs text-slate-300">{claim?.policyNumber || 'N/A'}</p>
               </div>
+            </div>
+          </Card>
 
-              <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                {(() => {
-                  const latestVoice = assessments?.find(
-                    (a: any) => a.assessmentType === 'VOICE_ANALYSIS'
-                  );
-
-                  const latestEmotion = assessments?.find(
-                    (a: any) => (a.rawResponse as any)?.top_emotions || a.provider?.includes('Hume')
-                  );
-
-                  const latestVisual = assessments?.find(
-                    (a: any) =>
-                      a.assessmentType === 'ATTENTION_TRACKING' ||
-                      (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
-                      a.provider?.includes('MediaPipe') ||
-                      (a.assessmentType === 'VISUAL_MODERATION' &&
-                        !(a.rawResponse as any)?.top_emotions)
-                  );
-
-                  const sections = [
-                    {
-                      id: 'voice',
-                      title: 'Voice Stress',
-                      data: latestVoice
-                        ? {
-                            ...latestVoice.rawResponse,
-                            risk_score: latestVoice.riskScore,
-                            provider: latestVoice.provider,
-                          }
-                        : currentMetrics?.voice,
-                      type: 'voice',
-                      tooltip: (
-                        <div className="space-y-2">
-                          <p>
-                            Analyzes vocal patterns that may indicate stress, tension, or emotional
-                            load during speech.
-                          </p>
-                          <ul className="list-disc pl-3 space-y-1">
-                            <li>
-                              <span className="font-semibold text-slate-100">Jitter (%):</span>{' '}
-                              Measures small, rapid variations in voice pitch. Higher values may
-                              indicate vocal instability or stress.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Shimmer (%):</span>{' '}
-                              Measures variations in voice loudness. Elevated shimmer can be linked
-                              to tension or fatigue.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Pitch SD (Hz):</span>{' '}
-                              Shows how much the speaker's pitch varies. Low variation may indicate
-                              monotone delivery; high variation may signal emotional arousal.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">HNR (dB):</span>{' '}
-                              Harmonics-to-Noise Ratio. Indicates voice clarity—lower values suggest
-                              more noise or strain in the voice.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Confidence (%):</span>{' '}
-                              System confidence in the accuracy of the voice stress analysis based
-                              on audio quality and signal consistency.
-                            </li>
-                          </ul>
-                        </div>
-                      ),
-                    },
-                    {
-                      id: 'visual',
-                      title: 'Visual Behavior',
-                      data: latestVisual
-                        ? {
-                            ...latestVisual.rawResponse,
-                            risk_score: latestVisual.riskScore,
-                            provider: latestVisual.provider,
-                          }
-                        : currentMetrics?.visual,
-                      type: 'visual',
-                      tooltip: (
-                        <div className="space-y-2">
-                          <p>
-                            Tracks facial and eye-related behaviors that can reflect attention,
-                            comfort, or cognitive effort.
-                          </p>
-                          <ul className="list-disc pl-3 space-y-1">
-                            <li>
-                              <span className="font-semibold text-slate-100">
-                                Blink Rate (per min):
-                              </span>{' '}
-                              Number of blinks per minute. Changes may be associated with stress,
-                              fatigue, or focus level.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">
-                                Blink Duration (ms):
-                              </span>{' '}
-                              Average length of each blink. Longer blinks may suggest tiredness or
-                              disengagement.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Lip Tension:</span>{' '}
-                              Measures tightness around the mouth. Higher values can indicate
-                              stress, suppression, or concentration.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Frames:</span> Number
-                              of video frames analyzed for this segment. Higher counts generally
-                              improve reliability.
-                            </li>
-                            <li>
-                              <span className="font-semibold text-slate-100">Confidence (%):</span>{' '}
-                              System confidence in visual behavior detection based on lighting, face
-                              visibility, and tracking quality.
-                            </li>
-                          </ul>
-                        </div>
-                      ),
-                    },
-                    {
-                      id: 'emotion',
-                      title: 'Expression',
-                      data: latestEmotion
-                        ? {
-                            ...latestEmotion.rawResponse,
-                            risk_score: latestEmotion.riskScore,
-                            provider: latestEmotion.provider,
-                          }
-                        : currentMetrics?.expression,
-                      type: 'emotion',
-                      tooltip:
-                        'Detects emotional and cognitive states based on facial expressions and micro-expressions.',
-                    },
-                  ];
-
-                  return sections.map(section => (
-                    <RiskAssessmentCard
-                      key={section.id}
-                      title={section.title}
-                      data={section.data}
-                      type={section.type as any}
-                      tooltip={(section as any).tooltip}
+          <div className="flex flex-1 gap-4 min-h-0">
+            {/* Deception Score */}
+            <div className="w-60 flex flex-col">
+              <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                      Deception Score
+                    </h3>
+                    <InfoTooltip
+                      title="Analysis Info"
+                      content="Metrics are calculated from the uploaded video as it plays. Processing occurs in real-time."
+                      direction="left"
                     />
-                  ));
-                })()}
-              </div>
-            </Card>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] h-5 border-emerald-700 text-emerald-400"
+                  >
+                    {isPlaying ? 'LIVE' : 'PAUSED'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-end gap-2 mb-4">
+                  <span className="text-2xl font-bold text-white">
+                    {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+                </div>
+
+                {/* Metrics Graph */}
+                <div className="flex-1 min-h-0">
+                  <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">
+                    Real-time Metrics
+                  </p>
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={metricsHistory}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                        <XAxis dataKey="time" hide />
+                        <YAxis domain={[0, 100]} hide />
+                        <Tooltip
+                          contentStyle={{
+                            fontSize: '9px',
+                            borderColor: '#334155',
+                            backgroundColor: '#1e293b',
+                          }}
+                          itemStyle={{ fontSize: '9px' }}
+                          labelStyle={{
+                            color: '#FBFAF2',
+                            textAlign: 'center',
+                            marginBottom: '4px',
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="deception"
+                          name="Deception Score"
+                          stroke="#A855F7"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="voice"
+                          name="Voice Stress"
+                          stroke="#72B0F2"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="visual"
+                          name="Visual Behavior"
+                          stroke="#2EE797"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="expression"
+                          name="Expression Measurement"
+                          stroke="#E884B6"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Progress Bars */}
+                <div className="mt-4 space-y-3">
+                  {[
+                    {
+                      label: 'Deception Score',
+                      value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
+                      color: '#A855F7',
+                    },
+                    {
+                      label: 'Voice Stress',
+                      value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
+                      color: '#72B0F2',
+                    },
+                    {
+                      label: 'Visual Behavior',
+                      value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+                      color: '#2EE797',
+                    },
+                    {
+                      label: 'Expression Measurement',
+                      value: ((deceptionData?.breakdown?.expressionMeasurement || 0) * 100).toFixed(
+                        2
+                      ),
+                      color: '#E884B6',
+                    },
+                  ].map(metric => (
+                    <div key={metric.label} className="mb-2">
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-slate-400">{metric.label}</span>
+                        <span className="text-slate-200 font-mono">{metric.value}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full transition-all duration-500"
+                          style={{
+                            width: `${metric.value}%`,
+                            backgroundColor: metric.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+
+            {/* Risk Analysis Card */}
+            <div className="w-60 flex flex-col overflow-hidden">
+              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4 shrink-0">
+                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                    Risk Analysis
+                  </h3>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                  {(() => {
+                    const latestVoice = assessments?.find(
+                      (a: any) => a.assessmentType === 'VOICE_ANALYSIS'
+                    );
+
+                    const latestEmotion = assessments?.find(
+                      (a: any) =>
+                        (a.rawResponse as any)?.top_emotions || a.provider?.includes('Hume')
+                    );
+
+                    const latestVisual = assessments?.find(
+                      (a: any) =>
+                        a.assessmentType === 'ATTENTION_TRACKING' ||
+                        (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
+                        a.provider?.includes('MediaPipe') ||
+                        (a.assessmentType === 'VISUAL_MODERATION' &&
+                          !(a.rawResponse as any)?.top_emotions)
+                    );
+
+                    const sections = [
+                      {
+                        id: 'voice',
+                        title: 'Voice Stress',
+                        data: latestVoice
+                          ? {
+                              ...latestVoice.rawResponse,
+                              risk_score: latestVoice.riskScore,
+                              provider: latestVoice.provider,
+                            }
+                          : currentMetrics?.voice,
+                        type: 'voice',
+                        tooltip: (
+                          <div className="space-y-2">
+                            <p>
+                              Analyzes vocal patterns that may indicate stress, tension, or
+                              emotional load during speech.
+                            </p>
+                            <ul className="list-disc pl-3 space-y-1">
+                              <li>
+                                <span className="font-semibold text-slate-100">Jitter (%):</span>{' '}
+                                Measures small, rapid variations in voice pitch. Higher values may
+                                indicate vocal instability or stress.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Shimmer (%):</span>{' '}
+                                Measures variations in voice loudness. Elevated shimmer can be
+                                linked to tension or fatigue.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Pitch SD (Hz):</span>{' '}
+                                Shows how much the speaker's pitch varies. Low variation may
+                                indicate monotone delivery; high variation may signal emotional
+                                arousal.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">HNR (dB):</span>{' '}
+                                Harmonics-to-Noise Ratio. Indicates voice clarity—lower values
+                                suggest more noise or strain in the voice.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Confidence (%):
+                                </span>{' '}
+                                System confidence in the accuracy of the voice stress analysis based
+                                on audio quality and signal consistency.
+                              </li>
+                            </ul>
+                          </div>
+                        ),
+                      },
+                      {
+                        id: 'visual',
+                        title: 'Visual Behavior',
+                        data: latestVisual
+                          ? {
+                              ...latestVisual.rawResponse,
+                              risk_score: latestVisual.riskScore,
+                              provider: latestVisual.provider,
+                            }
+                          : currentMetrics?.visual,
+                        type: 'visual',
+                        tooltip: (
+                          <div className="space-y-2">
+                            <p>
+                              Tracks facial and eye-related behaviors that can reflect attention,
+                              comfort, or cognitive effort.
+                            </p>
+                            <ul className="list-disc pl-3 space-y-1">
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Blink Rate (per min):
+                                </span>{' '}
+                                Number of blinks per minute. Changes may be associated with stress,
+                                fatigue, or focus level.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Blink Duration (ms):
+                                </span>{' '}
+                                Average length of each blink. Longer blinks may suggest tiredness or
+                                disengagement.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Lip Tension:</span>{' '}
+                                Measures tightness around the mouth. Higher values can indicate
+                                stress, suppression, or concentration.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">Frames:</span> Number
+                                of video frames analyzed for this segment. Higher counts generally
+                                improve reliability.
+                              </li>
+                              <li>
+                                <span className="font-semibold text-slate-100">
+                                  Confidence (%):
+                                </span>{' '}
+                                System confidence in visual behavior detection based on lighting,
+                                face visibility, and tracking quality.
+                              </li>
+                            </ul>
+                          </div>
+                        ),
+                      },
+                      {
+                        id: 'emotion',
+                        title: 'Expression',
+                        data: latestEmotion
+                          ? {
+                              ...latestEmotion.rawResponse,
+                              risk_score: latestEmotion.riskScore,
+                              provider: latestEmotion.provider,
+                            }
+                          : currentMetrics?.expression,
+                        type: 'emotion',
+                        tooltip:
+                          'Detects emotional and cognitive states based on facial expressions and micro-expressions.',
+                      },
+                    ];
+
+                    return sections.map(section => (
+                      <RiskAssessmentCard
+                        key={section.id}
+                        title={section.title}
+                        data={section.data}
+                        type={section.type as any}
+                        tooltip={(section as any).tooltip}
+                      />
+                    ));
+                  })()}
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

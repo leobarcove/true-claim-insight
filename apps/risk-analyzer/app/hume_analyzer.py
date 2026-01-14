@@ -62,16 +62,44 @@ class HumeAnalyzer:
             print(f"[HumeAnalyzer] Audio analysis failed: {e}")
             raise
 
-    async def analyze_video(self, video_path: str) -> Dict[str, Any]:
+    async def analyze_video(self, video_path: str, has_audio: bool = True) -> Dict[str, Any]:
         """
         Analyze video file for facial expressions and emotions using Stream API.
         Attempts both face and prosody analysis. Falls back to face only if audio is missing.
         """
         try:
-            # Try with both face and prosody first
-            model_config = StreamConfig(face={}, prosody={})
+            print(f"[HumeAnalyzer] Analyzing video: {video_path} (has_audio={has_audio})")
+
+            # Choose config based on audio presence
+            if has_audio:
+                model_config = StreamConfig(face={}, prosody={})
+            else:
+                model_config = StreamConfig(face={})
+                
             result = await self.socket.send_file(video_path, config=model_config)
+            
+            # Check if any part of the result contains the 'video_no_audio' error
             results_list = result if isinstance(result, list) else [result]
+            
+            has_prosody_error = False
+            for res in results_list:
+                # Check for error in the result dict/object
+                error = getattr(res, 'error', None) or (res.get('error') if isinstance(res, dict) else None)
+                code = getattr(res, 'code', None) or (res.get('code') if isinstance(res, dict) else None)
+                
+                if (code == 'E0102') or (error and "prosody" in error.lower() and "video_no_audio" in error.lower()):
+                    has_prosody_error = True
+                    break
+            
+            if has_prosody_error:
+                print(f"[HumeAnalyzer] Video has no audio (detected in response), retrying with face only...")
+                face_only_config = StreamConfig(face={})
+                result = await self.socket.send_file(video_path, config=face_only_config)
+                results_list = result if isinstance(result, list) else [result]
+                metrics = self._extract_from_stream_results(results_list, "face")
+                metrics["details"] = "Video analysis limited to facial expressions (no audio detected)."
+                return metrics
+
             metrics = self._extract_from_stream_results(results_list, "face")
             return metrics
             
@@ -79,7 +107,7 @@ class HumeAnalyzer:
             error_msg = str(e)
             # Check if the error is specifically about prosody not being supported for video_no_audio
             if "prosody" in error_msg and "video_no_audio" in error_msg:
-                print(f"[HumeAnalyzer] Video has no audio, retrying with face only...")
+                print(f"[HumeAnalyzer] Video has no audio (detected in exception), retrying with face only...")
                 try:
                     # Retry with only face model
                     face_only_config = StreamConfig(face={})
@@ -168,32 +196,62 @@ class HumeAnalyzer:
         emotion_counts = {}
         frame_count = 0
         
-        for res in results:
-            # Handle results containing face and/or prosody predictions
-            for model_name in ["face", "prosody"]:
-                model_data = getattr(res, model_name, None)
-                if not model_data and isinstance(res, dict):
-                    model_data = res.get(model_name)
+        for i, res in enumerate(results):
+            # Check for data in both 'res' directly and in 'res.models'
+            data_sources = [res]
+            models = getattr(res, 'models', None)
+            if not models and isinstance(res, dict):
+                models = res.get('models')
+            if models:
+                data_sources.append(models)
+
+            for source in data_sources:
+                for model_name in ["face", "prosody"]:
+                    model_data = getattr(source, model_name, None)
+                    if not model_data and isinstance(source, dict):
+                        model_data = source.get(model_name)
                     
-                if model_data and hasattr(model_data, 'predictions') and model_data.predictions:
-                    for pred in model_data.predictions:
-                        if model_name == "face":
-                            frame_count += 1
-                        if hasattr(pred, 'emotions') and pred.emotions:
-                            for emotion in pred.emotions:
-                                name = emotion.name
-                                score = emotion.score
-                                all_emotions[name] = all_emotions.get(name, 0) + score
-                                emotion_counts[name] = emotion_counts.get(name, 0) + 1
+                    if not model_data:
+                        continue
+                        
+                    # Extract predictions
+                    preds = []
+                    if hasattr(model_data, 'predictions'):
+                        preds = model_data.predictions
+                    elif isinstance(model_data, dict):
+                        preds = model_data.get('predictions', [])
+
+                    if preds:
+                        for pred in preds:
+                            if model_name == "face":
+                                frame_count += 1
+                            
+                            # Extract emotions from prediction
+                            emotions = []
+                            if hasattr(pred, 'emotions'):
+                                emotions = pred.emotions
+                            elif isinstance(pred, dict):
+                                emotions = pred.get('emotions', [])
+                            
+                            if emotions:
+                                for emotion in emotions:
+                                    # Handle both object and dict for emotion
+                                    name = getattr(emotion, 'name', None) or (emotion.get('name') if isinstance(emotion, dict) else None)
+                                    score = getattr(emotion, 'score', None) or (emotion.get('score') if isinstance(emotion, dict) else None)
+                                    
+                                    if name and score is not None:
+                                        all_emotions[name] = all_emotions.get(name, 0) + score
+                                        emotion_counts[name] = emotion_counts.get(name, 0) + 1
         
-        print(all_emotions)
+        print(f"[HumeAnalyzer] Aggregated emotions: {all_emotions}")
         if not all_emotions:
+            print(f"[HumeAnalyzer] No emotions detected across {len(results)} results. Frame count: {frame_count}")
             return {
                 "provider": f"HumeAI-Stream-{primary_model.capitalize()}",
                 "model": primary_model,
                 "top_emotions": [],
                 "risk_emotion_sum": 0,
-                "frames_analyzed": 0,
+                "frames_analyzed": frame_count,
                 "emotion_count": 0,
                 "timestamp": datetime.utcnow().isoformat()
             }
