@@ -207,6 +207,7 @@ export class UploadsService {
 
     return {
       ...upload,
+      recordingUrl: upload.videoUrl,
       sessionId: session?.id,
     };
   }
@@ -801,11 +802,99 @@ export class UploadsService {
     });
 
     return Promise.all(
-      uploads.map(async upload => ({
-        ...upload,
-        videoUrl: await this.signUrlIfNeeded(upload.videoUrl),
-      }))
+      uploads.map(async upload => {
+        const signedUrl = await this.signUrlIfNeeded(upload.videoUrl);
+        return {
+          ...upload,
+          videoUrl: signedUrl,
+          recordingUrl: signedUrl,
+        };
+      })
     );
+  }
+
+  async getAllUploads(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [uploads, total] = await Promise.all([
+      prisma.videoUpload.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          claim: {
+            select: {
+              id: true,
+              claimNumber: true,
+              claimant: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.videoUpload.count(),
+    ]);
+
+    const data = await Promise.all(
+      uploads.map(async upload => {
+        const signedUrl = await this.signUrlIfNeeded(upload.videoUrl);
+        return {
+          ...upload,
+          videoUrl: signedUrl,
+          recordingUrl: signedUrl,
+        };
+      })
+    );
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getUploadSegments(uploadId: string) {
+    const upload = await prisma.videoUpload.findUnique({
+      where: { id: uploadId },
+    });
+
+    if (!upload) {
+      throw new NotFoundException('Video upload not found');
+    }
+
+    // Get the session associated with this upload
+    const session = await prisma.session.findFirst({
+      where: { claimId: upload.claimId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      return [];
+    }
+
+    // Get deception scores for this session as segments
+    const scores = await prisma.deceptionScore.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Convert deception scores to segment format
+    return scores.map((score, index) => ({
+      id: score.id,
+      uploadId: uploadId,
+      startTime: index * 5, // Assuming 5-second segments
+      endTime: (index + 1) * 5,
+      deceptionScore: score.deceptionScore,
+      voiceStress: score.voiceStress,
+      visualBehavior: score.visualBehavior,
+      expressionMeasurement: score.expressionMeasurement,
+      createdAt: score.createdAt,
+    }));
   }
 
   async deleteUpload(uploadId: string) {
@@ -1167,7 +1256,7 @@ export class UploadsService {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ expiresIn: 3600 }), // 1 hour
+          body: JSON.stringify({ expiresIn: 31536000 }), // 1 year
         }
       );
 

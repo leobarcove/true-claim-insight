@@ -10,6 +10,7 @@ import {
   Req,
   Res,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -31,6 +32,16 @@ export class VideoController {
   async createRoom(@Body() dto: CreateRoomDto) {
     try {
       return await this.videoService.createRoom(dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('rooms')
+  @ApiOperation({ summary: 'Get all video sessions' })
+  async getAllSessions(@Query('page') page?: number, @Query('limit') limit?: number) {
+    try {
+      return await this.videoService.getAllSessions(page, limit);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -102,11 +113,31 @@ export class VideoController {
     }
   }
 
+  @Get('uploads')
+  @ApiOperation({ summary: 'Get all video uploads' })
+  async getAllUploads(@Query('page') page?: number, @Query('limit') limit?: number) {
+    try {
+      return await this.videoService.getAllUploads(page, limit);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
   @Get('uploads/:uploadId')
   @ApiOperation({ summary: 'Get video upload details' })
   async getUpload(@Param('uploadId') uploadId: string) {
     try {
       return await this.videoService.getUpload(uploadId);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('uploads/:uploadId/segments')
+  @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
+  async getUploadSegments(@Param('uploadId') uploadId: string) {
+    try {
+      return await this.videoService.getUploadSegments(uploadId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

@@ -10,7 +10,7 @@ export class RoomsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly dailyService: DailyService,
+    private readonly dailyService: DailyService
   ) {}
 
   /**
@@ -42,7 +42,9 @@ export class RoomsService {
     });
 
     if (existingSession && existingSession.roomUrl) {
-      this.logger.log(`Returning existing active session ${existingSession.id} for claim ${dto.claimId}`);
+      this.logger.log(
+        `Returning existing active session ${existingSession.id} for claim ${dto.claimId}`
+      );
       return { session: existingSession, roomUrl: existingSession.roomUrl };
     }
 
@@ -73,11 +75,18 @@ export class RoomsService {
       where: { id: sessionId },
       include: {
         claim: {
-          select: {
-            claimNumber: true,
-            claimType: true,
-            status: true,
+          include: {
+            claimant: {
+              select: {
+                fullName: true,
+                phoneNumber: true,
+                email: true,
+              },
+            },
           },
+        },
+        deceptionScores: {
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
@@ -86,13 +95,28 @@ export class RoomsService {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
+    // Enhance COMPLETED session with fresh recording link
+    if (session.status === SessionStatus.COMPLETED) {
+      try {
+        const recording = await this.getRecordingLink(session.id);
+        if (recording && recording.download_link) {
+          return { ...session, recordingUrl: recording.download_link };
+        }
+      } catch (e: any) {
+        this.logger.warn(`Failed to resolve recording for session ${session.id}: ${e.message}`);
+      }
+    }
+
     return session;
   }
 
   /**
    * Get Daily.co token and room info for joining
    */
-  async joinRoom(sessionId: string, dto: JoinRoomDto): Promise<{
+  async joinRoom(
+    sessionId: string,
+    dto: JoinRoomDto
+  ): Promise<{
     roomUrl: string;
     token: string;
     sessionId: string;
@@ -118,14 +142,14 @@ export class RoomsService {
       roomName,
       dto.userId,
       userName,
-      isOwner,
+      isOwner
     );
 
     // Update session status if this is the first join
     if (session.status === SessionStatus.WAITING || session.status === SessionStatus.SCHEDULED) {
       await this.prisma.session.update({
         where: { id: sessionId },
-        data: { 
+        data: {
           status: SessionStatus.IN_PROGRESS,
           startedAt: new Date(),
         },
@@ -180,6 +204,84 @@ export class RoomsService {
   }
 
   /**
+   * Get all sessions with pagination
+   */
+  async getAllSessions(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [sessions, total] = await Promise.all([
+      this.prisma.session.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          claim: {
+            select: {
+              id: true,
+              claimNumber: true,
+              claimant: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          },
+          deceptionScores: {
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      }),
+      this.prisma.session.count(),
+    ]);
+
+    // Optimize: Fetch all recordings from Daily.co once to avoid noise
+    const recordingsRes = (await this.dailyService.listRecordings()) as any;
+    const allRecordings = recordingsRes.data || [];
+
+    // Enhance sessions with recording links if missing
+    const enhancedSessions = await Promise.all(
+      sessions.map(async session => {
+        // Try to find a recording link for any session that doesn't have a static one
+        // or if it's currently IN_PROGRESS/COMPLETED (as links expire)
+        if (
+          !session.recordingUrl ||
+          session.status === SessionStatus.IN_PROGRESS ||
+          session.status === SessionStatus.COMPLETED
+        ) {
+          try {
+            const roomName = session.roomUrl?.split('/').pop();
+            const sessionRecordings = allRecordings.filter((r: any) => r.room_name === roomName);
+
+            if (sessionRecordings.length > 0) {
+              // Get the latest recording for this room
+              const latest = sessionRecordings.sort(
+                (a: any, b: any) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )[0];
+
+              const linkRes = await this.dailyService.getRecordingAccessLink(latest.id);
+              if (linkRes && linkRes.download_link) {
+                return { ...session, recordingUrl: linkRes.download_link };
+              }
+            }
+          } catch (e: any) {
+            this.logger.warn(`Failed to resolve recording for session ${session.id}: ${e.message}`);
+          }
+        }
+        return session;
+      })
+    );
+
+    return {
+      data: enhancedSessions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
    * Cancel a scheduled session
    */
   async cancelSession(sessionId: string): Promise<Session> {
@@ -203,5 +305,37 @@ export class RoomsService {
       where: { id: sessionId },
       data: { status: SessionStatus.CANCELLED },
     });
+  }
+
+  /**
+   * Get recordings for a session
+   */
+  async getRecordings(sessionId: string) {
+    const session = await this.getRoom(sessionId);
+    const roomName = session.roomUrl?.split('/').pop();
+    if (!roomName) return { total_count: 0, data: [] };
+
+    return this.dailyService.listRecordings(roomName);
+  }
+
+  /**
+   * Get the most recent recording link for a session
+   */
+  async getRecordingLink(sessionId: string) {
+    const session = await this.getRoom(sessionId);
+    const roomName = session.roomUrl?.split('/').pop();
+    if (!roomName) return null;
+
+    const recordings = (await this.dailyService.listRecordings(roomName)) as any;
+    if (!recordings.data || recordings.data.length === 0) {
+      return null;
+    }
+
+    // Sort by creation time to get the latest
+    const latest = recordings.data.sort(
+      (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+
+    return this.dailyService.getRecordingAccessLink(latest.id);
   }
 }

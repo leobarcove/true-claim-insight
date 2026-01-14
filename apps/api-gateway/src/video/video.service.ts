@@ -36,6 +36,14 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
+  async getAllSessions(page?: number, limit?: number) {
+    const url = new URL(`${this.baseUrl}/rooms`);
+    if (page) url.searchParams.append('page', page.toString());
+    if (limit) url.searchParams.append('limit', limit.toString());
+    const response = await fetch(url.toString());
+    return this.handleResponse(response);
+  }
+
   async joinRoom(id: string, dto: JoinRoomDto) {
     const response = await fetch(`${this.baseUrl}/rooms/${id}/join`, {
       method: 'POST',
@@ -93,6 +101,19 @@ export class VideoService {
 
   async getUpload(uploadId: string) {
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`);
+    return this.handleResponse(response);
+  }
+
+  async getAllUploads(page?: number, limit?: number) {
+    const url = new URL(`${this.baseUrl}/uploads`);
+    if (page) url.searchParams.append('page', page.toString());
+    if (limit) url.searchParams.append('limit', limit.toString());
+    const response = await fetch(url.toString());
+    return this.handleResponse(response);
+  }
+
+  async getUploadSegments(uploadId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/segments`);
     return this.handleResponse(response);
   }
 

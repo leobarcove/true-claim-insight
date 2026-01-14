@@ -17,14 +17,14 @@ interface DailyMeetingToken {
 /**
  * Daily.co Video Service
  * Handles video room creation and management via Daily.co API
- * 
+ *
  * Much simpler than TRTC - just REST API calls with Bearer token auth
  */
 @Injectable()
 export class DailyService implements OnModuleInit {
   private readonly logger = new Logger(DailyService.name);
   private readonly apiUrl = 'https://api.daily.co/v1';
-  
+
   private apiKey!: string;
   private domain!: string;
   private isConfigured = false;
@@ -60,7 +60,7 @@ export class DailyService implements OnModuleInit {
 
   /**
    * Create a new video room
-   * 
+   *
    * @param name - Unique room name (optional, auto-generated if not provided)
    * @param expiryMinutes - Minutes until room expires (default: 60)
    * @returns Room details including URL
@@ -106,7 +106,7 @@ export class DailyService implements OnModuleInit {
       throw new Error(`Daily.co API error: ${response.status}`);
     }
 
-    const room = await response.json() as DailyRoom;
+    const room = (await response.json()) as DailyRoom;
     this.logger.log(`Created room: ${room.url}`);
     return room;
   }
@@ -155,7 +155,7 @@ export class DailyService implements OnModuleInit {
 
   /**
    * Generate a meeting token for a user to join a room
-   * 
+   *
    * @param roomName - The room to join
    * @param userId - User identifier
    * @param userName - Display name in the call
@@ -165,7 +165,7 @@ export class DailyService implements OnModuleInit {
     roomName: string,
     userId: string,
     userName: string,
-    isOwner = false,
+    isOwner = false
   ): Promise<string> {
     if (!this.isConfigured) {
       return `mock-token-${userId}-${Date.now()}`;
@@ -199,14 +199,90 @@ export class DailyService implements OnModuleInit {
         throw new Error(`Daily.co API error: ${response.status}`);
       }
 
-      const data = await response.json() as DailyMeetingToken;
+      const data = (await response.json()) as DailyMeetingToken;
       return data.token;
     } catch (error: any) {
-      if (isDev && (error.name === 'ConnectTimeoutError' || error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.message.includes('timeout'))) {
-        this.logger.warn(`Daily.co API timeout - falling back to mock token for dev: ${error.message}`);
+      if (
+        isDev &&
+        (error.name === 'ConnectTimeoutError' ||
+          error.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+          error.message.includes('timeout'))
+      ) {
+        this.logger.warn(
+          `Daily.co API timeout - falling back to mock token for dev: ${error.message}`
+        );
         return `mock-token-${userId}-${Date.now()}`;
       }
       throw error;
     }
+  }
+
+  /**
+   * List all recordings, optionally filtered by room name
+   */
+  async listRecordings(roomName?: string) {
+    if (!this.isConfigured) return { total_count: 0, data: [] };
+
+    const url = new URL(`${this.apiUrl}/recordings`);
+    if (roomName) url.searchParams.append('room_name', roomName);
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Daily.co API error: ${response.status} ${await response.text()}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get specific recording details
+   */
+  async getRecordingDetails(recordingId: string) {
+    if (!this.isConfigured) return null;
+
+    const response = await fetch(`${this.apiUrl}/recordings/${recordingId}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Daily.co API error: ${response.status} ${await response.text()}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get an access link for a recording (expires after 1 hour by default)
+   */
+  async getRecordingAccessLink(recordingId: string) {
+    if (!this.isConfigured) return { download_link: '#' };
+
+    const response = await fetch(`${this.apiUrl}/recordings/${recordingId}/access-link`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Daily.co API error: ${response.status} ${await response.text()}`);
+    }
+
+    return response.json() as Promise<{ download_link: string }>;
+  }
+
+  /**
+   * Delete a recording
+   */
+  async deleteRecording(recordingId: string) {
+    if (!this.isConfigured) return true;
+
+    const response = await fetch(`${this.apiUrl}/recordings/${recordingId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    return response.ok;
   }
 }
