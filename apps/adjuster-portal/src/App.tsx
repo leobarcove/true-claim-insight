@@ -11,6 +11,8 @@ import { DashboardPage } from '@/pages/dashboard';
 import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
 import { NewClaimPage } from '@/pages/claims/new';
+import { UploadVideoPage } from '@/pages/claims/upload-video';
+import { VideoReviewPage } from '@/pages/claims/video-review';
 import { VideoCallPage } from '@/pages/video/call';
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
@@ -82,12 +84,36 @@ export default function App() {
               <Route
                 path="/claims/new"
                 element={
-                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'INSURER_STAFF', 'SUPER_ADMIN']}>
+                  <RoleRoute
+                    allowedRoles={[
+                      'ADJUSTER',
+                      'FIRM_ADMIN',
+                      'INSURER_ADMIN',
+                      'INSURER_STAFF',
+                      'SUPER_ADMIN',
+                    ]}
+                  >
                     <NewClaimPage />
                   </RoleRoute>
                 }
               />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
+              <Route
+                path="/claims/:id/upload-video"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                    <UploadVideoPage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/claims/:id/video-review/:uploadId"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                    <VideoReviewPage />
+                  </RoleRoute>
+                }
+              />
               <Route
                 path="/video/:sessionId"
                 element={
