@@ -80,6 +80,13 @@ export class AssessmentsService {
     const deceptionScore = w * wvs + w * wvb + w * wem;
     const isHighRisk = deceptionScore > 0.7;
 
+    // Find the latest processed time across all assessments to provide precise temporal progress
+    let processedUntil = 0;
+    assessments.forEach(a => {
+      const endTime = (a.rawResponse as any)?.endTime || 0;
+      if (endTime > processedUntil) processedUntil = endTime;
+    });
+
     // Persist deception calculation with NaN safeguards
     await (this.prisma as any).deceptionScore.create({
       data: {
@@ -92,12 +99,13 @@ export class AssessmentsService {
     });
 
     return {
-      deceptionScore: parseFloat(deceptionScore.toFixed(2)),
+      deceptionScore: parseFloat(deceptionScore.toFixed(4)),
       isHighRisk,
+      processedUntil: Number(processedUntil.toFixed(2)),
       breakdown: {
-        voiceStress: parseFloat(wvs.toFixed(2)),
-        visualBehavior: parseFloat(wvb.toFixed(2)),
-        expressionMeasurement: parseFloat(wem.toFixed(2)),
+        voiceStress: parseFloat(wvs.toFixed(4)),
+        visualBehavior: parseFloat(wvb.toFixed(4)),
+        expressionMeasurement: parseFloat(wem.toFixed(4)),
       },
       latestDataTimestamp: assessments[0]?.createdAt || null,
     };

@@ -354,10 +354,10 @@ export class UploadsService {
    * Process a video segment and generate deception metrics
    */
   async processSegment(uploadId: string, startTime: number, endTime: number) {
-    // Implement look-ahead strategy: Process the 5s window starting from the current startTime
-    const segmentDuration = 5;
+    // Priority: use provided endTime, fallback to 5s window
+    const defaultDuration = 5;
     const targetStart = startTime;
-    const targetEnd = startTime + segmentDuration;
+    const targetEnd = endTime && endTime > startTime ? endTime : startTime + defaultDuration;
     const cacheKey = `${uploadId}-${targetStart}-${targetEnd}`;
 
     // Deduplication: If already processing this segment, return the existing promise
@@ -374,23 +374,51 @@ export class UploadsService {
         let inputPath = localPath;
 
         if (!fs_sync.existsSync(localPath)) {
+          // Check if a download is already in progress and wait for it
+          const preparationPromise = this.preparationPromises.get(uploadId);
+          if (preparationPromise) {
+            this.logger.log(
+              `Waiting for local video preparation before processing segment for ${uploadId}...`
+            );
+            await preparationPromise.catch(() => {});
+          }
+
+          // Re-check existence after waiting
+          if (fs_sync.existsSync(localPath)) {
+            this.logger.log(`Local file found after waiting for preparation for ${uploadId}`);
+            inputPath = localPath;
+          } else {
+            this.logger.warn(
+              `Local file still not found for ${uploadId} after waiting, using remote URL for segment extraction`
+            );
+            const upload = await this.getUpload(uploadId);
+            inputPath = upload.videoUrl;
+          }
+        }
+        const duration = await this.getVideoDuration(inputPath);
+        const actualEnd = duration ? Math.min(targetEnd, duration) : targetEnd;
+
+        // Skip if segment is effectively empty or starts at/after duration
+        if (duration && (targetStart >= duration || actualEnd - targetStart < 0.1)) {
           this.logger.log(
-            `Local file not found for ${uploadId}, using remote URL for segment extraction`
+            `Skipping tiny or out-of-bounds segment: ${targetStart}-${actualEnd} (duration: ${duration})`
           );
-          const upload = await this.getUpload(uploadId);
-          inputPath = upload.videoUrl;
+          return {
+            processedUntil: duration || actualEnd,
+            metrics: null,
+          };
         }
 
         const metrics = await this.extractAndAnalyzeSegment(
           uploadId,
           inputPath,
           targetStart,
-          targetEnd
+          actualEnd
         );
 
         return {
           uploadId,
-          processedUntil: targetEnd,
+          processedUntil: actualEnd,
           metrics,
         };
       } finally {
@@ -519,19 +547,38 @@ export class UploadsService {
       const hasAudio = await this.hasAudioStream(localInputPath);
       const isUrl = localInputPath.startsWith('http');
 
+      const roundedStart = Math.max(0, Number(start.toFixed(2)));
+      const roundedEnd = Number(end.toFixed(2));
+      const segmentDuration = Number((roundedEnd - roundedStart).toFixed(2));
+
+      // Guard: Skip extraction if duration is too small (< 0.1s)
+      if (segmentDuration < 0.1) {
+        this.logger.log(
+          `Skipping segment extraction: ${roundedStart}-${roundedEnd} (duration ${segmentDuration}s is too small)`
+        );
+        return null;
+      }
+
+      // Simplified input options for better stability with remote URLs
       const inputOptions = isUrl
-        ? '-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -timeout 20000000'
+        ? '-reconnect 1 -reconnect_at_eof 1 -reconnect_delay_max 2 -timeout 10000000'
         : '';
-      const commonOutput = `-t ${end - start} -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart`;
-      this.logger.log(`Extracting segment ${start}-${end} from ${isUrl ? 'URL' : 'Local File'}`);
+
+      const commonOutput = `-t ${segmentDuration} -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart`;
+      this.logger.log(
+        `Extracting segment ${roundedStart}-${roundedEnd} (dur: ${segmentDuration}s) from ${
+          isUrl ? 'URL' : 'Local File'
+        }`
+      );
 
       if (isUrl) {
+        // Move -ss BEFORE -i for input seeking (much faster and stable for URLs)
         await execAsync(
-          `"${ffmpegPath}" -y ${inputOptions} -i "${localInputPath}" -ss ${start} ${commonOutput} -map 0:v:0? -an "${segmentVideoPath}"`
+          `"${ffmpegPath}" -y ${inputOptions} -ss ${roundedStart} -i "${localInputPath}" ${commonOutput} -map 0:v:0? -an "${segmentVideoPath}"`
         );
         if (hasAudio) {
           await execAsync(
-            `"${ffmpegPath}" -y ${inputOptions} -i "${localInputPath}" -ss ${start} -t ${end - start} -map 0:a:0? -vn -acodec pcm_s16le -ar 44100 -ac 1 "${segmentAudioPath}"`
+            `"${ffmpegPath}" -y ${inputOptions} -ss ${roundedStart} -i "${localInputPath}" -t ${segmentDuration} -map 0:a:0? -vn -acodec pcm_s16le -ar 44100 -ac 1 "${segmentAudioPath}"`
           );
         }
       } else {
@@ -1010,7 +1057,13 @@ export class UploadsService {
           provider: 'Parselmouth (Video Segment)',
           riskScore: getRiskScore(metrics.breakdown.voiceStress),
           confidence: metrics.details.voice?.confidence || 0.85,
-          rawResponse: metrics.details.voice,
+          rawResponse: {
+            ...metrics.details.voice,
+            startTime: _start,
+            endTime: _end,
+            segmentDeception: metrics.deceptionScore,
+            segmentBreakdown: metrics.breakdown,
+          },
         },
       }),
       prisma.riskAssessment.create({
@@ -1020,7 +1073,13 @@ export class UploadsService {
           provider: 'MediaPipe (Video Segment)',
           riskScore: getRiskScore(metrics.breakdown.visualBehavior),
           confidence: metrics.details.visual?.confidence || 0.8,
-          rawResponse: metrics.details.visual,
+          rawResponse: {
+            ...metrics.details.visual,
+            startTime: _start,
+            endTime: _end,
+            segmentDeception: metrics.deceptionScore,
+            segmentBreakdown: metrics.breakdown,
+          },
         },
       }),
       prisma.riskAssessment.create({
@@ -1030,7 +1089,13 @@ export class UploadsService {
           provider: 'HumeAI (Video Segment)',
           riskScore: getRiskScore(metrics.breakdown.expressionMeasurement),
           confidence: metrics.details.expression?.confidence || 0.9,
-          rawResponse: metrics.details.expression,
+          rawResponse: {
+            ...metrics.details.expression,
+            startTime: _start,
+            endTime: _end,
+            segmentDeception: metrics.deceptionScore,
+            segmentBreakdown: metrics.breakdown,
+          },
         },
       }),
     ]);

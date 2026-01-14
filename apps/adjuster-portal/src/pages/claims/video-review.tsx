@@ -324,44 +324,95 @@ export function VideoReviewPage() {
     }
   }, [videoUpload]);
 
-  // Update history when new data arrives (Polling behavior)
+  // 2. Side effects
+  // Update historical metrics from assessments (reconstructs timeline)
   useEffect(() => {
-    if (deceptionData) {
-      const newPoint = {
-        time: new Date().toLocaleTimeString(),
-        deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
-        voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
-        visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
-        expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
-      };
-
-      setMetricsHistory(prev => {
-        // If we already have this point (same score and breakdown), don't duplicate
-        const last = prev[prev.length - 1];
-        if (last && last.deception === newPoint.deception && last.voice === newPoint.voice) {
-          return prev;
+    if (assessments && assessments.length > 0) {
+      const segments = new Map<number, any>();
+      assessments.forEach((a: any) => {
+        const { startTime, segmentDeception, segmentBreakdown } = a.rawResponse || {};
+        if (startTime !== undefined && segmentDeception !== undefined) {
+          if (!segments.has(startTime)) {
+            segments.set(startTime, {
+              time: formatTime(startTime),
+              deception: (segmentDeception * 100).toFixed(2),
+              voice: (segmentBreakdown?.voiceStress * 100).toFixed(2),
+              visual: (segmentBreakdown?.visualBehavior * 100).toFixed(2),
+              expression: (segmentBreakdown?.expressionMeasurement * 100).toFixed(2),
+              startTime,
+            });
+          }
         }
-
-        const newHistory = [...prev, newPoint];
-        if (newHistory.length > 30) return newHistory.slice(newHistory.length - 30);
-        return newHistory;
       });
-    }
-  }, [deceptionData]);
 
-  // Backfill history if already processed but graph is empty
-  useEffect(() => {
-    if (isFullyProcessed && metricsHistory.length === 0 && deceptionData) {
-      const historicalPoint = {
-        time: 'Full Analysis',
+      const historicalPoints = Array.from(segments.values()).sort(
+        (a, b) => a.startTime - b.startTime
+      );
+      if (historicalPoints.length > 0) {
+        setMetricsHistory(historicalPoints);
+      }
+    } else if (deceptionData && metricsHistory.length === 0) {
+      // Fallback for live sessions
+      const initialPoint = {
+        time: formatTime(currentTime),
         deception: ((deceptionData.deceptionScore || 0) * 100).toFixed(2),
         voice: ((deceptionData.breakdown?.voiceStress || 0) * 100).toFixed(2),
         visual: ((deceptionData.breakdown?.visualBehavior || 0) * 100).toFixed(2),
         expression: ((deceptionData.breakdown?.expressionMeasurement || 0) * 100).toFixed(2),
       };
-      setMetricsHistory([historicalPoint]);
+      setMetricsHistory([initialPoint]);
     }
-  }, [isFullyProcessed, deceptionData, metricsHistory.length]);
+  }, [assessments, deceptionData, isFullyProcessed]);
+
+  // Sync progress with deception score metadata
+  useEffect(() => {
+    if (deceptionData?.processedUntil > lastProcessedTime) {
+      const capped = duration
+        ? Math.min(deceptionData.processedUntil, duration)
+        : deceptionData.processedUntil;
+      setLastProcessedTime(capped);
+      lastProcessedTimeRef.current = capped;
+    }
+  }, [deceptionData, duration, lastProcessedTime]);
+
+  // Update current metrics based on currentTime (Temporal Lookup)
+  useEffect(() => {
+    if (assessments && assessments.length > 0) {
+      const currentSegment = assessments.find((a: any) => {
+        const { startTime, endTime } = a.rawResponse || {};
+        return (
+          startTime !== undefined &&
+          endTime !== undefined &&
+          currentTime >= startTime &&
+          currentTime < endTime
+        );
+      });
+
+      if (currentSegment) {
+        const { segmentDeception, segmentBreakdown } = currentSegment.rawResponse;
+        setCurrentMetrics({
+          deceptionScore: segmentDeception,
+          breakdown: segmentBreakdown,
+          // Find specific metric details for this same time window
+          voice: assessments.find(
+            a =>
+              a.assessmentType === 'VOICE_ANALYSIS' &&
+              a.rawResponse?.startTime === currentSegment.rawResponse.startTime
+          )?.rawResponse,
+          visual: assessments.find(
+            a =>
+              a.assessmentType === 'ATTENTION_TRACKING' &&
+              a.rawResponse?.startTime === currentSegment.rawResponse.startTime
+          )?.rawResponse,
+          expression: assessments.find(
+            a =>
+              (a.assessmentType === 'VISUAL_MODERATION' || a.provider?.includes('Hume')) &&
+              a.rawResponse?.startTime === currentSegment.rawResponse.startTime
+          )?.rawResponse,
+        });
+      }
+    }
+  }, [currentTime, assessments]);
 
   // Prepare video on mount - Following call.tsx pattern
   useEffect(() => {
@@ -425,7 +476,10 @@ export function VideoReviewPage() {
       if (!videoUpload) return;
 
       // Handle final segment if needed
-      if (lastProcessedTimeRef.current < duration) {
+      const MIN_FINAL_SEGMENT_THRESHOLD = 1.0; // Don't process final bits < 1s
+      const remainingDuration = duration - lastProcessedTimeRef.current;
+
+      if (remainingDuration > MIN_FINAL_SEGMENT_THRESHOLD) {
         console.log('VideoReview: Ended. Processing remaining segment...');
         try {
           await processSegment.mutateAsync({
@@ -442,9 +496,12 @@ export function VideoReviewPage() {
             variant: 'destructive',
           });
         }
-      } else if (videoUpload.status === 'PROCESSING' || videoUpload.status === 'PENDING') {
-        // If already processed up to duration but not marked complete
-        generateConsent.mutate();
+      } else {
+        console.log('VideoReview: Ended. Remaining segment too small, finalizing...');
+        // If already processed up to duration or near it, trigger consent
+        if (videoUpload.status === 'PROCESSING' || videoUpload.status === 'PENDING') {
+          generateConsent.mutate();
+        }
       }
     };
 
@@ -671,8 +728,11 @@ export function VideoReviewPage() {
     }
 
     try {
-      // 2. If there are unprocessed segments (e.g. user skipped or interval missed end), process them
-      if (lastProcessedTimeRef.current < duration) {
+      // 2. If there are unprocessed segments, process them
+      const MIN_FINAL_SEGMENT_THRESHOLD = 1.0;
+      const remainingDuration = duration - lastProcessedTimeRef.current;
+
+      if (remainingDuration > MIN_FINAL_SEGMENT_THRESHOLD) {
         toast({
           title: 'Finalizing Analysis',
           description: 'Processing remaining video segment...',
@@ -900,7 +960,9 @@ export function VideoReviewPage() {
 
                 <div className="flex items-end gap-2 mb-4">
                   <span className="text-2xl font-bold text-white">
-                    {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                    {(
+                      (currentMetrics?.deceptionScore || deceptionData?.deceptionScore || 0) * 100
+                    ).toFixed(2)}
                   </span>
                   <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
                 </div>
@@ -974,24 +1036,36 @@ export function VideoReviewPage() {
                   {[
                     {
                       label: 'Deception Score',
-                      value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
+                      value: (
+                        (currentMetrics?.deceptionScore || deceptionData?.deceptionScore || 0) * 100
+                      ).toFixed(2),
                       color: '#A855F7',
                     },
                     {
                       label: 'Voice Stress',
-                      value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
+                      value: (
+                        (currentMetrics?.breakdown?.voiceStress ||
+                          deceptionData?.breakdown?.voiceStress ||
+                          0) * 100
+                      ).toFixed(2),
                       color: '#72B0F2',
                     },
                     {
                       label: 'Visual Behavior',
-                      value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+                      value: (
+                        (currentMetrics?.breakdown?.visualBehavior ||
+                          deceptionData?.breakdown?.visualBehavior ||
+                          0) * 100
+                      ).toFixed(2),
                       color: '#2EE797',
                     },
                     {
                       label: 'Expression Measurement',
-                      value: ((deceptionData?.breakdown?.expressionMeasurement || 0) * 100).toFixed(
-                        2
-                      ),
+                      value: (
+                        (currentMetrics?.breakdown?.expressionMeasurement ||
+                          deceptionData?.breakdown?.expressionMeasurement ||
+                          0) * 100
+                      ).toFixed(2),
                       color: '#E884B6',
                     },
                   ].map(metric => (
@@ -1026,18 +1100,37 @@ export function VideoReviewPage() {
 
                 <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                   {(() => {
-                    const latestVoice = assessments?.find(
-                      (a: any) => a.assessmentType === 'VOICE_ANALYSIS'
+                    // 1. Try temporal match first
+                    const temporalAssessments = assessments?.filter((a: any) => {
+                      const { startTime, endTime } = a.rawResponse || {};
+                      return (
+                        startTime !== undefined &&
+                        endTime !== undefined &&
+                        currentTime >= startTime &&
+                        currentTime < endTime
+                      );
+                    });
+
+                    const getLatest = (type: string, filter?: (a: any) => boolean) => {
+                      let found = temporalAssessments?.find(
+                        a => a.assessmentType === type || (filter && filter(a))
+                      );
+                      if (found) return found;
+                      return assessments?.find(
+                        a => a.assessmentType === type || (filter && filter(a))
+                      );
+                    };
+
+                    const latestVoice = getLatest('VOICE_ANALYSIS');
+
+                    const latestEmotion = getLatest(
+                      'VISUAL_MODERATION',
+                      a => (a.rawResponse as any)?.top_emotions || a.provider?.includes('Hume')
                     );
 
-                    const latestEmotion = assessments?.find(
-                      (a: any) =>
-                        (a.rawResponse as any)?.top_emotions || a.provider?.includes('Hume')
-                    );
-
-                    const latestVisual = assessments?.find(
-                      (a: any) =>
-                        a.assessmentType === 'ATTENTION_TRACKING' ||
+                    const latestVisual = getLatest(
+                      'ATTENTION_TRACKING',
+                      a =>
                         (a.rawResponse as any)?.blink_rate_per_min !== undefined ||
                         a.provider?.includes('MediaPipe') ||
                         (a.assessmentType === 'VISUAL_MODERATION' &&
