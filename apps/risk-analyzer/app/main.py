@@ -378,7 +378,8 @@ async def analyze_combined_endpoint(
 @app.post("/analyze-expression", response_model=AnalysisResponse)
 async def analyze_expression_endpoint(
     file: UploadFile = File(...),
-    sessionId: str = "unknown"
+    sessionId: str = "unknown",
+    noAudio: bool = False
 ):
     """Analyze video file for facial expressions using HumeAI."""
     if not file.filename.endswith(('.mp4', '.webm', '.mov')):
@@ -391,7 +392,7 @@ async def analyze_expression_endpoint(
 
     try:
         # Analyze using Hume
-        metrics = await hume_analyzer.analyze_video(tmp_path)
+        metrics = await hume_analyzer.analyze_video(tmp_path, has_audio=not noAudio)
         
         # Calculate risk score specifically for Hume metrics
         risk_score, confidence = calculate_hume_risk_score(metrics)

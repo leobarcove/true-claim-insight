@@ -80,14 +80,14 @@ export class AssessmentsService {
     const deceptionScore = w * wvs + w * wvb + w * wem;
     const isHighRisk = deceptionScore > 0.7;
 
-    // Persist deception calculation
+    // Persist deception calculation with NaN safeguards
     await (this.prisma as any).deceptionScore.create({
       data: {
         sessionId,
-        deceptionScore: deceptionScore as any,
-        voiceStress: wvs as any,
-        visualBehavior: wvb as any,
-        expressionMeasurement: wem as any,
+        deceptionScore: isNaN(deceptionScore) ? 0 : deceptionScore,
+        voiceStress: isNaN(wvs) ? 0 : wvs,
+        visualBehavior: isNaN(wvb) ? 0 : wvb,
+        expressionMeasurement: isNaN(wem) ? 0 : wem,
       },
     });
 
@@ -188,18 +188,18 @@ export class AssessmentsService {
   }
 
   private normalizeVoiceStress(metrics: any): number {
-    if (!metrics) return 0;
+    const m = metrics.metrics || metrics;
+    if (!m) return 0;
 
-    // Normalize each metric to 0-1 range where 1 = high stress
-    // Jitter: 0.5-6.0% normal, >6.0% stressed
-    // Shimmer: 1.5-12.0% normal, >12.0% stressed
-    // Pitch SD: 10-120 Hz normal, >120 Hz stressed
-    // HNR: >12 dB good, <8 dB poor (inverse: lower HNR = higher stress)
+    const jitter = m.jitter_percent ?? 0;
+    const shimmer = m.shimmer_percent ?? 0;
+    const pitchSd = m.pitch_sd_hz ?? 0;
+    const hnr = m.hnr_db ?? 15;
 
-    const jitterNorm = Math.min(1, Math.max(0, (metrics.jitter_percent - 0.8) / 7.0));
-    const shimmerNorm = Math.min(1, Math.max(0, (metrics.shimmer_percent - 2.0) / 15.0));
-    const pitchSdNorm = Math.min(1, Math.max(0, (metrics.pitch_sd_hz - 15) / 150));
-    const hnrNorm = Math.min(1, Math.max(0, (15 - metrics.hnr_db) / 20));
+    const jitterNorm = Math.min(1, Math.max(0, (jitter - 0.8) / 7.0));
+    const shimmerNorm = Math.min(1, Math.max(0, (shimmer - 2.0) / 15.0));
+    const pitchSdNorm = Math.min(1, Math.max(0, (pitchSd - 15) / 150));
+    const hnrNorm = Math.min(1, Math.max(0, (15 - hnr) / 20));
 
     // Reduced weights to make overall score less sensitive
     const weights = { jitter: 0.25, shimmer: 0.25, pitchSd: 0.2, hnr: 0.1 };
@@ -224,11 +224,11 @@ export class AssessmentsService {
 
     // 2. Lip Tension: In video_analyzer, lower ratio = more compressed lips (stress/suppression).
     // Normal ratio is around 0.4 - 0.5. Ratios below 0.3 indicate tension.
-    const lipRatio = metrics.avg_lip_tension || 0.45;
+    const lipRatio = metrics.avg_lip_tension ?? metrics.lip_tension ?? 0.45;
     const lipCompressionRisk = Math.min(0.4, Math.max(0, 0.4 - lipRatio) * 1.5);
 
     // 3. Blink Duration: Normal is ~100-250ms.
-    const blinkDur = metrics.avg_blink_duration_ms || 150;
+    const blinkDur = metrics.avg_blink_duration_ms ?? metrics.blink_duration ?? 150;
     const blinkDurRisk = Math.min(0.2, Math.abs(blinkDur - 150) / 500);
 
     const combinedScore = blinkDev + lipCompressionRisk + blinkDurRisk;
