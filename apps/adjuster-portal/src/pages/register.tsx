@@ -96,7 +96,7 @@ export function RegisterPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <img src="/tci-logo.svg" alt="TCI Logo" className="h-10 w-10" />
+            <img src="/logo.png" alt="Logo" className="h-10 w-10" />
           </div>
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>Register as a loss adjuster on True Claim Insight</CardDescription>

@@ -54,7 +54,7 @@ function AssessmentTrackerPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="bg-white px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10">
         <div className="font-bold text-primary flex items-center gap-2">
-          <img src="/tci-logo.svg" alt="TCI Logo" className="h-8 w-8" />
+          <img src="/logo.png" alt="Logo" className="h-8 w-8" />
           True Claim
         </div>
         <button
