@@ -18,6 +18,8 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Upload,
 } from 'lucide-react';
 
@@ -237,6 +239,17 @@ export function ClaimDetailPage() {
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
 
+  // Pagination states
+  const [docPage, setDocPage] = useState(1);
+  const [timelinePage, setTimelinePage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
+
+  // Reset pagination when claim changes
+  useEffect(() => {
+    setDocPage(1);
+    setTimelinePage(1);
+  }, [claimId]);
+
   // Initialize expanded sessions with the most recent one
   useEffect(() => {
     if (claim?.sessions && claim.sessions.length > 0 && expandedSessions.size === 0) {
@@ -354,7 +367,7 @@ export function ClaimDetailPage() {
     <div className="flex flex-col h-full">
       <Header
         title={
-          <span>
+          <span className="flex items-center gap-3">
             {claim.claimNumber}
             <Badge variant={statusConfig[claim.status].variant}>
               {convertToTitleCase(statusConfig[claim.status].label)}
@@ -552,65 +565,105 @@ export function ClaimDetailPage() {
               </CardHeader>
               <CardContent>
                 {claim.documents && claim.documents.length > 0 ? (
-                  <div className="space-y-2">
-                    {claim.documents
-                      .slice()
-                      .sort(
-                        (a: any, b: any) =>
-                          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-                      )
-                      .map((doc: any) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                        >
-                          <div className="flex items-center gap-3">
-                            {doc.type === 'DAMAGE_PHOTO' ? (
-                              <Image className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <div>
-                              <p className="text-sm font-medium">{doc.filename}</p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{doc.type.replace('_', ' ')}</span>
-                                <span>•</span>
-                                <span>{formatFileSize(doc.fileSize)}</span>
-                                <span>•</span>
-                                <span>{formatDateTime(doc.createdAt)}</span>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      {claim.documents
+                        .slice()
+                        .sort(
+                          (a: any, b: any) =>
+                            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                        )
+                        .slice((docPage - 1) * ITEMS_PER_PAGE, docPage * ITEMS_PER_PAGE)
+                        .map((doc: any) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              {doc.type === 'DAMAGE_PHOTO' ? (
+                                <Image className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              <div>
+                                <p className="text-sm font-medium">{doc.filename}</p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{doc.type.replace('_', ' ')}</span>
+                                  <span>•</span>
+                                  <span>{formatFileSize(doc.fileSize)}</span>
+                                  <span>•</span>
+                                  <span>{formatDateTime(doc.createdAt)}</span>
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                title="View document"
+                                onClick={() => {
+                                  if (doc.storageUrl) {
+                                    window.open(doc.storageUrl, '_blank');
+                                  }
+                                }}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                title="Download document"
+                                onClick={() => {
+                                  if (doc.storageUrl) {
+                                    downloadFile(doc.storageUrl, doc.filename);
+                                  }
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="View document"
-                              onClick={() => {
-                                if (doc.storageUrl) {
-                                  window.open(doc.storageUrl, '_blank');
-                                }
-                              }}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="Download document"
-                              onClick={() => {
-                                if (doc.storageUrl) {
-                                  downloadFile(doc.storageUrl, doc.filename);
-                                }
-                              }}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                    </div>
+
+                    {/* Documents Pagination Controls */}
+                    {claim.documents.length > ITEMS_PER_PAGE && (
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setDocPage(p => Math.max(1, p - 1))}
+                          disabled={docPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          Page {docPage} of{' '}
+                          {Math.ceil((claim.documents?.length || 0) / ITEMS_PER_PAGE)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() =>
+                            setDocPage(p =>
+                              Math.min(
+                                Math.ceil((claim.documents?.length || 0) / ITEMS_PER_PAGE),
+                                p + 1
+                              )
+                            )
+                          }
+                          disabled={
+                            docPage >= Math.ceil((claim.documents?.length || 0) / ITEMS_PER_PAGE)
+                          }
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
@@ -696,68 +749,114 @@ export function ClaimDetailPage() {
 
               <CardContent className="space-y-8">
                 {claim.sessions && claim.sessions.length > 0 ? (
-                  [...claim.sessions]
-                    .sort(
-                      (a: any, b: any) =>
-                        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                    )
-                    .map((session: any) => (
-                      <div
-                        key={session.id}
-                        className="space-y-4 border-b pb-8 last:border-0 last:pb-0"
-                      >
-                        <div
-                          className="flex items-center justify-between cursor-pointer group"
-                          onClick={() => toggleSession(session.id)}
-                        >
-                          <div className="flex items-center gap-2">
+                  <div className="space-y-6">
+                    <div className="space-y-8">
+                      {/* Sort and paginate sessions */}
+                      {[...claim.sessions]
+                        .sort(
+                          (a: any, b: any) =>
+                            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                        )
+                        .slice((timelinePage - 1) * ITEMS_PER_PAGE, timelinePage * ITEMS_PER_PAGE)
+                        .map((session: any) => (
+                          <div
+                            key={session.id}
+                            className="space-y-4 border-b pb-8 last:border-0 last:pb-0"
+                          >
                             <div
-                              className={cn(
-                                'w-2 h-2 rounded-full',
-                                session.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-blue-500'
-                              )}
-                            />
-                            <h4 className="text-sm font-semibold transition-colors">
-                              Session: {formatDateTime(session.createdAt)}
-                            </h4>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-[10px]',
-                                session.roomUrl
-                                  ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                                  : 'border-slate-200 bg-slate-50 text-slate-600'
-                              )}
+                              className="flex items-center justify-between cursor-pointer group"
+                              onClick={() => toggleSession(session.id)}
                             >
-                              {session.roomUrl ? 'Live' : 'Upload'}
-                            </Badge>
-                            <Badge
-                              variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
-                              className="text-[10px]"
-                            >
-                              {session.status}
-                            </Badge>
-                            {expandedSessions.has(session.id) ? (
-                              <ChevronUp className="h-4 w-4 text-slate-400" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-slate-400" />
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={cn(
+                                    'w-2 h-2 rounded-full',
+                                    session.status === 'COMPLETED'
+                                      ? 'bg-emerald-500'
+                                      : 'bg-blue-500'
+                                  )}
+                                />
+                                <h4 className="text-sm font-semibold transition-colors">
+                                  Session: {formatDateTime(session.createdAt)}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px]',
+                                    session.roomUrl
+                                      ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                      : 'border-slate-200 bg-slate-50 text-slate-600'
+                                  )}
+                                >
+                                  {session.roomUrl ? 'Live' : 'Upload'}
+                                </Badge>
+                                <Badge
+                                  variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
+                                  className="text-[10px]"
+                                >
+                                  {session.status}
+                                </Badge>
+                                {expandedSessions.has(session.id) ? (
+                                  <ChevronUp className="h-4 w-4 text-slate-400" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                                )}
+                              </div>
+                            </div>
+
+                            {expandedSessions.has(session.id) && (
+                              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                <SessionChart
+                                  sessionId={session.id}
+                                  deceptionData={session.deceptionData || []}
+                                  summary={session.summary}
+                                />
+                              </div>
                             )}
                           </div>
-                        </div>
+                        ))}
+                    </div>
 
-                        {expandedSessions.has(session.id) && (
-                          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                            <SessionChart
-                              sessionId={session.id}
-                              deceptionData={session.deceptionData || []}
-                              summary={session.summary}
-                            />
-                          </div>
-                        )}
+                    {/* Timeline Pagination Controls */}
+                    {claim.sessions.length > ITEMS_PER_PAGE && (
+                      <div className="flex items-center justify-center gap-3 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setTimelinePage(p => Math.max(1, p - 1))}
+                          disabled={timelinePage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          Page {timelinePage} of{' '}
+                          {Math.ceil((claim.sessions?.length || 0) / ITEMS_PER_PAGE)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() =>
+                            setTimelinePage(p =>
+                              Math.min(
+                                Math.ceil((claim.sessions?.length || 0) / ITEMS_PER_PAGE),
+                                p + 1
+                              )
+                            )
+                          }
+                          disabled={
+                            timelinePage >=
+                            Math.ceil((claim.sessions?.length || 0) / ITEMS_PER_PAGE)
+                          }
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
                       </div>
-                    ))
+                    )}
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
                     <Activity className="h-8 w-8 mb-2 opacity-20" />
