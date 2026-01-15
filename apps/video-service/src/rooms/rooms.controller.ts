@@ -36,8 +36,22 @@ export class RoomsController {
   @ApiResponse({ status: 200, description: 'Room details' })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async getRoom(@Param('id') id: string) {
-    const session = await this.roomsService.getRoom(id);
-    return session;
+    const s = await this.roomsService.getRoom(id);
+    return {
+      id: s.id,
+      claimId: s.claimId,
+      roomUrl: s.roomUrl,
+      status: s.status,
+      scheduledTime: s.scheduledTime,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      durationSeconds: s.durationSeconds,
+      recordingUrl: s.recordingUrl,
+      analysisStatus: s.analysisStatus,
+      createdAt: s.createdAt,
+      claim: s.claim,
+      deceptionScores: s.deceptionScores,
+    };
   }
 
   @Post(':id/join')

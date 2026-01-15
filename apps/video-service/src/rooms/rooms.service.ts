@@ -70,7 +70,7 @@ export class RoomsService {
   /**
    * Get room details by session ID
    */
-  async getRoom(sessionId: string): Promise<Session> {
+  async getRoom(sessionId: string): Promise<any> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: {

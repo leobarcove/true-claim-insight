@@ -20,6 +20,7 @@ import {
   List,
   Grid,
   MoreHorizontal,
+  Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout';
@@ -376,18 +377,9 @@ export function VideoSessionsPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleViewSession(item);
-                            }}
-                          >
-                            <Play className="h-4 w-4" />
-                          </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
+                            {/* <MoreHorizontal className="h-4 w-4" /> */}
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
