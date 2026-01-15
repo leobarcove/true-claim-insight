@@ -117,7 +117,7 @@ export function ClaimsListPage() {
             New
           </Button>
         </Link>
-        <div className="flex items-center gap-2 mr-2">
+        <div className="flex items-center gap-2">
           <SearchInput
             placeholder="Search by ID or name..."
             value={searchQuery}
@@ -221,7 +221,7 @@ export function ClaimsListPage() {
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {[...Array(6)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                   <Card key={i}>
                     <CardContent className="p-6 space-y-4">
                       <div className="flex justify-between">
@@ -260,7 +260,7 @@ export function ClaimsListPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Incident Date</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -280,8 +280,8 @@ export function ClaimsListPage() {
                       </TableCell>
                       <TableCell>{formatDate(claim.incidentDate)}</TableCell>
                       <TableCell>{formatDate(claim.createdAt)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2">
                           {claim.status === 'SCHEDULED' && (
                             <Button size="icon" variant="ghost" className="h-8 w-8 text-primary">
                               <Video className="h-4 w-4" />

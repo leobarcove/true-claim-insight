@@ -163,7 +163,7 @@ export function VideoSessionsPage() {
       PROCESSING: { variant: 'secondary', icon: Clock },
       FAILED: { variant: 'destructive', icon: XCircle },
       CANCELLED: { variant: 'outline', icon: XCircle },
-      PENDING: { variant: 'outline', icon: Clock },
+      PENDING: { variant: 'secondary', icon: Clock },
       SCHEDULED: { variant: 'outline', icon: Calendar },
       WAITING: { variant: 'outline', icon: Clock },
     };
@@ -300,7 +300,7 @@ export function VideoSessionsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
-                {[...Array(6)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                   <Card key={i} className="p-4">
                     <Skeleton className="h-40 w-full mb-4" />
                     <Skeleton className="h-4 w-3/4 mb-2" />
@@ -346,7 +346,7 @@ export function VideoSessionsPage() {
                       <TableCell className="font-medium">{item.data.claim.claimNumber}</TableCell>
                       <TableCell>{item.data.claim.claimant.fullName}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="secondary" className="text-xs">
                           {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
                         </Badge>
                       </TableCell>
@@ -354,7 +354,7 @@ export function VideoSessionsPage() {
                       <TableCell>
                         <div className="flex flex-col text-xs">
                           <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>
-                          <span className="text-muted-foreground">
+                          <span className="text-[11px] text-muted-foreground">
                             {format(new Date(item.data.createdAt), 'hh:mm a')}
                           </span>
                         </div>
@@ -384,7 +384,7 @@ export function VideoSessionsPage() {
                               handleViewSession(item);
                             }}
                           >
-                            <Play className="h-4 w-4 text-primary" />
+                            <Play className="h-4 w-4" />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8">
                             <MoreHorizontal className="h-4 w-4" />
