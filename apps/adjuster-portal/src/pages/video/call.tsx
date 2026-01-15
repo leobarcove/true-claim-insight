@@ -109,7 +109,7 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
   }, [type, raw?.top_emotions]);
 
   return (
-    <div className="p-2 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
+    <div className="p-2 rounded-lg bg-muted/70 border border-border/50 animate-in fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -120,9 +120,9 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
           ) : marker?.riskScore === 'LOW' ? (
             <ShieldCheck className="h-4 w-4 text-blue-500" />
           ) : (
-            <Activity className="h-4 w-4 text-slate-500 opacity-50" />
+            <Activity className="h-4 w-4 text-muted-foreground opacity-50" />
           )}
-          <span className="text-xs font-semibold text-slate-200">{title}</span>
+          <span className="text-xs font-semibold text-foreground">{title}</span>
           {tooltip && <InfoTooltip title={title} content={tooltip} direction="left" />}
         </div>
         {marker && (
@@ -145,33 +145,33 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
       <div className="grid grid-cols-2 gap-2 text-[10px]">
         {type === 'voice' && (
           <>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Jitter</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Jitter</p>
               <p
-                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-foreground'}`}
               >
                 {raw?.jitter_percent !== undefined ? `${raw.jitter_percent.toFixed(2)}%` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Shimmer</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Shimmer</p>
               <p
-                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.shimmer_percent !== undefined ? `${raw.shimmer_percent.toFixed(2)}%` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Pitch SD</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Pitch SD</p>
               <p
-                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.pitch_sd_hz !== undefined ? `${raw.pitch_sd_hz.toFixed(1)} Hz` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">HNR</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">HNR</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.hnr_db !== undefined ? `${raw.hnr_db.toFixed(1)} dB` : '—'}
               </p>
             </div>
@@ -180,14 +180,14 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
 
         {type === 'visual' && (
           <>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Rate</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Blink Rate</p>
               <p
                 className={`text-sm font-mono ${
                   raw?.blink_rate_per_min !== undefined &&
                   (raw.blink_rate_per_min < 10 || raw.blink_rate_per_min > 25)
                     ? 'text-amber-400'
-                    : 'text-slate-200'
+                    : 'text-foreground'
                 }`}
               >
                 {raw?.blink_rate_per_min !== undefined
@@ -195,25 +195,25 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
                   : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Lip Tension</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Lip Tension</p>
               <p
-                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.avg_lip_tension !== undefined ? raw.avg_lip_tension.toFixed(3) : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Dur.</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Blink Dur.</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.avg_blink_duration_ms !== undefined
                   ? `${raw.avg_blink_duration_ms.toFixed(0)} ms`
                   : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Frames</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Frames</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.frames_analyzed !== undefined ? raw.frames_analyzed : '—'}
               </p>
             </div>
@@ -223,9 +223,9 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
         {type === 'emotion' && (
           <>
             {topEmotions.map((emotion: any, idx: number) => (
-              <div key={idx} className="bg-slate-900/50 rounded p-2">
-                <p className="text-slate-500 uppercase font-bold text-[9px]">{emotion.name}</p>
-                <p className="text-sm font-mono text-slate-200">
+              <div key={idx} className="bg-card/50 rounded p-2">
+                <p className="text-muted-foreground uppercase font-bold text-[9px]">{emotion.name}</p>
+                <p className="text-sm font-mono text-foreground">
                   {emotion.score !== null && emotion.score !== undefined
                     ? `${(emotion.score * 100).toFixed(1)}%`
                     : '—'}
@@ -237,8 +237,8 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
-        <span className="text-[9px] text-slate-500">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+        <span className="text-[9px] text-muted-foreground">
           {marker?.provider
             ? `Conf: ${((marker.confidence ?? 0) * 100).toFixed(0)}%`
             : 'Awaiting Data...'}
@@ -494,10 +494,10 @@ export function VideoCallPage() {
   // Show error state with retry option
   if (joinError && !joinRoom.isPending) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
+      <div className="flex flex-col items-center justify-center h-full bg-background text-foreground">
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
         <p className="text-lg font-medium mb-2">Failed to Join Video Room</p>
-        <p className="text-sm text-slate-400 mb-6 max-w-md text-center">{joinError}</p>
+        <p className="text-sm text-muted-foreground mb-6 max-w-md text-center">{joinError}</p>
         <div className="flex gap-4">
           <Button onClick={() => navigate(-1)} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -514,10 +514,10 @@ export function VideoCallPage() {
 
   if (!joinData) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-200">
+      <div className="flex flex-col items-center justify-center h-full bg-background text-foreground">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
         <p className="text-lg font-medium">Preparing your secure video room...</p>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           {joinRoom.isPending ? 'Requesting room access...' : 'Initializing...'}
         </p>
         {joinRoom.isError && (
@@ -530,21 +530,21 @@ export function VideoCallPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 overflow-hidden">
+    <div className="flex flex-col h-full bg-background overflow-hidden">
       {/* Video Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900/50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-400 hover:text-white"
+            className="text-muted-foreground hover:text-foreground"
             onClick={() => navigate(-1)}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
           <div>
-            <h1 className="text-md font-semibold text-white">
+            <h1 className="text-md font-semibold text-foreground">
               Video Assessment: {session?.claimId || 'Loading...'}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
@@ -554,7 +554,7 @@ export function VideoCallPage() {
               >
                 Live Session
               </Badge>
-              <span className="text-xs text-slate-500">Secure • Encrypted</span>
+              <span className="text-xs text-muted-foreground">Secure • Encrypted</span>
             </div>
           </div>
         </div>
@@ -563,7 +563,7 @@ export function VideoCallPage() {
           <Button
             variant="outline"
             size="sm"
-            className="bg-slate-800 border-slate-700 text-slate-300 text-xs"
+            className="bg-muted border-border text-muted-foreground text-xs"
             onClick={() => playerRef.current?.requestFullscreen()}
           >
             <Maximize2 className="h-4 w-4 mr-2" />
@@ -579,7 +579,7 @@ export function VideoCallPage() {
       {/* Main Video Area */}
       <div className="flex-1 p-4 flex gap-4 overflow-hidden">
         {/* Left Column: Remote/Main Video */}
-        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800">
+        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-card border border-border">
           <DailyVideoPlayer
             key={`daily-${joinData.url}`}
             ref={playerRef}
@@ -598,26 +598,26 @@ export function VideoCallPage() {
         {/* Right Sidebar */}
         <div className="flex flex-col gap-4 w-128">
           {/* Session Info */}
-          <Card className="bg-slate-900 border-slate-800 p-2 shrink-0">
-            <h3 className="text-xs font-semibold text-slate-200 mb-2 uppercase tracking-wider">
+          <Card className="bg-card border-border p-2 shrink-0">
+            <h3 className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wider">
               Session Info
             </h3>
             <div className="flex items-center gap-8">
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Claim ID</p>
-                <p className="text-xs text-slate-300">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Claim ID</p>
+                <p className="text-xs text-muted-foreground">
                   {isClaimLoading ? 'Loading...' : claim?.id || 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
-                <p className="text-xs text-slate-300">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Claimant</p>
+                <p className="text-xs text-muted-foreground">
                   {isClaimLoading ? 'Loading...' : claim?.claimant?.fullName || 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Policy Number</p>
-                <p className="text-xs text-slate-300">{claim?.policyNumber || 'N/A'}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Policy Number</p>
+                <p className="text-xs text-muted-foreground">{claim?.policyNumber || 'N/A'}</p>
               </div>
             </div>
           </Card>
@@ -626,10 +626,10 @@ export function VideoCallPage() {
           <div className="flex flex-1 gap-4 min-h-0">
             {/* Deception Score */}
             <div className="w-60 flex flex-col">
-              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col">
+              <Card className="bg-card border-border p-2 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Deception Score
                     </h3>
                     <InfoTooltip
@@ -648,15 +648,15 @@ export function VideoCallPage() {
                 </div>
 
                 <div className="flex items-end gap-2 mb-4">
-                  <span className="text-md font-bold text-white">
+                  <span className="text-md font-bold text-foreground">
                     {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
                   </span>
-                  <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+                  <span className="text-xs text-muted-foreground mb-1">/ 100.00</span>
                 </div>
 
                 {/* Metrics Graph */}
-                <div className="pt-4 border-t border-slate-800 h-60">
-                  <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Metrics</p>
+                <div className="pt-4 border-t border-border h-60">
+                  <p className="text-[10px] text-muted-foreground font-bold mb-2 uppercase">Metrics</p>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={metricsHistory}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
@@ -738,10 +738,10 @@ export function VideoCallPage() {
                   ].map(metric => (
                     <div key={metric.label} className="mb-2">
                       <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">{metric.label}</span>
-                        <span className="text-slate-200 font-mono">{metric.value}%</span>
+                        <span className="text-muted-foreground">{metric.label}</span>
+                        <span className="text-foreground font-mono">{metric.value}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-500"
                           style={{
@@ -758,9 +758,9 @@ export function VideoCallPage() {
 
             {/* Risk Analysis */}
             <div className="w-60 flex flex-col overflow-hidden">
-              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col overflow-hidden">
+              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between mb-4 shrink-0">
-                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Risk Analysis
                   </h3>
                   <Badge
@@ -907,7 +907,7 @@ export function VideoCallPage() {
                 </div>
 
                 {analysisMode === 'manual' && (
-                  <div className="mt-4 pt-4 border-t border-slate-800 space-y-2 shrink-0">
+                  <div className="mt-4 pt-4 border-t border-border space-y-2 shrink-0">
                     <Button
                       type="button"
                       variant="outline"
@@ -958,9 +958,9 @@ export function VideoCallPage() {
       </div>
 
       {/* Control Bar (Mobile Style or Bottom Controls) */}
-      <div className="bg-slate-900/80 backdrop-blur-md border-t border-slate-800 px-6 py-3 flex justify-center gap-4">
+      <div className="bg-card/80 backdrop-blur-md border-t border-border px-6 py-3 flex justify-center gap-4">
         {/* Daily.co handles most controls, but we can add custom ones here if needed */}
-        <p className="text-xs text-slate-500 py-2">
+        <p className="text-xs text-muted-foreground py-2">
           Assessment session is being recorded for quality and compliance.
         </p>
       </div>

@@ -26,7 +26,7 @@ export function WelcomePage() {
       {/* Header */}
       <header className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <img src="/tci-logo.svg" alt="TCI Logo" className="h-10 w-10" />
+          <img src="/logo.png" alt="Logo" className="h-8 w-8" />
           <span className="font-semibold text-xl">True Claim</span>
         </div>
       </header>

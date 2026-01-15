@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { format } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,11 +14,7 @@ export function formatDate(date: string | Date | null | undefined): string {
   if (isNaN(d.getTime())) {
     return 'N/A';
   }
-  return new Intl.DateTimeFormat('en-MY', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(d);
+  return format(d, 'yyyy-MM-dd');
 }
 
 export function formatDateTime(date: string | Date | null | undefined): string {

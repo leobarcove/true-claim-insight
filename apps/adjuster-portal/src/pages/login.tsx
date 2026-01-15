@@ -67,7 +67,7 @@ export function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <img src="/tci-logo.svg" alt="TCI Logo" className="h-12 w-12" />
+            <img src="/logo.png" alt="Logo" className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
           <CardDescription>Sign in to your True Claim Insight account</CardDescription>
