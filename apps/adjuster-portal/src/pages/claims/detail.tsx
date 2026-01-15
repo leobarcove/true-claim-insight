@@ -899,7 +899,7 @@ export function ClaimDetailPage() {
                     disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Video Upload
+                    Manual Upload
                   </Button>
 
                   <p className="text-xs text-muted-foreground text-center mt-5">

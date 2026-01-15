@@ -42,7 +42,10 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-60 flex-col border-r border-border shadow-sm bg-card transition-all duration-[50ms]">
+    <div
+      className="flex h-full w-60 flex-col border-r border-border shadow-sm bg-card transition-all"
+      style={{ transitionDuration: '50ms' }}
+    >
       {/* Header / Logo */}
       <div className="flex h-20 items-center justify-center px-4">
         <Link to="/" className="flex items-center gap-2">

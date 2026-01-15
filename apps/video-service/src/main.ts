@@ -9,6 +9,11 @@ import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 
+// Polyfill for BigInt serialization
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 

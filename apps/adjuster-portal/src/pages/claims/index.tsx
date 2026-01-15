@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
+  Eye,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -282,13 +283,9 @@ export function ClaimsListPage() {
                       <TableCell>{formatDate(claim.createdAt)}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center gap-2">
-                          {claim.status === 'SCHEDULED' && (
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary">
-                              <Video className="h-4 w-4" />
-                            </Button>
-                          )}
                           <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
+                            {/* <MoreHorizontal className="h-4 w-4" /> */}
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -319,9 +316,11 @@ export function ClaimsListPage() {
                         </div>
 
                         <div>
-                          <p className="font-medium">Claimant ID: {claim.claimantId}</p>
+                          <p className="font-medium">{claim.claimant?.fullName}</p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {typeLabels[claim.claimType] || claim.claimType}
+                            <Badge variant="info" className="text-[10px]">
+                              {typeLabels[claim.claimType] || claim.claimType}
+                            </Badge>
                           </p>
                         </div>
 
@@ -329,13 +328,15 @@ export function ClaimsListPage() {
                           {claim.description}
                         </p>
 
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pt-2 border-t">
-                          <span>Incident: {formatDate(claim.incidentDate)}</span>
-                          <span>Created: {formatDate(claim.createdAt)}</span>
+                        <div className="pt-2 border-t space-y-1.5">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Incident: {formatDate(claim.incidentDate)}</span>
+                            <span>Created: {formatDate(claim.createdAt)}</span>
+                          </div>
                           {claim.scheduledAssessmentTime && (
-                            <span className="col-span-2 text-primary font-medium">
+                            <div className="text-xs text-primary font-medium">
                               Session: {formatDate(claim.scheduledAssessmentTime)}
-                            </span>
+                            </div>
                           )}
                         </div>
                       </div>
