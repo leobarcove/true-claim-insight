@@ -101,7 +101,7 @@ export function UploadVideoPage() {
       >
         <Button variant="outline" size="sm" onClick={() => navigate(`/claims/${claimId}`)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Claim
+          Back
         </Button>
       </Header>
 

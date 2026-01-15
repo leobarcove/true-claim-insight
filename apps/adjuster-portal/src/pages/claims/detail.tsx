@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   formatDate,
   getInitials,
@@ -34,6 +35,7 @@ import {
   formatDateTime,
   formatFileSize,
   downloadFile,
+  convertToTitleCase,
 } from '@/lib/utils';
 import { useClaim, useUpdateClaimStatus } from '@/hooks/use-claims';
 import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video';
@@ -322,8 +324,28 @@ export function ClaimDetailPage() {
 
   if (isLoading || !claim) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center font-medium">Loading claim details...</div>
+      <div className="flex flex-col h-full space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-48 w-full" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -331,8 +353,15 @@ export function ClaimDetailPage() {
   return (
     <div className="flex flex-col h-full">
       <Header
-        title={claim.claimNumber}
-        description={`${claim.claimant?.fullName || claim.claimantId} • ${claim.claimType.replace(/_/g, ' ')}`}
+        title={
+          <span>
+            {claim.claimNumber}
+            <Badge variant={statusConfig[claim.status].variant}>
+              {convertToTitleCase(statusConfig[claim.status].label)}
+            </Badge>
+          </span>
+        }
+        description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
       >
         <div className="flex items-center gap-3">
           <Link to="/claims">
@@ -341,9 +370,6 @@ export function ClaimDetailPage() {
               Back
             </Button>
           </Link>
-          <Badge variant={statusConfig[claim.status].variant}>
-            {statusConfig[claim.status].label}
-          </Badge>
           {claim.status === 'SCHEDULED' && (
             <Button
               size="sm"
@@ -744,10 +770,10 @@ export function ClaimDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Video Session button */}
+            {/* Session button */}
             <Card>
               <CardHeader>
-                <CardTitle>Video Session</CardTitle>
+                <CardTitle>Session</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">

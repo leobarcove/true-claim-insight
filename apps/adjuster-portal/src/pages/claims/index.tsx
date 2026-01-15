@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchInput } from '@/components/ui/search-input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -25,7 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDate } from '@/lib/utils';
+import { convertToTitleCase, formatDate } from '@/lib/utils';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
 
@@ -106,34 +106,28 @@ export function ClaimsListPage() {
   const claims = data?.claims || [];
   const pagination = data?.pagination;
 
-  const tabs = ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'];
+  const tabs = ['SCHEDULED', 'ASSIGNED', 'IN_ASSESSMENT', 'APPROVED'];
 
   return (
     <div className="flex flex-col h-full">
       <Header title="Claims" description="Manage and process your assigned claims">
         <Link to="/claims/new">
-          <Button>
+          <Button className="-mr-3 scale-75">
             <PlusCircle className="h-4 w-4 mr-2" />
             New
           </Button>
         </Link>
+        <div className="flex items-center gap-2 mr-2">
+          <SearchInput
+            placeholder="Search by ID or name..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-[280px]"
+          />
+        </div>
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {/* Filters */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by claim ID or claimant name..."
-              className="pl-9"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
         {/* Status Tabs and View Toggle */}
         <div className="flex items-center justify-between border-b border-border">
           <div className="flex gap-2">
@@ -197,7 +191,7 @@ export function ClaimsListPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...Array(5)].map((_, i) => (
+                    {[...Array(3)].map((_, i) => (
                       <TableRow key={i} className="hover:bg-transparent">
                         <TableCell>
                           <Skeleton className="h-4 w-24" />
@@ -277,11 +271,11 @@ export function ClaimsListPage() {
                       onClick={() => (window.location.href = `/claims/${claim.id}`)}
                     >
                       <TableCell className="font-medium">{claim.claimNumber}</TableCell>
-                      <TableCell>{claim.claimantId}</TableCell>
+                      <TableCell>{claim.claimant?.fullName || claim.claimantId}</TableCell>
                       <TableCell>{typeLabels[claim.claimType] || claim.claimType}</TableCell>
                       <TableCell>
                         <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
-                          {statusConfig[claim.status]?.label || claim.status}
+                          {convertToTitleCase(statusConfig[claim.status]?.label || claim.status)}
                         </Badge>
                       </TableCell>
                       <TableCell>{formatDate(claim.incidentDate)}</TableCell>
@@ -354,15 +348,14 @@ export function ClaimsListPage() {
 
           {/* Pagination */}
           {!isLoading && pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-end gap-2 pt-4">
+            <div className="flex items-center justify-center gap-3 mb-4">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Previous
+                <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-xs text-muted-foreground">
                 Page {page} of {pagination.totalPages}
@@ -373,8 +366,7 @@ export function ClaimsListPage() {
                 onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
                 disabled={page >= pagination.totalPages}
               >
-                Next
-                <ChevronRight className="h-4 w-4 ml-2" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           )}

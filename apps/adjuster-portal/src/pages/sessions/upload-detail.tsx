@@ -168,7 +168,7 @@ export function UploadDetailPage() {
         <p className="text-slate-600 mb-6">The requested video upload could not be found.</p>
         <Button onClick={() => navigate('/sessions')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Sessions
+          Back
         </Button>
       </div>
     );

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
-export function useTheme(defaultTheme: Theme = 'system', storageKey: string = 'vite-ui-theme') {
+export function useTheme(defaultTheme: Theme = 'light', storageKey: string = 'tci-ui-theme') {
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
   });

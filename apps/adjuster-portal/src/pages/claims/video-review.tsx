@@ -22,6 +22,7 @@ import {
   useGenerateVideoConsent,
   usePrepareVideo,
 } from '@/hooks/use-video-upload';
+import { Header } from '@/components/layout/header';
 import { useRiskAssessments, useSessionDeceptionScore } from '@/hooks/use-video';
 import {
   LineChart,
@@ -33,6 +34,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { InfoTooltip } from '@/components/ui/tooltip';
+import { convertToTitleCase } from '@/lib/utils';
 
 const DEFAULT_EMOTIONS = [
   'Admiration',
@@ -111,7 +113,7 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
   }, [type, raw?.top_emotions]);
 
   return (
-    <div className="p-2 rounded-lg bg-slate-800/70 border border-slate-700/50 animate-in fade-in">
+    <div className="p-2 rounded-lg bg-muted/50 border border-border animate-in fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -122,9 +124,9 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
           ) : marker?.risk_score === 'LOW' ? (
             <ShieldCheck className="h-4 w-4 text-blue-500" />
           ) : (
-            <Activity className="h-4 w-4 text-slate-500 opacity-50" />
+            <Activity className="h-4 w-4 text-muted-foreground opacity-50" />
           )}
-          <span className="text-xs font-semibold text-slate-200">{title}</span>
+          <span className="text-xs font-semibold">{title}</span>
           {tooltip && <InfoTooltip title={title} content={tooltip} direction="left" />}
         </div>
         {marker && (
@@ -147,33 +149,33 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
       <div className="grid grid-cols-2 gap-2 text-[10px]">
         {type === 'voice' && (
           <>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Jitter</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Jitter</p>
               <p
-                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.jitter_percent ?? 0) > 1.5 ? 'text-red-400' : 'text-foreground'}`}
               >
                 {raw?.jitter_percent !== undefined ? `${raw.jitter_percent.toFixed(2)}%` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Shimmer</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Shimmer</p>
               <p
-                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.shimmer_percent ?? 0) > 3 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.shimmer_percent !== undefined ? `${raw.shimmer_percent.toFixed(2)}%` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Pitch SD</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Pitch SD</p>
               <p
-                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${(raw?.pitch_sd_hz ?? 0) > 40 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.pitch_sd_hz !== undefined ? `${raw.pitch_sd_hz.toFixed(1)} Hz` : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">HNR</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">HNR</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.hnr_db !== undefined ? `${raw.hnr_db.toFixed(1)} dB` : '—'}
               </p>
             </div>
@@ -182,14 +184,14 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
 
         {type === 'visual' && (
           <>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Rate</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Blink Rate</p>
               <p
                 className={`text-sm font-mono ${
                   raw?.blink_rate_per_min !== undefined &&
                   (raw.blink_rate_per_min < 10 || raw.blink_rate_per_min > 25)
                     ? 'text-amber-400'
-                    : 'text-slate-200'
+                    : 'text-foreground'
                 }`}
               >
                 {raw?.blink_rate_per_min !== undefined
@@ -197,25 +199,25 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
                   : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Lip Tension</p>
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Lip Tension</p>
               <p
-                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-slate-200'}`}
+                className={`text-sm font-mono ${raw?.avg_lip_tension !== undefined && raw.avg_lip_tension < 0.7 ? 'text-amber-400' : 'text-foreground'}`}
               >
                 {raw?.avg_lip_tension !== undefined ? raw.avg_lip_tension.toFixed(3) : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Blink Dur.</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Blink Dur.</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.avg_blink_duration_ms !== undefined
                   ? `${raw.avg_blink_duration_ms.toFixed(0)} ms`
                   : '—'}
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded p-2">
-              <p className="text-slate-500 uppercase font-bold text-[9px]">Frames</p>
-              <p className="text-sm font-mono text-slate-200">
+            <div className="bg-card/50 rounded p-2">
+              <p className="text-muted-foreground uppercase font-bold text-[9px]">Frames</p>
+              <p className="text-sm font-mono text-foreground">
                 {raw?.frames_analyzed !== undefined ? raw.frames_analyzed : '—'}
               </p>
             </div>
@@ -225,9 +227,11 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
         {type === 'emotion' && (
           <>
             {topEmotions.map((emotion: any, idx: number) => (
-              <div key={idx} className="bg-slate-900/50 rounded p-2">
-                <p className="text-slate-500 uppercase font-bold text-[9px]">{emotion.name}</p>
-                <p className="text-sm font-mono text-slate-200">
+              <div key={idx} className="bg-card/50 rounded p-2">
+                <p className="text-muted-foreground uppercase font-bold text-[9px]">
+                  {emotion.name}
+                </p>
+                <p className="text-sm font-mono text-foreground">
                   {emotion.score !== null && emotion.score !== undefined
                     ? `${(emotion.score * 100).toFixed(1)}%`
                     : '—'}
@@ -239,8 +243,8 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50">
-        <span className="text-[9px] text-slate-500">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+        <span className="text-[9px] text-muted-foreground">
           {marker?.provider
             ? `Conf: ${((marker.confidence ?? 0) * 100).toFixed(0)}%`
             : 'Awaiting Data...'}
@@ -775,14 +779,14 @@ export function VideoReviewPage() {
 
   if (isLoadingUpload || isActuallyPreparing) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-950">
-        <div className="text-center text-slate-200">
+      <div className="flex h-full items-center justify-center bg-card">
+        <div className="text-center text-foreground">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4 mx-auto" />
           <p className="text-lg font-medium">
             {isActuallyPreparing ? 'Preparing video for analysis...' : 'Loading video details...'}
           </p>
           {isActuallyPreparing && (
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Downloading and caching video for real-time assessment
             </p>
           )}
@@ -793,13 +797,13 @@ export function VideoReviewPage() {
 
   if (!videoUpload) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-950">
-        <div className="text-center text-slate-200">
+      <div className="flex h-full items-center justify-center bg-card">
+        <div className="text-center text-foreground">
           <AlertCircle className="h-12 w-12 text-red-500 mb-4 mx-auto" />
           <p className="text-lg font-medium">Video not found</p>
           <Button variant="outline" className="mt-4" onClick={() => navigate(`/claims/${claimId}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Claim
+            Back
           </Button>
         </div>
       </div>
@@ -807,45 +811,40 @@ export function VideoReviewPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-background overflow-hidden animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900/50">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-slate-400 hover:text-white"
-            onClick={() => navigate(`/claims/${claimId}`)}
-            disabled={isPlaying}
-          >
+      <Header
+        // title={`Video Review: ${videoUpload?.status === 'COMPLETED' ? 'Completed' : 'In Progress'}`}
+        title={
+          <span>
+            Video Review
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20"
+            >
+              {convertToTitleCase(videoUpload.status)}
+            </Badge>
+          </span>
+        }
+        description={`Claim: ${claim?.claimNumber || claimId} • AI-Powered Risk Analysis`}
+      >
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/claims/${claimId}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <div>
-            <h1 className="text-md font-semibold text-white">Video Assessment Review</h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Badge
-                variant="outline"
-                className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20"
-              >
-                {videoUpload.status}
-              </Badge>
-              <span className="text-xs text-slate-500">Claim: {claim?.claimNumber || claimId}</span>
-            </div>
-          </div>
+          {(hasWatchedToEnd || isFullyProcessed) && (
+            <Button variant="default" size="sm" onClick={handleComplete} disabled={isCompleting}>
+              {isCompleting ? (
+                <span className="animate-spin mr-2">⏳</span>
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              {isCompleting ? 'Finalizing...' : 'Complete Review'}
+            </Button>
+          )}
         </div>
-
-        {(hasWatchedToEnd || isFullyProcessed) && (
-          <Button variant="default" size="sm" onClick={handleComplete} disabled={isCompleting}>
-            {isCompleting ? (
-              <span className="animate-spin mr-2">⏳</span>
-            ) : (
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-            )}
-            {isCompleting ? 'Finalizing...' : 'Complete Review'}
-          </Button>
-        )}
-      </div>
+      </Header>
 
       {/* Main Content */}
       <div className="flex-1 p-4 flex gap-4 overflow-hidden">
@@ -863,14 +862,14 @@ export function VideoReviewPage() {
           </div>
 
           {/* Custom Controls */}
-          <Card className="bg-slate-900 border-slate-800 p-4">
+          <Card className="bg-card border-border p-4">
             <div className="space-y-3">
               {/* Progress Bar */}
               <div className="relative">
-                <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
                   {/* Processed portion (green) */}
                   <div
-                    className="absolute h-2 bg-green-600/50 transition-all rounded-sm"
+                    className="absolute h-2 bg-green-500/50 transition-all rounded-sm"
                     style={{ width: `${processedPercentage}%` }}
                   />
                   {/* Current playback position (blue) */}
@@ -879,7 +878,7 @@ export function VideoReviewPage() {
                     style={{ width: `${progressPercentage}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>{formatTime(Math.min(currentTime, duration))}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
@@ -891,14 +890,14 @@ export function VideoReviewPage() {
                   variant="default"
                   size="icon"
                   onClick={handlePlayPause}
-                  className="rounded-full h-12 w-12 bg-blue-600 hover:bg-white text-white hover:text-blue-600 transition-colors border-none"
+                  className="rounded-full h-12 w-12 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors border-none"
                 >
                   {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
                 </Button>
               </div>
 
               {/* Info */}
-              <div className="text-center text-xs text-slate-500">
+              <div className="text-center text-xs text-muted-foreground">
                 <p>Video controls are limited. You must watch the entire video for processing.</p>
                 <p className="mt-1">
                   Processed: {formatTime(lastProcessedTime)} / {formatTime(duration)}
@@ -911,26 +910,28 @@ export function VideoReviewPage() {
         {/* Right Sidebar - Metrics & Risk */}
         <div className="flex flex-col gap-4 w-128 overflow-hidden">
           {/* Session Info */}
-          <Card className="bg-slate-900 border-slate-800 p-2 shrink-0">
-            <h3 className="text-xs font-semibold text-slate-200 mb-2 uppercase tracking-wider">
+          <Card className="bg-card border-border p-2 shrink-0">
+            <h3 className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wider">
               Session Info
             </h3>
             <div className="flex items-center gap-8">
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Claim ID</p>
-                <p className="text-xs text-slate-300">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Claim ID</p>
+                <p className="text-xs text-muted-foreground">
                   {isClaimLoading ? 'Loading...' : claim?.id || 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Claimant</p>
-                <p className="text-xs text-slate-300">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Claimant</p>
+                <p className="text-xs text-muted-foreground">
                   {isClaimLoading ? 'Loading...' : claim?.claimant?.fullName || 'N/A'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Policy Number</p>
-                <p className="text-xs text-slate-300">{claim?.policyNumber || 'N/A'}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                  Policy Number
+                </p>
+                <p className="text-xs text-muted-foreground">{claim?.policyNumber || 'N/A'}</p>
               </div>
             </div>
           </Card>
@@ -938,10 +939,10 @@ export function VideoReviewPage() {
           <div className="flex flex-1 gap-4 min-h-0">
             {/* Deception Score */}
             <div className="w-60 flex flex-col">
-              <Card className="bg-slate-900 border-slate-800 p-4 flex-1 flex flex-col">
+              <Card className="bg-card border-border p-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Deception Score
                     </h3>
                     <InfoTooltip
@@ -952,24 +953,24 @@ export function VideoReviewPage() {
                   </div>
                   <Badge
                     variant="outline"
-                    className="text-[10px] h-5 border-emerald-700 text-emerald-400"
+                    className="text-[10px] h-5 border-primary text-primary animate-pulse"
                   >
                     {isPlaying ? 'LIVE' : 'PAUSED'}
                   </Badge>
                 </div>
 
                 <div className="flex items-end gap-2 mb-4">
-                  <span className="text-2xl font-bold text-white">
+                  <span className="text-2xl font-bold text-foreground">
                     {(
                       (currentMetrics?.deceptionScore || deceptionData?.deceptionScore || 0) * 100
                     ).toFixed(2)}
                   </span>
-                  <span className="text-xs text-slate-500 mb-1">/ 100.00</span>
+                  <span className="text-xs text-muted-foreground mb-1">/ 100.00</span>
                 </div>
 
                 {/* Metrics Graph */}
                 <div className="flex-1 min-h-0">
-                  <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">
+                  <p className="text-[10px] text-muted-foreground font-bold mb-2 uppercase">
                     Real-time Metrics
                   </p>
                   <div className="h-40">
@@ -981,12 +982,13 @@ export function VideoReviewPage() {
                         <Tooltip
                           contentStyle={{
                             fontSize: '9px',
-                            borderColor: '#334155',
-                            backgroundColor: '#1e293b',
+                            borderColor: 'hsl(var(--border))',
+                            backgroundColor: 'hsl(var(--popover))',
+                            color: 'hsl(var(--popover-foreground))',
                           }}
                           itemStyle={{ fontSize: '9px' }}
                           labelStyle={{
-                            color: '#FBFAF2',
+                            color: 'hsl(var(--muted-foreground))',
                             textAlign: 'center',
                             marginBottom: '4px',
                           }}
@@ -1071,10 +1073,10 @@ export function VideoReviewPage() {
                   ].map(metric => (
                     <div key={metric.label} className="mb-2">
                       <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-slate-400">{metric.label}</span>
-                        <span className="text-slate-200 font-mono">{metric.value}%</span>
+                        <span className="text-muted-foreground">{metric.label}</span>
+                        <span className="text-foreground font-mono">{metric.value}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-500"
                           style={{
@@ -1091,9 +1093,9 @@ export function VideoReviewPage() {
 
             {/* Risk Analysis Card */}
             <div className="w-60 flex flex-col overflow-hidden">
-              <Card className="bg-slate-900 border-slate-800 p-2 flex-1 flex flex-col overflow-hidden">
+              <Card className="bg-card border-border p-4 flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between mb-4 shrink-0">
-                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Risk Analysis
                   </h3>
                 </div>

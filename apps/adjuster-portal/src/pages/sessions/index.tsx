@@ -31,6 +31,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { convertToTitleCase } from '@/lib/utils';
+import { SearchInput } from '@/components/ui/search-input';
+import { useDebounce } from '@/hooks/use-debounce';
 
 interface Session {
   id: string;
@@ -76,13 +79,17 @@ export function VideoSessionsPage() {
   const [filter, setFilter] = useState<'all' | 'live' | 'upload'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 400);
   const limit = 10;
 
   // Fetch live sessions
   const { data: sessionsRes, isLoading: isLoadingSessions } = useQuery({
-    queryKey: ['sessions', 'all', page],
+    queryKey: ['sessions', 'all', page, debouncedSearch],
     queryFn: async () => {
-      const response = await apiClient.get(`/video/rooms?page=${page}&limit=${limit}`);
+      const response = await apiClient.get(
+        `/video/rooms?page=${page}&limit=${limit}&search=${debouncedSearch}`
+      );
       // The API returns { success: true, data: { data: [], total, ... } }
       // We want the inner data object
       return response.data?.data || response.data;
@@ -91,9 +98,11 @@ export function VideoSessionsPage() {
 
   // Fetch video uploads
   const { data: uploadsRes, isLoading: isLoadingUploads } = useQuery({
-    queryKey: ['video-uploads', 'all', page],
+    queryKey: ['video-uploads', 'all', page, debouncedSearch],
     queryFn: async () => {
-      const response = await apiClient.get(`/video/uploads?page=${page}&limit=${limit}`);
+      const response = await apiClient.get(
+        `/video/uploads?page=${page}&limit=${limit}&search=${debouncedSearch}`
+      );
       // The API returns { success: true, data: { data: [], total, ... } }
       // We want the inner data object
       return response.data?.data || response.data;
@@ -165,7 +174,7 @@ export function VideoSessionsPage() {
     return (
       <Badge variant={config.variant} className="text-xs">
         <Icon className="h-3 w-3 mr-1" />
-        {status}
+        {convertToTitleCase(status)}
       </Badge>
     );
   };
@@ -174,12 +183,20 @@ export function VideoSessionsPage() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <Header
-        title="Video Sessions"
+        title="Sessions"
         description="View and manage all video assessment sessions and uploads"
-      />
+      >
+        <div className="flex items-center gap-2">
+          <SearchInput
+            placeholder="Search by ID or name..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-[280px]"
+          />
+        </div>
+      </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {/* Filter Tabs */}
         {/* Filter Tabs and View Toggle */}
         <div className="flex items-center justify-between border-b border-border">
           <div className="flex gap-2">
@@ -191,7 +208,7 @@ export function VideoSessionsPage() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              All Sessions ({totalSessions + totalUploads})
+              All ({totalSessions + totalUploads})
             </button>
             <button
               onClick={() => handleFilterChange('live')}
@@ -250,7 +267,7 @@ export function VideoSessionsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...Array(5)].map((_, i) => (
+                    {[...Array(3)].map((_, i) => (
                       <TableRow key={i} className="hover:bg-transparent">
                         <TableCell>
                           <Skeleton className="h-4 w-24" />
@@ -316,7 +333,7 @@ export function VideoSessionsPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Date & Time</TableHead>
                     <TableHead>Duration</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -357,8 +374,8 @@ export function VideoSessionsPage() {
                           'N/A'
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -460,15 +477,14 @@ export function VideoSessionsPage() {
         </div>
 
         {!isLoading && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 mt-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
             >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Previous
+              <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-xs font-medium">
               Page {page} of {totalPages}
@@ -479,8 +495,7 @@ export function VideoSessionsPage() {
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
             >
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}
