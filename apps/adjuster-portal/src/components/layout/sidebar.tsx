@@ -22,7 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Claims', href: '/claims', icon: FileText },
-  { name: 'Video Sessions', href: '/sessions', icon: Video },
+  { name: 'Sessions', href: '/sessions', icon: Video },
   { name: 'Schedule', href: '/schedule', icon: Calendar },
 ];
 
@@ -42,7 +42,7 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-60 flex-col border-r border-border/50 bg-card transition-all duration-300">
+    <div className="flex h-full w-60 flex-col border-r border-border shadow-sm bg-card transition-all duration-[50ms]">
       {/* Header / Logo */}
       <div className="flex h-20 items-center justify-center px-4">
         <Link to="/" className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function Sidebar() {
 
         {/* User Profile */}
         <div className="flex items-center gap-3 pt-5 border-t border-border/50">
-          <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+          <Avatar className="h-10 w-10 border-2 border-background shadow-sm bg-muted">
             <AvatarFallback className="bg-primary/10 text-primary font-bold">
               {user ? getInitials(user.fullName) : 'U'}
             </AvatarFallback>

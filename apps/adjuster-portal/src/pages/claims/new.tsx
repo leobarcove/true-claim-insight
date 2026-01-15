@@ -89,7 +89,7 @@ export function NewClaimPage() {
       >
         <Button variant="outline" size="sm" onClick={() => navigate(-1)} disabled={isSubmitting}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to List
+          Back
         </Button>
       </Header>
 
@@ -98,8 +98,8 @@ export function NewClaimPage() {
           <div className="bg-card rounded-lg border shadow-sm p-8">
             {isSubmitting ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="text-gray-500">Submitting claim details...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="text-muted-foreground">Submitting claim details...</p>
               </div>
             ) : (
               <ClaimSubmissionWizard

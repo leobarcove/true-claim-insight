@@ -96,10 +96,14 @@ export function RegisterPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <img src="/logo.png" alt="Logo" className="h-10 w-10" />
           </div>
-          <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
-          <CardDescription>Register as a loss adjuster on True Claim Insight</CardDescription>
+          <div className="flex flex-col items-center space-y-2">
+            <img src="/logo.png" alt="Logo" className="h-12 w-12" />
+            <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
+            <CardDescription className="text-center">
+              Register as a loss adjuster on True Claim Insight
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

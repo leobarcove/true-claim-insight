@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
+import { convertToTitleCase } from '@/lib/utils';
 
 const getStatusBadge = (status: string) => {
   const variants: Record<
@@ -47,14 +48,14 @@ const getStatusBadge = (status: string) => {
     ESCALATED_SIU: 'destructive',
     CLOSED: 'secondary',
   };
-  return <Badge variant={variants[status] || 'default'}>{status.replace('_', ' ')}</Badge>;
+  return <Badge variant={variants[status] || 'default'}>{convertToTitleCase(status)}</Badge>;
 };
 
 export function DashboardPage() {
   const { user } = useAuthStore();
-  const [recentClaimsView, setRecentClaimsView] = useState<'table' | 'card'>('table');
+  const [recentClaimsView, setRecentClaimsView] = useState<'table' | 'card'>('card');
   const [recentClaimsPage, setRecentClaimsPage] = useState(1);
-  const [sessionsView, setSessionsView] = useState<'table' | 'card'>('table');
+  const [sessionsView, setSessionsView] = useState<'table' | 'card'>('card');
   const [sessionsPage, setSessionsPage] = useState(1);
 
   const { data: statsData, isLoading: statsLoading } = useClaimStats();
@@ -76,13 +77,6 @@ export function DashboardPage() {
 
   const stats = [
     {
-      title: 'Active Claims',
-      value: statsData?.totalAssigned.toString() || '0',
-      change: 'Currently assigned',
-      icon: FileText,
-      trend: 'neutral',
-    },
-    {
       title: 'Scheduled Sessions',
       value: statsData?.inProgress.toString() || '0',
       change: 'Active status',
@@ -90,20 +84,25 @@ export function DashboardPage() {
       trend: 'neutral',
     },
     {
-      title: 'Pending Reports',
-      value: statsData?.pendingReview.toString() || '0',
-      change: 'Action required',
-      icon: Clock,
-      trend: 'warning',
+      title: 'Active Claims',
+      value: statsData?.totalAssigned.toString() || '0',
+      change: 'Currently assigned',
+      icon: FileText,
+      trend: 'neutral',
     },
     {
-      title: 'Completed This Month',
-      value: statsData?.completedThisMonth.toString() || '0',
-      change: 'Finalised total',
+      title: 'Total Cases',
+      value: statsData?.totalClaims.toString() || '0',
+      change: 'Lifetime total',
       icon: CheckCircle,
       trend: 'up',
     },
   ];
+
+  const daysInMonthSoFar = new Date().getDate();
+  const averagePerDayMonth = statsData
+    ? (statsData.completedThisMonth / daysInMonthSoFar).toFixed(1)
+    : '0';
 
   const recentClaims = claimsData?.claims || [];
   const upcomingSessions = sessionsData?.claims || [];
@@ -124,74 +123,98 @@ export function DashboardPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Performance Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Performance Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="text-center p-4 rounded-lg bg-accent/50">
-                {statsLoading ? (
-                  <Skeleton className="h-9 w-12 mx-auto mb-1" />
-                ) : (
-                  <p className="text-3xl font-bold text-primary">
-                    {statsData?.averagePerDay?.toFixed(1) || '0'}
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground">Avg. Cases/Day</p>
+        <Card className="bg-primary text-primary-foreground border-none overflow-hidden relative">
+          {/* Background Pattern Effect (Subtle) */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full translate-y-32 -translate-x-32 blur-3xl" />
+
+          <CardContent className="p-8 relative z-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-2">
+                <p className="text-primary-foreground/80 font-medium text-sm">
+                  Total Monthly Cases
+                </p>
+                <div className="flex items-baseline gap-4">
+                  {statsLoading ? (
+                    <Skeleton className="h-12 w-32 bg-primary-foreground/20" />
+                  ) : (
+                    <h2 className="text-5xl font-bold tracking-tight">
+                      {statsData?.completedThisMonth || 0}
+                    </h2>
+                  )}
+                  <div className="flex items-center text-primary-foreground/90 bg-primary-foreground/10 px-2 py-0.5 rounded text-sm font-medium">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    +12.5%
+                  </div>
+                </div>
               </div>
-              <div className="text-center p-4 rounded-lg bg-accent/50">
-                {statsLoading ? (
-                  <Skeleton className="h-9 w-12 mx-auto mb-1" />
-                ) : (
-                  <p className="text-3xl font-bold text-emerald-600">
-                    {statsData?.completedThisWeek || 0}
+
+              <div className="flex gap-4 md:gap-8">
+                <div className="space-y-1">
+                  <p className="text-xs text-primary-foreground/70 uppercase tracking-wider font-semibold">
+                    Average Cases/Day
                   </p>
-                )}
-                <p className="text-sm text-muted-foreground">Completed This Week</p>
-              </div>
-              <div className="text-center p-4 rounded-lg bg-accent/50">
-                {statsLoading ? (
-                  <Skeleton className="h-9 w-12 mx-auto mb-1" />
-                ) : (
-                  <p className="text-3xl font-bold text-primary">{statsData?.totalClaims || 0}</p>
-                )}
-                <p className="text-sm text-muted-foreground">Total Cases Handled</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-16 bg-primary-foreground/20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{averagePerDayMonth}</p>
+                  )}
+                </div>
+                <div className="w-[1px] bg-primary-foreground/20 h-10 self-center" />
+                <div className="space-y-1">
+                  <p className="text-xs text-primary-foreground/70 uppercase tracking-wider font-semibold">
+                    Completed This Week
+                  </p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-16 bg-primary-foreground/20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{statsData?.completedThisWeek || 0}</p>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-1 lg:grid-cols-3">
           {stats.map(stat => (
-            <Card key={stat.title}>
+            <Card
+              key={stat.title}
+              className="shadow-sm border-border/60 hover:shadow-md transition-shadow"
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
                 </CardTitle>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
+                <div
+                  className={`p-2 rounded-lg ${
+                    stat.trend === 'up'
+                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20'
+                      : stat.trend === 'warning'
+                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20'
+                        : 'bg-slate-50 text-slate-600 dark:bg-slate-800'
+                  }`}
+                >
+                  <stat.icon className="h-4 w-4" />
+                </div>
               </CardHeader>
               <CardContent>
                 {statsLoading ? (
                   <Skeleton className="h-8 w-16 mb-1" />
                 ) : (
-                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <div className="flex items-end justify-between">
+                    <div className="text-2xl font-bold">{stat.value}</div>
+                    <div className="flex items-center text-xs font-medium text-emerald-600">
+                      {stat?.change && (
+                        <>
+                          {stat.trend === 'up' ? '↑' : stat.trend === 'warning' ? '!' : '•'}
+                          <span className="ml-1">{stat.change}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
-                <p
-                  className={`text-xs ${
-                    stat.trend === 'up'
-                      ? 'text-emerald-600'
-                      : stat.trend === 'warning'
-                        ? 'text-yellow-600'
-                        : 'text-muted-foreground'
-                  }`}
-                >
-                  {stat.change}
-                </p>
               </CardContent>
             </Card>
           ))}
@@ -203,7 +226,7 @@ export function DashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Recent Claims</CardTitle>
               <div className="flex items-center gap-2">
-                <div className="flex items-center bg-muted/50 rounded-lg p-1">
+                {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -220,7 +243,7 @@ export function DashboardPage() {
                   >
                     <Grid className="h-4 w-4" />
                   </Button>
-                </div>
+                </div> */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -236,14 +259,29 @@ export function DashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent border-none">
-                        <TableHead colSpan={4}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableHead>
+                        {claimsLoading ? (
+                          <TableHead colSpan={4}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableHead>
+                        ) : (
+                          <>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Claim Number
+                            </TableHead>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Type
+                            </TableHead>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Status
+                            </TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {claimsLoading ? (
-                        [...Array(5)].map((_, i) => (
+                        [...Array(3)].map((_, i) => (
                           <TableRow key={i} className="border-border/50 hover:bg-transparent">
                             <TableCell>
                               <Skeleton className="h-4 w-24" />
@@ -275,7 +313,7 @@ export function DashboardPage() {
                             <TableCell className="font-medium text-foreground">
                               {claim.claimNumber}
                               <div className="text-[10px] text-muted-foreground mt-0.5">
-                                {new Date(claim.createdAt).toLocaleDateString()}
+                                {claim.createdAt?.split('T')[0]}
                               </div>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
@@ -292,34 +330,6 @@ export function DashboardPage() {
                       )}
                     </TableBody>
                   </Table>
-
-                  {/* Pagination */}
-                  {!claimsLoading && (
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setRecentClaimsPage(p => Math.max(1, p - 1))}
-                        disabled={recentClaimsPage === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <span className="text-xs text-muted-foreground">Page {recentClaimsPage}</span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setRecentClaimsPage(p => p + 1)}
-                        disabled={
-                          !claimsData?.pagination ||
-                          recentClaimsPage >= claimsData.pagination.totalPages
-                        }
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
               ) : (
                 /* Card View */
@@ -349,29 +359,15 @@ export function DashboardPage() {
                         <div className="space-y-1">
                           <p className="text-sm font-medium">{claim.claimNumber}</p>
                           <p className="text-xs text-muted-foreground">
-                            ID: {claim.claimantId.substring(0, 8)}... •{' '}
-                            {claim.claimType.replace('_', ' ')}
+                            {claim.claimant?.fullName} • {claim.vehiclePlateNumber} •{' '}
+                            {convertToTitleCase(claim.claimType)}
                           </p>
                         </div>
-                        {getStatusBadge(claim.status)}
+                        <div className="flex flex-col items-center gap-1">
+                          {getStatusBadge(claim.status)}
+                        </div>
                       </div>
                     ))
-                  )}
-                  {/* Reuse Pagination for Card View too if desired, or keep it simple */}
-                  {!claimsLoading && (
-                    <div className="flex items-center justify-center pt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRecentClaimsPage(p => p + 1)}
-                        disabled={
-                          !claimsData?.pagination ||
-                          recentClaimsPage >= claimsData.pagination.totalPages
-                        }
-                      >
-                        Load More
-                      </Button>
-                    </div>
                   )}
                 </div>
               )}
@@ -383,7 +379,7 @@ export function DashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Upcoming Sessions</CardTitle>
               <div className="flex items-center gap-2">
-                <div className="flex items-center bg-muted/50 rounded-lg p-1">
+                {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -400,13 +396,13 @@ export function DashboardPage() {
                   >
                     <Grid className="h-4 w-4" />
                   </Button>
-                </div>
+                </div> */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => (window.location.href = '/claims?status=SCHEDULED')}
+                  onClick={() => (window.location.href = '/schedule')}
                 >
-                  View Schedule
+                  View All
                 </Button>
               </div>
             </CardHeader>
@@ -416,14 +412,26 @@ export function DashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent border-none">
-                        <TableHead colSpan={3}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableHead>
+                        {sessionsLoading ? (
+                          <TableHead colSpan={3}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableHead>
+                        ) : (
+                          <>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-0">
+                              Claim
+                            </TableHead>
+                            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">
+                              Scheduled For
+                            </TableHead>
+                            <TableHead className="w-[40px]"></TableHead>
+                          </>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sessionsLoading ? (
-                        [...Array(5)].map((_, i) => (
+                        [...Array(3)].map((_, i) => (
                           <TableRow key={i} className="border-border/50 hover:bg-transparent">
                             <TableCell className="px-0">
                               <div className="flex items-center gap-3">
@@ -564,7 +572,7 @@ export function DashboardPage() {
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm font-medium">
-                              Claimant ID: {claim.claimantId.substring(0, 8)}
+                              Claimant: {claim.claimant?.fullName}
                             </p>
                             <p className="text-xs text-muted-foreground">{claim.claimNumber}</p>
                           </div>
@@ -579,21 +587,6 @@ export function DashboardPage() {
                         </div>
                       </div>
                     ))
-                  )}
-                  {!sessionsLoading && (
-                    <div className="flex items-center justify-center pt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSessionsPage(p => p + 1)}
-                        disabled={
-                          !sessionsData?.pagination ||
-                          sessionsPage >= sessionsData.pagination.totalPages
-                        }
-                      >
-                        Load More
-                      </Button>
-                    </div>
                   )}
                 </div>
               )}

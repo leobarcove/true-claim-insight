@@ -79,12 +79,14 @@ const normalizeDate = (dateStr: string) => {
 
 const Button = ({ children, className, variant = 'default', ...props }: any) => {
   const variants: any = {
-    default: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm active:scale-95 text-sm',
-    outline: 'border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-sm',
-    ghost: 'hover:bg-gray-100 text-gray-600 text-sm',
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 text-sm',
-    secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200 text-sm',
-    danger: 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm',
+    default:
+      'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-95 text-sm',
+    outline: 'border border-input bg-background hover:bg-accent text-accent-foreground text-sm',
+    ghost: 'hover:bg-accent text-muted-foreground text-sm',
+    primary: 'bg-primary text-primary-foreground hover:bg-primary/90 text-sm',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm',
+    danger:
+      'bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 text-sm',
   };
   return (
     <button
@@ -111,27 +113,27 @@ const Input = ({
 }: any) => (
   <div className={cn('space-y-1.5 relative', containerClassName)}>
     <div className="flex justify-between items-center">
-      {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+      {label && <label className="text-sm font-medium text-foreground">{label}</label>}
       {aiFilled && (
-        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 animate-pulse">
+        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 animate-pulse">
           <Sparkles size={10} /> AI FILLED
         </span>
       )}
     </div>
     <input
       className={cn(
-        'w-full px-3 py-2.5 rounded-lg border text-sm transition-all outline-none',
+        'w-full px-3 py-2.5 rounded-lg border text-sm transition-all outline-none bg-background text-foreground placeholder:text-muted-foreground',
         aiFilled
-          ? 'border-amber-300 bg-amber-50/50 focus:ring-amber-500'
-          : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
-        error ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : '',
+          ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
+          : 'border-input focus:ring-2 focus:ring-ring focus:border-primary',
+        error ? 'border-destructive focus:border-destructive focus:ring-destructive/30' : '',
         className
       )}
       onBlur={onBlur}
       {...props}
     />
     {error && (
-      <p className="text-xs text-red-500 flex items-center gap-1">
+      <p className="text-xs text-destructive flex items-center gap-1">
         <AlertCircle size={10} /> {error}
       </p>
     )}
@@ -194,11 +196,11 @@ const AutocompleteInput = ({
         onBlur={onBlur}
       />
       {showSuggestions && filtered.length > 0 && (
-        <div className="absolute z-20 w-full bg-white mt-1 border border-gray-100 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-20 w-full bg-popover mt-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {filtered.map(item => (
             <div
               key={item}
-              className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+              className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm text-foreground"
               onClick={() => handleSelect(item)}
             >
               {item}
@@ -801,29 +803,29 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <button
               onClick={() => setStep(1)}
-              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gray-100 bg-white hover:border-blue-500 hover:bg-blue-50/50 transition-all group shadow-sm hover:shadow-md"
+              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-border bg-card hover:border-primary hover:bg-primary/5 transition-all group shadow-sm hover:shadow-md"
             >
-              <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                <User className="text-gray-500 group-hover:text-blue-600" size={32} />
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                <User className="text-muted-foreground group-hover:text-primary" size={32} />
               </div>
               <div className="text-center">
-                <h3 className="font-bold text-lg text-gray-900">Manual Entry</h3>
-                <p className="text-sm text-gray-500 mt-1">Fill in details step-by-step</p>
+                <h3 className="font-bold text-lg text-foreground">Manual Entry</h3>
+                <p className="text-sm text-muted-foreground mt-1">Fill in details step-by-step</p>
               </div>
             </button>
 
             <button
               onClick={() => setIsAiImportActive(true)}
-              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-blue-100 bg-blue-50/30 hover:border-blue-500 hover:bg-blue-50 transition-all group relative overflow-hidden shadow-sm hover:shadow-md"
+              className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-primary/20 bg-primary/5 hover:border-primary hover:bg-primary/10 transition-all group relative overflow-hidden shadow-sm hover:shadow-md"
             >
-              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-blue-200 shadow-lg">
-                <Sparkles className="text-white" size={28} />
+              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center group-hover:scale-110 transition-transform shadow-primary/20 shadow-lg">
+                <Sparkles className="text-primary-foreground" size={28} />
               </div>
               <div className="text-center">
-                <h3 className="font-bold text-lg text-gray-900">AI Import</h3>
-                <p className="text-sm text-gray-500 mt-1">Upload MyKad & Incident Photos</p>
+                <h3 className="font-bold text-lg text-foreground">AI Import</h3>
+                <p className="text-sm text-muted-foreground mt-1">Upload MyKad & Incident Photos</p>
               </div>
-              <div className="mt-4 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide rounded-full">
+              <div className="mt-4 px-3 py-1 bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wide rounded-full">
                 Recommended
               </div>
             </button>
@@ -833,7 +835,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         <div className="flex justify-center">
           <button
             onClick={fillDemoData}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 text-xs font-bold hover:bg-amber-500/20 transition-colors shadow-sm"
           >
             <Sparkles size={14} />
             FILL DEMO DATA (SHORTCUT)
@@ -841,7 +843,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         </div>
 
         <div className="text-center pt-2">
-          <Button variant="ghost" onClick={onCancel} className="text-gray-400 font-normal">
+          <Button variant="ghost" onClick={onCancel} className="text-muted-foreground font-normal">
             Cancel
           </Button>
         </div>
@@ -850,12 +852,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   }
 
   return (
-    <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-[600px]">
+    <div className="max-w-xl mx-auto bg-card rounded-2xl shadow-sm border border-border flex flex-col min-h-[600px]">
       {/* Progress Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-100">
+      <div className="bg-card px-6 py-4 border-b border-border">
         <div className="flex justify-between items-center relative">
           {/* Connecting Line */}
-          <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-100 -z-0 translate-y-[-50%] overflow-hidden">
+          <div className="absolute top-4 left-0 w-full h-0.5 bg-muted -z-0 translate-y-[-50%] overflow-hidden">
             <div
               className="h-full bg-green-500 transition-all duration-500"
               style={{ width: `${(currentStepperIndex / (stepStates.length - 1)) * 100}%` }}
@@ -869,16 +871,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             return (
               <div
                 key={s.title}
-                className="relative z-10 flex flex-col items-center gap-2 bg-white px-2"
+                className="relative z-10 flex flex-col items-center gap-2 bg-card px-2"
               >
                 <div
                   className={cn(
                     'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300',
                     isActive
-                      ? 'bg-blue-600 text-white ring-4 ring-blue-50 scale-110'
+                      ? 'bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110'
                       : isCompleted
                         ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-400 border border-gray-200'
+                        : 'bg-muted text-muted-foreground border border-border'
                   )}
                 >
                   {isCompleted ? <Check size={14} strokeWidth={3} /> : <StepIcon size={14} />}
@@ -886,7 +888,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 <span
                   className={cn(
                     'text-[10px] font-bold uppercase tracking-wider transition-colors',
-                    isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-300'
+                    isActive
+                      ? 'text-primary'
+                      : isCompleted
+                        ? 'text-green-600'
+                        : 'text-muted-foreground/50'
                   )}
                 >
                   {s.title}
@@ -902,8 +908,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Claimant Information</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-xl font-bold text-foreground">Claimant Information</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 Search for an existing claimant or enter new details.
               </p>
             </div>
@@ -965,8 +971,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Vehicle Details</h2>
-              <p className="text-sm text-gray-500 mt-1">Vehicle involved in the incident.</p>
+              <h2 className="text-xl font-bold text-foreground">Vehicle Details</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Vehicle involved in the incident.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1042,8 +1050,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Incident Details</h2>
-              <p className="text-sm text-gray-500 mt-1">When and what happened.</p>
+              <h2 className="text-xl font-bold text-foreground">Incident Details</h2>
+              <p className="text-sm text-muted-foreground mt-1">When and what happened.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1082,20 +1090,20 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-sm font-medium text-gray-700">Description</label>
+                <label className="text-sm font-medium text-foreground">Description</label>
                 {aiFilledFields.has('description') && (
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                     <Sparkles size={10} /> AI FILLED
                   </span>
                 )}
               </div>
               <textarea
                 className={cn(
-                  'w-full px-3 py-2 rounded-lg border outline-none h-32 resize-none transition-all text-sm',
+                  'w-full px-3 py-2 rounded-lg border outline-none h-32 resize-none transition-all text-sm bg-background text-foreground placeholder:text-muted-foreground',
                   aiFilledFields.has('description')
-                    ? 'border-amber-300 bg-amber-50/50 focus:ring-amber-500'
-                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
-                  errors.description ? 'border-red-500 focus:ring-red-100' : ''
+                    ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
+                    : 'border-input focus:ring-2 focus:ring-ring focus:border-primary',
+                  errors.description ? 'border-destructive focus:ring-destructive/30' : ''
                 )}
                 placeholder="Describe how the incident happened in detail..."
                 value={formData.description}
@@ -1109,8 +1117,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               )}
             </div>
 
-            <div className="space-y-4 border-t pt-4">
-              <h3 className="text-xl font-bold text-gray-700">Police Report (Optional)</h3>
+            <div className="space-y-4 border-t border-border pt-4">
+              <h3 className="text-xl font-bold text-foreground">Police Report (Optional)</h3>
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Report Number"
@@ -1182,8 +1190,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 4 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Incident Location</h2>
-              <p className="text-sm text-gray-500 mt-1">Where did it happen?</p>
+              <h2 className="text-xl font-bold text-foreground">Incident Location</h2>
+              <p className="text-sm text-muted-foreground mt-1">Where did it happen?</p>
             </div>
 
             <div className="relative" ref={addressContainerRef}>
@@ -1278,8 +1286,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 5 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Damage Evidence</h2>
-              <p className="text-sm text-gray-500 mt-1">Upload at least 2 photos of the damage.</p>
+              <h2 className="text-xl font-bold text-foreground">Damage Evidence</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload at least 2 photos of the damage.
+              </p>
             </div>
 
             {/* Upload Area */}
@@ -1287,9 +1297,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               className={cn(
                 'border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer group',
                 isDragging
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 bg-gray-50/50 hover:border-blue-500 hover:bg-blue-50/50',
-                errors.photos ? 'border-red-300 bg-red-50/30' : ''
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-muted/30 hover:border-primary hover:bg-primary/5',
+                errors.photos ? 'border-destructive/50 bg-destructive/10' : ''
               )}
               onClick={() => document.getElementById('photo-upload')?.click()}
               onDragOver={e => {
@@ -1306,11 +1316,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 }
               }}
             >
-              <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Upload className="text-blue-600" size={20} />
+              <div className="w-12 h-12 bg-card rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <Upload className="text-primary" size={20} />
               </div>
-              <h3 className="text-sm font-bold text-gray-900">Click or drag to upload photos</h3>
-              <p className="text-xs text-gray-500 mt-1 max-w-[200px]">
+              <h3 className="text-sm font-bold text-foreground">Click or drag to upload photos</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
                 Supports JPG, PNG (Max 5MB)
               </p>
               <input
@@ -1418,84 +1428,90 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 6 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Review Submission</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-xl font-bold text-foreground">Review Submission</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 Please verify all details before submitting.
               </p>
             </div>
 
-            <div className="space-y-4 bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
-              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500">Claimant</span>
+            <div className="space-y-4 bg-muted/40 p-4 rounded-2xl border border-border">
+              <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                <span className="text-sm text-muted-foreground">Claimant</span>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-gray-900">{formData.claimantId || 'Self'}</p>
-                  <p className="text-xs text-gray-400">{formData.nric}</p>
-                  <p className="text-[10px] text-gray-400">Policy: {formData.policyNumber}</p>
+                  <p className="text-sm font-bold text-foreground">
+                    {formData.claimantId || 'Self'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{formData.nric}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Policy: {formData.policyNumber}
+                  </p>
                 </div>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500">Vehicle</span>
+              <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                <span className="text-sm text-muted-foreground">Vehicle</span>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-gray-900">{formData.vehiclePlate}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-bold text-foreground">{formData.vehiclePlate}</p>
+                  <p className="text-xs text-muted-foreground">
                     {formData.vehicleYear} {formData.vehicleMake} {formData.vehicleModel}
                   </p>
                   {formData.engineNo && (
-                    <p className="text-[10px] text-gray-400">Engine: {formData.engineNo}</p>
+                    <p className="text-[10px] text-muted-foreground">Engine: {formData.engineNo}</p>
                   )}
                   {formData.chassisNo && (
-                    <p className="text-[10px] text-gray-400">Chassis: {formData.chassisNo}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Chassis: {formData.chassisNo}
+                    </p>
                   )}
                 </div>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500">Claim Type</span>
+              <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                <span className="text-sm text-muted-foreground">Claim Type</span>
                 <div className="text-right">
-                  <p className="text-sm font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
+                  <p className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-md">
                     {CLAIM_TYPES[formData.claimType]}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     <span
                       className="flex items-center gap-1"
                       style={{ justifyContent: 'flex-end', marginRight: 8, marginTop: 4 }}
                     >
-                      <ImageIcon size={14} className="text-gray-400" />
+                      <ImageIcon size={14} className="text-muted-foreground" />
                       {formData.photos.length} evidence{formData.photos.length === 1 ? '' : 's'}
                     </span>
                   </p>
                 </div>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
-                <span className="text-sm text-gray-500">Incident Details</span>
+              <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                <span className="text-sm text-muted-foreground">Incident Details</span>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-gray-900 max-w-[220px]">
+                  <p className="text-sm font-bold text-foreground max-w-[220px]">
                     {formData.address}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {formData.incidentDate} at {formData.incidentTime}
                   </p>
                 </div>
               </div>
               {formData.policeReportNumber && (
-                <div className="flex justify-between items-center py-1 border-b border-gray-200/50 last:border-0">
-                  <span className="text-sm text-gray-500">Police Report</span>
+                <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                  <span className="text-sm text-muted-foreground">Police Report</span>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900 max-w-[220px]">
+                    <p className="text-sm font-bold text-foreground max-w-[220px]">
                       {formData.policeReportNumber}
                     </p>
-                    <p className="text-xs text-gray-400">{formData.policeStation}</p>
-                    <p className="text-xs text-gray-400">{formData.policeReportDate}</p>
+                    <p className="text-xs text-muted-foreground">{formData.policeStation}</p>
+                    <p className="text-xs text-muted-foreground">{formData.policeReportDate}</p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">
-              <AlertCircle className="text-blue-600 shrink-0 mt-0.5" size={20} />
-              <p className="text-xs text-blue-800 leading-relaxed">
+            <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 flex gap-3">
+              <AlertCircle className="text-primary shrink-0 mt-0.5" size={20} />
+              <p className="text-xs text-primary/80 leading-relaxed">
                 By submitting, you confirm that the information provided is accurate and true.
                 {mode === 'AGENT'
-                  ? ' The claimant will receive an SMS to verify their identity via V-KYC.'
+                  ? ' The claimant will receive an SMS to verify their identity via e-KYC.'
                   : ' You will be asked to verify your identity using your MyKad during the video call.'}
               </p>
             </div>
@@ -1504,7 +1520,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       </div>
 
       {/* Footer Actions */}
-      <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+      <div className="p-6 border-t border-border bg-muted/40">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={handleBack}>
             {step === (mode === 'AGENT' ? 1 : 2) ? 'Cancel' : 'Back'}
