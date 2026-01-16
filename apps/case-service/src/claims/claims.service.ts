@@ -431,6 +431,76 @@ export class ClaimsService {
   }
 
   /**
+   * Get tenant-wide claim statistics
+   */
+  async getStats(tenantContext: TenantContext) {
+    const where = this.tenantService.buildClaimTenantFilter(tenantContext);
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfWeek = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const [totalClaims, activeClaims, completedThisMonth, completedThisWeek, statusBreakdown] =
+      await Promise.all([
+        // Total claims in tenant
+        this.prisma.claim.count({ where }),
+
+        // Active claims in tenant
+        this.prisma.claim.count({
+          where: {
+            ...where,
+            status: {
+              in: ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'],
+            },
+          },
+        }),
+
+        // Completed this month in tenant
+        this.prisma.claim.count({
+          where: {
+            ...where,
+            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+            updatedAt: { gte: startOfMonth },
+          },
+        }),
+
+        // Completed this week in tenant
+        this.prisma.claim.count({
+          where: {
+            ...where,
+            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+            updatedAt: { gte: startOfWeek },
+          },
+        }),
+
+        // Status breakdown
+        this.prisma.claim.groupBy({
+          by: ['status'],
+          where,
+          _count: { status: true },
+        }),
+      ]);
+
+    return {
+      stats: {
+        totalClaims,
+        activeClaims,
+        completedThisMonth,
+        completedThisWeek,
+        averagePerDay: completedThisWeek / 7,
+      },
+      statusBreakdown: statusBreakdown.reduce(
+        (acc, item) => {
+          acc[item.status] = item._count.status;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+    };
+  }
+
+  /**
    * Add a note to a claim with tenant validation
    */
   async addNote(claimId: string, content: string, authorId: string, tenantContext?: TenantContext) {

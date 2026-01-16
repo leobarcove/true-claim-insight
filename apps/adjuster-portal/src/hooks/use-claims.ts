@@ -22,6 +22,8 @@ export interface ClaimFilters {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  adjusterId?: string;
+  scope?: 'tenant' | 'personal';
 }
 
 export interface ClaimListResponse {
@@ -86,6 +88,8 @@ export function useClaims(filters: ClaimFilters = {}) {
       if (filters.limit) params.append('limit', filters.limit.toString());
       if (filters.sortBy) params.append('sortBy', filters.sortBy);
       if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+      if (filters.adjusterId) params.append('adjusterId', filters.adjusterId);
+      if (filters.scope) params.append('scope', filters.scope);
 
       const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>(
         `/claims?${params.toString()}`
@@ -120,11 +124,12 @@ export function useClaimQueue() {
 }
 
 // Fetch claim statistics
-export function useClaimStats() {
+export function useClaimStats(scope?: 'tenant' | 'personal') {
   return useQuery({
-    queryKey: claimKeys.stats(),
+    queryKey: [...claimKeys.stats(), scope || 'default'],
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimStats>>('/claims/stats');
+      const url = scope ? `/claims/stats?scope=${scope}` : '/claims/stats';
+      const { data } = await apiClient.get<ApiResponse<ClaimStats>>(url);
       return data.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes

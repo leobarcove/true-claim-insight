@@ -70,10 +70,7 @@ export class ClaimsController {
   @ApiQuery({ name: 'status', required: false, type: String })
   @ApiQuery({ name: 'claimType', required: false, type: String })
   @ApiQuery({ name: 'adjusterId', required: false, type: String })
-  async findAll(
-    @Query() query: ClaimQueryDto,
-    @Tenant() tenantContext: TenantContext,
-  ) {
+  async findAll(@Query() query: ClaimQueryDto, @Tenant() tenantContext: TenantContext) {
     return this.claimsService.findAll(query, tenantContext);
   }
 
@@ -92,10 +89,7 @@ export class ClaimsController {
     status: HttpStatus.FORBIDDEN,
     description: 'Claim does not belong to your organisation',
   })
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Tenant() tenantContext: TenantContext,
-  ) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
     return this.claimsService.findOne(id, tenantContext);
   }
 
@@ -117,7 +111,7 @@ export class ClaimsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateClaimDto: UpdateClaimDto,
-    @Tenant() tenantContext: TenantContext,
+    @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.update(id, updateClaimDto, tenantContext);
   }
@@ -136,7 +130,7 @@ export class ClaimsController {
   async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('status') status: string,
-    @Tenant() tenantContext: TenantContext,
+    @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.updateStatus(id, status, tenantContext);
   }
@@ -155,13 +149,9 @@ export class ClaimsController {
   async assignAdjuster(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() assignAdjusterDto: AssignAdjusterDto,
-    @Tenant() tenantContext: TenantContext,
+    @Tenant() tenantContext: TenantContext
   ) {
-    return this.claimsService.assignAdjuster(
-      id,
-      assignAdjusterDto.adjusterId,
-      tenantContext,
-    );
+    return this.claimsService.assignAdjuster(id, assignAdjusterDto.adjusterId, tenantContext);
   }
 
   @Delete(':id')
@@ -176,10 +166,7 @@ export class ClaimsController {
     status: HttpStatus.FORBIDDEN,
     description: 'Claim does not belong to your organisation',
   })
-  async remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Tenant() tenantContext: TenantContext,
-  ) {
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
     return this.claimsService.remove(id, tenantContext);
   }
 
@@ -196,7 +183,7 @@ export class ClaimsController {
   })
   async getTimeline(
     @Param('id', ParseUUIDPipe) id: string,
-    @Tenant() tenantContext: TenantContext,
+    @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.getTimeline(id, tenantContext);
   }
@@ -216,8 +203,17 @@ export class ClaimsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body('content') content: string,
     @Body('authorId') authorId: string,
-    @Tenant() tenantContext: TenantContext,
+    @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.addNote(id, content, authorId, tenantContext);
+  }
+  @Get('stats')
+  @ApiOperation({ summary: 'Get tenant-wide claim statistics' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Returns tenant-scoped claim stats',
+  })
+  async getStats(@Tenant() tenantContext: TenantContext) {
+    return this.claimsService.getStats(tenantContext);
   }
 }
