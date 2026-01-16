@@ -309,9 +309,9 @@ export function VideoSessionsPage() {
             )
           ) : filteredSessions.length === 0 ? (
             <Card className="p-12 text-center">
-              <AlertCircle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">No sessions found</h3>
-              <p className="text-slate-600">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No sessions found</h3>
+              <p className="text-muted-foreground">
                 {filter === 'all'
                   ? 'No video sessions or uploads available yet.'
                   : filter === 'live'
@@ -394,15 +394,15 @@ export function VideoSessionsPage() {
                   onClick={() => handleViewSession(item)}
                 >
                   {/* Thumbnail */}
-                  <div className="relative h-40 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                  <div className="relative h-40 bg-muted/30 bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center">
                     {item.type === 'live' ? (
-                      <Video className="h-16 w-16 text-slate-400" />
+                      <Video className="h-12 w-12 text-muted-foreground/50" />
                     ) : (
-                      <Upload className="h-16 w-16 text-slate-400" />
+                      <Upload className="h-12 w-12 text-muted-foreground/50" />
                     )}
                     <div className="absolute top-2 right-2">{getStatusBadge(item.data.status)}</div>
                     <div className="absolute top-2 left-2">
-                      <Badge variant="outline" className="text-xs bg-white/10 backdrop-blur-sm">
+                      <Badge variant="secondary" className="text-xs">
                         {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
                       </Badge>
                     </div>
@@ -411,13 +411,15 @@ export function VideoSessionsPage() {
                   {/* Content */}
                   <div className="p-4 space-y-3">
                     <div>
-                      <h3 className="font-semibold text-slate-900 mb-1">
+                      <h3 className="font-semibold text-foreground mb-1">
                         {item.data.claim.claimNumber}
                       </h3>
-                      <p className="text-sm text-slate-600">{item.data.claim.claimant.fullName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.data.claim.claimant.fullName}
+                      </p>
                     </div>
 
-                    <div className="space-y-2 text-xs text-slate-600">
+                    <div className="space-y-2 text-xs text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-3 w-3" />
                         <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>

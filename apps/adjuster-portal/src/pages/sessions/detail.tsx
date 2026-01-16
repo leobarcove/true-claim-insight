@@ -190,16 +190,8 @@ export function SessionDetailPage() {
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={metricsData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="time"
-                      tick={{ fontSize: 12 }}
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      tick={{ fontSize: 12 }}
-                      stroke="hsl(var(--muted-foreground))"
-                    />
+                    <XAxis dataKey="time" hide />
+                    <YAxis domain={[0, 1]} hide />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'hsl(var(--popover))',
@@ -207,7 +199,7 @@ export function SessionDetailPage() {
                         borderRadius: '8px',
                         color: 'hsl(var(--popover-foreground))',
                       }}
-                      itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                      formatter={(value: number, name: string) => [`${value.toFixed(2)}%`, name]}
                     />
                     <Legend />
                     <Line
@@ -324,8 +316,8 @@ export function SessionDetailPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-muted-foreground">Deception Score</span>
-                      <span className="text-lg font-bold text-purple-600">
-                        {(Number(latestScore.deceptionScore) * 100).toFixed(2)}%
+                      <span className="text-lg font-bold text-foreground">
+                        {(Number(latestScore.deceptionScore) * 100).toFixed(2)}
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -341,8 +333,8 @@ export function SessionDetailPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-muted-foreground">Voice Stress</span>
-                      <span className="text-sm font-semibold text-blue-600">
-                        {(Number(latestScore.voiceStress) * 100).toFixed(2)}%
+                      <span className="text-sm font-semibold text-foreground">
+                        {(Number(latestScore.voiceStress) * 100).toFixed(2)}
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -358,8 +350,8 @@ export function SessionDetailPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-muted-foreground">Visual Behavior</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        {(Number(latestScore.visualBehavior) * 100).toFixed(2)}%
+                      <span className="text-sm font-semibold text-foreground">
+                        {(Number(latestScore.visualBehavior) * 100).toFixed(2)}
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -375,8 +367,8 @@ export function SessionDetailPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-muted-foreground">Expression</span>
-                      <span className="text-sm font-semibold text-pink-600">
-                        {(Number(latestScore.expressionMeasurement) * 100).toFixed(2)}%
+                      <span className="text-sm font-semibold text-foreground">
+                        {(Number(latestScore.expressionMeasurement) * 100).toFixed(2)}
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
