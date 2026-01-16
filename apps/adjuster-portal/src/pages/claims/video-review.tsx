@@ -127,7 +127,14 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
             <Activity className="h-4 w-4 text-muted-foreground opacity-50" />
           )}
           <span className="text-xs font-semibold">{title}</span>
-          {tooltip && <InfoTooltip title={title} content={tooltip} direction="left" />}
+          {tooltip && (
+            <InfoTooltip
+              title={title}
+              content={tooltip}
+              direction="left"
+              contentClassName="min-w-[450px]"
+            />
+          )}
         </div>
         {marker && (
           <Badge
@@ -814,19 +821,8 @@ export function VideoReviewPage() {
     <div className="flex flex-col h-full bg-background overflow-hidden animate-in fade-in duration-500">
       {/* Header */}
       <Header
-        // title={`Video Review: ${videoUpload?.status === 'COMPLETED' ? 'Completed' : 'In Progress'}`}
-        title={
-          <span>
-            Video Review
-            <Badge
-              variant="outline"
-              className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary border-primary/20"
-            >
-              {convertToTitleCase(videoUpload.status)}
-            </Badge>
-          </span>
-        }
-        description={`Claim: ${claim?.claimNumber || claimId} • AI-Powered Risk Analysis`}
+        title="Manual Upload"
+        description={`AI-Powered Risk Analysis • ${claim?.claimNumber || claimId}`}
       >
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(`/claims/${claimId}`)}>
@@ -1159,28 +1155,30 @@ export function VideoReviewPage() {
                             </p>
                             <ul className="list-disc pl-3 space-y-1">
                               <li>
-                                <span className="font-semibold text-slate-100">Jitter (%):</span>{' '}
+                                <span className="font-semibold text-foreground">Jitter (%):</span>{' '}
                                 Measures small, rapid variations in voice pitch. Higher values may
                                 indicate vocal instability or stress.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Shimmer (%):</span>{' '}
+                                <span className="font-semibold text-foreground">Shimmer (%):</span>{' '}
                                 Measures variations in voice loudness. Elevated shimmer can be
                                 linked to tension or fatigue.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Pitch SD (Hz):</span>{' '}
+                                <span className="font-semibold text-foreground">
+                                  Pitch SD (Hz):
+                                </span>{' '}
                                 Shows how much the speaker's pitch varies. Low variation may
                                 indicate monotone delivery; high variation may signal emotional
                                 arousal.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">HNR (dB):</span>{' '}
+                                <span className="font-semibold text-foreground">HNR (dB):</span>{' '}
                                 Harmonics-to-Noise Ratio. Indicates voice clarity—lower values
                                 suggest more noise or strain in the voice.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Confidence (%):
                                 </span>{' '}
                                 System confidence in the accuracy of the voice stress analysis based
@@ -1209,31 +1207,31 @@ export function VideoReviewPage() {
                             </p>
                             <ul className="list-disc pl-3 space-y-1">
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Blink Rate (per min):
                                 </span>{' '}
                                 Number of blinks per minute. Changes may be associated with stress,
                                 fatigue, or focus level.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Blink Duration (ms):
                                 </span>{' '}
                                 Average length of each blink. Longer blinks may suggest tiredness or
                                 disengagement.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Lip Tension:</span>{' '}
+                                <span className="font-semibold text-foreground">Lip Tension:</span>{' '}
                                 Measures tightness around the mouth. Higher values can indicate
                                 stress, suppression, or concentration.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Frames:</span> Number
-                                of video frames analyzed for this segment. Higher counts generally
-                                improve reliability.
+                                <span className="font-semibold text-foreground">Frames:</span>{' '}
+                                Number of video frames analyzed for this segment. Higher counts
+                                generally improve reliability.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Confidence (%):
                                 </span>{' '}
                                 System confidence in visual behavior detection based on lighting,

@@ -124,8 +124,12 @@ export class RoomsController {
   @Get()
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all sessions' })
-  async getAllSessions(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    const result = await this.roomsService.getAllSessions(page, limit);
+  async getAllSessions(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string
+  ) {
+    const result = await this.roomsService.getAllSessions(page, limit, search);
     return {
       data: result.data.map(s => ({
         id: s.id,

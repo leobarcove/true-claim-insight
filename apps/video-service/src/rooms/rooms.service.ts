@@ -95,8 +95,7 @@ export class RoomsService {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
-    // Enhance COMPLETED session with fresh recording link
-    if (session.status === SessionStatus.COMPLETED) {
+    if (session.status === SessionStatus.COMPLETED && this.dailyService.isReady()) {
       try {
         const recording = await this.getRecordingLink(session.id);
         if (recording && recording.download_link) {
@@ -206,11 +205,50 @@ export class RoomsService {
   /**
    * Get all sessions with pagination
    */
-  async getAllSessions(page = 1, limit = 10) {
+  async getAllSessions(page = 1, limit = 10, search?: string) {
+    // Check if Daily.co is ready. If not, we can't provide valid recordings.
+    if (!this.dailyService.isReady()) {
+      return { data: [], total: 0, page, limit, totalPages: 0 };
+    }
+
     const skip = (page - 1) * limit;
+    const recordingsRes = (await this.dailyService.listRecordings()) as any;
+    const allRecordings = recordingsRes.data || [];
+    if (allRecordings.length === 0) {
+      return { data: [], total: 0, page, limit, totalPages: 0 };
+    }
+
+    // Map room names to their latest recording info for fast lookup
+    const roomToLatestRecording = new Map<string, any>();
+    for (const rec of allRecordings) {
+      const existing = roomToLatestRecording.get(rec.room_name);
+      if (!existing || new Date(rec.created_at) > new Date(existing.created_at)) {
+        roomToLatestRecording.set(rec.room_name, rec);
+      }
+    }
+
+    const recordedRoomNames = Array.from(roomToLatestRecording.keys());
+    const whereClause: any = {
+      status: { in: [SessionStatus.COMPLETED, SessionStatus.IN_PROGRESS] },
+      OR: recordedRoomNames.map(name => ({
+        roomUrl: { contains: name },
+      })),
+    };
+
+    if (search) {
+      whereClause.AND = [
+        {
+          OR: [
+            { claim: { claimNumber: { contains: search, mode: 'insensitive' } } },
+            { claim: { claimant: { fullName: { contains: search, mode: 'insensitive' } } } },
+          ],
+        },
+      ];
+    }
 
     const [sessions, total] = await Promise.all([
       this.prisma.session.findMany({
+        where: whereClause,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -226,54 +264,35 @@ export class RoomsService {
               },
             },
           },
-          deceptionScores: {
-            orderBy: { createdAt: 'desc' },
-          },
         },
       }),
-      this.prisma.session.count(),
+      this.prisma.session.count({ where: whereClause }),
     ]);
 
-    // Optimize: Fetch all recordings from Daily.co once to avoid noise
-    const recordingsRes = (await this.dailyService.listRecordings()) as any;
-    const allRecordings = recordingsRes.data || [];
-
-    // Enhance sessions with recording links if missing
     const enhancedSessions = await Promise.all(
       sessions.map(async session => {
-        // Try to find a recording link for any session that doesn't have a static one
-        // or if it's currently IN_PROGRESS/COMPLETED (as links expire)
-        if (
-          !session.recordingUrl ||
-          session.status === SessionStatus.IN_PROGRESS ||
-          session.status === SessionStatus.COMPLETED
-        ) {
-          try {
-            const roomName = session.roomUrl?.split('/').pop();
-            const sessionRecordings = allRecordings.filter((r: any) => r.room_name === roomName);
+        const roomName = session.roomUrl?.split('/').pop();
+        if (!roomName) return null;
 
-            if (sessionRecordings.length > 0) {
-              // Get the latest recording for this room
-              const latest = sessionRecordings.sort(
-                (a: any, b: any) =>
-                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-              )[0];
+        const recording = roomToLatestRecording.get(roomName);
+        if (!recording) return null;
 
-              const linkRes = await this.dailyService.getRecordingAccessLink(latest.id);
-              if (linkRes && linkRes.download_link) {
-                return { ...session, recordingUrl: linkRes.download_link };
-              }
-            }
-          } catch (e: any) {
-            this.logger.warn(`Failed to resolve recording for session ${session.id}: ${e.message}`);
+        try {
+          const linkRes = await this.dailyService.getRecordingAccessLink(recording.id);
+          if (linkRes?.download_link && linkRes.download_link !== '#') {
+            return { ...session, recordingUrl: linkRes.download_link };
           }
+        } catch (e) {
+          this.logger.warn(`Failed to resolve link for session ${session.id}`);
         }
-        return session;
+        return null;
       })
     );
 
+    const finalData = enhancedSessions.filter(s => s !== null);
+
     return {
-      data: enhancedSessions,
+      data: finalData,
       total,
       page,
       limit,
@@ -311,8 +330,11 @@ export class RoomsService {
    * Get recordings for a session
    */
   async getRecordings(sessionId: string) {
-    const session = await this.getRoom(sessionId);
-    const roomName = session.roomUrl?.split('/').pop();
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { roomUrl: true },
+    });
+    const roomName = session?.roomUrl?.split('/').pop();
     if (!roomName) return { total_count: 0, data: [] };
 
     return this.dailyService.listRecordings(roomName);
@@ -322,7 +344,12 @@ export class RoomsService {
    * Get the most recent recording link for a session
    */
   async getRecordingLink(sessionId: string) {
-    const session = await this.getRoom(sessionId);
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { roomUrl: true },
+    });
+    if (!session) return null;
+
     const roomName = session.roomUrl?.split('/').pop();
     if (!roomName) return null;
 

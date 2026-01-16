@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
+  Loader2,
 } from 'lucide-react';
 
 import { Header } from '@/components/layout/header';
@@ -299,7 +300,7 @@ export function ClaimDetailPage() {
   };
 
   const handleUpdateStatus = async (status: string) => {
-    if (!claimId) return;
+    if (!claimId || updateStatus.isPending) return;
 
     try {
       await updateStatus.mutateAsync(status as any);
@@ -421,14 +422,25 @@ export function ClaimDetailPage() {
             size="sm"
             className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
             onClick={() => handleUpdateStatus('APPROVED')}
-            disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+            disabled={
+              claim.status === 'APPROVED' || claim.status === 'REJECTED' || updateStatus.isPending
+            }
           >
-            <div className="flex items-center gap-2">
-              <span className="font-bold">Approve</span>
-            </div>
-            <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-              {modifier} + Enter
-            </span>
+            {updateStatus.isPending && updateStatus.variables === 'APPROVED' ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="font-bold">Approving...</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">Approve</span>
+                </div>
+                <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                  {modifier} + Enter
+                </span>
+              </>
+            )}
           </Button>
 
           <Button
@@ -436,14 +448,25 @@ export function ClaimDetailPage() {
             size="sm"
             className="h-10 px-4 flex-col items-center justify-center min-w-[120px]"
             onClick={() => handleUpdateStatus('REJECTED')}
-            disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+            disabled={
+              claim.status === 'APPROVED' || claim.status === 'REJECTED' || updateStatus.isPending
+            }
           >
-            <div className="flex items-center gap-2">
-              <span className="font-bold">Reject</span>
-            </div>
-            <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-              {modifier} + Backspace
-            </span>
+            {updateStatus.isPending && updateStatus.variables === 'REJECTED' ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="font-bold">Rejecting...</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">Reject</span>
+                </div>
+                <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                  {modifier} + Backspace
+                </span>
+              </>
+            )}
           </Button>
         </div>
       </Header>
@@ -454,7 +477,7 @@ export function ClaimDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Incident Details */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle>Incident Details</CardTitle>
                 <span className="text-xs text-muted-foreground">
                   Updated: {formatDate(claim.updatedAt)}
@@ -464,16 +487,16 @@ export function ClaimDetailPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="flex items-start gap-3">
                     <div>
-                      <p className="text-sm font-medium">Incident Date</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs font-medium">Incident Date</p>
+                      <p className="text-xs text-muted-foreground">
                         {formatDate(claim.incidentDate)}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <div>
-                      <p className="text-sm font-medium">Location</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs font-medium">Location</p>
+                      <p className="text-xs text-muted-foreground">
                         {claim.incidentLocation.address}
                       </p>
                     </div>
