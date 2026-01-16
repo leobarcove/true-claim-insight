@@ -1,14 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsOptional,
-  IsInt,
-  Min,
-  Max,
-  IsString,
-  IsUUID,
-  IsEnum,
-  IsIn,
-} from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString, IsUUID, IsEnum, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ClaimStatus {
@@ -64,17 +55,24 @@ export class ClaimQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     example: 'createdAt',
     description: 'Field to sort by',
-    enum: ['createdAt', 'updatedAt', 'claimNumber', 'status', 'priority'],
+    enum: [
+      'createdAt',
+      'updatedAt',
+      'claimNumber',
+      'status',
+      'priority',
+      'scheduledAssessmentTime',
+    ],
   })
   @IsOptional()
   @IsString()
-  @IsIn(['createdAt', 'updatedAt', 'claimNumber', 'status', 'priority'])
+  @IsIn(['createdAt', 'updatedAt', 'claimNumber', 'status', 'priority', 'scheduledAssessmentTime'])
   sortBy?: string = 'createdAt';
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     example: 'desc',
     description: 'Sort order',
     enum: ['asc', 'desc'],

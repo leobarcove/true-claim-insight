@@ -95,10 +95,7 @@ export function UploadVideoPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header
-        title="Upload Assessment Video"
-        description={`Claim: ${claim?.claimNumber || claimId}`}
-      >
+      <Header title="Manual Upload" description={`Claim: ${claim?.claimNumber || claimId}`}>
         <Button variant="outline" size="sm" onClick={() => navigate(`/claims/${claimId}`)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -106,10 +103,10 @@ export function UploadVideoPage() {
       </Header>
 
       <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-2xl mx-auto">
+        <div className="mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Upload Video for Deception Analysis</CardTitle>
+              <CardTitle>Manual Upload for Deception Analysis</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="text-sm text-muted-foreground space-y-2">

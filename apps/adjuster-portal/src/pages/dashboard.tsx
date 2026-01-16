@@ -68,7 +68,6 @@ export function DashboardPage() {
   });
 
   const { data: sessionsData, isLoading: sessionsLoading } = useClaims({
-    status: 'SCHEDULED' as any,
     limit: 5,
     page: sessionsPage,
     sortBy: 'scheduledAssessmentTime',
@@ -188,13 +187,7 @@ export function DashboardPage() {
                   {stat.title}
                 </CardTitle>
                 <div
-                  className={`p-2 rounded-lg ${
-                    stat.trend === 'up'
-                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20'
-                      : stat.trend === 'warning'
-                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20'
-                        : 'bg-slate-50 text-slate-600 dark:bg-slate-800'
-                  }`}
+                  className={`p-2 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20`}
                 >
                   <stat.icon className="h-4 w-4" />
                 </div>
@@ -205,7 +198,9 @@ export function DashboardPage() {
                 ) : (
                   <div className="flex items-end justify-between">
                     <div className="text-2xl font-bold">{stat.value}</div>
-                    <div className="flex items-center text-xs font-medium text-emerald-600">
+                    <div
+                      className={`flex items-center text-xs font-medium ${stat.trend === 'up' ? 'text-emerald-600' : stat.trend === 'warning' ? 'text-amber-600' : 'text-slate-600'}`}
+                    >
                       {stat?.change && (
                         <>
                           {stat.trend === 'up' ? '↑' : stat.trend === 'warning' ? '!' : '•'}

@@ -56,7 +56,7 @@ export class ClaimsController {
   }
 
   @Get('stats')
-  @ApiOperation({ summary: 'Get claim statistics for the current adjuster' })
+  @ApiOperation({ summary: 'Get claim statistics' })
   getStats(@Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
@@ -65,48 +65,35 @@ export class ClaimsController {
       'X-User-Role': req.user?.role,
     };
 
-    // Use adjuster ID from the user's adjuster relationship
     const adjusterId = req.user?.adjuster?.id;
+    // Default to tenant stats unless personal scope is explicitly requested
+    const useTenantStats = req.query?.scope !== 'personal' || !adjusterId;
 
-    if (!adjusterId) {
-      // If user is not an adjuster, return empty stats
-      return {
-        totalAssigned: 0,
-        pendingReview: 0,
-        inProgress: 0,
-        completedThisMonth: 0,
-        completedThisWeek: 0,
-        averagePerDay: 0,
-        totalClaims: 0,
-        statusBreakdown: {},
-      };
-    }
+    const endpoint = useTenantStats
+      ? `${this.caseServiceUrl}/api/v1/claims/stats`
+      : `${this.caseServiceUrl}/api/v1/adjusters/${adjusterId}/stats`;
 
-    // Call case service's adjuster stats endpoint
-    return this.httpService
-      .get(`${this.caseServiceUrl}/api/v1/adjusters/${adjusterId}/stats`, { headers })
-      .pipe(
-        map(response => {
-          const data = response.data.data;
-          // Transform to frontend expected format
-          return {
-            totalAssigned: data.stats?.activeClaims || 0,
-            pendingReview: data.statusBreakdown?.REPORT_PENDING || 0,
-            inProgress: data.statusBreakdown?.SCHEDULED || 0,
-            completedThisMonth: data.stats?.completedThisMonth || 0,
-            completedThisWeek: data.stats?.completedThisWeek || 0,
-            averagePerDay: data.stats?.averagePerDay || 0,
-            totalClaims: data.stats?.totalClaims || 0,
-            statusBreakdown: data.statusBreakdown || {},
-          };
-        }),
-        catchError(e => {
-          throw new HttpException(
-            e.response?.data || 'Failed to fetch claim stats',
-            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
-          );
-        })
-      );
+    return this.httpService.get(endpoint, { headers }).pipe(
+      map(response => {
+        const data = response.data.data;
+        return {
+          totalAssigned: data.stats?.activeClaims || 0,
+          pendingReview: data.statusBreakdown?.REPORT_PENDING || 0,
+          inProgress: data.statusBreakdown?.SCHEDULED || 0,
+          completedThisMonth: data.stats?.completedThisMonth || 0,
+          completedThisWeek: data.stats?.completedThisWeek || 0,
+          averagePerDay: data.stats?.averagePerDay || 0,
+          totalClaims: data.stats?.totalClaims || 0,
+          statusBreakdown: data.statusBreakdown || {},
+        };
+      }),
+      catchError(e => {
+        throw new HttpException(
+          e.response?.data || 'Failed to fetch claim stats',
+          e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      })
+    );
   }
 
   @Get()
@@ -119,14 +106,23 @@ export class ClaimsController {
       'X-User-Role': req.user?.role,
     };
 
-    // case-service has /api/v1 prefix
+    const params = { ...req.query };
+
+    // Default to tenant-wide claims unless personal scope is requested
+    if (req.query?.scope === 'personal' && req.user?.adjuster?.id && !params.adjusterId) {
+      params.adjusterId = req.user.adjuster.id;
+    }
+
+    // Remove scope parameter as it's not supported by case-service DTO
+    delete params.scope;
+
     return this.httpService
       .get(`${this.caseServiceUrl}/api/v1/claims`, {
         headers,
-        params: req.query, // Pass query parameters (search, status, etc.)
+        params,
       })
       .pipe(
-        map(response => response.data.data), // Extract .data.data to avoid double wrapping
+        map(response => response.data.data),
         catchError(e => {
           throw new HttpException(
             e.response?.data || 'Failed to fetch claims',

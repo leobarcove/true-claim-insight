@@ -318,7 +318,7 @@ export function ClaimsListPage() {
                         <div>
                           <p className="font-medium">{claim.claimant?.fullName}</p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            <Badge variant="info" className="text-[10px]">
+                            <Badge variant="secondary" className="text-[10px]">
                               {typeLabels[claim.claimType] || claim.claimType}
                             </Badge>
                           </p>
