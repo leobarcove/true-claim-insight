@@ -183,10 +183,7 @@ export function VideoSessionsPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <Header
-        title="Sessions"
-        description="View and manage all video assessment sessions and uploads"
-      >
+      <Header title="Sessions" description="View and manage all live sessions and video uploads">
         <div className="flex items-center gap-2">
           <SearchInput
             placeholder="Search by ID or name..."

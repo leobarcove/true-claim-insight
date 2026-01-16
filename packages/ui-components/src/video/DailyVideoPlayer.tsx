@@ -24,6 +24,51 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
   ({ url, token, onJoined, onLeft, onError, onAppMessage, onCallFrameCreated }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null!);
     const [status, setStatus] = useState<'loading' | 'ready' | 'joined' | 'error'>('loading');
+    const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+
+    // Observe theme changes
+    useEffect(() => {
+      const observer = new MutationObserver(() => {
+        setIsDark(document.documentElement.classList.contains('dark'));
+      });
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+      return () => observer.disconnect();
+    }, []);
+
+    // Daily theme configuration
+    const dailyTheme = useMemo(
+      () => ({
+        colors: isDark
+          ? {
+              accent: '#0D8A63',
+              accentText: '#FFFFFF',
+              background: '#09090b',
+              backgroundAccent: '#18181b',
+              baseText: '#fafafa',
+              border: '#27272a',
+              mainAreaBg: '#09090b',
+              mainAreaBgAccent: '#18181b',
+              mainAreaText: '#fafafa',
+              supportiveText: '#a1a1aa',
+            }
+          : {
+              accent: '#0B6E4F',
+              accentText: '#FFFFFF',
+              background: '#ffffff',
+              backgroundAccent: '#f4f4f5',
+              baseText: '#09090b',
+              border: '#e4e4e7',
+              mainAreaBg: '#ffffff',
+              mainAreaBgAccent: '#f4f4f5',
+              mainAreaText: '#09090b',
+              supportiveText: '#71717a',
+            },
+      }),
+      [isDark]
+    );
 
     // Memoize options to ensure stability
     const callOptions = useMemo(
@@ -36,7 +81,7 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
             width: '100%',
             height: '100%',
             border: '0',
-            borderRadius: '8px',
+            borderRadius: '12px',
           },
           showLeaveButton: true,
           showFullscreenButton: true,
@@ -46,6 +91,13 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
     );
 
     const callFrame = useCallFrame(callOptions);
+
+    // Update theme dynamically
+    useEffect(() => {
+      if (callFrame) {
+        callFrame.setTheme(dailyTheme);
+      }
+    }, [callFrame, dailyTheme]);
 
     // Pass the call instance back to the parent for DailyProvider
     useEffect(() => {
@@ -106,10 +158,16 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
 
         // Auto-join if in a joinable state
         if (url && (state === 'new' || state === 'loaded')) {
-          callFrame.join({ url, token }).catch(e => {
-            console.error('[DailyVideoPlayer] join() failed:', e);
-            setStatus('error');
-          });
+          callFrame
+            .join({
+              url,
+              token,
+              // Initial theme is handled by the setTheme effect once joined
+            })
+            .catch(e => {
+              console.error('[DailyVideoPlayer] join() failed:', e);
+              setStatus('error');
+            });
         }
       };
 
@@ -240,19 +298,23 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
     }));
 
     return (
-      <div className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden border border-slate-800">
+      <div className="relative w-full h-full bg-background rounded-xl overflow-hidden border border-border">
         {status === 'loading' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/80 z-10">
-            <Loader2 className="h-8 w-8 animate-spin mb-2" />
-            <p className="text-sm font-medium">Connecting to secure video session...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-background/80 z-10 transition-colors">
+            <Loader2 className="h-8 w-8 animate-spin mb-3 text-primary" />
+            <p className="text-sm font-semibold tracking-tight">
+              Connecting to secure video session...
+            </p>
           </div>
         )}
 
         {status === 'error' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-red-400 bg-slate-900 z-10 p-6 text-center">
-            <VideoOff className="h-12 w-12 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Video Connection Failed</h3>
-            <p className="text-sm text-slate-400 max-w-xs">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-destructive bg-background z-10 p-8 text-center transition-colors">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <VideoOff className="h-8 w-8" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Video Connection Failed</h3>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
               We couldn't establish a connection to the video room. Please check your internet and
               try again.
             </p>

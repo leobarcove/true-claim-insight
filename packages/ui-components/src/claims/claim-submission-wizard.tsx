@@ -82,7 +82,7 @@ const Button = ({ children, className, variant = 'default', ...props }: any) => 
     default:
       'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-95 text-sm',
     outline: 'border border-input bg-background hover:bg-accent text-accent-foreground text-sm',
-    ghost: 'hover:bg-accent text-muted-foreground text-sm',
+    ghost: 'hover:bg-accent text-muted-foreground text-sm hover:text-accent-foreground',
     primary: 'bg-primary text-primary-foreground hover:bg-primary/90 text-sm',
     secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm',
     danger:
@@ -122,7 +122,7 @@ const Input = ({
     </div>
     <input
       className={cn(
-        'w-full px-3 py-2.5 rounded-lg border text-sm transition-all outline-none bg-background text-foreground placeholder:text-muted-foreground',
+        'w-full px-3 py-2.5 rounded-lg border text-sm transition-all outline-none bg-background text-foreground placeholder:text-muted-foreground dark:[color-scheme:dark]',
         aiFilled
           ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
           : 'border-input focus:ring-2 focus:ring-ring focus:border-primary',
@@ -681,8 +681,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     return (
       <div className="max-w-xl mx-auto space-y-8 py-4">
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold text-gray-900">How would you like to start?</h2>
-          <p className="text-gray-500">Choose how you want to input the claim details</p>
+          <h2 className="text-2xl font-bold text-foreground">How would you like to start?</h2>
+          <p className="text-muted-foreground">Choose how you want to input the claim details</p>
         </div>
 
         {isAiImportActive ? (
@@ -723,7 +723,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                     'flex items-center gap-4 p-4 rounded-xl border-2 border-dashed transition-all',
                     aiImportFiles[slot.id]
                       ? 'border-green-200 bg-green-50/50'
-                      : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50/50'
+                      : 'border-border hover:border-primary/50 hover:bg-muted/50/50'
                   )}
                   onClick={() => {
                     const input = document.createElement('input');
@@ -742,21 +742,21 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                       'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
                       aiImportFiles[slot.id]
                         ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-400'
+                        : 'bg-muted text-muted-foreground/80'
                     )}
                   >
                     {aiImportFiles[slot.id] ? <Check size={20} /> : <slot.icon size={20} />}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-gray-900">{slot.label}</h4>
+                      <h4 className="text-sm font-bold text-foreground">{slot.label}</h4>
                       {slot.required && (
                         <span className="text-[10px] text-red-500 font-bold uppercase">
                           Required
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {aiImportFiles[slot.id] ? aiImportFiles[slot.id]?.name : slot.description}
                     </p>
                   </div>
@@ -766,7 +766,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                         e.stopPropagation();
                         setAiImportFiles(prev => ({ ...prev, [slot.id]: null }));
                       }}
-                      className="p-1 hover:bg-red-100 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                      className="p-1 hover:bg-red-100 rounded-full text-muted-foreground/80 hover:text-red-500 transition-colors"
                     >
                       <X size={16} />
                     </button>
@@ -782,7 +782,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               <Button
                 onClick={handleAiImportSubmit}
                 disabled={isExtracting || !aiImportFiles.mykad || !aiImportFiles.damaged_evidence}
-                className="min-w-[160px] shadow-lg shadow-blue-200"
+                className="min-w-[160px] shadow-lg shadow-primary/20"
               >
                 {isExtracting ? (
                   <>
@@ -823,7 +823,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </div>
               <div className="text-center">
                 <h3 className="font-bold text-lg text-foreground">AI Import</h3>
-                <p className="text-sm text-muted-foreground mt-1">Upload MyKad & Incident Photos</p>
+                <p className="text-sm text-muted-foreground mt-1">Upload Documents</p>
               </div>
               <div className="mt-4 px-3 py-1 bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wide rounded-full">
                 Recommended
@@ -840,12 +840,6 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             <Sparkles size={14} />
             FILL DEMO DATA (SHORTCUT)
           </button>
-        </div>
-
-        <div className="text-center pt-2">
-          <Button variant="ghost" onClick={onCancel} className="text-muted-foreground font-normal">
-            Cancel
-          </Button>
         </div>
       </div>
     );
@@ -916,12 +910,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
             <div className="relative group">
               <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 group-focus-within:text-blue-500 transition-colors"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 group-focus-within:text-primary transition-colors"
                 style={{ top: '1.7rem' }}
               />
               <Input
                 placeholder="Search by NRIC or Phone..."
-                className="bg-gray-50 border-transparent focus:bg-white pl-9"
+                className="bg-muted/50 border-transparent focus:bg-background pl-9"
               />
             </div>
 
@@ -1055,9 +1049,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Claim Type</label>
+              <label className="text-sm font-medium text-foreground">Claim Type</label>
               <select
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm bg-white"
+                className="w-full px-3 py-2.5 rounded-lg border border-border outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm bg-background text-foreground dark:[color-scheme:dark]"
                 value={formData.claimType}
                 onChange={e => setFormData({ ...formData, claimType: e.target.value })}
               >
@@ -1165,17 +1159,17 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   onBlur={() => handleBlur('policeStation')}
                 />
                 {policeStationShowSuggestions && policeStationSuggestions.length > 0 && (
-                  <div className="absolute z-20 w-full bg-white mt-1 border border-gray-100 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                     {policeStationSuggestions.map(addr => (
                       <button
                         key={addr}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 text-sm flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                        className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
                         onClick={() => {
                           setFormData({ ...formData, policeStation: addr });
                           setPoliceStationShowSuggestions(false);
                         }}
                       >
-                        <MapPin size={14} className="text-gray-400 shrink-0" />
+                        <MapPin size={14} className="text-muted-foreground/80 shrink-0" />
                         <span className="truncate">{addr}</span>
                       </button>
                     ))}
@@ -1196,7 +1190,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
             <div className="relative" ref={addressContainerRef}>
               <Search
-                className="absolute left-3 h-4 w-4 text-gray-400 z-10"
+                className="absolute left-3 h-4 w-4 text-muted-foreground/80 z-10"
                 style={{ top: '1.2rem' }}
               />
               <Input
@@ -1213,17 +1207,17 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 onBlur={() => handleBlur('address')}
               />
               {showAddressSuggestions && addressSuggestions.length > 0 && (
-                <div className="absolute z-20 w-full bg-white mt-1 border border-gray-100 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  <div className="bg-gray-50 px-3 py-1.5 text-[10px] uppercase font-bold text-gray-400">
+                <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  <div className="bg-muted/50 px-3 py-1.5 text-[10px] uppercase font-bold text-muted-foreground/80">
                     Suggestions
                   </div>
                   {addressSuggestions.map(addr => (
                     <button
                       key={addr}
-                      className="w-full text-left px-4 py-3 hover:bg-blue-50 text-sm flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                      className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
                       onClick={() => selectAddress(addr)}
                     >
-                      <MapPin size={16} className="text-gray-400 shrink-0" />
+                      <MapPin size={16} className="text-muted-foreground/80 shrink-0" />
                       <span className="truncate">{addr}</span>
                     </button>
                   ))}
@@ -1233,15 +1227,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
             {/* Google Maps Integration (Embed) */}
             <div
-              className="aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-inner relative tci-map-container"
+              className="aspect-video bg-muted rounded-xl overflow-hidden border border-border shadow-inner relative tci-map-container"
               style={{ width: '100%', height: '220px' }}
             >
               {formData.address ? (
                 <>
                   {isMapLoading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10">
-                      <Loader2 className="animate-spin text-blue-500 mb-2" size={24} />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10">
+                      <Loader2 className="animate-spin text-primary mb-2" size={24} />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                         Loading Map...
                       </span>
                     </div>
@@ -1258,23 +1252,23 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   ></iframe>
                 </>
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                  <div className="bg-white p-4 rounded-full shadow-sm mb-3">
-                    <MapPin size={32} className="text-gray-300" />
+                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/80">
+                  <div className="bg-background p-4 rounded-full shadow-sm mb-3">
+                    <MapPin size={32} className="text-muted-foreground/60" />
                   </div>
                   <p className="text-sm font-medium">Enter location to see map</p>
                 </div>
               )}
               {!formData.address && ( // Overlay for demo if map fails to load without key
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-50/50 pointer-events-none">
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/50/50 pointer-events-none">
                   {/* This is just a fallback if iframe breaks due to no API key */}
                 </div>
               )}
             </div>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex gap-3">
-              <AlertCircle className="text-blue-600 shrink-0 mt-0.5" size={16} />
-              <p className="text-xs text-blue-700">
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex gap-3">
+              <AlertCircle className="text-primary shrink-0 mt-0.5" size={16} />
+              <p className="text-xs text-primary/90 font-medium">
                 Ensure the location pin is accurate. This will be used to deploy the nearest
                 adjuster.
               </p>
@@ -1342,7 +1336,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 {formData.photos.map((file: File, idx: number) => (
                   <div
                     key={idx}
-                    className="relative aspect-square group rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-white cursor-pointer"
+                    className="relative aspect-square group rounded-lg overflow-hidden border border-border shadow-sm bg-background cursor-pointer"
                     onClick={() => setPreviewPhotoIndex(idx)}
                   >
                     <img
@@ -1357,7 +1351,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                         e.stopPropagation();
                         setPhotoToRemoveIndex(idx);
                       }}
-                      className="absolute top-1.5 right-1.5 z-10 bg-white/80 hover:bg-red-500 hover:text-white p-1.5 text-gray-600 rounded-full backdrop-blur-sm transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                      className="absolute top-1.5 right-1.5 z-10 bg-background/80 hover:bg-red-500 hover:text-white p-1.5 text-muted-foreground rounded-full backdrop-blur-sm transition-all shadow-sm opacity-0 group-hover:opacity-100"
                     >
                       <X size={12} strokeWidth={3} />
                     </button>
@@ -1365,15 +1359,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                     {/* <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity"> */}
                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1.5 text-white transition-opacity">
                       <p className="text-[9px] truncate px-1">{file.name}</p>
-                      <p className="text-[8px] text-gray-300 px-1">
+                      <p className="text-[8px] text-muted-foreground/60 px-1">
                         {(file.size / 1024 / 1024).toFixed(1)} MB
                       </p>
                     </div>
 
                     {/* Removal Confirmation Overlay */}
                     {photoToRemoveIndex === idx && (
-                      <div className="absolute inset-0 z-20 bg-white/95 flex flex-col items-center justify-center p-2 text-center animate-in fade-in zoom-in-95 duration-200">
-                        <p className="text-[10px] font-bold text-gray-900 mb-2 leading-tight">
+                      <div className="absolute inset-0 z-20 bg-background/95 flex flex-col items-center justify-center p-2 text-center animate-in fade-in zoom-in-95 duration-200">
+                        <p className="text-[10px] font-bold text-foreground mb-2 leading-tight">
                           Remove photo?
                         </p>
                         <div className="flex gap-2">
@@ -1392,7 +1386,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                               e.stopPropagation();
                               setPhotoToRemoveIndex(null);
                             }}
-                            className="bg-gray-100 text-gray-600 text-[9px] font-bold px-2 py-1 rounded"
+                            className="bg-muted text-muted-foreground text-[9px] font-bold px-2 py-1 rounded"
                           >
                             No
                           </button>
@@ -1412,7 +1406,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200"
             onClick={() => setPreviewPhotoIndex(null)}
           >
-            <button className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors">
+            <button className="absolute top-6 right-6 text-white hover:text-muted-foreground/60 transition-colors">
               <X size={32} />
             </button>
             <img

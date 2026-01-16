@@ -94,7 +94,7 @@ export function NewClaimPage() {
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="mx-auto">
           <div className="bg-card rounded-lg border shadow-sm p-8">
             {isSubmitting ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
