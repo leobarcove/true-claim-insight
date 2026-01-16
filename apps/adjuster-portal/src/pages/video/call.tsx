@@ -124,7 +124,14 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
             <Activity className="h-4 w-4 text-muted-foreground opacity-50" />
           )}
           <span className="text-xs font-semibold">{title}</span>
-          {tooltip && <InfoTooltip title={title} content={tooltip} direction="left" />}
+          {tooltip && (
+            <InfoTooltip
+              title={title}
+              content={tooltip}
+              direction="left"
+              contentClassName="min-w-[450px]"
+            />
+          )}
         </div>
         {marker && (
           <Badge
@@ -468,7 +475,7 @@ export function VideoCallPage() {
       await endSession.mutateAsync('Adjuster ended the session');
       toast({
         title: 'Session Ended',
-        description: 'The video assessment has been successfully completed.',
+        description: 'The live session has been successfully completed.',
       });
       navigate(`/claims/${session?.claimId || ''}`);
     } catch (error: any) {
@@ -487,10 +494,14 @@ export function VideoCallPage() {
 
   // Memoized callback to prevent component remount
   const handleVideoLeft = useCallback(() => {
-    if (!isAnalyzingRef.current) {
-      navigate(`/claims/${session?.claimId || ''}`);
+    // Only navigate if we're not middle-of-analysis and we have a target claim
+    if (!isAnalyzingRef.current && session?.claimId) {
+      console.log('[VideoCallPage] Navigating to claim detail:', session.claimId);
+      navigate(`/claims/${session.claimId}`);
+    } else if (!session?.claimId) {
+      console.warn('[VideoCallPage] Blocked navigation: No claimId available');
     } else {
-      console.log('[VideoCallPage] Blocked navigation due to analysis in progress');
+      console.log('[VideoCallPage] Blocked navigation: Analysis in progress');
     }
   }, [navigate, session?.claimId]);
 
@@ -536,8 +547,8 @@ export function VideoCallPage() {
     <div className="flex flex-col h-full bg-background overflow-hidden">
       {/* Video Header */}
       <Header
-        title={`Video Assessment: ${session?.claimId || 'Loading...'}`}
-        description="Secure • Encrypted • Live Session"
+        title="Live Session"
+        description={`Secure • Encrypted • ${session?.claimId || 'Loading...'}`}
       >
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -562,7 +573,7 @@ export function VideoCallPage() {
       {/* Main Video Area */}
       <div className="flex-1 p-4 flex gap-4 overflow-hidden">
         {/* Left Column: Remote/Main Video */}
-        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl bg-black border border-border">
+        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl">
           <DailyVideoPlayer
             key={`daily-${joinData.url}`}
             ref={playerRef}
@@ -644,17 +655,27 @@ export function VideoCallPage() {
                   </p>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={metricsHistory}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="currentColor"
+                        className="text-muted-foreground/20"
+                      />
                       <XAxis dataKey="time" hide />
                       <YAxis domain={[0, 1]} hide />
                       <Tooltip
                         contentStyle={{
                           fontSize: '9px',
-                          borderColor: '#334155',
-                          backgroundColor: '#1e293b',
+                          borderRadius: '8px',
+                          borderColor: 'hsl(var(--border))',
+                          backgroundColor: 'hsl(var(--card))',
+                          color: 'hsl(var(--card-foreground))',
                         }}
                         itemStyle={{ fontSize: '9px' }}
-                        labelStyle={{ color: '#FBFAF2', textAlign: 'center', marginBottom: '4px' }}
+                        labelStyle={{
+                          color: 'hsl(var(--foreground))',
+                          textAlign: 'center',
+                          marginBottom: '4px',
+                        }}
                       />
                       <Line
                         type="monotone"
@@ -791,28 +812,30 @@ export function VideoCallPage() {
                             </p>
                             <ul className="list-disc pl-3 space-y-1">
                               <li>
-                                <span className="font-semibold text-slate-100">Jitter (%):</span>{' '}
+                                <span className="font-semibold text-foreground">Jitter (%):</span>{' '}
                                 Measures small, rapid variations in voice pitch. Higher values may
                                 indicate vocal instability or stress.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Shimmer (%):</span>{' '}
+                                <span className="font-semibold text-foreground">Shimmer (%):</span>{' '}
                                 Measures variations in voice loudness. Elevated shimmer can be
                                 linked to tension or fatigue.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Pitch SD (Hz):</span>{' '}
+                                <span className="font-semibold text-foreground">
+                                  Pitch SD (Hz):
+                                </span>{' '}
                                 Shows how much the speaker's pitch varies. Low variation may
                                 indicate monotone delivery; high variation may signal emotional
                                 arousal.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">HNR (dB):</span>{' '}
+                                <span className="font-semibold text-foreground">HNR (dB):</span>{' '}
                                 Harmonics-to-Noise Ratio. Indicates voice clarity—lower values
                                 suggest more noise or strain in the voice.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Confidence (%):
                                 </span>{' '}
                                 System confidence in the accuracy of the voice stress analysis based
@@ -835,31 +858,31 @@ export function VideoCallPage() {
                             </p>
                             <ul className="list-disc pl-3 space-y-1">
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Blink Rate (per min):
                                 </span>{' '}
                                 Number of blinks per minute. Changes may be associated with stress,
                                 fatigue, or focus level.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Blink Duration (ms):
                                 </span>{' '}
                                 Average length of each blink. Longer blinks may suggest tiredness or
                                 disengagement.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Lip Tension:</span>{' '}
+                                <span className="font-semibold text-foreground">Lip Tension:</span>{' '}
                                 Measures tightness around the mouth. Higher values can indicate
                                 stress, suppression, or concentration.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">Frames:</span> Number
-                                of video frames analyzed for this segment. Higher counts generally
-                                improve reliability.
+                                <span className="font-semibold text-foreground">Frames:</span>{' '}
+                                Number of video frames analyzed for this segment. Higher counts
+                                generally improve reliability.
                               </li>
                               <li>
-                                <span className="font-semibold text-slate-100">
+                                <span className="font-semibold text-foreground">
                                   Confidence (%):
                                 </span>{' '}
                                 System confidence in visual behavior detection based on lighting,
@@ -910,7 +933,7 @@ export function VideoCallPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="w-full text-[10px] h-8 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                      className="w-full text-[10px] h-8 border-primary/30 text-primary hover:bg-primary/10"
                       onClick={e => {
                         e.preventDefault();
                         triggerVisualAnalysis();
@@ -924,7 +947,7 @@ export function VideoCallPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="w-full text-[10px] h-8 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                      className="w-full text-[10px] h-8 border-primary/30 text-primary hover:bg-primary/10"
                       onClick={e => {
                         e.preventDefault();
                         triggerExpressionAnalysis(true);

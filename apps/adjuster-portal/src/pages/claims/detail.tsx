@@ -1,15 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  MapPin,
-  Calendar,
   Video,
   Car,
   FileText,
-  ShieldCheck,
-  CheckCircle2,
-  XCircle,
   AlertTriangle,
   Download,
   Image,
@@ -244,11 +238,45 @@ export function ClaimDetailPage() {
   const [timelinePage, setTimelinePage] = useState(1);
   const ITEMS_PER_PAGE = 5;
 
+  const [modifier, setModifier] = useState<string>('Ctrl');
+
+  // Detect OS for modifier key
+  useEffect(() => {
+    if (typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)) {
+      setModifier('⌘');
+    } else {
+      setModifier('Ctrl');
+    }
+  }, []);
+
   // Reset pagination when claim changes
   useEffect(() => {
     setDocPage(1);
     setTimelinePage(1);
   }, [claimId]);
+
+  // Shortcut key controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if Ctrl or Command key is pressed
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED') {
+            handleUpdateStatus('APPROVED');
+          }
+        } else if (e.key === 'Backspace') {
+          e.preventDefault();
+          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED') {
+            handleUpdateStatus('REJECTED');
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [claim?.status, claimId]);
 
   // Initialize expanded sessions with the most recent one
   useEffect(() => {
@@ -315,7 +343,7 @@ export function ClaimDetailPage() {
       await navigator.clipboard.writeText(devLink);
 
       toast({
-        title: 'Assessment Started',
+        title: 'Live Session Started',
         description: 'Magic link copied to clipboard! Joining video room...',
       });
 
@@ -327,7 +355,7 @@ export function ClaimDetailPage() {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to start video assessment. Please try again.',
+        description: 'Failed to start live session. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -377,22 +405,46 @@ export function ClaimDetailPage() {
         description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
       >
         <div className="flex items-center gap-3">
-          <Link to="/claims">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
           {claim.status === 'SCHEDULED' && (
             <Button
               size="sm"
               onClick={handleStartVideoAssessment}
               disabled={createVideoRoom.isPending || isNotifying}
+              className="h-10 px-4"
             >
               <Video className="h-4 w-4 mr-2" />
-              {createVideoRoom.isPending || isNotifying ? 'Starting...' : 'Start Video Assessment'}
+              {createVideoRoom.isPending || isNotifying ? 'Starting...' : 'Start Live Session'}
             </Button>
           )}
+
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+            onClick={() => handleUpdateStatus('APPROVED')}
+            disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-bold">Approve</span>
+            </div>
+            <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+              {modifier} + Enter
+            </span>
+          </Button>
+
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+            onClick={() => handleUpdateStatus('REJECTED')}
+            disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-bold">Reject</span>
+            </div>
+            <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+              {modifier} + Backspace
+            </span>
+          </Button>
         </div>
       </Header>
 
@@ -409,11 +461,8 @@ export function ClaimDetailPage() {
                 </span>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm">{claim.description}</p>
-
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="flex items-start gap-3">
-                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">Incident Date</p>
                       <p className="text-sm text-muted-foreground">
@@ -422,7 +471,6 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">Location</p>
                       <p className="text-sm text-muted-foreground">
@@ -431,6 +479,33 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 </div>
+                <p className="text-sm">{claim.description}</p>
+
+                {/* Police Report */}
+                {claim.policeReportDate && (
+                  <div className="pt-4 border-t">
+                    <div className="flex flex-row items-center justify-between">
+                      <p className="text-lg font-medium mb-2">Police Report</p>
+                      <span className="text-xs text-muted-foreground mb-3">
+                        Reported: {formatDate(claim.updatedAt)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="flex flex-col justify-between">
+                        <span className="text-xs font-medium">Report Number:</span>
+                        <span className="text-xs text-muted-foreground">
+                          {claim?.policeReportNumber || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col justify-between">
+                        <span className="text-xs font-medium">Police Station:</span>
+                        <span className="text-xs text-muted-foreground">
+                          {claim?.policeStation || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Other Party Details (for TPPD claims) */}
                 {claim.otherParty && Object.keys(claim.otherParty).length > 0 && (
@@ -439,24 +514,24 @@ export function ClaimDetailPage() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       {(claim.otherParty as any).name && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Name:</span>
-                          <span className="font-medium">
+                          <span className="text-xs font-medium">Name:</span>
+                          <span className="text-xs text-muted-foreground">
                             {String((claim.otherParty as any).name)}
                           </span>
                         </div>
                       )}
                       {(claim.otherParty as any).vehiclePlate && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Vehicle:</span>
-                          <span className="font-medium">
+                          <span className="text-xs font-medium">Vehicle:</span>
+                          <span className="text-xs text-muted-foreground">
                             {String((claim.otherParty as any).vehiclePlate)}
                           </span>
                         </div>
                       )}
                       {(claim.otherParty as any).insurerName && (
                         <div className="flex justify-between col-span-2">
-                          <span className="text-muted-foreground">Insurer:</span>
-                          <span className="font-medium">
+                          <span className="text-xs font-medium">Insurer:</span>
+                          <span className="text-xs text-muted-foreground">
                             {String((claim.otherParty as any).insurerName)}
                           </span>
                         </div>
@@ -464,45 +539,6 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Policy Information (New: Compliance) */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">Policy Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground text-sm">Policy Number</span>
-                    <span className="font-medium text-sm">{claim.policyNumber}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground text-sm">Sum Insured</span>
-                    <span className="font-medium text-sm">
-                      {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground text-sm">NCD Rate</span>
-                    <span className="font-medium text-sm">
-                      {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground text-sm">Policy Type</span>
-                    <span className="font-medium text-sm">
-                      {claim.claimType.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground text-sm">Panel Workshop</span>
-                    <span className="font-medium text-sm">
-                      {claim.workshopName || 'Not Assigned'}
-                    </span>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -889,7 +925,7 @@ export function ClaimDetailPage() {
                     <Video className="h-4 w-4 mr-2" />
                     {createVideoRoom.isPending || isNotifying
                       ? 'Starting...'
-                      : 'Start Video Assessment'}
+                      : 'Start Live Session'}
                   </Button>
 
                   <Button
@@ -933,54 +969,6 @@ export function ClaimDetailPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  className="w-full bg-success hover:bg-success/90"
-                  onClick={() => handleUpdateStatus('APPROVED')}
-                  disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Approve Claim
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => handleUpdateStatus('REJECTED')}
-                  disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Reject Claim
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* SLA Status */}
-            {/* <Card
-              className={cn(
-                'border-l-4',
-                getDaysSince(claim.createdAt) > 7 ? 'border-l-destructive' : 'border-l-success'
-              )}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">SLA Status (BNM)</span>
-                  <Badge variant={getDaysSince(claim.createdAt) > 7 ? 'destructive' : 'success'}>
-                    {getDaysSince(claim.createdAt)} Days Active
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {getDaysSince(claim.createdAt) > 7
-                    ? 'SLA breach: Recommended TAT is 7 working days for acknowledgement.'
-                    : 'Within recommended turnaround time.'}
-                </p>
-              </CardContent>
-            </Card> */}
 
             {/* Claimant Info */}
             <Card>
@@ -1075,28 +1063,40 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Police Report */}
+            {/* Policy Information */}
             <Card>
               <CardHeader className="py-4">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  Police Report
+                  <FileText className="h-4 w-4" />
+                  Policy Information
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Report No:</span>
-                  <span className="font-medium">{claim.policeReportNumber || 'N/A'}</span>
+                  <span className="text-muted-foreground">Policy No:</span>
+                  <span className="font-medium">{claim.policyNumber || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date:</span>
-                  <span className="font-medium">
-                    {claim.policeReportDate ? formatDate(claim.policeReportDate) : 'N/A'}
+                  <span className="text-muted-foreground">Policy Type:</span>
+                  <span className="font-medium text-uppercase">
+                    {claim.claimType.replace(/_/g, ' ')}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-muted-foreground">Station:</span>
-                  <span className="font-medium">{claim.policeStation || 'Not provided'}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sum Insured:</span>
+                  <span className="font-medium text-uppercase">
+                    {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">NCD Rate:</span>
+                  <span className="font-medium">
+                    {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Panel Workshop:</span>
+                  <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
                 </div>
               </CardContent>
             </Card>

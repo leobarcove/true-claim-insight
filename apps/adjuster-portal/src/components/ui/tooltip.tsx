@@ -92,13 +92,9 @@ export function InfoTooltip({
     }
   };
 
-  const variantClasses =
-    variant === 'dark'
-      ? 'text-slate-200 bg-slate-900 border-slate-700'
-      : 'text-slate-700 bg-white border-slate-200 shadow-xl';
-
-  const titleClasses = variant === 'dark' ? 'text-slate-100' : 'text-slate-900';
-  const contentClasses = variant === 'dark' ? 'text-slate-300' : 'text-slate-600';
+  const variantClasses = 'text-popover-foreground bg-popover border-border shadow-xl';
+  const titleClasses = 'text-foreground';
+  const contentClasses = 'text-muted-foreground';
 
   return (
     <div
@@ -108,14 +104,16 @@ export function InfoTooltip({
       onMouseLeave={() => setIsVisible(false)}
     >
       {trigger || (
-        <HelpCircle className={cn('text-slate-500 cursor-help', `h-${iconSize} w-${iconSize}`)} />
+        <HelpCircle
+          className={cn('text-muted-foreground cursor-help', `h-${iconSize} w-${iconSize}`)}
+        />
       )}
 
       {isVisible &&
         createPortal(
           <div
             className={cn(
-              'fixed z-[9999] p-3 leading-relaxed border rounded-md shadow-2xl whitespace-normal break-words pointer-events-none max-w-[320px]',
+              'fixed z-[9999] p-3 leading-relaxed border rounded-md shadow-2xl whitespace-normal break-words pointer-events-none max-w-[350px]',
               fontSize,
               variantClasses,
               contentClassName
