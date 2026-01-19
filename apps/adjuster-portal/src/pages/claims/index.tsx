@@ -4,7 +4,7 @@ import {
   Search,
   Video,
   FileText,
-  PlusCircle,
+  Plus,
   List,
   Grid,
   ChevronLeft,
@@ -113,8 +113,8 @@ export function ClaimsListPage() {
     <div className="flex flex-col h-full">
       <Header title="Claims" description="Manage and process your assigned claims">
         <Link to="/claims/new">
-          <Button className="-mr-3 scale-75">
-            <PlusCircle className="h-4 w-4 mr-2" />
+          <Button className="shadow-primary/20 shadow-lg -mr-3 scale-75">
+            <Plus className="h-4 w-4 mr-2" />
             New
           </Button>
         </Link>

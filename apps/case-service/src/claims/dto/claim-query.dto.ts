@@ -81,4 +81,9 @@ export class ClaimQueryDto {
   @IsString()
   @IsIn(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc' = 'desc';
+
+  @ApiPropertyOptional({ example: '2025-01-01T00:00:00Z' })
+  @IsOptional()
+  @IsString()
+  scheduledFrom?: string;
 }

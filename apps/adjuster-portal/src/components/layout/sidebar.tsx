@@ -47,7 +47,7 @@ export function Sidebar() {
       style={{ transitionDuration: '50ms' }}
     >
       {/* Header / Logo */}
-      <div className="flex h-20 items-center justify-center px-4">
+      <div className="flex h-20 items-center justify-center px-4 -ml-2">
         <Link to="/" className="flex items-center gap-2">
           <img src="/logo.png" alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
           <span className="font-bold text-xl tracking-tight text-foreground">True Claim</span>

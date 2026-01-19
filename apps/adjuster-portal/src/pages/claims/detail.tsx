@@ -406,18 +406,6 @@ export function ClaimDetailPage() {
         description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
       >
         <div className="flex items-center gap-3">
-          {claim.status === 'SCHEDULED' && (
-            <Button
-              size="sm"
-              onClick={handleStartVideoAssessment}
-              disabled={createVideoRoom.isPending || isNotifying}
-              className="h-10 px-4"
-            >
-              <Video className="h-4 w-4 mr-2" />
-              {createVideoRoom.isPending || isNotifying ? 'Starting...' : 'Start Live Session'}
-            </Button>
-          )}
-
           <Button
             size="sm"
             className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
