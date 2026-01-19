@@ -80,6 +80,7 @@ export class ClaimsService {
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
+      scheduledFrom,
     } = query;
     const skip = (page - 1) * limit;
 
@@ -89,6 +90,11 @@ export class ClaimsService {
     if (status) where.status = status;
     if (claimType) where.claimType = claimType;
     if (adjusterId) where.adjusterId = adjusterId;
+    if (scheduledFrom) {
+      where.scheduledAssessmentTime = {
+        gte: new Date(scheduledFrom),
+      };
+    }
 
     // Apply tenant isolation filter
     if (tenantContext) {
@@ -438,49 +444,94 @@ export class ClaimsService {
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const startOfWeek = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    const [totalClaims, activeClaims, completedThisMonth, completedThisWeek, statusBreakdown] =
-      await Promise.all([
-        // Total claims in tenant
-        this.prisma.claim.count({ where }),
+    const [
+      totalClaims,
+      activeClaims,
+      completedThisMonth,
+      completedLastMonth,
+      completedThisWeek,
+      upcomingScheduled,
+      totalAssigned,
+      statusBreakdown,
+    ] = await Promise.all([
+      // Total claims in tenant
+      this.prisma.claim.count({ where }),
 
-        // Active claims in tenant
-        this.prisma.claim.count({
-          where: {
-            ...where,
-            status: {
-              in: ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'],
-            },
+      // Active claims in tenant
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          status: {
+            in: ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'],
           },
-        }),
+        },
+      }),
 
-        // Completed this month in tenant
-        this.prisma.claim.count({
-          where: {
-            ...where,
-            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-            updatedAt: { gte: startOfMonth },
+      // Completed this month in tenant
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+          updatedAt: { gte: startOfMonth },
+        },
+      }),
+
+      // Completed last month in tenant
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+          updatedAt: {
+            gte: startOfLastMonth,
+            lt: startOfMonth,
           },
-        }),
+        },
+      }),
 
-        // Completed this week in tenant
-        this.prisma.claim.count({
-          where: {
-            ...where,
-            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-            updatedAt: { gte: startOfWeek },
+      // Completed this week in tenant
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+          updatedAt: { gte: startOfWeek },
+        },
+      }),
+
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          scheduledAssessmentTime: {
+            gte: now,
           },
-        }),
+        },
+      }),
 
-        // Status breakdown
-        this.prisma.claim.groupBy({
-          by: ['status'],
-          where,
-          _count: { status: true },
-        }),
-      ]);
+      this.prisma.claim.count({
+        where: {
+          ...where,
+          status: 'ASSIGNED',
+        },
+      }),
+
+      // Status breakdown
+      this.prisma.claim.groupBy({
+        by: ['status'],
+        where,
+        _count: { status: true },
+      }),
+    ]);
+
+    // Calculate monthly change percentage
+    let monthlyChange = 0;
+    if (completedLastMonth > 0) {
+      monthlyChange = ((completedThisMonth - completedLastMonth) / completedLastMonth) * 100;
+    } else if (completedThisMonth > 0) {
+      monthlyChange = 100; // 100% increase if there were 0 last month
+    }
 
     return {
       stats: {
@@ -489,6 +540,9 @@ export class ClaimsService {
         completedThisMonth,
         completedThisWeek,
         averagePerDay: completedThisWeek / 7,
+        inProgress: upcomingScheduled, // Upcoming scheduled sessions
+        totalAssigned, // Total assigned claims
+        monthlyChange: parseFloat(monthlyChange.toFixed(1)),
       },
       statusBreakdown: statusBreakdown.reduce(
         (acc, item) => {

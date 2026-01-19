@@ -24,6 +24,7 @@ export interface ClaimFilters {
   sortOrder?: 'asc' | 'desc';
   adjusterId?: string;
   scope?: 'tenant' | 'personal';
+  scheduledFrom?: string;
 }
 
 export interface ClaimListResponse {
@@ -44,6 +45,8 @@ export interface ClaimStats {
   completedThisWeek: number;
   averagePerDay: number;
   totalClaims: number;
+  activeClaims: number;
+  monthlyChange: number;
   statusBreakdown: Record<string, number>;
 }
 
@@ -90,6 +93,7 @@ export function useClaims(filters: ClaimFilters = {}) {
       if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
       if (filters.adjusterId) params.append('adjusterId', filters.adjusterId);
       if (filters.scope) params.append('scope', filters.scope);
+      if (filters.scheduledFrom) params.append('scheduledFrom', filters.scheduledFrom);
 
       const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>(
         `/claims?${params.toString()}`
@@ -213,8 +217,9 @@ export function useScheduleSession() {
 
   return useMutation({
     mutationFn: async ({ claimId, scheduledAt }: { claimId: string; scheduledAt: string }) => {
-      const { data } = await apiClient.post<ApiResponse<Claim>>(`/claims/${claimId}/schedule`, {
-        scheduledAt,
+      const { data } = await apiClient.post<ApiResponse<any>>('/video/rooms', {
+        claimId,
+        scheduledTime: scheduledAt,
       });
       return data.data;
     },

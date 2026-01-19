@@ -45,6 +45,18 @@ export class RoomsService {
       this.logger.log(
         `Returning existing active session ${existingSession.id} for claim ${dto.claimId}`
       );
+
+      // Sync claim if needed
+      if (dto.scheduledTime) {
+        await this.prisma.claim.update({
+          where: { id: dto.claimId },
+          data: {
+            scheduledAssessmentTime: new Date(dto.scheduledTime),
+            status: 'SCHEDULED',
+          },
+        });
+      }
+
       return { session: existingSession, roomUrl: existingSession.roomUrl };
     }
 
@@ -60,6 +72,15 @@ export class RoomsService {
         roomUrl: dailyRoom.url,
         status: dto.scheduledTime ? SessionStatus.SCHEDULED : SessionStatus.WAITING,
         scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
+      },
+    });
+
+    // Update claim status and time
+    await this.prisma.claim.update({
+      where: { id: dto.claimId },
+      data: {
+        scheduledAssessmentTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
+        status: dto.scheduledTime ? 'SCHEDULED' : claim.status,
       },
     });
 

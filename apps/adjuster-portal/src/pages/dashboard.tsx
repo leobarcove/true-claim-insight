@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileText,
   Video,
@@ -29,6 +29,7 @@ import { useAuthStore } from '@/stores/auth-store';
 
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { convertToTitleCase } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
 
 const getStatusBadge = (status: string) => {
   const variants: Record<
@@ -67,12 +68,19 @@ export function DashboardPage() {
     sortOrder: 'desc',
   });
 
-  const { data: sessionsData, isLoading: sessionsLoading } = useClaims({
-    limit: 5,
-    page: sessionsPage,
-    sortBy: 'scheduledAssessmentTime',
-    sortOrder: 'asc',
-  });
+  const sessionsFilters = useMemo(
+    () => ({
+      limit: 5,
+      page: sessionsPage,
+      status: 'SCHEDULED' as any,
+      sortBy: 'scheduledAssessmentTime',
+      sortOrder: 'asc' as const,
+      scheduledFrom: new Date().toISOString(),
+    }),
+    [sessionsPage]
+  );
+
+  const { data: sessionsData, isLoading: sessionsLoading } = useClaims(sessionsFilters);
 
   const stats = [
     {
@@ -142,8 +150,14 @@ export function DashboardPage() {
                     </h2>
                   )}
                   <div className="flex items-center text-primary-foreground/90 bg-primary-foreground/10 px-2 py-0.5 rounded text-sm font-medium">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    +12.5%
+                    {statsData && statsData.monthlyChange >= 0 ? (
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                    ) : (
+                      <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
+                    )}
+                    {statsData?.monthlyChange !== undefined
+                      ? `${statsData.monthlyChange >= 0 ? '+' : ''}${statsData.monthlyChange}%`
+                      : '0%'}
                   </div>
                 </div>
               </div>
@@ -477,15 +491,12 @@ export function DashboardPage() {
                             <TableCell className="text-right">
                               <p className="text-sm font-medium">
                                 {claim.scheduledAssessmentTime
-                                  ? new Date(claim.scheduledAssessmentTime).toLocaleDateString()
+                                  ? format(parseISO(claim.scheduledAssessmentTime), 'yyyy-MM-dd')
                                   : 'N/A'}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {claim.scheduledAssessmentTime
-                                  ? new Date(claim.scheduledAssessmentTime).toLocaleTimeString([], {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
+                                  ? format(parseISO(claim.scheduledAssessmentTime), 'HH:mm')
                                   : 'Unscheduled'}
                               </p>
                             </TableCell>
@@ -573,10 +584,14 @@ export function DashboardPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-medium">Scheduled</p>
+                          <p className="text-xs font-medium">
+                            {claim.scheduledAssessmentTime
+                              ? format(parseISO(claim.scheduledAssessmentTime), 'HH:mm')
+                              : 'Unscheduled'}
+                          </p>
                           <p className="text-[10px] text-muted-foreground">
                             {claim.scheduledAssessmentTime
-                              ? new Date(claim.scheduledAssessmentTime).toLocaleDateString()
+                              ? format(parseISO(claim.scheduledAssessmentTime), 'yyyy-MM-dd')
                               : 'Unscheduled'}
                           </p>
                         </div>
