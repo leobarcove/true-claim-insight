@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useVerifyNRIC } from '@/hooks/use-claimants';
@@ -92,8 +92,8 @@ export function VerifyNRICPage() {
       <div className="max-w-md w-full">
         {/* Header Decor */}
         <div className="flex justify-center mb-8">
-          <div className="bg-blue-600 p-4 rounded-3xl shadow-xl shadow-blue-200">
-            <ShieldCheck className="w-12 h-12 text-white" />
+          <div className="bg-white p-4 rounded-3xl shadow-xl shadow-primary/10 border border-primary/10 transition-transform hover:scale-105 duration-300">
+            <img src="/logo.png" alt="Logo" className="w-12 h-12" />
           </div>
         </div>
 
@@ -114,14 +114,14 @@ export function VerifyNRICPage() {
                 NRIC Number
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-blue-600 text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-primary text-slate-400">
                   <Lock className="w-5 h-5" />
                 </div>
                 <Input
                   id="nric"
                   type="text"
                   placeholder="e.g. 850101-14-1234"
-                  className="pl-12 h-14 rounded-2xl border-slate-200 focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all text-lg"
+                  className="pl-12 h-14 rounded-2xl border-slate-200 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-lg"
                   value={nric}
                   onChange={handleNRICChange}
                   disabled={verifyMutation.isPending}
@@ -148,7 +148,7 @@ export function VerifyNRICPage() {
 
             <Button
               type="submit"
-              className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold shadow-lg shadow-blue-200 transition-all active:scale-[0.98] group"
+              className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98] group"
               disabled={verifyMutation.isPending}
             >
               {verifyMutation.isPending ? (
@@ -169,7 +169,7 @@ export function VerifyNRICPage() {
         {/* Security Footer */}
         <div className="mt-8 text-center space-y-4">
           <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
-            <ShieldCheck className="w-4 h-4" />
+            <CheckCircle2 className="w-4 h-4" />
             <span>End-to-End Encrypted Identity Verification</span>
           </div>
           <p className="text-[10px] uppercase tracking-widest text-slate-300 font-bold">

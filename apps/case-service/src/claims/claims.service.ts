@@ -272,7 +272,7 @@ export class ClaimsService {
   async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
     await this.findOne(id, tenantContext); // Verify claim exists and tenant access
 
-    const claim = await this.prisma.claim.update({
+    await this.prisma.claim.update({
       where: { id },
       data: {
         ...(updateClaimDto.description && {
@@ -315,7 +315,7 @@ export class ClaimsService {
       changes: updateClaimDto,
     });
 
-    return claim;
+    return this.findOne(id, tenantContext);
   }
 
   /**
@@ -327,7 +327,7 @@ export class ClaimsService {
     // Validate status transition
     this.validateStatusTransition(existingClaim.status, status);
 
-    const claim = await this.prisma.claim.update({
+    await this.prisma.claim.update({
       where: { id },
       data: {
         status: status as any,
@@ -344,7 +344,7 @@ export class ClaimsService {
       `Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`
     );
 
-    return claim;
+    return this.findOne(id, tenantContext);
   }
 
   /**
