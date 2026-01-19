@@ -38,15 +38,15 @@ function AssessmentTrackerPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'SUBMITTED':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-emerald-100 text-emerald-700';
       case 'ASSIGNED':
-        return 'bg-purple-100 text-purple-700';
+        return 'bg-secondary text-secondary-foreground';
       case 'SCHEDULED':
         return 'bg-amber-100 text-amber-700';
       case 'IN_ASSESSMENT':
-        return 'bg-green-100 text-green-700';
+        return 'bg-primary/10 text-primary';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-muted text-muted-foreground';
     }
   };
 
@@ -130,12 +130,12 @@ function AssessmentTrackerPage() {
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <button
                       onClick={() => navigate(`/video/${activeSession.id}`)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-lg shadow-blue-200 active:scale-[0.98]"
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
                     >
                       <Video size={20} fill="currentColor" />
                       Join Live Assessment
                     </button>
-                    <p className="text-[10px] text-center text-blue-500 font-bold mt-2 uppercase tracking-widest">
+                    <p className="text-[10px] text-center text-primary font-bold mt-2 uppercase tracking-widest">
                       Adjuster is waiting for you
                     </p>
                   </div>

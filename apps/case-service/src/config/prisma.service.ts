@@ -2,16 +2,18 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@tci/prisma-client';
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     super({
-      log:
-        process.env.NODE_ENV === 'development'
-          ? ['query', 'info', 'warn', 'error']
-          : ['error'],
+      log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+      datasources: {
+        db: {
+          url:
+            process.env.DATABASE_URL +
+            (process.env.DATABASE_URL?.includes('?') ? '&' : '?') +
+            'connection_limit=3',
+        },
+      },
     });
   }
 
@@ -38,8 +40,8 @@ export class PrismaService
 
     const tables = tablenames
       .map(({ tablename }) => tablename)
-      .filter((name) => name !== '_prisma_migrations')
-      .map((name) => `"public"."${name}"`)
+      .filter(name => name !== '_prisma_migrations')
+      .map(name => `"public"."${name}"`)
       .join(', ');
 
     try {
