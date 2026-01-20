@@ -29,6 +29,7 @@ import {
   Calendar as CalendarIcon,
   Plus,
   AlertCircle,
+  Bell,
 } from 'lucide-react';
 import {
   format,
@@ -507,11 +508,16 @@ export function SchedulePage() {
               </Card>
 
               {/* Today's Schedule */}
-              <Card>
-                <CardHeader>
+              <Card className="shadow-sm border-border/60 hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     Today's Schedule
                   </CardTitle>
+                  <div
+                    className={`p-2 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20`}
+                  >
+                    <Bell className="h-4 w-4" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -534,7 +540,7 @@ export function SchedulePage() {
                         </div>
                       ))
                     ) : (
-                      <div className="pb-4 text-center rounded-[2.5rem] flex flex-col items-center">
+                      <div className="py-4 text-center rounded-[2.5rem] flex flex-col items-center">
                         <div className="h-12 w-12 rounded-full bg-muted/10 flex items-center justify-center">
                           <AlertCircle className="h-6 w-6 text-muted-foreground/30" />
                         </div>
