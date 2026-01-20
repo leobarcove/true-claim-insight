@@ -394,8 +394,24 @@ export function VideoSessionsPage() {
                   onClick={() => handleViewSession(item)}
                 >
                   {/* Thumbnail */}
-                  <div className="relative h-40 bg-muted/30 bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center">
-                    {item.type === 'live' ? (
+                  <div className="relative h-40 bg-muted/30 bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center overflow-hidden">
+                    {item.type === 'live' && item.data.recordingUrl ? (
+                      <video
+                        src={`${item.data.recordingUrl}#t=0.1`}
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                        preload="metadata"
+                        muted
+                        playsInline
+                      />
+                    ) : item.type === 'upload' && item.data.videoUrl ? (
+                      <video
+                        src={`${item.data.videoUrl}#t=0.1`}
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                        preload="metadata"
+                        muted
+                        playsInline
+                      />
+                    ) : item.type === 'live' ? (
                       <Video className="h-12 w-12 text-muted-foreground/50" />
                     ) : (
                       <Upload className="h-12 w-12 text-muted-foreground/50" />

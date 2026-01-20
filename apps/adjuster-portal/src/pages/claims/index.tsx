@@ -107,7 +107,7 @@ export function ClaimsListPage() {
   const claims = data?.claims || [];
   const pagination = data?.pagination;
 
-  const tabs = ['SCHEDULED', 'ASSIGNED', 'IN_ASSESSMENT', 'APPROVED'];
+  const tabs = ['SUBMITTED', 'SCHEDULED', 'APPROVED', 'REJECTED'];
 
   return (
     <div className="flex flex-col h-full">

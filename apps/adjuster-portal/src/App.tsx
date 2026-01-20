@@ -18,6 +18,8 @@ import { VideoSessionsPage } from '@/pages/sessions';
 import { SessionDetailPage } from '@/pages/sessions/detail';
 import { UploadDetailPage } from '@/pages/sessions/upload-detail';
 import { SchedulePage } from '@/pages/schedule';
+import { SettingsPage } from '@/pages/settings';
+import { HelpPage } from '@/pages/help';
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
@@ -130,8 +132,8 @@ export default function App() {
               <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
               <Route path="/sessions/upload/:uploadId" element={<UploadDetailPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
-              <Route path="/settings" element={<ComingSoon title="Settings" />} />
-              <Route path="/help" element={<ComingSoon title="Help" />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/help" element={<HelpPage />} />
             </Route>
 
             {/* Catch all */}
@@ -142,17 +144,5 @@ export default function App() {
         {env.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </ErrorBoundary>
-  );
-}
-
-// Placeholder for coming soon pages
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold mb-2">{title}</h2>
-        <p className="text-muted-foreground">Coming soon...</p>
-      </div>
-    </div>
   );
 }
