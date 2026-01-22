@@ -43,6 +43,11 @@ export class CreateClaimDto {
   @IsEnum(ClaimType)
   claimType!: ClaimType;
 
+  @ApiPropertyOptional({ example: '880101-12-1234' })
+  @IsString()
+  @IsOptional()
+  nric?: string;
+
   @ApiProperty({ example: '2025-12-15' })
   @IsDateString()
   incidentDate!: string;
@@ -83,7 +88,7 @@ export class CreateClaimDto {
   @IsString()
   @IsOptional()
   vehicleModel?: string;
-  
+
   @ApiPropertyOptional({ example: 'PMK123456789' })
   @IsString()
   @IsOptional()

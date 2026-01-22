@@ -14,6 +14,7 @@ import {
   X,
   Upload,
   ImageIcon,
+  ChevronDown,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -109,6 +110,7 @@ const Input = ({
   className,
   containerClassName,
   onBlur,
+  inputRef,
   ...props
 }: any) => (
   <div className={cn('space-y-1.5 relative', containerClassName)}>
@@ -130,6 +132,7 @@ const Input = ({
         className
       )}
       onBlur={onBlur}
+      ref={inputRef}
       {...props}
     />
     {error && (
@@ -139,6 +142,98 @@ const Input = ({
     )}
   </div>
 );
+
+const Select = ({
+  label,
+  value,
+  onChange,
+  options,
+  error,
+  aiFilled,
+  className,
+  containerClassName,
+  ...props
+}: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (val: string) => {
+    onChange({ target: { value: val } });
+    setIsOpen(false);
+  };
+
+  const selectedLabel = options.find((o: any) => o.value === value)?.label || value;
+
+  return (
+    <div className={cn('space-y-1.5 relative', containerClassName)} ref={containerRef}>
+      <div className="flex justify-between items-center">
+        {label && <label className="text-sm font-medium text-foreground">{label}</label>}
+        {aiFilled && (
+          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 animate-pulse">
+            <Sparkles size={10} /> AI FILLED
+          </span>
+        )}
+      </div>
+      <div
+        className={cn(
+          'w-full px-3 py-2.5 rounded-lg border text-sm transition-all outline-none bg-background text-foreground flex items-center justify-between cursor-pointer',
+          aiFilled
+            ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
+            : 'border-input hover:border-primary/50',
+          error ? 'border-destructive focus:border-destructive focus:ring-destructive/30' : '',
+          isOpen ? 'ring-2 ring-ring border-primary' : '',
+          className
+        )}
+        onClick={() => setIsOpen(!isOpen)}
+        {...props}
+      >
+        <span className={!value ? 'text-muted-foreground' : ''}>
+          {selectedLabel || 'Select...'}
+        </span>
+        <ChevronDown
+          size={16}
+          className={cn('text-muted-foreground transition-transform', isOpen && 'rotate-180')}
+        />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-20 w-full bg-popover mt-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+          {options.map((opt: any) => (
+            <div
+              key={opt.value}
+              className={cn(
+                'px-4 py-2 cursor-pointer text-sm flex justify-between items-center transition-colors',
+                value === opt.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+              onClick={() => handleSelect(opt.value)}
+            >
+              {opt.label}
+              {value === opt.value && <Check size={14} className="text-primary-foreground" />}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle size={10} /> {error}
+        </p>
+      )}
+    </div>
+  );
+};
 
 const AutocompleteInput = ({
   label,
@@ -153,6 +248,7 @@ const AutocompleteInput = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filtered, setFiltered] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -174,13 +270,26 @@ const AutocompleteInput = ({
       setFiltered(matches);
       setShowSuggestions(true);
     } else {
-      setShowSuggestions(false);
+      setFiltered(suggestions);
+      setShowSuggestions(true);
+    }
+  };
+
+  const handleFocus = () => {
+    if (!value) {
+      setFiltered(suggestions);
+      setShowSuggestions(true);
+    } else {
+      handleInput({ target: { value } });
     }
   };
 
   const handleSelect = (val: string) => {
     onChange(val);
     setShowSuggestions(false);
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
   };
 
   return (
@@ -192,8 +301,9 @@ const AutocompleteInput = ({
         placeholder={placeholder}
         error={error}
         aiFilled={aiFilled}
-        onFocus={() => value && handleInput({ target: { value } })}
+        onFocus={handleFocus}
         onBlur={onBlur}
+        inputRef={inputRef}
       />
       {showSuggestions && filtered.length > 0 && (
         <div className="absolute z-20 w-full bg-popover mt-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -242,6 +352,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     incidentTime: new Date().toTimeString().slice(0, 5),
     description: '',
     address: '',
+    latitude: '',
+    longitude: '',
     photos: [] as File[],
     panelWorkshop: '',
     chassisNo: '',
@@ -265,7 +377,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   const [isMapLoading, setIsMapLoading] = useState(true);
 
   // Location Suggestion State
-  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [policeStationSuggestions, setPoliceStationSuggestions] = useState<string[]>([]);
   const [policeStationShowSuggestions, setPoliceStationShowSuggestions] = useState(false);
@@ -593,9 +705,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           const res = await fetch(`${baseUrl}/location/search?q=${encodeURIComponent(query)}`);
           if (res.ok) {
             const json = await res.json();
-            // API Gateway Standard Response: { success: true, data: [...], meta: ... }
-            const suggestions = (json.data || []).map((item: any) => item.displayName);
-            setAddressSuggestions(suggestions);
+            setAddressSuggestions(json.data || []);
           }
         } catch (e) {
           console.error('Failed to fetch address suggestions', e);
@@ -618,8 +728,13 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     }
   };
 
-  const selectAddress = (addr: string) => {
-    setFormData({ ...formData, address: addr });
+  const selectAddress = (item: any) => {
+    setFormData({
+      ...formData,
+      address: item.displayName,
+      latitude: parseFloat(item.lat),
+      longitude: parseFloat(item.lon),
+    });
     setShowAddressSuggestions(false);
     setErrors(e => {
       const next = { ...e };
@@ -645,7 +760,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   const fillDemoData = () => {
     setFormData({
       ...formData,
-      claimantId: 'Ahmad bin Zulkifli',
+      claimantId: 'Kumar Claimant',
       nric: '850512-14-5567',
       mobileNumber: '+60123456789',
       policyNumber: 'POL-2026-991234',
@@ -922,7 +1037,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             <div className="space-y-4 pt-2">
               <Input
                 label="Full Name (as per MyKad)"
-                placeholder="e.g. Ahmad bin Zulkifli"
+                placeholder="e.g. Kumar Claimant"
                 value={formData.claimantId}
                 error={errors.claimantId}
                 aiFilled={aiFilledFields.has('claimantId')}
@@ -999,9 +1114,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 suggestions={Object.keys(MALAYSIA_CARS)}
                 error={errors.vehicleMake}
                 aiFilled={aiFilledFields.has('vehicleMake')}
-                onChange={(val: string) =>
-                  setFormData({ ...formData, vehicleMake: val, vehicleModel: '' })
-                }
+                onChange={(val: string) => {
+                  setFormData({ ...formData, vehicleMake: val, vehicleModel: '' });
+                  if (val) {
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.vehicleMake;
+                      return next;
+                    });
+                  }
+                }}
                 onBlur={() => handleBlur('vehicleMake')}
               />
               <AutocompleteInput
@@ -1011,7 +1133,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 suggestions={MALAYSIA_CARS[formData.vehicleMake] || []}
                 error={errors.vehicleModel}
                 aiFilled={aiFilledFields.has('vehicleModel')}
-                onChange={(val: string) => setFormData({ ...formData, vehicleModel: val })}
+                onChange={(val: string) => {
+                  setFormData({ ...formData, vehicleModel: val });
+                  if (val) {
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.vehicleModel;
+                      return next;
+                    });
+                  }
+                }}
                 onBlur={() => handleBlur('vehicleModel')}
               />
             </div>
@@ -1049,18 +1180,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Claim Type</label>
-              <select
-                className="w-full px-3 py-2.5 rounded-lg border border-border outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm bg-background text-foreground dark:[color-scheme:dark]"
+              <Select
+                label="Claim Type"
                 value={formData.claimType}
-                onChange={e => setFormData({ ...formData, claimType: e.target.value })}
-              >
-                {Object.entries(CLAIM_TYPES).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                onChange={(e: any) => setFormData({ ...formData, claimType: e.target.value })}
+                options={Object.entries(CLAIM_TYPES).map(([key, label]) => ({
+                  value: key,
+                  label,
+                }))}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Input
@@ -1211,14 +1339,14 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   <div className="bg-muted/50 px-3 py-1.5 text-[10px] uppercase font-bold text-muted-foreground/80">
                     Suggestions
                   </div>
-                  {addressSuggestions.map(addr => (
+                  {addressSuggestions.map((item: any) => (
                     <button
-                      key={addr}
+                      key={item.displayName}
                       className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
-                      onClick={() => selectAddress(addr)}
+                      onClick={() => selectAddress(item)}
                     >
                       <MapPin size={16} className="text-muted-foreground/80 shrink-0" />
-                      <span className="truncate">{addr}</span>
+                      <span className="truncate">{item.displayName}</span>
                     </button>
                   ))}
                 </div>

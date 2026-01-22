@@ -42,7 +42,7 @@ class PIAMConsentPDF(FPDF):
         self.set_fill_color(40, 44, 52) # Darker grey/blue
         self.set_text_color(255, 255, 255)
         self.set_font('Helvetica', 'B', 11)
-        self.cell(0, 10, '  CLAIMANT CONSENT & DISCLOSURE FORM / BORANG KEIZINAN & PEDEDAHAN TUNTUTAN', 0, 1, 'L', fill=True)
+        self.cell(0, 10, '  CLAIMANT CONSENT & DISCLOSURE FORM / BORANG KEIZINAN & PENDEDAHAN TUNTUTAN', 0, 1, 'L', fill=True)
         self.ln(2)
 
     def footer(self):
@@ -93,11 +93,11 @@ class PIAMConsentPDF(FPDF):
         ]
 
         malay_points = [
-            "Mengikut Perenggan 5 daripada Jadual 9 Akta Perkhidmatan Kewangan 2013, anda dikehendaki menyatakan dengan penuh dan benar butir-butir yang diminta dalam borang ini, jika tidak penilaian tuntutan mungkin terjejas.",
-            "Saya mengakui dan bersetuju bahawa sesi temu bual ini boleh dirakam dalam bentuk audio dan/atau video bagi tujuan siasatan, pengesahan, dan penyimpanan rekod tuntutan.",
-            "Saya memberi kuasa kepada pihak penanggung insurans, pelaras, dan wakil mereka untuk mengumpul, menggunakan, mendedahkan, dan memproses data peribadi saya bagi tujuan berkaitan tuntutan ini selaras dengan Akta Perlindungan Data Peribadi 2010.",
-            "Saya memahami bahawa sebarang kenyataan palsu, salah nyataan, atau kegagalan mendedahkan fakta material boleh menyebabkan tuntutan ditolak, dikurangkan, atau dibatalkan.",
-            "Saya dengan ini mengesahkan bahawa butiran yang diberikan adalah benar dan tepat. Saya membenarkan pengumpulan dan pemprosesan data biometrik saya (suara, corak muka) untuk tujuan pengesahan tuntutan."
+            "Mengikut Perenggan 5 Jadual 9 Akta Perkhidmatan Kewangan 2013, anda dikehendaki menyatakan dengan lengkap dan benar butir-butir yang diminta dalam borang ini; kegagalan berbuat demikian boleh menjejaskan penilaian tuntutan.",
+            "Saya mengakui dan bersetuju bahawa sesi temu bual ini boleh dirakam dalam bentuk audio dan/atau video bagi tujuan siasatan, pengesahan, serta penyimpanan rekod tuntutan.",
+            "Saya memberi kuasa kepada pihak penanggung insurans, pelaras, serta wakil mereka untuk mengumpul, menggunakan, mendedahkan dan memproses data peribadi saya bagi tujuan yang berkaitan dengan tuntutan ini selaras dengan Akta Perlindungan Data Peribadi 2010.",
+            "Saya memahami bahawa sebarang kenyataan palsu, salah nyata, atau kegagalan mendedahkan fakta material boleh menyebabkan tuntutan ditolak, dikurangkan atau dibatalkan.",
+            "Saya dengan ini mengesahkan bahawa semua butiran yang diberikan adalah benar dan tepat. Saya membenarkan pengumpulan dan pemprosesan data biometrik saya (seperti suara dan corak muka) bagi tujuan pengesahan tuntutan."
         ]
         
         y_start = self.get_y()

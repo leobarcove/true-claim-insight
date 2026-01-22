@@ -12,8 +12,17 @@ export class ClaimantsService {
    * Find claimant by phone number
    */
   async findByPhone(phoneNumber: string): Promise<Claimant | null> {
-    return this.prisma.claimant.findUnique({
+    return this.prisma.claimant.findFirst({
       where: { phoneNumber },
+    });
+  }
+
+  /**
+   * Find claimant by NRIC
+   */
+  async findByNric(nric: string): Promise<Claimant | null> {
+    return this.prisma.claimant.findUnique({
+      where: { nric },
     });
   }
 
@@ -27,35 +36,62 @@ export class ClaimantsService {
   }
 
   /**
-   * Create a new claimant with just phone number (phone-first registration)
-   * Additional details (NRIC, name, DOB) will be added during eKYC
+   * Create a new claimant with phone and optional NRIC/name
    */
-  async createFromPhone(phoneNumber: string): Promise<Claimant> {
-    this.logger.log(`Creating new claimant for phone: ${phoneNumber}`);
+  async createClaimant(data: {
+    phoneNumber: string;
+    nric?: string;
+    fullName?: string;
+  }): Promise<Claimant> {
+    this.logger.log(`Creating new claimant for phone: ${data.phoneNumber}, NRIC: ${data.nric}`);
 
     return this.prisma.claimant.create({
       data: {
-        phoneNumber,
+        phoneNumber: data.phoneNumber,
+        nric: data.nric,
+        fullName: data.fullName,
       },
     });
   }
 
   /**
-   * Find or create claimant by phone number
-   * Used during OTP verification to ensure claimant exists
+   * Find or create claimant by NRIC (preferred) or phone number
    */
-  async findOrCreateByPhone(phoneNumber: string): Promise<Claimant> {
-    const existing = await this.findByPhone(phoneNumber);
+  async findOrCreate(data: {
+    nric?: string;
+    phoneNumber: string;
+    fullName?: string;
+  }): Promise<Claimant> {
+    let existing: Claimant | null = null;
+
+    if (data.nric) {
+      existing = await this.findByNric(data.nric);
+    }
+
+    if (!existing) {
+      existing = await this.findByPhone(data.phoneNumber);
+    }
 
     if (existing) {
-      // Update last login
+      // Update last login or other fields if provided
       return this.prisma.claimant.update({
         where: { id: existing.id },
-        data: { lastLoginAt: new Date() },
+        data: {
+          lastLoginAt: new Date(),
+          ...(data.nric && !existing.nric && { nric: data.nric }),
+          ...(data.fullName && !existing.fullName && { fullName: data.fullName }),
+        },
       });
     }
 
-    return this.createFromPhone(phoneNumber);
+    return this.createClaimant(data);
+  }
+
+  /**
+   * Find or create claimant by phone number (Legacy/OTP Flow)
+   */
+  async findOrCreateByPhone(phoneNumber: string): Promise<Claimant> {
+    return this.findOrCreate({ phoneNumber });
   }
 
   /**
