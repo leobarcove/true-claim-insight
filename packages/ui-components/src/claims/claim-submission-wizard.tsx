@@ -15,6 +15,7 @@ import {
   Upload,
   ImageIcon,
   ChevronDown,
+  FileText,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -28,19 +29,100 @@ function cn(...inputs: ClassValue[]) {
 
 const MALAYSIA_CARS: Record<string, string[]> = {
   Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa', 'Traz'],
-  Proton: ['Saga', 'Persona', 'Iriz', 'Exora', 'X50', 'X70', 'X90', 'S70'],
+  Proton: ['Saga', 'Persona', 'Iriz', 'Exora', 'X50', 'X70', 'X90', 'S70', 'e.MAS 7'],
   Honda: ['City', 'Civic', 'HR-V', 'CR-V', 'Jazz', 'City Hatchback', 'WR-V', 'Accord'],
-  Toyota: ['Vios', 'Yaris', 'Corolla Cross', 'Hilux', 'Veloz', 'Camry', 'Innova', 'Fortuner'],
-  Mazda: ['2', '3', '6', 'CX-3', 'CX-30', 'CX-5', 'CX-8', 'BT-50'],
-  Nissan: ['Almera', 'Serena', 'X-Trail', 'Navara'],
-  BMW: ['3 Series', '5 Series', 'X1', 'X3', 'X5', 'iX3', 'iX'],
-  'Mercedes-Benz': ['A-Class', 'C-Class', 'E-Class', 'GLA', 'GLC', 'EQA', 'EQE'],
-  BYD: ['Atto 3', 'Dolphin', 'Seal'],
-  Tesla: ['Model 3', 'Model Y'],
-  Kia: ['Carnival', 'Sorento', 'Sportage'],
-  Hyundai: ['Tucson', 'Santa Fe', 'Ioniq 5', 'Ioniq 6'],
-  Chery: ['Omoda 5', 'Tiggo 8 Pro'],
-  ORA: ['Good Cat'],
+  Toyota: [
+    'Vios',
+    'Yaris',
+    'Corolla Cross',
+    'Hilux',
+    'Veloz',
+    'Camry',
+    'Innova',
+    'Fortuner',
+    'Alphard',
+    'Vellfire',
+  ],
+  Mazda: ['2', '3', '6', 'CX-3', 'CX-30', 'CX-5', 'CX-60', 'CX-8', 'CX-90', 'BT-50', 'MX-5'],
+  Nissan: ['Almera', 'Serena', 'X-Trail', 'Navara', 'Kicks e-Power', 'Leaf'],
+  BMW: [
+    '1 Series',
+    '2 Series',
+    '3 Series',
+    '5 Series',
+    '7 Series',
+    'X1',
+    'X3',
+    'X5',
+    'X7',
+    'iX1',
+    'iX3',
+    'iX',
+    'i4',
+    'i5',
+    'i7',
+  ],
+  'Mercedes-Benz': [
+    'A-Class',
+    'C-Class',
+    'E-Class',
+    'S-Class',
+    'GLA',
+    'GLB',
+    'GLC',
+    'GLE',
+    'GLS',
+    'EQA',
+    'EQB',
+    'EQE',
+    'EQS',
+  ],
+  BYD: ['Atto 3', 'Dolphin', 'Seal', 'Seal U DM-i', 'Sealion 6', 'M6'],
+  Tesla: ['Model 3', 'Model Y', 'Model S', 'Model X'],
+  Kia: ['Picanto', 'Seltos', 'Sportage', 'Sorento', 'Carnival', 'EV6', 'EV9'],
+  Hyundai: ['Stargazer', 'Creta', 'Tucson', 'Santa Fe', 'Staria', 'Ioniq 5', 'Ioniq 6'],
+  Chery: ['Omoda 5', 'Omoda E5', 'Tiggo 7 Pro', 'Tiggo 8 Pro'],
+  ORA: ['Good Cat', 'Good Cat GT'],
+  Audi: ['A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8', 'e-tron', 'Q4 e-tron'],
+  Volkswagen: ['Polo', 'Vento', 'Passat', 'Tiguan', 'ID.4'],
+  Mitsubishi: ['Attrage', 'ASX', 'Outlander', 'Triton', 'Xpander'],
+  Subaru: ['XV', 'Forester', 'Outback', 'WRX', 'BRZ'],
+  Peugeot: ['2008', '3008', '5008', 'e-2008'],
+  Renault: ['Captur', 'Koleos', 'Triber'],
+  MG: ['MG5', 'MG ZS', 'MG HS', 'MG4 EV', 'MG ZS EV', 'Cyberster'],
+  GWM: ['Ora Good Cat', 'Haval H6', 'Haval Jolion', 'Haval H6 HEV'],
+  Neta: ['V', 'X', 'S'],
+  Zeekr: ['X', '001', '009'],
+  Aion: ['Y Plus', 'ES', 'V'],
+  Lynk: ['01', '05', '06', '09'],
+  Smart: ['#1', '#3'],
+  Volvo: ['XC40', 'XC60', 'XC90', 'S60', 'S90', 'C40 Recharge', 'XC40 Recharge'],
+  Porsche: ['Macan', 'Cayenne', 'Panamera', 'Taycan', '911', '718'],
+  'Land Rover': [
+    'Defender',
+    'Discovery',
+    'Discovery Sport',
+    'Range Rover Evoque',
+    'Range Rover Velar',
+    'Range Rover Sport',
+    'Range Rover',
+  ],
+  Lexus: ['UX', 'NX', 'RX', 'ES', 'IS', 'LS', 'LM', 'UX 300e'],
+  Ferrari: [
+    'Roma',
+    'Portofino',
+    'F8 Tributo',
+    '296 GTB',
+    'SF90 Stradale',
+    '812 Superfast',
+    'Purosangue',
+  ],
+  Lamborghini: ['Huracán', 'Urus', 'Revuelto'],
+  'Rolls-Royce': ['Ghost', 'Phantom', 'Cullinan', 'Spectre'],
+  Bentley: ['Continental GT', 'Flying Spur', 'Bentayga'],
+  Maserati: ['Ghibli', 'Quattroporte', 'Levante', 'MC20', 'GranTurismo', 'Grecale'],
+  'Aston Martin': ['DB12', 'DBX', 'Vantage', 'DBS'],
+  McLaren: ['GT', 'Artura', '720S', '765LT', '750S'],
 };
 
 const CLAIM_TYPES: Record<string, string> = {
@@ -339,6 +421,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     return initialStep;
   });
 
+  // Document input refs
+  const policyDocInputRef = useRef<HTMLInputElement>(null);
+  const policeDocInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState<any>({
     claimantId: '',
     mobileNumber: '',
@@ -363,6 +450,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     policeReportDate: new Date().toISOString().split('T')[0],
     policeStation: '',
     policyNumber: '',
+    policyDocument: null as File | null,
+    policeReportDocument: null as File | null,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -415,8 +504,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   const stepStates = [
     { title: 'Claimant', icon: User, show: mode === 'AGENT' },
     { title: 'Vehicle', icon: Car, show: true },
-    { title: 'Incident', icon: AlertCircle, show: true },
-    { title: 'Location', icon: MapPin, show: true },
+    { title: 'Incident', icon: MapPin, show: true },
+    { title: 'Report', icon: FileText, show: true },
     { title: 'Evidence', icon: Camera, show: true },
     { title: 'Review', icon: ClipboardCheck, show: true },
   ].filter((s: any) => s.show);
@@ -498,12 +587,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       // Claimant
       if (!formData.claimantId.trim()) newErrors.claimantId = 'Name is required';
       if (!formData.nric.trim()) newErrors.nric = 'NRIC is required';
-      // Basic NRIC validation (regex)
       else if (!/^\d{6}-\d{2}-\d{4}$/.test(formData.nric) && !/^\d{12}$/.test(formData.nric))
         newErrors.nric = 'Invalid NRIC format (e.g. 880101-12-1234)';
 
       if (!formData.mobileNumber.trim()) newErrors.mobileNumber = 'Mobile number is required';
       if (!formData.policyNumber.trim()) newErrors.policyNumber = 'Policy number is required';
+      if (!formData.policyDocument) newErrors.policyDocument = 'Policy document is required';
     }
 
     if (currentStep === 2) {
@@ -519,14 +608,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       // Incident
       if (!formData.incidentDate) newErrors.incidentDate = 'Date is required';
       if (!formData.incidentTime) newErrors.incidentTime = 'Time is required';
-      if (!formData.description.trim()) newErrors.description = 'Description is required';
-      else if (formData.description.length < 20)
-        newErrors.description = 'Please provide more detail (min 20 chars)';
+      if (!formData.address.trim()) newErrors.address = 'Location is required';
     }
 
     if (currentStep === 4) {
-      // Location
-      if (!formData.address.trim()) newErrors.address = 'Location is required';
+      // Report (Description + Police)
+      if (!formData.description.trim()) newErrors.description = 'Description is required';
+      else if (formData.description.length < 20)
+        newErrors.description = 'Please provide more detail (min 20 chars)';
+      if (!formData.policeReportDocument)
+        newErrors.policeReportDocument = 'Police report is required';
     }
 
     if (currentStep === 5) {
@@ -662,8 +753,32 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newPhotos = Array.from(e.target.files);
-      // Validate types
-      const validPhotos = newPhotos.filter(f => f.type.startsWith('image/'));
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+      const validPhotos: File[] = [];
+      let hasError = false;
+
+      newPhotos.forEach(f => {
+        if (f.type.startsWith('image/') && f.size <= MAX_SIZE) {
+          validPhotos.push(f);
+        } else {
+          hasError = true;
+        }
+      });
+
+      if (hasError) {
+        setErrors(prev => ({
+          ...prev,
+          photos: 'Some files were rejected. Images only, max 5MB each.',
+        }));
+      } else if (validPhotos.length > 0) {
+        // Clear error if adding valid photos
+        setErrors(prev => {
+          const next = { ...prev };
+          delete next.photos;
+          return next;
+        });
+      }
 
       setFormData((prev: any) => {
         const totalPhotos = prev.photos.length + validPhotos.length;
@@ -676,16 +791,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           photos: [...prev.photos, ...validPhotos],
         };
       });
-
-      // Clear error if resolved
-      if (formData.photos.length + validPhotos.length >= 2) {
-        setErrors(e => {
-          const next = { ...e };
-          delete next.photos;
-          return next;
-        });
-      }
     }
+    // Reset input
+    if (e.target) e.target.value = '';
   };
 
   const removePhoto = (index: number) => {
@@ -693,6 +801,39 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       ...prev,
       photos: prev.photos.filter((_: any, i: number) => i !== index),
     }));
+  };
+
+  const handleDocumentUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'policyDocument' | 'policeReportDocument'
+  ) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors(prev => ({ ...prev, [field]: 'File size exceeds 5MB' }));
+        return;
+      }
+
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        setErrors(prev => ({
+          ...prev,
+          [field]: 'Invalid file format. Only PDF and images are allowed.',
+        }));
+        return;
+      }
+
+      setFormData((prev: any) => ({ ...prev, [field]: file }));
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const removeDocument = (field: 'policyDocument' | 'policeReportDocument') => {
+    setFormData((prev: any) => ({ ...prev, [field]: null }));
   };
 
   // Debounce logic for address search
@@ -845,8 +986,18 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                     input.type = 'file';
                     input.accept = 'image/*,.pdf';
                     input.onchange = (e: any) => {
-                      if (e.target.files?.[0]) {
-                        setAiImportFiles(prev => ({ ...prev, [slot.id]: e.target.files[0] }));
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          setAiExtractionError('File size exceeds 5MB');
+                          return;
+                        }
+                        if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+                          setAiExtractionError('Invalid file type. Only PDF and Image allowed.');
+                          return;
+                        }
+                        setAiExtractionError(null);
+                        setAiImportFiles(prev => ({ ...prev, [slot.id]: file }));
                       }
                     };
                     input.click();
@@ -1012,26 +1163,15 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         </div>
       </div>
 
-      <div className="p-8 flex-1" style={{ minHeight: 'calc(100vh - 350px)' }}>
-        {/* Step 1: Claimant (Agent only) */}
+      <div className="p-8 flex-1 flex flex-col" style={{ minHeight: '600px' }}>
+        {/* Step 1: Claimant */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-foreground">Claimant Information</h2>
+              <h2 className="text-xl font-bold text-foreground">Claimant Details</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Search for an existing claimant or enter new details.
+                Enter claimant details and policy information.
               </p>
-            </div>
-
-            <div className="relative group">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 group-focus-within:text-primary transition-colors"
-                style={{ top: '1.7rem' }}
-              />
-              <Input
-                placeholder="Search by NRIC or Phone..."
-                className="bg-muted/50 border-transparent focus:bg-background pl-9"
-              />
             </div>
 
             <div className="space-y-4 pt-2">
@@ -1064,14 +1204,81 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   onBlur={() => handleBlur('mobileNumber')}
                 />
               </div>
-              <Input
-                label="Policy Number"
-                placeholder="e.g. POL-2025-001234"
-                value={formData.policyNumber}
-                error={errors.policyNumber}
-                onChange={(e: any) => setFormData({ ...formData, policyNumber: e.target.value })}
-                onBlur={() => handleBlur('policyNumber')}
-              />
+
+              <div
+                className="space-y-6 border-t border-border pt-6"
+                style={{ marginTop: '1.5rem' }}
+              >
+                <Input
+                  label="Policy Number"
+                  placeholder="e.g. POL-2025-001234"
+                  value={formData.policyNumber}
+                  error={errors.policyNumber}
+                  onChange={(e: any) => setFormData({ ...formData, policyNumber: e.target.value })}
+                  onBlur={() => handleBlur('policyNumber')}
+                />
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Policy Document <span className="text-destructive">*</span>
+                  </label>
+                  <div
+                    className={cn(
+                      'border border-dashed rounded-lg p-4 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                      formData.policyDocument ? 'border-primary/50 bg-primary/5' : 'border-border'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                        <FileText size={18} />
+                      </div>
+                      {formData.policyDocument ? (
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {formData.policyDocument.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(formData.policyDocument.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          <p>Upload Policy PDF / Image</p>
+                        </div>
+                      )}
+                    </div>
+                    {formData.policyDocument ? (
+                      <button
+                        onClick={() => removeDocument('policyDocument')}
+                        className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                        onClick={() => policyDocInputRef.current?.click()}
+                      >
+                        Browse
+                      </Button>
+                    )}
+                    <input
+                      ref={policyDocInputRef}
+                      id="policy-doc-upload"
+                      type="file"
+                      accept=".pdf, image/*"
+                      className="hidden"
+                      onChange={e => handleDocumentUpload(e, 'policyDocument')}
+                    />
+                  </div>
+                  {errors.policyDocument && (
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={10} /> {errors.policyDocument}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1175,8 +1382,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
-              <h2 className="text-xl font-bold text-foreground">Incident Details</h2>
-              <p className="text-sm text-muted-foreground mt-1">When and what happened.</p>
+              <h2 className="text-xl font-bold text-foreground">Incident</h2>
+              <p className="text-sm text-muted-foreground mt-1">When and where did it happen?</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1210,6 +1417,108 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 onBlur={() => handleBlur('incidentTime')}
               />
             </div>
+
+            <div className="space-y-1 border-t border-border pt-6" style={{ marginTop: '1.5rem' }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <label className="text-sm font-medium text-foreground">Location</label>
+                <div className="group relative flex items-center">
+                  <AlertCircle
+                    size={14}
+                    className="text-muted-foreground/70 hover:text-primary cursor-help transition-colors"
+                  />
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-64 p-3 backdrop-blur-md border border-primary/20 text-primary-foreground text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    <p className="text-muted-foreground leading-relaxed">
+                      Ensure the location pin is accurate. This will be used to deploy the nearest
+                      adjuster.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="relative" ref={addressContainerRef}>
+                <Search
+                  className="absolute left-3 h-4 w-4 text-muted-foreground/80 z-10"
+                  style={{ top: '1.2rem' }}
+                />
+                <Input
+                  placeholder="Search location (e.g. Jalan Tun Razak)"
+                  value={formData.address}
+                  error={errors.address}
+                  className="pl-9"
+                  onChange={handleAddressSearch}
+                  onFocus={() => {
+                    if (formData.address && formData.address.length > 2) {
+                      setShowAddressSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => handleBlur('address')}
+                />
+                {showAddressSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                    <div className="bg-muted/50 px-3 py-1.5 text-[10px] uppercase font-bold text-muted-foreground/80">
+                      Suggestions
+                    </div>
+                    {addressSuggestions.map((item: any) => (
+                      <button
+                        key={item.displayName}
+                        className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
+                        onClick={() => selectAddress(item)}
+                      >
+                        <MapPin size={16} className="text-muted-foreground/80 shrink-0" />
+                        <span className="truncate">{item.displayName}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Google Maps Integration (Embed) */}
+              <div
+                className="aspect-video bg-muted rounded-xl overflow-hidden border border-border shadow-inner relative tci-map-container mt-4"
+                style={{ width: '100%', height: '170px' }}
+              >
+                {formData.address ? (
+                  <>
+                    {isMapLoading && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10">
+                        <Loader2 className="animate-spin text-primary mb-2" size={24} />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                          Loading Map...
+                        </span>
+                      </div>
+                    )}
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      className="border-0"
+                      allowFullScreen
+                      onLoad={() => setIsMapLoading(false)}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                      style={{ filter: 'grayscale(0.2)' }}
+                    ></iframe>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/80">
+                    <div className="bg-background p-4 rounded-full shadow-sm mb-3">
+                      <MapPin size={32} className="text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-medium">Enter location to see map</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Description & Reports */}
+        {step === 4 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Report</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Describe the incident and attach reports.
+              </p>
+            </div>
+
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-foreground">Description</label>
@@ -1221,7 +1530,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </div>
               <textarea
                 className={cn(
-                  'w-full px-3 py-2 rounded-lg border outline-none h-32 resize-none transition-all text-sm bg-background text-foreground placeholder:text-muted-foreground',
+                  'w-full px-3 py-2 rounded-lg border outline-none h-28 resize-none transition-all text-sm bg-background text-foreground placeholder:text-muted-foreground',
                   aiFilledFields.has('description')
                     ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
                     : 'border-input focus:ring-2 focus:ring-ring focus:border-primary',
@@ -1240,7 +1549,72 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="space-y-4 border-t border-border pt-4">
-              <h3 className="text-xl font-bold text-foreground">Police Report (Optional)</h3>
+              <h3 className="text-md font-bold text-foreground">
+                Police Report <span className="text-destructive">*</span>
+              </h3>
+
+              {/* Police Report Document Upload */}
+              <div className="space-y-1.5">
+                <div
+                  className={cn(
+                    'border border-dashed rounded-lg p-4 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                    formData.policeReportDocument
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-border'
+                  )}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                      <FileText size={18} />
+                    </div>
+                    {formData.policeReportDocument ? (
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {formData.policeReportDocument.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(formData.policeReportDocument.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        <p>Upload Police Report PDF / Image</p>
+                      </div>
+                    )}
+                  </div>
+                  {formData.policeReportDocument ? (
+                    <button
+                      onClick={() => removeDocument('policeReportDocument')}
+                      className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                      onClick={() => policeDocInputRef.current?.click()}
+                    >
+                      Browse
+                    </Button>
+                  )}
+                  <input
+                    ref={policeDocInputRef}
+                    id="police-doc-upload"
+                    type="file"
+                    accept=".pdf, image/*"
+                    className="hidden"
+                    onChange={e => handleDocumentUpload(e, 'policeReportDocument')}
+                  />
+                </div>
+                {errors.policeReportDocument && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={10} /> {errors.policeReportDocument}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Report Number"
@@ -1308,102 +1682,6 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           </div>
         )}
 
-        {/* Step 4: Location */}
-        {step === 4 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Incident Location</h2>
-              <p className="text-sm text-muted-foreground mt-1">Where did it happen?</p>
-            </div>
-
-            <div className="relative" ref={addressContainerRef}>
-              <Search
-                className="absolute left-3 h-4 w-4 text-muted-foreground/80 z-10"
-                style={{ top: '1.2rem' }}
-              />
-              <Input
-                placeholder="Search location (e.g. Jalan Tun Razak)"
-                value={formData.address}
-                error={errors.address}
-                className="pl-9"
-                onChange={handleAddressSearch}
-                onFocus={() => {
-                  if (formData.address && formData.address.length > 2) {
-                    setShowAddressSuggestions(true);
-                  }
-                }}
-                onBlur={() => handleBlur('address')}
-              />
-              {showAddressSuggestions && addressSuggestions.length > 0 && (
-                <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  <div className="bg-muted/50 px-3 py-1.5 text-[10px] uppercase font-bold text-muted-foreground/80">
-                    Suggestions
-                  </div>
-                  {addressSuggestions.map((item: any) => (
-                    <button
-                      key={item.displayName}
-                      className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
-                      onClick={() => selectAddress(item)}
-                    >
-                      <MapPin size={16} className="text-muted-foreground/80 shrink-0" />
-                      <span className="truncate">{item.displayName}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Google Maps Integration (Embed) */}
-            <div
-              className="aspect-video bg-muted rounded-xl overflow-hidden border border-border shadow-inner relative tci-map-container"
-              style={{ width: '100%', height: '220px' }}
-            >
-              {formData.address ? (
-                <>
-                  {isMapLoading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10">
-                      <Loader2 className="animate-spin text-primary mb-2" size={24} />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        Loading Map...
-                      </span>
-                    </div>
-                  )}
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    className="border-0"
-                    loading="lazy"
-                    allowFullScreen
-                    onLoad={() => setIsMapLoading(false)}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(formData.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                    style={{ filter: 'grayscale(0.2)' }}
-                  ></iframe>
-                </>
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/80">
-                  <div className="bg-background p-4 rounded-full shadow-sm mb-3">
-                    <MapPin size={32} className="text-muted-foreground/60" />
-                  </div>
-                  <p className="text-sm font-medium">Enter location to see map</p>
-                </div>
-              )}
-              {!formData.address && ( // Overlay for demo if map fails to load without key
-                <div className="absolute inset-0 flex items-center justify-center bg-muted/50/50 pointer-events-none">
-                  {/* This is just a fallback if iframe breaks due to no API key */}
-                </div>
-              )}
-            </div>
-
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex gap-3">
-              <AlertCircle className="text-primary shrink-0 mt-0.5" size={16} />
-              <p className="text-xs text-primary/90 font-medium">
-                Ensure the location pin is accurate. This will be used to deploy the nearest
-                adjuster.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Step 5: Photos */}
         {step === 5 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -1423,7 +1701,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   : 'border-border bg-muted/30 hover:border-primary hover:bg-primary/5',
                 errors.photos ? 'border-destructive/50 bg-destructive/10' : ''
               )}
-              onClick={() => document.getElementById('photo-upload')?.click()}
+              onClick={() => photoInputRef.current?.click()}
               onDragOver={e => {
                 e.preventDefault();
                 setIsDragging(true);
@@ -1446,10 +1724,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 Supports JPG, PNG (Max 5MB)
               </p>
               <input
+                ref={photoInputRef}
                 id="photo-upload"
                 type="file"
                 multiple
-                accept="image/*"
+                accept="image/*,.pdf"
                 className="hidden"
                 onChange={handlePhotoUpload}
               />

@@ -64,6 +64,33 @@ export function NewClaimPage() {
         }
       }
 
+      // Upload Policy Document
+      if (data.policyDocument) {
+        console.log(`Uploading policy document for claim ${claim.id}`);
+        const formData = new FormData();
+        // Using SIGNED_STATEMENT as the closest match for Policy Document from available enums
+        formData.append('type', 'SIGNED_STATEMENT');
+        formData.append('file', data.policyDocument);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+
+      // Upload Police Report
+      if (data.policeReportDocument) {
+        console.log(`Uploading police report for claim ${claim.id}`);
+        const formData = new FormData();
+        formData.append('type', 'POLICE_REPORT');
+        formData.append('file', data.policeReportDocument);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+
       toast({
         title: 'Success',
         description: `Claim created successfully!`,
