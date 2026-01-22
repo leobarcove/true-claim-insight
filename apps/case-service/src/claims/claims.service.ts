@@ -30,6 +30,7 @@ export class ClaimsService {
         incidentLocation: createClaimDto.incidentLocation as any,
         description: createClaimDto.description,
         claimantId: createClaimDto.claimantId,
+        nric: createClaimDto.nric,
         insurerTenantId: createClaimDto.tenantId,
         vehiclePlateNumber: createClaimDto.vehiclePlateNumber,
         vehicleMake: createClaimDto.vehicleMake,

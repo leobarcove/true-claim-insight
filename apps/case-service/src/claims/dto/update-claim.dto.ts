@@ -19,6 +19,11 @@ export class UpdateClaimDto {
   @MaxLength(2000)
   description?: string;
 
+  @ApiPropertyOptional({ example: '850101-14-1234' })
+  @IsString()
+  @IsOptional()
+  nric?: string;
+
   @ApiPropertyOptional({ type: IncidentLocationDto })
   @IsObject()
   @IsOptional()
@@ -86,7 +91,7 @@ export class UpdateClaimDto {
   @IsOptional()
   workshopName?: string;
 
-  @ApiPropertyOptional({ example: 2500.50 })
+  @ApiPropertyOptional({ example: 2500.5 })
   @IsNumber()
   @IsOptional()
   estimatedRepairCost?: number;

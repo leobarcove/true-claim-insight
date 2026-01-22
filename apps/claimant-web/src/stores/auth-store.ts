@@ -6,6 +6,7 @@ export interface ClaimantUser {
   phoneNumber: string;
   fullName?: string | null;
   kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED';
+  tenantId?: string | null;
 }
 
 interface AuthState {
@@ -19,7 +20,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    set => ({
       user: null,
       accessToken: null,
       isAuthenticated: false,
@@ -31,8 +32,8 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
         }),
 
-      updateUser: (updates) =>
-        set((state) => ({
+      updateUser: updates =>
+        set(state => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
@@ -45,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'tci-claimant-auth',
-      partialize: (state) => ({
+      partialize: state => ({
         user: state.user,
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,

@@ -64,6 +64,7 @@ model Adjuster {
 
 model Claimant {
   id            String    @id @default(uuid())
+  nric          String?   @unique
   nricHash      String?   @unique
   nricEncrypted Bytes?
   fullName      String?
@@ -78,6 +79,7 @@ model Claimant {
   claims        Claim[]
 
   @@index([phoneNumber])
+  @@index([nric])
   @@map("claimants")
 }
 
@@ -99,6 +101,7 @@ model Claim {
   id                      String      @id @default(uuid())
   claimNumber             String      @unique
   claimantId              String
+  nric                    String?
   adjusterId              String?
   insurerTenantId         String?
   policyNumber            String
@@ -144,6 +147,7 @@ model Claim {
   videoUploads            VideoUpload[]
 
   @@index([claimantId])
+  @@index([nric])
   @@index([adjusterId])
   @@index([status])
   @@index([createdAt(sort: Desc)])

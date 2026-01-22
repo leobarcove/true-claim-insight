@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClaimantsService } from '../claimants/claimants.service';
 
 @ApiTags('Claims')
 @ApiBearerAuth()
@@ -26,14 +27,15 @@ export class ClaimsController {
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly claimantsService: ClaimantsService
   ) {
     this.caseServiceUrl = this.configService.get('CASE_SERVICE_URL') || 'http://localhost:3001';
   }
 
   @Post()
   @ApiOperation({ summary: 'Create a new claim' })
-  create(@Body() createClaimDto: any, @Req() req: any) {
+  async create(@Body() createClaimDto: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.user?.tenantId,
@@ -41,18 +43,35 @@ export class ClaimsController {
       'X-User-Role': req.user?.role,
     };
 
-    // case-service has /api/v1 prefix
-    return this.httpService
-      .post(`${this.caseServiceUrl}/api/v1/claims`, createClaimDto, { headers })
-      .pipe(
-        map(response => response.data.data), // Extract .data.data to avoid double wrapping
-        catchError(e => {
-          throw new HttpException(
-            e.response?.data || 'Failed to create claim',
-            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
-          );
-        })
-      );
+    let claimantId = createClaimDto.claimantId;
+
+    // Resolve claimant if NRIC/Phone provided (mainly for Agent flow)
+    if (!claimantId && createClaimDto.claimantNric && createClaimDto.claimantPhone) {
+      const claimant = await this.claimantsService.findOrCreate({
+        nric: createClaimDto.claimantNric,
+        phoneNumber: createClaimDto.claimantPhone,
+        fullName: createClaimDto.claimantName,
+      });
+      claimantId = claimant.id;
+    }
+
+    const payload = {
+      ...createClaimDto,
+      claimantId,
+    };
+    delete payload.claimantNric;
+    delete payload.claimantPhone;
+    delete payload.claimantName;
+
+    return this.httpService.post(`${this.caseServiceUrl}/api/v1/claims`, payload, { headers }).pipe(
+      map(response => response.data.data),
+      catchError(e => {
+        throw new HttpException(
+          e.response?.data || 'Failed to create claim',
+          e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      })
+    );
   }
 
   @Get('stats')

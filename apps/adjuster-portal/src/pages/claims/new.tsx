@@ -17,21 +17,20 @@ export function NewClaimPage() {
     setIsSubmitting(true);
     try {
       const user = useAuthStore.getState().user;
-
-      // Map wizard data to case-service CreateClaimDto
-      // For MVP, we use fixed UUIDs from seeded data
-      // In production, these would come from the user session
       const payload = {
         claimType: data.claimType || 'OWN_DAMAGE',
         incidentDate: data.incidentDate || new Date().toISOString().split('T')[0],
         incidentLocation: {
-          address: data.address || 'Jalan Bukit Bintang, Kuala Lumpur',
-          latitude: 3.1478,
-          longitude: 101.7128,
+          address: data.address,
+          latitude: data.latitude,
+          longitude: data.longitude,
         },
         description: data.description || 'Claim submitted via AI Import',
-        claimantId: 'demo-claimant-id', // Using actual claimant UUID from the database seed
-        tenantId: user?.tenantId || 'allianz-id', // Use current user's tenant or fallback to seed
+        claimantName: data.claimantId,
+        claimantPhone: data.mobileNumber,
+        claimantNric: data.nric,
+        nric: data.nric,
+        tenantId: user?.tenantId,
         policyNumber: data.policyNumber || '',
         vehiclePlateNumber: data.vehiclePlate || '',
         vehicleMake: data.vehicleMake || '',
@@ -42,7 +41,7 @@ export function NewClaimPage() {
         policeReportNumber: data.policeReportNumber || '',
         policeReportDate: data.policeReportDate || '',
         policeStation: data.policeStation || '',
-        isPdpaCompliant: true, // Default to true for agent manual entry
+        isPdpaCompliant: true,
       };
 
       console.log('Submitting claim payload:', payload);
