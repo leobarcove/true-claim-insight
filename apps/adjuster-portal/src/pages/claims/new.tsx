@@ -7,6 +7,8 @@ import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
+import { useVehicleMakes, VehicleModel } from '@/hooks/use-master-data';
+import { ApiResponse } from '@/lib/api-client';
 
 export function NewClaimPage() {
   const navigate = useNavigate();
@@ -107,6 +109,18 @@ export function NewClaimPage() {
     }
   };
 
+  const { data: makes } = useVehicleMakes();
+
+  const fetchModels = async (makeId: string) => {
+    const { data } = await apiClient.get<ApiResponse<VehicleModel[]>>(
+      '/master-data/vehicles/models',
+      {
+        params: { makeId },
+      }
+    );
+    return data.data;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -132,6 +146,14 @@ export function NewClaimPage() {
                 mode="AGENT"
                 onSuccess={handleSuccess}
                 onCancel={() => navigate(-1)}
+                vehicleMasterData={
+                  makes
+                    ? {
+                        makes,
+                        fetchModels,
+                      }
+                    : undefined
+                }
               />
             )}
           </div>

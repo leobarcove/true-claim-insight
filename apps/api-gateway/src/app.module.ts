@@ -16,6 +16,7 @@ import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
 import { RiskModule } from './risk/risk.module';
 import { OcrModule } from './ocr/ocr.module';
+import { MasterDataModule } from './master-data/master-data.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -59,6 +60,7 @@ import configuration from './config/configuration';
     LocationModule,
     RiskModule,
     OcrModule,
+    MasterDataModule,
   ],
   providers: [
     // Global rate limiting guard

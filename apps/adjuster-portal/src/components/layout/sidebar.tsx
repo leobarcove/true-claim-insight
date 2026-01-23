@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -10,6 +11,8 @@ import {
   Moon,
   Sun,
   ChevronLeft,
+  Factory,
+  Car,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -18,12 +21,18 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useTheme } from '@/hooks/use-theme';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Claims', href: '/claims', icon: FileText },
   { name: 'Sessions', href: '/sessions', icon: Video },
   { name: 'Schedule', href: '/schedule', icon: Calendar },
+];
+
+const masterDataNavigation = [
+  { name: 'Vehicle Make', href: '/master-data/vehicle-make', icon: Factory },
+  { name: 'Vehicle Model', href: '/master-data/vehicle-model', icon: Car },
 ];
 
 const secondaryNavigation = [
@@ -36,9 +45,15 @@ export function Sidebar() {
   const { user } = useAuthStore();
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setIsLogoutDialogOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
     logoutMutation.mutate();
+    setIsLogoutDialogOpen(false);
   };
 
   return (
@@ -64,6 +79,40 @@ export function Sidebar() {
                 item.href === '/'
                   ? location.pathname === '/'
                   : location.pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={cn(
+                    'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  <item.icon
+                    className={cn(
+                      'h-4 w-4 transition-colors',
+                      isActive
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground group-hover:text-current'
+                    )}
+                  />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Master Data Section */}
+        <div>
+          <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">
+            Master Data
+          </h3>
+          <div className="space-y-1">
+            {masterDataNavigation.map(item => {
+              const isActive = location.pathname === item.href;
               return (
                 <Link
                   key={item.name}
@@ -164,13 +213,24 @@ export function Sidebar() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             className="h-8 w-8 text-muted-foreground"
           >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={isLogoutDialogOpen}
+        onOpenChange={setIsLogoutDialogOpen}
+        title="Confirm Logout"
+        description="Are you sure you want to log out of your session?"
+        onConfirm={handleConfirmLogout}
+        confirmText="Logout"
+        variant="destructive"
+        isLoading={logoutMutation.isPending}
+      />
     </div>
   );
 }

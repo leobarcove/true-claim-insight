@@ -264,7 +264,7 @@ export function VideoSessionsPage() {
                       </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="bg-card">
                     {[...Array(3)].map((_, i) => (
                       <TableRow key={i} className="hover:bg-transparent">
                         <TableCell>
@@ -273,22 +273,22 @@ export function VideoSessionsPage() {
                         <TableCell>
                           <Skeleton className="h-4 w-32" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-5 w-24 rounded-full" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-5 w-20 rounded-full" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <div className="space-y-1">
                             <Skeleton className="h-3 w-24" />
                             <Skeleton className="h-3 w-16" />
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-3 w-16" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-8 w-8 ml-auto" />
                         </TableCell>
                       </TableRow>
@@ -327,14 +327,14 @@ export function VideoSessionsPage() {
                   <TableRow>
                     <TableHead>Claim Number</TableHead>
                     <TableHead>Claimant</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date & Time</TableHead>
-                    <TableHead>Duration</TableHead>
+                    <TableHead className="text-center">Duration</TableHead>
+                    <TableHead className="text-center">Type</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Created</TableHead>
                     <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="bg-card">
                   {filteredSessions.map(item => (
                     <TableRow
                       key={`${item.type}-${item.data.id}`}
@@ -343,21 +343,7 @@ export function VideoSessionsPage() {
                     >
                       <TableCell className="font-medium">{item.data.claim.claimNumber}</TableCell>
                       <TableCell>{item.data.claim.claimant.fullName}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(item.data.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-xs">
-                          <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(new Date(item.data.createdAt), 'hh:mm a')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-center text-xs text-muted-foreground">
                         {item.type === 'live' && item.data.durationSeconds ? (
                           <span>
                             {Math.floor(item.data.durationSeconds / 60)}m{' '}
@@ -373,7 +359,23 @@ export function VideoSessionsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex justify-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {getStatusBadge(item.data.status)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col text-xs">
+                          <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {format(new Date(item.data.createdAt), 'hh:mm a')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
                           <Button size="icon" variant="ghost" className="h-8 w-8">
                             {/* <MoreHorizontal className="h-4 w-4" /> */}
                             <Eye className="h-4 w-4" />

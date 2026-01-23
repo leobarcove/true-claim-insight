@@ -109,9 +109,18 @@ export class UsersService {
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         licenseNumber: data.licenseNumber,
+        adjuster:
+          user.role === 'ADJUSTER' && data.licenseNumber
+            ? {
+                update: {
+                  licenseNumber: data.licenseNumber,
+                },
+              }
+            : undefined,
       },
       include: {
         tenant: true,
+        adjuster: true,
       },
     });
   }

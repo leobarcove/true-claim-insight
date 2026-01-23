@@ -398,3 +398,26 @@ enum VideoUploadStatus {
   FAILED
 }
 
+
+model VehicleMake {
+  id        String         @id @default(uuid())
+  name      String         @unique
+  models    VehicleModel[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@map("vehicle_makes")
+}
+
+model VehicleModel {
+  id        String      @id @default(uuid())
+  name      String
+  makeId    String
+  make      VehicleMake @relation(fields: [makeId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([makeId, name])
+  @@index([makeId])
+  @@map("vehicle_models")
+}
