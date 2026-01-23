@@ -20,6 +20,8 @@ import { UploadDetailPage } from '@/pages/sessions/upload-detail';
 import { SchedulePage } from '@/pages/schedule';
 import { SettingsPage } from '@/pages/settings';
 import { HelpPage } from '@/pages/help';
+import { VehicleMakePage } from '@/pages/master-data/vehicle-make';
+import { VehicleModelPage } from '@/pages/master-data/vehicle-model';
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
@@ -133,6 +135,26 @@ export default function App() {
               <Route path="/sessions/upload/:uploadId" element={<UploadDetailPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route
+                path="/master-data/vehicle-make"
+                element={
+                  <RoleRoute
+                    allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN']}
+                  >
+                    <VehicleMakePage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/master-data/vehicle-model"
+                element={
+                  <RoleRoute
+                    allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN']}
+                  >
+                    <VehicleModelPage />
+                  </RoleRoute>
+                }
+              />
               <Route path="/help" element={<HelpPage />} />
             </Route>
 

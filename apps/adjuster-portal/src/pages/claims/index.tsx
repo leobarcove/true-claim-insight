@@ -11,7 +11,10 @@ import {
   ChevronRight,
   MoreHorizontal,
   Eye,
+  Calendar,
+  Clock,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
@@ -191,7 +194,7 @@ export function ClaimsListPage() {
                       </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="bg-card">
                     {[...Array(3)].map((_, i) => (
                       <TableRow key={i} className="hover:bg-transparent">
                         <TableCell>
@@ -200,19 +203,19 @@ export function ClaimsListPage() {
                         <TableCell>
                           <Skeleton className="h-4 w-32" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-6 w-20 rounded-full" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-6 w-24 rounded-full" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-8 w-8 ml-auto" />
                         </TableCell>
                       </TableRow>
@@ -257,14 +260,14 @@ export function ClaimsListPage() {
                   <TableRow>
                     <TableHead className="w-[200px]">Claim Number</TableHead>
                     <TableHead>Claimant</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Incident Date</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead className="text-center">Type</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Incident Date</TableHead>
+                    <TableHead className="text-center">Created</TableHead>
                     <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="bg-card">
                   {claims.map(claim => (
                     <TableRow
                       key={claim.id}
@@ -273,16 +276,27 @@ export function ClaimsListPage() {
                     >
                       <TableCell className="font-medium">{claim.claimNumber}</TableCell>
                       <TableCell>{claim.claimant?.fullName || claim.claimantId}</TableCell>
-                      <TableCell>{typeLabels[claim.claimType] || claim.claimType}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
+                        {typeLabels[claim.claimType] || claim.claimType}
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
                           {convertToTitleCase(statusConfig[claim.status]?.label || claim.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatDate(claim.incidentDate)}</TableCell>
-                      <TableCell>{formatDate(claim.createdAt)}</TableCell>
                       <TableCell className="text-center">
-                        <div className="flex justify-center gap-2">
+                        {formatDate(claim.incidentDate)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col text-xs">
+                          <span>{format(new Date(claim.createdAt), 'MMM dd, yyyy')}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {format(new Date(claim.createdAt), 'hh:mm a')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
                           <Button size="icon" variant="ghost" className="h-8 w-8">
                             {/* <MoreHorizontal className="h-4 w-4" /> */}
                             <Eye className="h-4 w-4" />
@@ -329,15 +343,25 @@ export function ClaimsListPage() {
                         </p>
 
                         <div className="pt-2 border-t space-y-1.5">
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Incident: {formatDate(claim.incidentDate)}</span>
-                            <span>Created: {formatDate(claim.createdAt)}</span>
-                          </div>
-                          {claim.scheduledAssessmentTime && (
-                            <div className="text-xs text-primary font-medium">
-                              Session: {formatDate(claim.scheduledAssessmentTime)}
+                          <div className="flex justify-between gap-1.5 py-1">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3 text-primary/60" />
+                              <span>Incident: {formatDate(claim.incidentDate)}</span>
                             </div>
-                          )}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3 text-primary/60" />
+                                <div className="flex flex-col mt-3">
+                                  <span>
+                                    Created: {format(new Date(claim.createdAt), 'MMM dd, yyyy')}
+                                  </span>
+                                  <span className="text-[11px] opacity-70">
+                                    {format(new Date(claim.createdAt), 'hh:mm a')}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

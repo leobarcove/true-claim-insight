@@ -288,7 +288,7 @@ export function DashboardPage() {
                         )}
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="bg-card">
                       {claimsLoading ? (
                         [...Array(3)].map((_, i) => (
                           <TableRow key={i} className="border-border/50 hover:bg-transparent">
@@ -438,7 +438,7 @@ export function DashboardPage() {
                         )}
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="bg-card">
                       {sessionsLoading ? (
                         [...Array(3)].map((_, i) => (
                           <TableRow key={i} className="border-border/50 hover:bg-transparent">

@@ -12,3 +12,4 @@ export * from './select';
 export * from './skeleton';
 export * from './tooltip';
 export * from './switch';
+export * from './confirmation-dialog';
