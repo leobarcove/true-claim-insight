@@ -368,6 +368,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   // Document input refs
   const policyDocInputRef = useRef<HTMLInputElement>(null);
   const policeDocInputRef = useRef<HTMLInputElement>(null);
+  const myKadDocInputRef = useRef<HTMLInputElement>(null);
+  const vehicleRegDocInputRef = useRef<HTMLInputElement>(null);
+  const workshopQuotationInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<any>({
@@ -396,6 +399,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     policyNumber: '',
     policyDocument: null as File | null,
     policeReportDocument: null as File | null,
+    myKadFront: null as File | null,
+    vehicleRegistrationCard: null as File | null,
+    workshopQuotation: null as File | null,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -537,6 +543,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       if (!formData.mobileNumber.trim()) newErrors.mobileNumber = 'Mobile number is required';
       if (!formData.policyNumber.trim()) newErrors.policyNumber = 'Policy number is required';
       if (!formData.policyDocument) newErrors.policyDocument = 'Policy document is required';
+      if (!formData.myKadFront) newErrors.myKadFront = 'MyKad Front is required';
     }
 
     if (currentStep === 2) {
@@ -546,6 +553,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       if (!formData.vehicleModel.trim()) newErrors.vehicleModel = 'Model is required';
       if (!formData.chassisNo.trim()) newErrors.chassisNo = 'Chassis number is required';
       if (!formData.engineNo.trim()) newErrors.engineNo = 'Engine number is required';
+      if (!formData.vehicleRegistrationCard)
+        newErrors.vehicleRegistrationCard = 'Vehicle registration card is required';
     }
 
     if (currentStep === 3) {
@@ -616,6 +625,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     const newFormData = { ...formData };
 
     // Process MyKad
+    if (aiImportFiles.mykad) {
+      newFormData.myKadFront = aiImportFiles.mykad;
+    }
     if (extraction.mykad?.document) {
       const front = extraction.mykad.document.front;
       if (front) {
@@ -660,6 +672,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     }
 
     // Process Police Report
+    if (aiImportFiles.police_report) {
+      newFormData.policeReportDocument = aiImportFiles.police_report;
+    }
     if (extraction.police_report?.document) {
       const data = extraction.police_report.document;
       if (data.report?.incident?.narrative) {
@@ -690,6 +705,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
     setFormData(newFormData);
     setAiFilledFields(filled);
+    setErrors({});
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setIsAiImportActive(false);
     setStep(mode === 'AGENT' ? 1 : 2);
   };
@@ -749,7 +768,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
   const handleDocumentUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    field: 'policyDocument' | 'policeReportDocument'
+    field:
+      | 'policyDocument'
+      | 'policeReportDocument'
+      | 'myKadFront'
+      | 'vehicleRegistrationCard'
+      | 'workshopQuotation'
   ) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -776,7 +800,14 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     }
   };
 
-  const removeDocument = (field: 'policyDocument' | 'policeReportDocument') => {
+  const removeDocument = (
+    field:
+      | 'policyDocument'
+      | 'policeReportDocument'
+      | 'myKadFront'
+      | 'vehicleRegistrationCard'
+      | 'workshopQuotation'
+  ) => {
     setFormData((prev: any) => ({ ...prev, [field]: null }));
   };
 
@@ -842,7 +873,27 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     }
   };
 
-  const fillDemoData = () => {
+  const fillDemoData = async () => {
+    const fetchFile = async (fileName: string, type: string) => {
+      try {
+        const response = await fetch(`/demo-assets/${fileName}`);
+        const blob = await response.blob();
+        return new File([blob], fileName, { type });
+      } catch (e) {
+        console.error('Failed to fetch demo file', fileName, e);
+        return null;
+      }
+    };
+
+    const [nric, policy, voc, police, photo1, photo2] = await Promise.all([
+      fetchFile('nric.jpg', 'image/jpeg'),
+      fetchFile('insurance_document.jpg', 'image/jpeg'),
+      fetchFile('voc.jpg', 'image/jpeg'),
+      fetchFile('police_report.jpg', 'image/jpeg'),
+      fetchFile('damaged_vehicle_1.jpg', 'image/jpeg'),
+      fetchFile('damaged_vehicle_2.jpg', 'image/jpeg'),
+    ]);
+
     setFormData({
       ...formData,
       claimantId: 'Kumar Claimant',
@@ -862,9 +913,17 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       policeReportNumber: `IPDKL/${Math.floor(Math.random() * 90000) + 10000}/${new Date().getFullYear()}`,
       policeReportDate: new Date().toISOString().split('T')[0],
       policeStation: 'Balai Polis Jalan Tun Razak',
-      photos: [], // Photos still need manual upload or mock
+      myKadFront: nric,
+      policyDocument: policy,
+      vehicleRegistrationCard: voc,
+      policeReportDocument: police,
+      photos: [photo1, photo2].filter(Boolean) as File[],
     });
     setAiFilledFields(new Set());
+    setErrors({});
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     if (step === 0) setStep(1);
   };
 
@@ -1118,7 +1177,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </p>
             </div>
 
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4">
               <Input
                 label="Full Name (as per MyKad)"
                 placeholder="e.g. Kumar Claimant"
@@ -1149,8 +1208,69 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 />
               </div>
 
+              {/* MyKad Upload - Mandatory */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  MyKad (Front) <span className="text-destructive">*</span>
+                </label>
+                <div
+                  className={cn(
+                    'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                    formData.myKadFront ? 'border-primary/50 bg-primary/5' : 'border-border'
+                  )}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                      <User size={18} />
+                    </div>
+                    {formData.myKadFront ? (
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{formData.myKadFront.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(formData.myKadFront.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        <p>Upload MyKad (Front) Image</p>
+                      </div>
+                    )}
+                  </div>
+                  {formData.myKadFront ? (
+                    <button
+                      onClick={() => removeDocument('myKadFront')}
+                      className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                      onClick={() => myKadDocInputRef.current?.click()}
+                    >
+                      Browse
+                    </Button>
+                  )}
+                  <input
+                    ref={myKadDocInputRef}
+                    id="mykad-doc-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handleDocumentUpload(e, 'myKadFront')}
+                  />
+                </div>
+                {errors.myKadFront && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={10} /> {errors.myKadFront}
+                  </p>
+                )}
+              </div>
+
               <div
-                className="space-y-6 border-t border-border pt-6"
+                className="space-y-4 border-t border-border pt-6"
                 style={{ marginTop: '1.5rem' }}
               >
                 <Input
@@ -1167,7 +1287,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   </label>
                   <div
                     className={cn(
-                      'border border-dashed rounded-lg p-4 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                      'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
                       formData.policyDocument ? 'border-primary/50 bg-primary/5' : 'border-border'
                     )}
                   >
@@ -1318,6 +1438,74 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 }
                 onBlur={() => handleBlur('engineNo')}
               />
+            </div>
+
+            {/* Vehicle Registration Card Upload - Mandatory */}
+            <div
+              className="space-y-1.5 pt-4 border-t border-border"
+              style={{ marginTop: '1.5rem' }}
+            >
+              <label className="text-sm font-medium text-foreground">
+                Vehicle Registration Card <span className="text-destructive">*</span>
+              </label>
+              <div
+                className={cn(
+                  'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                  formData.vehicleRegistrationCard
+                    ? 'border-primary/50 bg-primary/5'
+                    : 'border-border'
+                )}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                    <FileText size={18} />
+                  </div>
+                  {formData.vehicleRegistrationCard ? (
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {formData.vehicleRegistrationCard.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(formData.vehicleRegistrationCard.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      <p>Upload Registration Card PDF / Image</p>
+                    </div>
+                  )}
+                </div>
+                {formData.vehicleRegistrationCard ? (
+                  <button
+                    onClick={() => removeDocument('vehicleRegistrationCard')}
+                    className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                    onClick={() => vehicleRegDocInputRef.current?.click()}
+                  >
+                    Browse
+                  </Button>
+                )}
+                <input
+                  ref={vehicleRegDocInputRef}
+                  id="vehicle-reg-doc-upload"
+                  type="file"
+                  accept=".pdf, image/*"
+                  className="hidden"
+                  onChange={e => handleDocumentUpload(e, 'vehicleRegistrationCard')}
+                />
+              </div>
+              {errors.vehicleRegistrationCard && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={10} /> {errors.vehicleRegistrationCard}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1501,7 +1689,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               <div className="space-y-1.5">
                 <div
                   className={cn(
-                    'border border-dashed rounded-lg p-4 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                    'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
                     formData.policeReportDocument
                       ? 'border-primary/50 bg-primary/5'
                       : 'border-border'
@@ -1748,6 +1936,65 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 ))}
               </div>
             )}
+
+            {/* Workshop Repair Quotation - Optional */}
+            <div className="space-y-1.5 pt-6 border-t border-border mt-6">
+              <label className="text-sm font-medium text-foreground">
+                Workshop Repair Quotation{' '}
+                <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
+              </label>
+              <div
+                className={cn(
+                  'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                  formData.workshopQuotation ? 'border-primary/50 bg-primary/5' : 'border-border'
+                )}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                    <FileText size={18} />
+                  </div>
+                  {formData.workshopQuotation ? (
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {formData.workshopQuotation.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(formData.workshopQuotation.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      <p>Upload Workshop Quotation PDF / Image</p>
+                    </div>
+                  )}
+                </div>
+                {formData.workshopQuotation ? (
+                  <button
+                    onClick={() => removeDocument('workshopQuotation')}
+                    className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                    onClick={() => workshopQuotationInputRef.current?.click()}
+                  >
+                    Browse
+                  </Button>
+                )}
+                <input
+                  ref={workshopQuotationInputRef}
+                  id="workshop-quotation-upload"
+                  type="file"
+                  accept=".pdf, image/*"
+                  className="hidden"
+                  onChange={e => handleDocumentUpload(e, 'workshopQuotation')}
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -1789,6 +2036,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   <p className="text-xs text-muted-foreground">{formData.nric}</p>
                   <p className="text-[10px] text-muted-foreground">
                     Policy: {formData.policyNumber}
+                    <div className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
+                      <Check size={10} /> MYKAD {formData.myKadFront ? 'UPLOADED' : 'MISSING'}
+                    </div>
                   </p>
                 </div>
               </div>
@@ -1807,6 +2057,10 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                       Chassis: {formData.chassisNo}
                     </p>
                   )}
+                  <div className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
+                    <Check size={10} /> REG. CARD{' '}
+                    {formData.vehicleRegistrationCard ? 'UPLOADED' : 'MISSING'}
+                  </div>
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
@@ -1823,6 +2077,11 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                       <ImageIcon size={14} className="text-muted-foreground" />
                       {formData.photos.length} evidence{formData.photos.length === 1 ? '' : 's'}
                     </span>
+                    {formData.workshopQuotation && (
+                      <span className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
+                        <Check size={10} /> WORKSHOP QUOTATION
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>

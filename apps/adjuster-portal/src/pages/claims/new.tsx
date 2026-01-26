@@ -91,6 +91,45 @@ export function NewClaimPage() {
         });
       }
 
+      // Upload MyKad Front
+      if (data.myKadFront) {
+        console.log(`Uploading MyKad Front for claim ${claim.id}`);
+        const formData = new FormData();
+        formData.append('type', 'MYKAD_FRONT');
+        formData.append('file', data.myKadFront);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+
+      // Upload Vehicle Registration Card
+      if (data.vehicleRegistrationCard) {
+        console.log(`Uploading vehicle registration card for claim ${claim.id}`);
+        const formData = new FormData();
+        formData.append('type', 'VEHICLE_REG_CARD');
+        formData.append('file', data.vehicleRegistrationCard);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+
+      // Upload Workshop Quotation
+      if (data.workshopQuotation) {
+        console.log(`Uploading workshop quotation for claim ${claim.id}`);
+        const formData = new FormData();
+        formData.append('type', 'REPAIR_QUOTATION');
+        formData.append('file', data.workshopQuotation);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+
       toast({
         title: 'Success',
         description: `Claim created successfully!`,
