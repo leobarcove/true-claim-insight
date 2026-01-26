@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Button, Progress } from '@/components/ui';
 import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -13,8 +13,16 @@ export function NewClaimPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+    message: string;
+  } | null>(null);
+
   const handleSuccess = async (data: any) => {
     setIsSubmitting(true);
+    setUploadProgress({ current: 0, total: 100, message: 'Creating claim record...' });
+
     try {
       const user = useAuthStore.getState().user;
       const payload = {
@@ -49,90 +57,74 @@ export function NewClaimPage() {
       const response = await apiClient.post('/claims', payload);
       const claim = response.data.data;
 
-      // Handle document/photo uploads if any
+      // Prepare all document/photo upload tasks
+      const uploadTasks: { file: File; type: string; label: string }[] = [];
+
       if (data.photos && data.photos.length > 0) {
-        console.log(`Uploading ${data.photos.length} photos for claim ${claim.id}`);
-        for (const photo of data.photos) {
-          const formData = new FormData();
-          formData.append('type', 'DAMAGE_PHOTO'); // Append fields before files
-          formData.append('file', photo);
-          await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
+        data.photos.forEach((photo: File, index: number) => {
+          uploadTasks.push({
+            file: photo,
+            type: 'DAMAGE_PHOTO',
+            label: `Photo ${index + 1}`,
+          });
+        });
+      }
+
+      const otherDocs = [
+        { key: 'policyDocument', type: 'SIGNED_STATEMENT', label: 'Policy Document' },
+        { key: 'policeReportDocument', type: 'POLICE_REPORT', label: 'Police Report' },
+        { key: 'myKadFront', type: 'MYKAD_FRONT', label: 'MyKad Front' },
+        {
+          key: 'vehicleRegistrationCard',
+          type: 'VEHICLE_REG_CARD',
+          label: 'Vehicle Registration Card',
+        },
+        { key: 'workshopQuotation', type: 'REPAIR_QUOTATION', label: 'Workshop Quotation' },
+      ];
+
+      otherDocs.forEach(doc => {
+        if (data[doc.key]) {
+          uploadTasks.push({
+            file: data[doc.key],
+            type: doc.type,
+            label: doc.label,
           });
         }
-      }
+      });
 
-      // Upload Policy Document
-      if (data.policyDocument) {
-        console.log(`Uploading policy document for claim ${claim.id}`);
-        const formData = new FormData();
-        // Using SIGNED_STATEMENT as the closest match for Policy Document from available enums
-        formData.append('type', 'SIGNED_STATEMENT');
-        formData.append('file', data.policyDocument);
-        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-      }
+      if (uploadTasks.length > 0) {
+        console.log(`Starting parallel upload for ${uploadTasks.length} files`);
+        let completedCount = 0;
 
-      // Upload Police Report
-      if (data.policeReportDocument) {
-        console.log(`Uploading police report for claim ${claim.id}`);
-        const formData = new FormData();
-        formData.append('type', 'POLICE_REPORT');
-        formData.append('file', data.policeReportDocument);
-        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-      }
+        await Promise.all(
+          uploadTasks.map(async task => {
+            const formData = new FormData();
+            formData.append('type', task.type);
+            formData.append('file', task.file);
 
-      // Upload MyKad Front
-      if (data.myKadFront) {
-        console.log(`Uploading MyKad Front for claim ${claim.id}`);
-        const formData = new FormData();
-        formData.append('type', 'MYKAD_FRONT');
-        formData.append('file', data.myKadFront);
-        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-      }
-
-      // Upload Vehicle Registration Card
-      if (data.vehicleRegistrationCard) {
-        console.log(`Uploading vehicle registration card for claim ${claim.id}`);
-        const formData = new FormData();
-        formData.append('type', 'VEHICLE_REG_CARD');
-        formData.append('file', data.vehicleRegistrationCard);
-        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-      }
-
-      // Upload Workshop Quotation
-      if (data.workshopQuotation) {
-        console.log(`Uploading workshop quotation for claim ${claim.id}`);
-        const formData = new FormData();
-        formData.append('type', 'REPAIR_QUOTATION');
-        formData.append('file', data.workshopQuotation);
-        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+            try {
+              await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+                headers: {
+                  'Content-Type': 'multipart/form-data',
+                },
+              });
+              completedCount++;
+              setUploadProgress({
+                current: completedCount,
+                total: uploadTasks.length,
+                message: `Uploading ${task.label}... (${completedCount}/${uploadTasks.length})`,
+              });
+            } catch (err) {
+              console.error(`Failed to upload ${task.label}:`, err);
+              completedCount++;
+            }
+          })
+        );
       }
 
       toast({
         title: 'Success',
-        description: `Claim created successfully!`,
+        description: `Claim created successfully`,
       });
 
       navigate('/claims');
@@ -143,6 +135,7 @@ export function NewClaimPage() {
       alert(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
