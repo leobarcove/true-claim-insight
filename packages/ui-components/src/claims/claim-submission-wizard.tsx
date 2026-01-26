@@ -885,13 +885,14 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       }
     };
 
-    const [nric, policy, voc, police, photo1, photo2] = await Promise.all([
+    const [nric, policy, voc, police, photo1, photo2, quotation] = await Promise.all([
       fetchFile('nric.jpg', 'image/jpeg'),
       fetchFile('insurance_document.jpg', 'image/jpeg'),
       fetchFile('voc.jpg', 'image/jpeg'),
       fetchFile('police_report.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_1.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_2.jpg', 'image/jpeg'),
+      fetchFile('workshop_repair.jpg', 'image/jpeg'),
     ]);
 
     setFormData({
@@ -917,6 +918,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       policyDocument: policy,
       vehicleRegistrationCard: voc,
       policeReportDocument: police,
+      workshopQuotation: quotation,
       photos: [photo1, photo2].filter(Boolean) as File[],
     });
     setAiFilledFields(new Set());
@@ -938,7 +940,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   // Search Step 0 (Selection) is same as before but cleaner
   if (step === 0 && mode === 'AGENT') {
     return (
-      <div className="max-w-xl mx-auto space-y-8 py-4">
+      <div className="max-w-2xl mx-auto space-y-8 py-4">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-foreground">How would you like to start?</h2>
           <p className="text-muted-foreground">Choose how you want to input the claim details</p>
@@ -1115,7 +1117,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
   }
 
   return (
-    <div className="max-w-xl mx-auto bg-card rounded-2xl shadow-sm border border-border flex flex-col min-h-[600px]">
+    <div className="max-w-2xl mx-auto bg-card rounded-2xl shadow-sm border border-border flex flex-col min-h-[600px]">
       {/* Progress Header */}
       <div className="bg-card px-6 py-4 border-b border-border">
         <div className="flex justify-between items-center relative">
@@ -1178,16 +1180,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             </div>
 
             <div className="space-y-4">
-              <Input
-                label="Full Name (as per MyKad)"
-                placeholder="e.g. Kumar Claimant"
-                value={formData.claimantId}
-                error={errors.claimantId}
-                aiFilled={aiFilledFields.has('claimantId')}
-                onChange={(e: any) => setFormData({ ...formData, claimantId: e.target.value })}
-                onBlur={() => handleBlur('claimantId')}
-              />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Full Name (as per MyKad)"
+                  placeholder="e.g. Kumar Claimant"
+                  value={formData.claimantId}
+                  error={errors.claimantId}
+                  aiFilled={aiFilledFields.has('claimantId')}
+                  onChange={(e: any) => setFormData({ ...formData, claimantId: e.target.value })}
+                  onBlur={() => handleBlur('claimantId')}
+                />
                 <Input
                   label="NRIC Number"
                   placeholder="e.g. 880101-14-1234"
@@ -1197,6 +1199,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   onChange={(e: any) => setFormData({ ...formData, nric: e.target.value })}
                   onBlur={() => handleBlur('nric')}
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Mobile Number"
                   placeholder="e.g.+60123456789"
@@ -1206,10 +1211,21 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   onChange={(e: any) => setFormData({ ...formData, mobileNumber: e.target.value })}
                   onBlur={() => handleBlur('mobileNumber')}
                 />
+                <Input
+                  label="Policy Number"
+                  placeholder="e.g. POL-2025-001234"
+                  value={formData.policyNumber}
+                  error={errors.policyNumber}
+                  onChange={(e: any) => setFormData({ ...formData, policyNumber: e.target.value })}
+                  onBlur={() => handleBlur('policyNumber')}
+                />
               </div>
 
-              {/* MyKad Upload - Mandatory */}
-              <div className="space-y-1.5">
+              {/* Document Uploads */}
+              <div
+                className="space-y-1.5 pt-4 border-t border-border"
+                style={{ marginTop: '1.5rem' }}
+              >
                 <label className="text-sm font-medium text-foreground">
                   MyKad (Front) <span className="text-destructive">*</span>
                 </label>
@@ -1269,79 +1285,67 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 )}
               </div>
 
-              <div
-                className="space-y-4 border-t border-border pt-6"
-                style={{ marginTop: '1.5rem' }}
-              >
-                <Input
-                  label="Policy Number"
-                  placeholder="e.g. POL-2025-001234"
-                  value={formData.policyNumber}
-                  error={errors.policyNumber}
-                  onChange={(e: any) => setFormData({ ...formData, policyNumber: e.target.value })}
-                  onBlur={() => handleBlur('policyNumber')}
-                />
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
-                    Policy Document <span className="text-destructive">*</span>
-                  </label>
-                  <div
-                    className={cn(
-                      'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
-                      formData.policyDocument ? 'border-primary/50 bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
-                        <FileText size={18} />
-                      </div>
-                      {formData.policyDocument ? (
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {formData.policyDocument.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {(formData.policyDocument.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          <p>Upload Policy PDF / Image</p>
-                        </div>
-                      )}
+              {/* Policy Document Upload */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  Policy Document <span className="text-destructive">*</span>
+                </label>
+                <div
+                  className={cn(
+                    'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                    formData.policyDocument ? 'border-primary/50 bg-primary/5' : 'border-border'
+                  )}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                      <FileText size={18} />
                     </div>
                     {formData.policyDocument ? (
-                      <button
-                        onClick={() => removeDocument('policyDocument')}
-                        className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {formData.policyDocument.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(formData.policyDocument.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
                     ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
-                        onClick={() => policyDocInputRef.current?.click()}
-                      >
-                        Browse
-                      </Button>
+                      <div className="text-sm text-muted-foreground">
+                        <p>Upload Policy PDF / Image</p>
+                      </div>
                     )}
-                    <input
-                      ref={policyDocInputRef}
-                      id="policy-doc-upload"
-                      type="file"
-                      accept=".pdf, image/*"
-                      className="hidden"
-                      onChange={e => handleDocumentUpload(e, 'policyDocument')}
-                    />
                   </div>
-                  {errors.policyDocument && (
-                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                      <AlertCircle size={10} /> {errors.policyDocument}
-                    </p>
+                  {formData.policyDocument ? (
+                    <button
+                      onClick={() => removeDocument('policyDocument')}
+                      className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                      onClick={() => policyDocInputRef.current?.click()}
+                    >
+                      Browse
+                    </Button>
                   )}
+                  <input
+                    ref={policyDocInputRef}
+                    id="policy-doc-upload"
+                    type="file"
+                    accept=".pdf, image/*"
+                    className="hidden"
+                    onChange={e => handleDocumentUpload(e, 'policyDocument')}
+                  />
                 </div>
+                {errors.policyDocument && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={10} /> {errors.policyDocument}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1515,45 +1519,13 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
               <h2 className="text-xl font-bold text-foreground">Incident</h2>
-              <p className="text-sm text-muted-foreground mt-1">When and where did it happen?</p>
+              <p className="text-sm text-muted-foreground mt-1">Where and when did it happen?</p>
             </div>
 
-            <div className="space-y-1.5">
-              <Select
-                label="Claim Type"
-                value={formData.claimType}
-                onChange={(e: any) => setFormData({ ...formData, claimType: e.target.value })}
-                options={Object.entries(CLAIM_TYPES).map(([key, label]) => ({
-                  value: key,
-                  label,
-                }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Date"
-                type="date"
-                value={formData.incidentDate}
-                error={errors.incidentDate}
-                aiFilled={aiFilledFields.has('incidentDate')}
-                onChange={(e: any) => setFormData({ ...formData, incidentDate: e.target.value })}
-                onBlur={() => handleBlur('incidentDate')}
-              />
-              <Input
-                label="Time"
-                type="time"
-                value={formData.incidentTime}
-                error={errors.incidentTime}
-                aiFilled={aiFilledFields.has('incidentTime')}
-                onChange={(e: any) => setFormData({ ...formData, incidentTime: e.target.value })}
-                onBlur={() => handleBlur('incidentTime')}
-              />
-            </div>
-
-            <div className="space-y-1 border-t border-border pt-6" style={{ marginTop: '1.5rem' }}>
+            <div className="space-y-1">
               <div className="flex items-center gap-2 mb-1.5">
                 <label className="text-sm font-medium text-foreground">Location</label>
-                <div className="group relative flex items-center">
+                <div className="group relative flex items-center mt-1">
                   <AlertCircle
                     size={14}
                     className="text-muted-foreground/70 hover:text-primary cursor-help transition-colors"
@@ -1606,7 +1578,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               {/* Google Maps Integration (Embed) */}
               <div
                 className="aspect-video bg-muted rounded-xl overflow-hidden border border-border shadow-inner relative tci-map-container mt-4"
-                style={{ width: '100%', height: '170px' }}
+                style={{ width: '100%', height: '180px' }}
               >
                 {formData.address ? (
                   <>
@@ -1638,6 +1610,39 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 )}
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Select
+                label="Claim Type"
+                value={formData.claimType}
+                onChange={(e: any) => setFormData({ ...formData, claimType: e.target.value })}
+                options={Object.entries(CLAIM_TYPES).map(([key, label]) => ({
+                  value: key,
+                  label,
+                }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Date"
+                type="date"
+                value={formData.incidentDate}
+                error={errors.incidentDate}
+                aiFilled={aiFilledFields.has('incidentDate')}
+                onChange={(e: any) => setFormData({ ...formData, incidentDate: e.target.value })}
+                onBlur={() => handleBlur('incidentDate')}
+              />
+              <Input
+                label="Time"
+                type="time"
+                value={formData.incidentTime}
+                error={errors.incidentTime}
+                aiFilled={aiFilledFields.has('incidentTime')}
+                onChange={(e: any) => setFormData({ ...formData, incidentTime: e.target.value })}
+                onBlur={() => handleBlur('incidentTime')}
+              />
+            </div>
           </div>
         )}
 
@@ -1662,7 +1667,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </div>
               <textarea
                 className={cn(
-                  'w-full px-3 py-2 rounded-lg border outline-none h-28 resize-none transition-all text-sm bg-background text-foreground placeholder:text-muted-foreground',
+                  'w-full px-3 py-2 rounded-lg border outline-none h-24 resize-none transition-all text-sm bg-background text-foreground placeholder:text-muted-foreground',
                   aiFilledFields.has('description')
                     ? 'border-amber-500/50 bg-amber-500/5 focus:ring-amber-500'
                     : 'border-input focus:ring-2 focus:ring-ring focus:border-primary',
@@ -1680,13 +1685,77 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               )}
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Report Number"
+                placeholder="e.g. IPDKL/10234/2025"
+                value={formData.policeReportNumber}
+                aiFilled={aiFilledFields.has('policeReportNumber')}
+                onChange={(e: any) =>
+                  setFormData({ ...formData, policeReportNumber: e.target.value.toUpperCase() })
+                }
+                onBlur={() => handleBlur('policeReportNumber')}
+              />
+              <Input
+                label="Date"
+                type="date"
+                value={formData.policeReportDate}
+                aiFilled={aiFilledFields.has('policeReportDate')}
+                onChange={(e: any) =>
+                  setFormData({ ...formData, policeReportDate: e.target.value })
+                }
+                onBlur={() => handleBlur('policeReportDate')}
+              />
+            </div>
+            <div className="relative" ref={policeStationContainerRef}>
+              <Input
+                label="Station"
+                placeholder="e.g. Balai Polis Jalan Tun Razak"
+                value={formData.policeStation}
+                aiFilled={aiFilledFields.has('policeStation')}
+                onChange={(e: any) => {
+                  const val = e.target.value;
+                  setFormData({ ...formData, policeStation: val });
+                  if (val.length > 2) {
+                    setPoliceStationShowSuggestions(true);
+                    handlePoliceStationSearch(val);
+                  } else {
+                    setPoliceStationShowSuggestions(false);
+                  }
+                }}
+                onFocus={() => {
+                  if (formData.policeStation && formData.policeStation.length > 2) {
+                    setPoliceStationShowSuggestions(true);
+                  }
+                }}
+                onBlur={() => handleBlur('policeStation')}
+              />
+              {policeStationShowSuggestions && policeStationSuggestions.length > 0 && (
+                <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  {policeStationSuggestions.map(addr => (
+                    <button
+                      key={addr}
+                      className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
+                      onClick={() => {
+                        setFormData({ ...formData, policeStation: addr });
+                        setPoliceStationShowSuggestions(false);
+                      }}
+                    >
+                      <MapPin size={14} className="text-muted-foreground/80 shrink-0" />
+                      <span className="truncate">{addr}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-4 border-t border-border pt-4">
-              <h3 className="text-md font-bold text-foreground">
+              <label className="text-sm font-medium text-foreground">
                 Police Report <span className="text-destructive">*</span>
-              </h3>
+              </label>
 
               {/* Police Report Document Upload */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" style={{ marginTop: 6 }}>
                 <div
                   className={cn(
                     'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
@@ -1746,70 +1815,6 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   </p>
                 )}
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Report Number"
-                  placeholder="e.g. IPDKL/10234/2025"
-                  value={formData.policeReportNumber}
-                  aiFilled={aiFilledFields.has('policeReportNumber')}
-                  onChange={(e: any) =>
-                    setFormData({ ...formData, policeReportNumber: e.target.value.toUpperCase() })
-                  }
-                  onBlur={() => handleBlur('policeReportNumber')}
-                />
-                <Input
-                  label="Date"
-                  type="date"
-                  value={formData.policeReportDate}
-                  aiFilled={aiFilledFields.has('policeReportDate')}
-                  onChange={(e: any) =>
-                    setFormData({ ...formData, policeReportDate: e.target.value })
-                  }
-                  onBlur={() => handleBlur('policeReportDate')}
-                />
-              </div>
-              <div className="relative" ref={policeStationContainerRef}>
-                <Input
-                  label="Station"
-                  placeholder="e.g. Balai Polis Jalan Tun Razak"
-                  value={formData.policeStation}
-                  aiFilled={aiFilledFields.has('policeStation')}
-                  onChange={(e: any) => {
-                    const val = e.target.value;
-                    setFormData({ ...formData, policeStation: val });
-                    if (val.length > 2) {
-                      setPoliceStationShowSuggestions(true);
-                      handlePoliceStationSearch(val);
-                    } else {
-                      setPoliceStationShowSuggestions(false);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (formData.policeStation && formData.policeStation.length > 2) {
-                      setPoliceStationShowSuggestions(true);
-                    }
-                  }}
-                  onBlur={() => handleBlur('policeStation')}
-                />
-                {policeStationShowSuggestions && policeStationSuggestions.length > 0 && (
-                  <div className="absolute z-20 w-full bg-background mt-1 border border-border/50 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                    {policeStationSuggestions.map(addr => (
-                      <button
-                        key={addr}
-                        className="w-full text-left px-4 py-3 hover:bg-primary/10 text-sm flex items-center gap-3 transition-colors border-b border-border last:border-0"
-                        onClick={() => {
-                          setFormData({ ...formData, policeStation: addr });
-                          setPoliceStationShowSuggestions(false);
-                        }}
-                      >
-                        <MapPin size={14} className="text-muted-foreground/80 shrink-0" />
-                        <span className="truncate">{addr}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
@@ -1827,7 +1832,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
             {/* Upload Area */}
             <div
               className={cn(
-                'border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer group',
+                'border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group',
                 isDragging
                   ? 'border-primary bg-primary/10'
                   : 'border-border bg-muted/30 hover:border-primary hover:bg-primary/5',
@@ -2028,7 +2033,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
 
             <div className="space-y-4 bg-muted/40 p-4 rounded-2xl border border-border">
               <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                <span className="text-sm text-muted-foreground">Claimant</span>
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  Claimant
+                  {(formData.myKadFront || formData.policyDocument) && (
+                    <FileText size={14} className="text-primary/80" />
+                  )}
+                </span>
                 <div className="text-right">
                   <p className="text-sm font-bold text-foreground">
                     {formData.claimantId || 'Self'}
@@ -2036,14 +2046,16 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   <p className="text-xs text-muted-foreground">{formData.nric}</p>
                   <p className="text-[10px] text-muted-foreground">
                     Policy: {formData.policyNumber}
-                    <div className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
-                      <Check size={10} /> MYKAD {formData.myKadFront ? 'UPLOADED' : 'MISSING'}
-                    </div>
                   </p>
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                <span className="text-sm text-muted-foreground">Vehicle</span>
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  Vehicle
+                  {formData.vehicleRegistrationCard && (
+                    <FileText size={14} className="text-primary/80" />
+                  )}
+                </span>
                 <div className="text-right">
                   <p className="text-sm font-bold text-foreground">{formData.vehiclePlate}</p>
                   <p className="text-xs text-muted-foreground">
@@ -2057,32 +2069,26 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                       Chassis: {formData.chassisNo}
                     </p>
                   )}
-                  <div className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
-                    <Check size={10} /> REG. CARD{' '}
-                    {formData.vehicleRegistrationCard ? 'UPLOADED' : 'MISSING'}
-                  </div>
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                <span className="text-sm text-muted-foreground">Claim Type</span>
+                <span className="text-sm text-muted-foreground flex items-center gap-2">
+                  Claim Type
+                  {formData.workshopQuotation && <FileText size={14} className="text-primary/80" />}
+                </span>
                 <div className="text-right">
                   <p className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-md">
                     {CLAIM_TYPES[formData.claimType]}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground mt-1">
                     <span
                       className="flex items-center gap-1"
-                      style={{ justifyContent: 'flex-end', marginRight: 8, marginTop: 4 }}
+                      style={{ justifyContent: 'flex-end', marginRight: 0 }}
                     >
                       <ImageIcon size={14} className="text-muted-foreground" />
                       {formData.photos.length} evidence{formData.photos.length === 1 ? '' : 's'}
                     </span>
-                    {formData.workshopQuotation && (
-                      <span className="flex items-center gap-1 justify-end mt-1 text-[10px] text-green-600 font-bold">
-                        <Check size={10} /> WORKSHOP QUOTATION
-                      </span>
-                    )}
-                  </p>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
@@ -2098,7 +2104,12 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               </div>
               {formData.policeReportNumber && (
                 <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                  <span className="text-sm text-muted-foreground">Police Report</span>
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    Police Report
+                    {formData.policeReportDocument && (
+                      <FileText size={14} className="text-primary/80" />
+                    )}
+                  </span>
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground max-w-[220px]">
                       {formData.policeReportNumber}
@@ -2131,7 +2142,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
           </Button>
 
           <div className="flex gap-3">
-            {step < 5 && (
+            {step < 6 && (
               <Button
                 variant="outline"
                 className="group border-amber-200/60 hover:bg-amber-50 hidden sm:flex"
