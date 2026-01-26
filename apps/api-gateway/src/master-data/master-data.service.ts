@@ -20,6 +20,15 @@ export class MasterDataService {
     });
   }
 
+  async getVehicleStructure() {
+    const makes = await this.findAllMakes();
+    const structure: Record<string, string[]> = {};
+    makes.forEach(make => {
+      structure[make.name] = make.models.map(model => model.name);
+    });
+    return structure;
+  }
+
   async findModelsByMake(makeId: string) {
     return this.prisma.vehicleModel.findMany({
       where: { makeId },

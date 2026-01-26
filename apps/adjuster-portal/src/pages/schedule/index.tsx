@@ -279,7 +279,7 @@ export function SchedulePage() {
           <>
             {/* Calendar Skeleton */}
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex items-center justify-between mb-4 bg-muted/30 rounded-xl">
+              <div className="flex items-center justify-between mb-4 rounded-xl">
                 <div className="flex items-center gap-2">
                   <Skeleton className="h-9 w-[200px] rounded-lg" />
                 </div>
@@ -300,7 +300,7 @@ export function SchedulePage() {
           <>
             {/* Calendar */}
             <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex items-center justify-between mb-4 bg-muted/30 rounded-xl">
+              <div className="flex items-center justify-between mb-4 rounded-xl">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center bg-card rounded-lg border shadow-sm h-9">
                     <Button

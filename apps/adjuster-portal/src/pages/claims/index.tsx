@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InfoTooltip } from '@/components/ui/tooltip';
 import { convertToTitleCase, formatDate } from '@/lib/utils';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -162,22 +163,36 @@ export function ClaimsListPage() {
 
           {/* View Toggle */}
           <div className="flex items-center bg-muted/50 rounded-lg p-1 mb-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 rounded-md ${viewMode === 'table' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => setViewMode('table')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 rounded-md ${viewMode === 'card' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => setViewMode('card')}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
+            <InfoTooltip
+              content="List"
+              direction="top"
+              fontSize="text-[11px]"
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-7 w-7 rounded-md ${viewMode === 'table' ? 'bg-background shadow-sm' : ''}`}
+                  onClick={() => setViewMode('table')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <InfoTooltip
+              content="Grid"
+              direction="top"
+              fontSize="text-[11px]"
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-7 w-7 rounded-md ${viewMode === 'card' ? 'bg-background shadow-sm' : ''}`}
+                  onClick={() => setViewMode('card')}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+              }
+            />
           </div>
         </div>
 
@@ -297,10 +312,16 @@ export function ClaimsListPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center">
-                          <Button size="icon" variant="ghost" className="h-8 w-8">
-                            {/* <MoreHorizontal className="h-4 w-4" /> */}
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <InfoTooltip
+                            content="View"
+                            direction="top"
+                            fontSize="text-[11px]"
+                            trigger={
+                              <Button size="icon" variant="ghost" className="h-8 w-8">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
                         </div>
                       </TableCell>
                     </TableRow>

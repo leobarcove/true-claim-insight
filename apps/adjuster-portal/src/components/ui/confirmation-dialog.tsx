@@ -55,7 +55,7 @@ export function ConfirmationDialog({
             variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
-            className="flex-1 rounded-xl hover:bg-accent"
+            className="flex-1 rounded-xl hover:bg-accent border border-input"
           >
             {cancelText}
           </Button>
