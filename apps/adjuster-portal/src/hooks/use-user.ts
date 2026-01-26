@@ -42,3 +42,20 @@ export function useUpdatePassword() {
     },
   });
 }
+
+export function useDeleteAccount() {
+  const { logout } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.delete<ApiResponse<void>>('/auth/account');
+      return data.data;
+    },
+    onSuccess: () => {
+      logout();
+      queryClient.clear();
+      window.location.href = '/login';
+    },
+  });
+}

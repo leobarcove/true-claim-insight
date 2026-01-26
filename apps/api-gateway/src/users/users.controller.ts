@@ -1,19 +1,5 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  UseGuards,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { Controller, Get, Patch, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -34,13 +20,9 @@ export class UsersController {
   @ApiOperation({ summary: 'Get all users (admin only)' })
   @ApiResponse({ status: 200, description: 'List of users' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async findAll(
-    @CurrentUser() user: Express.User,
-    @Query('tenantId') tenantId?: string,
-  ) {
+  async findAll(@CurrentUser() user: Express.User, @Query('tenantId') tenantId?: string) {
     // FIRM_ADMIN can only see users in their tenant
-    const effectiveTenantId =
-      user.role === 'FIRM_ADMIN' ? user.tenantId : tenantId;
+    const effectiveTenantId = user.role === 'FIRM_ADMIN' ? user.tenantId : tenantId;
 
     return this.usersService.findAll(effectiveTenantId);
   }
@@ -49,19 +31,27 @@ export class UsersController {
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User found' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: Express.User,
-  ) {
+  async findOne(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
+    let user;
     // Users can only view their own profile unless admin
-    if (
-      currentUser.id !== id &&
-      !['FIRM_ADMIN', 'INSURER_STAFF'].includes(currentUser.role)
-    ) {
-      return this.usersService.findById(currentUser.id);
+    if (currentUser.id !== id && !['FIRM_ADMIN', 'INSURER_STAFF'].includes(currentUser.role)) {
+      user = await this.usersService.findById(currentUser.id);
+    } else {
+      user = await this.usersService.findById(id);
     }
 
-    return this.usersService.findById(id);
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      tenantId: user.tenantId,
+      tenantName: user.tenant?.name,
+      licenseNumber: user.licenseNumber || user.adjuster?.licenseNumber,
+    };
   }
 
   @Patch(':id')
@@ -71,17 +61,26 @@ export class UsersController {
   async update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
-    @CurrentUser() currentUser: Express.User,
+    @CurrentUser() currentUser: Express.User
   ) {
+    let updatedUser;
     // Users can only update their own profile unless admin
-    if (
-      currentUser.id !== id &&
-      !['FIRM_ADMIN', 'INSURER_STAFF'].includes(currentUser.role)
-    ) {
-      return this.usersService.update(currentUser.id, updateUserDto);
+    if (currentUser.id !== id && !['FIRM_ADMIN', 'INSURER_STAFF'].includes(currentUser.role)) {
+      updatedUser = await this.usersService.update(currentUser.id, updateUserDto);
+    } else {
+      updatedUser = await this.usersService.update(id, updateUserDto);
     }
 
-    return this.usersService.update(id, updateUserDto);
+    return {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      fullName: updatedUser.fullName,
+      phoneNumber: updatedUser.phoneNumber,
+      role: updatedUser.role,
+      tenantId: updatedUser.tenantId,
+      tenantName: updatedUser.tenant?.name,
+      licenseNumber: updatedUser.licenseNumber || updatedUser.adjuster?.licenseNumber,
+    };
   }
 
   @Delete(':id')
