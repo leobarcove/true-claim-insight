@@ -33,6 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { InfoTooltip } from '@/components/ui/tooltip';
 
 export function VehicleMakePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -243,23 +244,37 @@ export function VehicleMakePage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-foreground hover:bg-accent"
-                            onClick={() => handleEditClick(make)}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive hover:bg-accent"
-                            onClick={() => handleDeleteClick(make.id)}
-                            disabled={deleteMakeMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <InfoTooltip
+                            content="Edit"
+                            direction="top"
+                            fontSize="text-[11px]"
+                            trigger={
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-foreground hover:bg-accent"
+                                onClick={() => handleEditClick(make)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            }
+                          />
+                          <InfoTooltip
+                            content="Delete"
+                            direction="top"
+                            fontSize="text-[11px]"
+                            trigger={
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-foreground hover:bg-accent"
+                                onClick={() => handleDeleteClick(make.id)}
+                                disabled={deleteMakeMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -360,7 +375,7 @@ function EditMakeDialog({
           </Button>
           <Button onClick={onSave} disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

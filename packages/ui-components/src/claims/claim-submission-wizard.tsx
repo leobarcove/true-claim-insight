@@ -27,104 +27,6 @@ function cn(...inputs: ClassValue[]) {
 
 // ================= CONSTANTS & DATA =================
 
-const MALAYSIA_CARS: Record<string, string[]> = {
-  Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa', 'Traz'],
-  Proton: ['Saga', 'Persona', 'Iriz', 'Exora', 'X50', 'X70', 'X90', 'S70', 'e.MAS 7'],
-  Honda: ['City', 'Civic', 'HR-V', 'CR-V', 'Jazz', 'City Hatchback', 'WR-V', 'Accord'],
-  Toyota: [
-    'Vios',
-    'Yaris',
-    'Corolla Cross',
-    'Hilux',
-    'Veloz',
-    'Camry',
-    'Innova',
-    'Fortuner',
-    'Alphard',
-    'Vellfire',
-  ],
-  Mazda: ['2', '3', '6', 'CX-3', 'CX-30', 'CX-5', 'CX-60', 'CX-8', 'CX-90', 'BT-50', 'MX-5'],
-  Nissan: ['Almera', 'Serena', 'X-Trail', 'Navara', 'Kicks e-Power', 'Leaf'],
-  BMW: [
-    '1 Series',
-    '2 Series',
-    '3 Series',
-    '5 Series',
-    '7 Series',
-    'X1',
-    'X3',
-    'X5',
-    'X7',
-    'iX1',
-    'iX3',
-    'iX',
-    'i4',
-    'i5',
-    'i7',
-  ],
-  'Mercedes-Benz': [
-    'A-Class',
-    'C-Class',
-    'E-Class',
-    'S-Class',
-    'GLA',
-    'GLB',
-    'GLC',
-    'GLE',
-    'GLS',
-    'EQA',
-    'EQB',
-    'EQE',
-    'EQS',
-  ],
-  BYD: ['Atto 3', 'Dolphin', 'Seal', 'Seal U DM-i', 'Sealion 6', 'M6'],
-  Tesla: ['Model 3', 'Model Y', 'Model S', 'Model X'],
-  Kia: ['Picanto', 'Seltos', 'Sportage', 'Sorento', 'Carnival', 'EV6', 'EV9'],
-  Hyundai: ['Stargazer', 'Creta', 'Tucson', 'Santa Fe', 'Staria', 'Ioniq 5', 'Ioniq 6'],
-  Chery: ['Omoda 5', 'Omoda E5', 'Tiggo 7 Pro', 'Tiggo 8 Pro'],
-  ORA: ['Good Cat', 'Good Cat GT'],
-  Audi: ['A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8', 'e-tron', 'Q4 e-tron'],
-  Volkswagen: ['Polo', 'Vento', 'Passat', 'Tiguan', 'ID.4'],
-  Mitsubishi: ['Attrage', 'ASX', 'Outlander', 'Triton', 'Xpander'],
-  Subaru: ['XV', 'Forester', 'Outback', 'WRX', 'BRZ'],
-  Peugeot: ['2008', '3008', '5008', 'e-2008'],
-  Renault: ['Captur', 'Koleos', 'Triber'],
-  MG: ['MG5', 'MG ZS', 'MG HS', 'MG4 EV', 'MG ZS EV', 'Cyberster'],
-  GWM: ['Ora Good Cat', 'Haval H6', 'Haval Jolion', 'Haval H6 HEV'],
-  Neta: ['V', 'X', 'S'],
-  Zeekr: ['X', '001', '009'],
-  Aion: ['Y Plus', 'ES', 'V'],
-  Lynk: ['01', '05', '06', '09'],
-  Smart: ['#1', '#3'],
-  Volvo: ['XC40', 'XC60', 'XC90', 'S60', 'S90', 'C40 Recharge', 'XC40 Recharge'],
-  Porsche: ['Macan', 'Cayenne', 'Panamera', 'Taycan', '911', '718'],
-  'Land Rover': [
-    'Defender',
-    'Discovery',
-    'Discovery Sport',
-    'Range Rover Evoque',
-    'Range Rover Velar',
-    'Range Rover Sport',
-    'Range Rover',
-  ],
-  Lexus: ['UX', 'NX', 'RX', 'ES', 'IS', 'LS', 'LM', 'UX 300e'],
-  Ferrari: [
-    'Roma',
-    'Portofino',
-    'F8 Tributo',
-    '296 GTB',
-    'SF90 Stradale',
-    '812 Superfast',
-    'Purosangue',
-  ],
-  Lamborghini: ['Huracán', 'Urus', 'Revuelto'],
-  'Rolls-Royce': ['Ghost', 'Phantom', 'Cullinan', 'Spectre'],
-  Bentley: ['Continental GT', 'Flying Spur', 'Bentayga'],
-  Maserati: ['Ghibli', 'Quattroporte', 'Levante', 'MC20', 'GranTurismo', 'Grecale'],
-  'Aston Martin': ['DB12', 'DBX', 'Vantage', 'DBS'],
-  McLaren: ['GT', 'Artura', '720S', '765LT', '750S'],
-};
-
 const CLAIM_TYPES: Record<string, string> = {
   OWN_DAMAGE: 'Own Damage',
   THIRD_PARTY_PROPERTY: 'Third Party Property Damage',
@@ -321,14 +223,13 @@ const AutocompleteInput = ({
   label,
   value,
   onChange,
-  suggestions,
+  suggestions = [],
   placeholder,
   error,
   aiFilled,
   onBlur,
 }: any) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [filtered, setFiltered] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -343,36 +244,29 @@ const AutocompleteInput = ({
   }, []);
 
   const handleInput = (e: any) => {
-    const val = e.target.value;
-    onChange(val);
-    if (val.length > 0) {
-      const matches = suggestions.filter((s: string) =>
-        s.toLowerCase().includes(val.toLowerCase())
-      );
-      setFiltered(matches);
-      setShowSuggestions(true);
-    } else {
-      setFiltered(suggestions);
-      setShowSuggestions(true);
-    }
+    onChange(e.target.value);
+    setShowSuggestions(true);
   };
 
   const handleFocus = () => {
-    if (!value) {
-      setFiltered(suggestions);
-      setShowSuggestions(true);
-    } else {
-      handleInput({ target: { value } });
-    }
+    setShowSuggestions(true);
   };
 
   const handleSelect = (val: string) => {
     onChange(val);
     setShowSuggestions(false);
-    if (inputRef.current) {
-      inputRef.current.blur();
-    }
+    // Increased timeout slightly to ensure state propagation before blur validation
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.blur();
+      }
+    }, 50);
   };
+
+  // Compute filtered suggestions during render to stay in sync with props
+  const filtered = suggestions.filter((s: string) =>
+    s.toLowerCase().includes((value || '').toLowerCase())
+  );
 
   return (
     <div className="relative" ref={containerRef}>
@@ -388,12 +282,15 @@ const AutocompleteInput = ({
         inputRef={inputRef}
       />
       {showSuggestions && filtered.length > 0 && (
-        <div className="absolute z-20 w-full bg-popover mt-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {filtered.map(item => (
+        <div className="absolute z-50 w-full bg-popover mt-1 border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map((item: string) => (
             <div
               key={item}
               className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm text-foreground"
-              onClick={() => handleSelect(item)}
+              onMouseDown={e => {
+                e.preventDefault();
+                handleSelect(item);
+              }}
             >
               {item}
             </div>
@@ -414,12 +311,59 @@ interface ClaimSubmissionWizardProps {
   onCancel?: () => void;
 }
 
+// Module-level cache to persist data across component remounts and prevent redundant fetches
+let vehicleDataCache: Record<string, string[]> | null = null;
+let vehicleDataPromise: Promise<Record<string, string[]>> | null = null;
+
 export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmissionWizardProps) {
   // Step 0 is the Selection Screen (AI vs Manual)
   const [step, setStep] = useState(() => {
     const initialStep = mode === 'AGENT' ? 0 : 2;
     return initialStep;
   });
+
+  // Initialize from cache if available to prevent flickering
+  const [vehicleData, setVehicleData] = useState<Record<string, string[]>>(vehicleDataCache || {});
+
+  useEffect(() => {
+    // If we already have the data, no need to fetch again
+    if (vehicleDataCache) {
+      if (Object.keys(vehicleData).length === 0) {
+        setVehicleData(vehicleDataCache);
+      }
+      return;
+    }
+
+    const fetchVehicleData = async () => {
+      // If a fetch is already in progress, wait for it
+      if (vehicleDataPromise) {
+        const data = await vehicleDataPromise;
+        setVehicleData(data);
+        return;
+      }
+
+      // Start new fetch
+      vehicleDataPromise = (async () => {
+        try {
+          const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api/v1';
+          const res = await fetch(`${baseUrl}/master-data/vehicles/structure`);
+          if (res.ok) {
+            const { data } = await res.json();
+            vehicleDataCache = data;
+            return data;
+          }
+        } catch (e) {
+          console.error('Failed to fetch vehicle data', e);
+        }
+        return {};
+      })();
+
+      const result = await vehicleDataPromise;
+      setVehicleData(result);
+    };
+
+    fetchVehicleData();
+  }, []);
 
   // Document input refs
   const policyDocInputRef = useRef<HTMLInputElement>(null);
@@ -1318,7 +1262,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Make"
                 placeholder="Select Make"
                 value={formData.vehicleMake}
-                suggestions={Object.keys(MALAYSIA_CARS)}
+                suggestions={Object.keys(vehicleData)}
                 error={errors.vehicleMake}
                 aiFilled={aiFilledFields.has('vehicleMake')}
                 onChange={(val: string) => {
@@ -1337,7 +1281,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 label="Model"
                 placeholder="Select Model"
                 value={formData.vehicleModel}
-                suggestions={MALAYSIA_CARS[formData.vehicleMake] || []}
+                suggestions={vehicleData[formData.vehicleMake] || []}
                 error={errors.vehicleModel}
                 aiFilled={aiFilledFields.has('vehicleModel')}
                 onChange={(val: string) => {

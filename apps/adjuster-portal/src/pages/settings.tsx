@@ -5,7 +5,6 @@ import {
   Bell,
   Lock,
   Globe,
-  Save,
   Mail,
   Phone,
   Shield,
@@ -184,10 +183,7 @@ export function SettingsPage() {
                               Saving...
                             </>
                           ) : (
-                            <>
-                              Save Changes
-                              <Save className="ml-2 h-4 w-4" />
-                            </>
+                            <>Save</>
                           )}
                         </Button>
                       </div>
