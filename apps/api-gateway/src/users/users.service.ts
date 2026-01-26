@@ -49,6 +49,7 @@ export class UsersService {
       where: { email },
       include: {
         tenant: true,
+        adjuster: true,
       },
     });
   }
@@ -122,6 +123,13 @@ export class UsersService {
         tenant: true,
         adjuster: true,
       },
+    });
+  }
+
+  async updatePassword(id: string, password: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { password },
     });
   }
 

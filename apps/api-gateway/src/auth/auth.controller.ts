@@ -9,6 +9,7 @@ import {
   Res,
   Req,
   UnauthorizedException,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
@@ -18,8 +19,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { ClaimantsService } from '../claimants/claimants.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
+import { RegisterDto, LoginDto, ChangePasswordDto } from './dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -119,9 +119,40 @@ export class AuthController {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      phoneNumber: user.phoneNumber,
+      licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
       tenantId: user.tenantId,
       tenantName: user.tenant?.name,
     };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Change user password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid current password' })
+  async changePassword(@CurrentUser() user: Express.User, @Body() dto: ChangePasswordDto) {
+    await this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
+    return { message: 'Password changed successfully' };
+  }
+
+  @Delete('account')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Delete current user account' })
+  @ApiResponse({ status: 200, description: 'Account deleted successfully' })
+  async deleteAccount(
+    @CurrentUser() user: Express.User,
+    @Res({ passthrough: true }) response: FastifyReply
+  ) {
+    await this.authService.deleteAccount(user.id);
+    response.clearCookie('refreshToken', {
+      path: '/api/v1/auth/refresh',
+    });
+    return { message: 'Account deleted successfully' };
   }
 
   // ============ CLAIMANT OTP AUTHENTICATION ============

@@ -16,6 +16,7 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  phoneNumber: string;
   role: UserRole;
   tenantId: string;
   tenantName: string;
@@ -34,7 +35,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    set => ({
       user: null,
       accessToken: null,
       isAuthenticated: false,
@@ -46,8 +47,8 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
         }),
 
-      updateUser: (updates) =>
-        set((state) => ({
+      updateUser: updates =>
+        set(state => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
@@ -60,7 +61,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'tci-auth',
-      partialize: (state) => ({
+      partialize: state => ({
         user: state.user,
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
