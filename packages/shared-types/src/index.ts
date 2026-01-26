@@ -86,6 +86,9 @@ export enum DocumentType {
   DRIVING_LICENCE = 'DRIVING_LICENCE',
   ASSESSMENT_REPORT = 'ASSESSMENT_REPORT',
   SIGNED_STATEMENT = 'SIGNED_STATEMENT',
+  MYKAD_FRONT = 'MYKAD_FRONT',
+  VEHICLE_REG_CARD = 'VEHICLE_REG_CARD',
+  REPAIR_QUOTATION = 'REPAIR_QUOTATION',
 }
 
 export enum ActorType {
@@ -317,9 +320,7 @@ export interface RiskAssessmentResponse {
       flaggedQuestions: number;
     };
     visualAnalysis: {
-      deepfakeDetected: boolean;
-      multiFaceDetected: boolean;
-      contentModeration: string;
+      deepfakeDetected: boolean; multiFaceDetected: boolean; contentModeration: string;
     };
     attentionTracking: {
       averageAttentionScore: number;

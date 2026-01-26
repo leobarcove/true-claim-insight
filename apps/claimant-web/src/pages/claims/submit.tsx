@@ -30,7 +30,37 @@ export function SubmitClaimPage() {
       };
 
       console.log('Submitting claim:', payload);
-      await apiClient.post('/claims', payload);
+      const response = await apiClient.post('/claims', payload);
+      const claim = response.data.data;
+
+      // Upload Photos
+      if (data.photos && data.photos.length > 0) {
+        for (const photo of data.photos) {
+          const formData = new FormData();
+          formData.append('type', 'DAMAGE_PHOTO');
+          formData.append('file', photo);
+          await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        }
+      }
+
+      // Helper to upload single document
+      const uploadDoc = async (file: File | null, type: string) => {
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('type', type);
+        formData.append('file', file);
+        await apiClient.post(`/claims/${claim.id}/documents/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      };
+
+      await uploadDoc(data.policyDocument, 'SIGNED_STATEMENT');
+      await uploadDoc(data.policeReportDocument, 'POLICE_REPORT');
+      await uploadDoc(data.myKadFront, 'MYKAD_FRONT');
+      await uploadDoc(data.vehicleRegistrationCard, 'VEHICLE_REG_CARD');
+      await uploadDoc(data.workshopQuotation, 'REPAIR_QUOTATION');
 
       navigate('/dashboard');
     } catch (error) {
