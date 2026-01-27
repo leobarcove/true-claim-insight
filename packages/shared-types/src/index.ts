@@ -202,6 +202,19 @@ export interface Claim {
   adjuster?: Adjuster;
   documents?: Document[];
   sessions?: Session[];
+  trinityChecks?: TrinityCheck[];
+}
+
+export interface TrinityCheck {
+  id: string;
+  claimId: string;
+  score: number;
+  status: 'PASS' | 'FAIL' | 'WARNING' | 'REVIEW_NEEDED';
+  summary?: string;
+  checkResults: Record<string, any>;
+  riskFactors: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Session {

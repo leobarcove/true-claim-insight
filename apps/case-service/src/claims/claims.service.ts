@@ -97,6 +97,13 @@ export class ClaimsService {
       };
     }
 
+    if (query.hasAnalysis) {
+      where.OR = [
+        { trinityChecks: { some: {} } },
+        { documents: { some: { analysis: { isNot: null } } } },
+      ];
+    }
+
     // Apply tenant isolation filter
     if (tenantContext) {
       where = this.tenantService.buildClaimTenantFilter(tenantContext, where);
@@ -117,9 +124,11 @@ export class ClaimsService {
 
       // Combine search with existing filters
       if (where.OR) {
-        // If tenant filter already has OR, wrap everything in AND
+        // If filter already has OR, wrap everything in AND
+        const { OR: existingOR, ...rest } = where;
         where = {
-          AND: [{ OR: where.OR }, { OR: searchConditions }],
+          ...rest,
+          AND: [...(rest.AND || []), { OR: existingOR }, { OR: searchConditions }],
         };
       } else {
         where.OR = searchConditions;

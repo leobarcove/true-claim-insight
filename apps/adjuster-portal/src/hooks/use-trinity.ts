@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
 
 // Types based on Risk Engine's expected output
@@ -65,5 +65,22 @@ export function useDocumentAnalysis(documentId: string) {
     },
     enabled: !!documentId,
     retry: 1,
+  });
+}
+
+export function useTriggerTrinityCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (claimId: string) => {
+      const { data } = await apiClient.post<ApiResponse<any>>(
+        `/claims/${claimId}/documents/trinity-check`
+      );
+      return data.data;
+    },
+    onSuccess: (_, claimId) => {
+      queryClient.invalidateQueries({ queryKey: trinityKeys.check(claimId) });
+      queryClient.invalidateQueries({ queryKey: ['claims', 'detail', claimId] });
+    },
   });
 }

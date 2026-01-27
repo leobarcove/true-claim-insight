@@ -211,4 +211,24 @@ export class RiskController {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
   }
+
+  @Get('claims/:claimId/trinity')
+  @ApiOperation({ summary: 'Get trinity check results for a claim' })
+  async getTrinityCheck(@Param('claimId') claimId: string) {
+    try {
+      return await this.riskService.getTrinityCheck(claimId);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('documents/:documentId/analysis')
+  @ApiOperation({ summary: 'Get analysis for a document' })
+  async getDocumentAnalysis(@Param('documentId') documentId: string) {
+    try {
+      return await this.riskService.getDocumentAnalysis(documentId);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
 }
