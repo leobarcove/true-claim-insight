@@ -14,8 +14,6 @@ export class GpuClientService {
   }
 
   async ocr(fileBuffer: Buffer, filename: string): Promise<any> {
-    // Need to use 'form-data' or similar if using axios, or just fetch with FormData
-    // Implementing using native fetch (Node 18+)
     const formData = new FormData();
     const blob = new Blob([fileBuffer]);
     formData.append('file', blob, filename);
@@ -25,12 +23,12 @@ export class GpuClientService {
   }
 
   async generateJson(prompt: string, model = 'qwen2.5:7b'): Promise<any> {
-    const body = {
-      prompt,
-      model,
-      format: 'json',
-    };
-    return this.postData('/v3/llm/generate', body);
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('model', model);
+    formData.append('format', 'json');
+
+    return this.post('/v3/llm/generate', formData);
   }
 
   async visionJson(
@@ -50,41 +48,26 @@ export class GpuClientService {
   }
 
   async reasoningJson(prompt: string, model = 'deepseek-r1:14b'): Promise<any> {
-    const body = {
-      prompt,
-      model,
-      stream: false,
-      options: { temperature: 0.3 }, // Low temp for analytical tasks
-    };
-    return this.postData('/v3/llm/generate', body);
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('model', model);
+    formData.append('stream', 'false');
+    formData.append('options', JSON.stringify({ temperature: 0.3 }));
+
+    return this.post('/v3/llm/generate', formData);
   }
 
   private async post(endpoint: string, body: FormData): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
-        body: body as any, // TypeScript might complain about FormData in fetch depending on lib config
+        body: body as any,
       });
       if (!response.ok) {
-        throw new Error(`GPU API Error: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      this.logger.error(`GPU Call Failed [${endpoint}]: ${error}`);
-      throw error;
-    }
-  }
-
-  private async postData(endpoint: string, data: any): Promise<any> {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
+        const errorBody = await response.text().catch(() => 'No error body');
+        this.logger.error(
+          `GPU API Error [${endpoint}] Status: ${response.status} Body: ${errorBody}`
+        );
         throw new Error(`GPU API Error: ${response.statusText}`);
       }
       return await response.json();

@@ -29,6 +29,7 @@ export function DocumentsListPage() {
     search: debouncedSearch,
     page,
     limit,
+    hasAnalysis: true,
   });
 
   const claims = response?.claims || [];
@@ -213,7 +214,21 @@ export function DocumentsListPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          <span className="text-muted-foreground text-sm">-</span>
+                          {item.trinityChecks?.[0] ? (
+                            <span
+                              className={`font-semibold ${
+                                item.trinityChecks[0].score > 70
+                                  ? 'text-destructive'
+                                  : item.trinityChecks[0].score > 30
+                                    ? 'text-warning'
+                                    : 'text-success'
+                              }`}
+                            >
+                              {item.trinityChecks[0].score}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -294,7 +309,19 @@ export function DocumentsListPage() {
                     <div className="pt-4 border-t space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Trinity Score</span>
-                        <span className="text-foreground">-</span>
+                        <span
+                          className={`font-semibold ${
+                            item.trinityChecks?.[0]
+                              ? item.trinityChecks[0].score > 70
+                                ? 'text-destructive'
+                                : item.trinityChecks[0].score > 30
+                                  ? 'text-warning'
+                                  : 'text-success'
+                              : 'text-foreground'
+                          }`}
+                        >
+                          {item.trinityChecks?.[0] ? `${item.trinityChecks[0].score}%` : '-'}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Created</span>

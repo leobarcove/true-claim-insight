@@ -29,7 +29,7 @@ export class DocumentsService {
       `claims/${claimId}`
     );
 
-    const signedUrl = await this.storageService.getSignedUrl(storagePath);
+    const signedUrl = await this.storageService.getSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
     // Create document record
     const document = await this.create(claimId, {
@@ -50,11 +50,43 @@ export class DocumentsService {
   }
 
   private async triggerRiskAnalysis(documentId: string) {
-    const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3005';
-    const url = `${riskEngineUrl}/risk/analyze/${documentId}`;
+    const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3004';
+    const url = `${riskEngineUrl}/api/v1/risk/analyze/${documentId}`;
     this.logger.log(`Triggering analysis at ${url}`);
 
     await firstValueFrom(this.httpService.post(url, {}));
+  }
+
+  /**
+   * Manually trigger analysis/trinity check for all docs in a claim
+   */
+  async triggerTrinityCheck(claimId: string) {
+    const docs = await this.prisma.document.findMany({
+      where: { claimId },
+    });
+
+    if (docs.length === 0) {
+      throw new NotFoundException('No documents found for this claim');
+    }
+
+    // Trigger analysis for each document
+    const results = await Promise.all(
+      docs.map(async doc => {
+        try {
+          await this.triggerRiskAnalysis(doc.id);
+          return { id: doc.id, status: 'triggered' };
+        } catch (err) {
+          this.logger.error(`Manual trigger failed for doc ${doc.id}: ${err}`);
+          return { id: doc.id, status: 'failed', error: (err as any).message };
+        }
+      })
+    );
+
+    return {
+      claimId,
+      totalProcessed: docs.length,
+      results,
+    };
   }
 
   /**

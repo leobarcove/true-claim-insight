@@ -60,13 +60,7 @@ export class DocumentProcessorService {
       if (isImage && doc.type === 'DAMAGE_PHOTO') {
         // Vision Path
         modelUsed = 'qwen2.5vl:7b';
-        const prompt = `Analyze this vehicle damage photo. Return JSON with:
-        - vehicle_detected: boolean
-        - plate_number_visible: string (if any)
-        - damage_severity: "Minor" | "Moderate" | "Severe"
-        - damage_location: list of parts (e.g. "Front Bumper")
-        - parts_to_replace: list of likely parts
-        `;
+        const prompt = this.getExtractionPrompt(doc.type as DocumentType);
         const resp = await this.gpu.visionJson(prompt, fileBuffer, doc.filename, modelUsed);
         visionData = resp.output || resp;
         resultData = visionData;
@@ -178,7 +172,7 @@ export class DocumentProcessorService {
     this.logger.log(`Trinity Check completed for Claim ${claimId}: ${report.status}`);
   }
 
-  private getExtractionPrompt(type: DocumentType, text: string): string {
+  private getExtractionPrompt(type: DocumentType, text?: string): string {
     const schemas = {
       NRIC: `
       Extract Malaysian NRIC details into this specific JSON structure:
@@ -250,16 +244,43 @@ export class DocumentProcessorService {
         ],
         "confidence_score": number (0-1)
       }`,
+      DAMAGE_PHOTO: `
+      Analyze this vehicle damage photo and extract insights into this specific JSON structure:
+      {
+        "vehicle_detected": boolean,
+        "plate_number_visible": "string (the license plate if visible, else null)",
+        "damage_severity": "Minor" | "Moderate" | "Severe",
+        "damage_location": ["string (e.g. Front Bumper, Left Headlight)"],
+        "parts_to_replace": ["string"],
+        "is_internal_damage_likely": boolean,
+        "confidence_score": number (0-1)
+      }`,
+      MYKAD_FRONT: `
+      Extract Malaysian MyKad (Front) details into this specific JSON structure:
+      {
+        "full_name": "string",
+        "id_number": "string (without hyphens)",
+        "address": "string",
+        "date_of_birth": "string (YYYY-MM-DD)",
+        "gender": "MALE" | "FEMALE",
+        "confidence_score": number (0-1)
+      }`,
     };
 
     const specificPrompt = (schemas as any)[type] || `Extract key information in JSON format.`;
 
-    return `You are a specialized data extraction AI.
+    let prompt = `You are a specialized data extraction AI.
     ${specificPrompt}
     
-    Ensure the output is valid JSON only. Do not wrap in markdown blocks.
+    Ensure the output is valid JSON only. Do not wrap in markdown blocks.`;
+
+    if (text) {
+      prompt += `
     
     DOCUMENT TEXT:
     ${text}`;
+    }
+
+    return prompt;
   }
 }

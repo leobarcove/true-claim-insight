@@ -95,6 +95,13 @@ export class DocumentsController {
     return this.documentsService.getDownloadUrl(claimId, id);
   }
 
+  @Post('trinity-check')
+  @ApiOperation({ summary: 'Trigger Trinity AI checks for all documents in a claim' })
+  @ApiParam({ name: 'claimId', description: 'Claim UUID' })
+  async triggerTrinityCheck(@Param('claimId', ParseUUIDPipe) claimId: string) {
+    return this.documentsService.triggerTrinityCheck(claimId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a document' })
