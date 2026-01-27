@@ -2,6 +2,9 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { StorageService } from '../common/services/storage.service';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class DocumentsService {
@@ -9,7 +12,9 @@ export class DocumentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -25,7 +30,9 @@ export class DocumentsService {
     );
 
     const signedUrl = await this.storageService.getSignedUrl(storagePath);
-    return this.create(claimId, {
+
+    // Create document record
+    const document = await this.create(claimId, {
       type: type as any,
       filename: file.filename,
       storageUrl: signedUrl,
@@ -33,6 +40,21 @@ export class DocumentsService {
       fileSize: buffer.length,
       metadata: { storagePath },
     });
+
+    // Trigger Risk Engine Analysis (Fire and forget)
+    this.triggerRiskAnalysis(document.id).catch(err =>
+      this.logger.error(`Failed to trigger risk analysis for ${document.id}`, err)
+    );
+
+    return document;
+  }
+
+  private async triggerRiskAnalysis(documentId: string) {
+    const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3005';
+    const url = `${riskEngineUrl}/risk/analyze/${documentId}`;
+    this.logger.log(`Triggering analysis at ${url}`);
+
+    await firstValueFrom(this.httpService.post(url, {}));
   }
 
   /**

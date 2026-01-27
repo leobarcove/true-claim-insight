@@ -19,7 +19,6 @@ import {
   ChevronRight,
   List,
   Grid,
-  MoreHorizontal,
   Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -92,8 +91,6 @@ export function VideoSessionsPage() {
       const response = await apiClient.get(
         `/video/rooms?page=${page}&limit=${limit}&search=${debouncedSearch}`
       );
-      // The API returns { success: true, data: { data: [], total, ... } }
-      // We want the inner data object
       return response.data?.data || response.data;
     },
   });
@@ -105,8 +102,6 @@ export function VideoSessionsPage() {
       const response = await apiClient.get(
         `/video/uploads?page=${page}&limit=${limit}&search=${debouncedSearch}`
       );
-      // The API returns { success: true, data: { data: [], total, ... } }
-      // We want the inner data object
       return response.data?.data || response.data;
     },
   });
@@ -289,19 +284,19 @@ export function VideoSessionsPage() {
                           <Skeleton className="h-4 w-32" />
                         </TableCell>
                         <TableCell className="text-center">
+                          <Skeleton className="h-4 w-20 rounded-full" />
+                        </TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-5 w-24 rounded-full" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-5 w-20 rounded-full" />
+                          <Skeleton className="h-5 w-24 rounded-full" />
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="space-y-1">
                             <Skeleton className="h-3 w-24" />
                             <Skeleton className="h-3 w-16" />
                           </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Skeleton className="h-3 w-16" />
                         </TableCell>
                         <TableCell className="text-center">
                           <Skeleton className="h-8 w-8 ml-auto" />
@@ -337,76 +332,95 @@ export function VideoSessionsPage() {
           ) : viewMode === 'table' ? (
             /* Table View */
             <div className="rounded-md border animate-in fade-in duration-300">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Claim Number</TableHead>
-                    <TableHead>Claimant</TableHead>
-                    <TableHead className="text-center">Duration</TableHead>
-                    <TableHead className="text-center">Type</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Created</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="bg-card">
-                  {filteredSessions.map(item => (
-                    <TableRow
-                      key={`${item.type}-${item.data.id}`}
-                      className="cursor-pointer hover:bg-accent/50"
-                      onClick={() => handleViewSession(item)}
-                    >
-                      <TableCell className="font-medium">{item.data.claim.claimNumber}</TableCell>
-                      <TableCell>{item.data.claim.claimant.fullName}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">
-                        {item.type === 'live' && item.data.durationSeconds ? (
-                          <span>
-                            {Math.floor(item.data.durationSeconds / 60)}m{' '}
-                            {item.data.durationSeconds % 60}s
-                          </span>
-                        ) : item.type === 'upload' && item.data.duration ? (
-                          <span>
-                            {Math.floor(item.data.duration / 60)}m{' '}
-                            {Math.floor(item.data.duration % 60)}s
-                          </span>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="text-xs">
-                          {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {getStatusBadge(item.data.status)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-col text-xs">
-                          <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(new Date(item.data.createdAt), 'hh:mm a')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center">
-                          <InfoTooltip
-                            content="View"
-                            direction="top"
-                            fontSize="text-[11px]"
-                            trigger={
-                              <Button size="icon" variant="ghost" className="h-8 w-8">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="bg-card rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-300">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-muted/50 border-b">
+                    <tr className="hover:bg-transparent">
+                      <th className="px-6 py-4 font-medium text-muted-foreground">Claim Number</th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground">Claimant</th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Duration
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Type
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Created
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {filteredSessions.map(item => (
+                      <tr
+                        key={`${item.type}-${item.data.id}`}
+                        className="hover:bg-muted/50 transition-colors"
+                      >
+                        <td className="px-6 py-4 font-medium">{item.data.claim.claimNumber}</td>
+                        <td className="px-6 py-4">{item.data.claim.claimant.fullName}</td>
+                        <td className="px-6 py-4 text-center text-xs text-muted-foreground">
+                          {item.type === 'live' && item.data.durationSeconds ? (
+                            <span>
+                              {Math.floor(item.data.durationSeconds / 60)}m{' '}
+                              {item.data.durationSeconds % 60}s
+                            </span>
+                          ) : item.type === 'upload' && item.data.duration ? (
+                            <span>
+                              {Math.floor(item.data.duration / 60)}m{' '}
+                              {Math.floor(item.data.duration % 60)}s
+                            </span>
+                          ) : (
+                            'N/A'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Badge variant="secondary" className="text-xs">
+                            {item.type === 'live' ? 'Live Session' : 'Manual Upload'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {getStatusBadge(item.data.status)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex flex-col text-xs">
+                            <span>{format(new Date(item.data.createdAt), 'MMM dd, yyyy')}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {format(new Date(item.data.createdAt), 'hh:mm a')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex justify-center">
+                            <InfoTooltip
+                              content="View"
+                              direction="top"
+                              fontSize="text-[11px]"
+                              trigger={
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleViewSession(item);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              }
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">

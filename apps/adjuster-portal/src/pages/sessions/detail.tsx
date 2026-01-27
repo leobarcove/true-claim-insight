@@ -143,7 +143,7 @@ export function SessionDetailPage() {
   return (
     <div className="flex flex-col h-full">
       <Header
-        title="Live Session Recording"
+        title="Live Session"
         description={
           <span className="font-medium text-muted-foreground">
             Claim: {session.claim.claimNumber}

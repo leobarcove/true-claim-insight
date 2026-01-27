@@ -337,6 +337,9 @@ importers:
       '@fastify/static':
         specifier: ^8.0.0
         version: 8.3.0
+      '@nestjs/axios':
+        specifier: ^4.0.1
+        version: 4.0.1(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(axios@1.13.2)(rxjs@7.8.2)
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -373,6 +376,9 @@ importers:
       '@tci/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      axios:
+        specifier: ^1.7.0
+        version: 1.13.2
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1

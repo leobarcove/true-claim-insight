@@ -1,0 +1,69 @@
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, ApiResponse } from '@/lib/api-client';
+
+// Types based on Risk Engine's expected output
+export interface TrinityMatchResult {
+  check_id: string;
+  is_pass: boolean | null;
+  confidence: number;
+  variance?: number;
+  details: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'RUN' | 'SKIPPED' | 'ERROR';
+  name?: string; // Enhanced for UI if backend sends it, or we map it
+}
+
+export interface TrinityCheck {
+  id: string;
+  claimId: string;
+  status: 'VERIFIED' | 'FLAGGED' | 'REJECTED' | 'INCOMPLETE';
+  totalScore: number;
+  checks: Record<string, TrinityMatchResult> | any; // Type might vary based on DB JSON storage
+  summary?: string;
+  riskFactors?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentAnalysis {
+  documentId: string;
+  confidenceScore: number;
+  // Dynamic fields from analysis
+  extractedData: Record<string, any>;
+  validityStatus: 'PASS' | 'WARN' | 'FAIL';
+  issues?: string[];
+}
+
+export const trinityKeys = {
+  all: ['trinity'] as const,
+  check: (claimId: string) => [...trinityKeys.all, 'check', claimId] as const,
+  analysis: (docId: string) => [...trinityKeys.all, 'analysis', docId] as const,
+};
+
+export function useTrinityCheck(claimId: string) {
+  return useQuery({
+    queryKey: trinityKeys.check(claimId),
+    queryFn: async () => {
+      // Endpoint derived from RiskController: @Get('claims/:claimId/trinity')
+      const { data } = await apiClient.get<TrinityCheck>(`/risk/claims/${claimId}/trinity`);
+      return data;
+    },
+    enabled: !!claimId,
+    retry: 1,
+  });
+}
+
+export function useDocumentAnalysis(documentId: string) {
+  return useQuery({
+    queryKey: trinityKeys.analysis(documentId),
+    queryFn: async () => {
+      // Endpoint derived from RiskController: @Get('documents/:documentId/analysis')
+      const { data } = await apiClient.get<DocumentAnalysis>(
+        `/risk/documents/${documentId}/analysis`
+      );
+      return data;
+    },
+    enabled: !!documentId,
+    retry: 1,
+  });
+}

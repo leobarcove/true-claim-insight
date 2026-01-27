@@ -161,6 +161,24 @@ export class ClaimsService {
               notes: true,
             },
           },
+          documents: {
+            select: {
+              id: true,
+              type: true,
+              filename: true,
+              createdAt: true,
+            },
+          },
+          trinityChecks: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              status: true,
+              riskFactors: true,
+            },
+          },
         },
       }),
       this.prisma.claim.count({ where }),
@@ -202,6 +220,10 @@ export class ClaimsService {
               orderBy: { createdAt: 'desc' },
             },
           },
+        },
+        trinityChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
         notes: {
           orderBy: { createdAt: 'desc' },
