@@ -4,6 +4,8 @@ import { GpuClientService } from '../llm/gpu-client.service';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
 import { DocumentType } from '@tci/shared-types';
 
+import { EventsGateway } from '../trinity/events.gateway';
+
 @Injectable()
 export class DocumentProcessorService {
   private readonly logger = new Logger(DocumentProcessorService.name);
@@ -11,8 +13,26 @@ export class DocumentProcessorService {
   constructor(
     private prisma: PrismaService,
     private gpu: GpuClientService,
-    private trinity: TrinityCheckEngine
+    private trinity: TrinityCheckEngine,
+    private events: EventsGateway
   ) {}
+
+  /**
+   * Helper to update document status and emit events
+   */
+  async updateDocumentStatus(documentId: string, status: any, claimId?: string) {
+    this.logger.log(`Updating document ${documentId} status to: ${status}`);
+    const updated = await this.prisma.document.update({
+      where: { id: documentId },
+      data: { status },
+      select: { claimId: true },
+    });
+
+    const targetClaimId = claimId || updated.claimId;
+    if (targetClaimId) {
+      this.events.emitDocumentStatus(targetClaimId, documentId, status);
+    }
+  }
 
   /**
    * Orchestrates the analysis of a single document by ID (fetches content from Storage URL)
@@ -24,6 +44,9 @@ export class DocumentProcessorService {
     if (!doc.storageUrl) throw new Error('Document has no storage URL');
 
     try {
+      // Update status to PROCESSING
+      await this.updateDocumentStatus(documentId, 'PROCESSING', doc.claimId);
+
       // Download the file
       const response = await fetch(doc.storageUrl);
       if (!response.ok) throw new Error(`Failed to download document: ${response.statusText}`);
@@ -33,9 +56,16 @@ export class DocumentProcessorService {
 
       const mimeType = doc.mimeType || 'application/octet-stream';
 
-      return this.processDocument(documentId, fileBuffer, mimeType);
+      const result = await this.processDocument(documentId, fileBuffer, mimeType);
+
+      // Update status to COMPLETED
+      await this.updateDocumentStatus(documentId, 'COMPLETED', doc.claimId);
+
+      return result;
     } catch (error) {
       this.logger.error(`Failed to download/process document ${documentId}: ${error}`);
+      // Update status to FAILED
+      await this.updateDocumentStatus(documentId, 'FAILED', doc.claimId);
       throw error;
     }
   }
@@ -158,7 +188,7 @@ export class DocumentProcessorService {
     const report = this.trinity.auditClaim(dataBag);
 
     // 4. Save Trinity Check
-    await this.prisma.trinityCheck.create({
+    const trinityCheck = await this.prisma.trinityCheck.create({
       data: {
         claimId,
         score: report.total_score,
@@ -170,6 +200,71 @@ export class DocumentProcessorService {
     });
 
     this.logger.log(`Trinity Check completed for Claim ${claimId}: ${report.status}`);
+
+    // 5. Trigger Intelligence Reasoning (Reasoning v3)
+    await this.runIntelligenceReasoning(claimId, trinityCheck.id, dataBag, report);
+  }
+
+  /**
+   * Intelligence Reasoning using LLM reasoning (e.g. DeepSeek-R1)
+   */
+  async runIntelligenceReasoning(
+    claimId: string,
+    trinityCheckId: string,
+    dataBag: any,
+    report: any
+  ) {
+    this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
+
+    const prompt = `
+      You are a senior insurance claim investigator. 
+      Analyze the following extracted data from multiple documents related to one claim.
+      
+      DOCUMENTS DATA:
+      ${JSON.stringify(dataBag, null, 2)}
+      
+      TRINITY CROSS-CHECK RESULTS:
+      ${JSON.stringify(report, null, 2)}
+      
+      Please provide:
+      1. A detailed reasoning of the claim's legitimacy.
+      2. Any hidden red flags or inconsistencies not caught by automated checks.
+      3. A final recommendation (APPROVE, INVESTIGATE, REJECT).
+      4. Key insights for the adjuster.
+      
+      Format your response in a structured JSON:
+      {
+        "reasoning": "multi-line string discussing the findings",
+        "insights": ["insight 1", "insight 2"],
+        "recommendation": "APPROVE" | "INVESTIGATE" | "REJECT",
+        "confidence": number (0-1)
+      }
+    `;
+
+    try {
+      const resp = await this.gpu.reasoningJson(prompt);
+      const result = resp.output || resp;
+
+      await this.prisma.trinityCheck.update({
+        where: { id: trinityCheckId },
+        data: {
+          reasoning: result.reasoning,
+          reasoningInsights: {
+            insights: result.insights,
+            recommendation: result.recommendation,
+            confidence: result.confidence,
+            model: 'deepseek-r1:14b',
+          },
+        },
+      });
+
+      this.logger.log(`Intelligence reasoning completed for Claim ${claimId}`);
+
+      // Emit Trinity Update
+      this.events.emitTrinityUpdate(claimId, 'COMPLETED');
+    } catch (error) {
+      this.logger.error(`Intelligence reasoning failed for Claim ${claimId}: ${error}`);
+    }
   }
 
   private getExtractionPrompt(type: DocumentType, text?: string): string {

@@ -24,8 +24,14 @@ export class AnalysisQueue {
       .subscribe();
   }
 
-  addJob(documentId: string) {
+  async addJob(documentId: string) {
     this.logger.log(`Queuing job for document: ${documentId}`);
+    
+    // Update status to QUEUED
+    await this.processor.updateDocumentStatus(documentId, 'QUEUED').catch(err => 
+      this.logger.error(`Failed to update status to QUEUED for ${documentId}: ${err}`)
+    );
+
     this.jobSubject.next(documentId);
   }
 }

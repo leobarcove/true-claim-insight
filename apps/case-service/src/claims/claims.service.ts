@@ -100,7 +100,13 @@ export class ClaimsService {
     if (query.hasAnalysis) {
       where.OR = [
         { trinityChecks: { some: {} } },
-        { documents: { some: { analysis: { isNot: null } } } },
+        {
+          documents: {
+            some: {
+              OR: [{ analysis: { isNot: null } }, { status: 'QUEUED' }, { status: 'PROCESSING' }],
+            },
+          },
+        },
       ];
     }
 

@@ -9,6 +9,8 @@ import { DocumentProcessorService } from './processors/document-processor.servic
 import { AnalysisQueue } from './processors/analysis.queue';
 import { RiskController } from './controllers/risk.controller';
 
+import { EventsGateway } from './trinity/events.gateway';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -20,6 +22,12 @@ import { RiskController } from './controllers/risk.controller';
     AssessmentsModule,
   ],
   controllers: [RiskController],
-  providers: [GpuClientService, TrinityCheckEngine, DocumentProcessorService, AnalysisQueue],
+  providers: [
+    GpuClientService,
+    TrinityCheckEngine,
+    DocumentProcessorService,
+    AnalysisQueue,
+    EventsGateway,
+  ],
 })
 export class AppModule {}
