@@ -51,7 +51,6 @@ export class RiskController {
       where: { documentId },
     });
 
-    if (!analysis) throw new NotFoundException('Analysis not found');
-    return analysis;
+    return analysis || null;
   }
 }

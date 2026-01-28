@@ -18,9 +18,16 @@ export interface TrinityCheck {
   claimId: string;
   status: 'VERIFIED' | 'FLAGGED' | 'REJECTED' | 'INCOMPLETE';
   totalScore: number;
-  checks: Record<string, TrinityMatchResult> | any; // Type might vary based on DB JSON storage
+  checkResults: Record<string, TrinityMatchResult> | any;
   summary?: string;
   riskFactors?: string[];
+  reasoning?: string;
+  reasoningInsights?: {
+    insights: string[];
+    recommendation: string;
+    confidence: number;
+    model?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
