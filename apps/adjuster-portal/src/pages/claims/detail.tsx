@@ -17,6 +17,8 @@ import {
   Upload,
   Loader2,
   Play,
+  ExternalLink,
+  Brain,
 } from 'lucide-react';
 
 import { Header } from '@/components/layout/header';
@@ -631,9 +633,27 @@ export function ClaimDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
+                  Documents
+                  <InfoTooltip
+                    content="View"
+                    direction="top"
+                    fontSize="text-[11px]"
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7"
+                        onClick={() => navigate(`/documents/${claimId}`)}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                </CardTitle>
+                <div className="flex items-center gap-2">
                   {claim.documents && claim.documents.length > 0 && (
                     <InfoTooltip
-                      content="Rerun Trinity Analysis"
+                      content="Rerun Analysis"
                       direction="top"
                       fontSize="text-[11px]"
                       trigger={
@@ -641,9 +661,8 @@ export function ClaimDetailPage() {
                           variant="ghost"
                           size="sm"
                           className={cn(
-                            'h-6 w-6 p-0 rounded-full bg-muted hover:bg-emerald-50 hover:text-emerald-600 transition-colors mt-1',
-                            triggerTrinity.isPending &&
-                              'animate-pulse text-emerald-600 bg-emerald-50'
+                            'h-6 w-6 p-0 rounded-full bg-muted hover:bg-emerald-50 hover:text-primary transition-colors',
+                            triggerTrinity.isPending && 'animate-pulse text-primary bg-emerald-50'
                           )}
                           onClick={e => {
                             e.stopPropagation();
@@ -652,17 +671,53 @@ export function ClaimDetailPage() {
                           disabled={triggerTrinity.isPending}
                         >
                           {triggerTrinity.isPending ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
                           ) : (
-                            <Play className="h-3 w-3 fill-current" />
+                            <Play className="h-2.5 w-2.5 fill-current" />
                           )}
                         </Button>
                       }
                     />
                   )}
-                  Documents
-                </CardTitle>
-                <Badge variant="secondary">{claim.documents?.length || 0}</Badge>
+                  {claim.trinityChecks && claim.trinityChecks.length > 0 && (
+                    <InfoTooltip
+                      content={
+                        <div className="space-y-2 max-w-[450px]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-base">True Claim Intelligence</span>
+                            <Badge
+                              variant={
+                                claim.trinityChecks[0].score > 70
+                                  ? 'destructive'
+                                  : claim.trinityChecks[0].score > 30
+                                    ? 'warning'
+                                    : 'success'
+                              }
+                            >
+                              {claim.trinityChecks[0].score || 0}%
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {(claim.trinityChecks[0] as any)?.reasoning ||
+                              'No detailed reasoning available.'}
+                          </p>
+                        </div>
+                      }
+                      direction="top"
+                      fontSize="text-[11px]"
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 rounded-full bg-muted hover:bg-emerald-50 text-emerald-600 hover:text-primary transition-colors"
+                          onClick={() => navigate(`/documents/${claimId}`)}
+                        >
+                          <Brain className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {claim.documents && claim.documents.length > 0 ? (
@@ -790,75 +845,89 @@ export function ClaimDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
+                  Timeline
                   <InfoTooltip
-                    title="Metrics Analysis"
+                    content="View"
                     direction="top"
-                    variant="light"
-                    iconSize={4}
-                    fontSize="text-xs"
-                    className="scale-110 mt-1"
-                    contentClassName="max-w-[450px]"
-                    content={
-                      <div className="flex gap-8 items-start">
-                        <section className="flex-1 space-y-3 p-2">
-                          <p className="text-muted-foreground font-medium mb-3">
-                            This section shows a timeline of past sessions with their deception
-                            metrics.
-                          </p>
-                          <ul className="space-y-2.5 mt-2 text-muted-foreground">
-                            <li>
-                              <strong className="text-foreground block mb-0.5">Voice Stress</strong>
-                              Analyzes vocal patterns that may indicate stress, tension, or
-                              emotional load during speech. The scoring is calculated by normalizing
-                              measurements against industry baselines:
-                              <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
-                                <p className="mt-2 text-primary font-semibold">
-                                  Score = (0.25×Jitter + 0.25×Shimmer + 0.2×PitchSD + 0.1×HNR)²
-                                </p>
-                              </div>
-                            </li>
-                            <li>
-                              <strong className="text-foreground block mb-0.5">
-                                Visual Behavior:
-                              </strong>
-                              Tracks facial and eye-related behaviors that can reflect attention,
-                              comfort, or cognitive effort. The scoring is calculated by aggregate
-                              risk points:
-                              <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
-                                <p className="mt-2 text-primary font-semibold">
-                                  Score = BlinkRateDev(40%) + LipTension(40%) + BlinkDurDev(20%)
-                                </p>
-                              </div>
-                            </li>
-                            <li>
-                              <strong className="text-foreground block mb-0.5">
-                                Expression Measurement:
-                              </strong>
-                              Detects emotional and cognitive states based on facial expressions.
-                              The scoring is calculated by peak fraud-linked emotion with baseline
-                              correction:
-                              <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
-                                <p className="mt-2 text-primary font-semibold">
-                                  Score = Max(FraudEmotions) - 10% Noise Threshold
-                                </p>
-                              </div>
-                            </li>
-                          </ul>
-
-                          <div className="pt-2 mt-5 border-t border-border">
-                            <p className="text-foreground leading-normal">
-                              The <span className="font-semibold">Deception Score</span> is the
-                              balanced average of the three pillars above, with each category
-                              weighted equally at one-third.
-                            </p>
-                          </div>
-                        </section>
-                      </div>
+                    fontSize="text-[11px]"
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7"
+                        onClick={() => navigate(`/sessions`)}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
                     }
                   />
-                  Timeline
                 </CardTitle>
-                <span className="text-xs text-muted-foreground">Historical Analysis</span>
+                <InfoTooltip
+                  title="Metrics Analysis"
+                  direction="top"
+                  variant="light"
+                  iconSize={4}
+                  fontSize="text-xs"
+                  className="scale-110 mt-1"
+                  contentClassName="max-w-[450px]"
+                  content={
+                    <div className="flex gap-8 items-start">
+                      <section className="flex-1 space-y-3 p-2">
+                        <p className="text-muted-foreground font-medium mb-3">
+                          This section shows a timeline of past sessions with their deception
+                          metrics.
+                        </p>
+                        <ul className="space-y-2.5 mt-2 text-muted-foreground">
+                          <li>
+                            <strong className="text-foreground block mb-0.5">Voice Stress</strong>
+                            Analyzes vocal patterns that may indicate stress, tension, or emotional
+                            load during speech. The scoring is calculated by normalizing
+                            measurements against industry baselines:
+                            <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
+                              <p className="mt-2 text-primary font-semibold">
+                                Score = (0.25×Jitter + 0.25×Shimmer + 0.2×PitchSD + 0.1×HNR)²
+                              </p>
+                            </div>
+                          </li>
+                          <li>
+                            <strong className="text-foreground block mb-0.5">
+                              Visual Behavior:
+                            </strong>
+                            Tracks facial and eye-related behaviors that can reflect attention,
+                            comfort, or cognitive effort. The scoring is calculated by aggregate
+                            risk points:
+                            <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
+                              <p className="mt-2 text-primary font-semibold">
+                                Score = BlinkRateDev(40%) + LipTension(40%) + BlinkDurDev(20%)
+                              </p>
+                            </div>
+                          </li>
+                          <li>
+                            <strong className="text-foreground block mb-0.5">
+                              Expression Measurement:
+                            </strong>
+                            Detects emotional and cognitive states based on facial expressions. The
+                            scoring is calculated by peak fraud-linked emotion with baseline
+                            correction:
+                            <div className="space-y-3 font-mono text-[11px] bg-muted p-3 rounded-lg border border-border shadow-sm text-foreground/80 leading-relaxed pt-1 pb-3">
+                              <p className="mt-2 text-primary font-semibold">
+                                Score = Max(FraudEmotions) - 10% Noise Threshold
+                              </p>
+                            </div>
+                          </li>
+                        </ul>
+
+                        <div className="pt-2 mt-5 border-t border-border">
+                          <p className="text-foreground leading-normal">
+                            The <span className="font-semibold">Deception Score</span> is the
+                            balanced average of the three pillars above, with each category weighted
+                            equally at one-third.
+                          </p>
+                        </div>
+                      </section>
+                    </div>
+                  }
+                />
               </CardHeader>
 
               <CardContent className="space-y-8">
