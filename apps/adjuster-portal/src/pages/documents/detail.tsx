@@ -668,7 +668,7 @@ export function DocumentDetailPage() {
                               <Brain className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                              <h4 className="font-bold text-sm">Automated Reasoning</h4>
+                              <h4 className="font-bold text-sm">Reasoning Analysis</h4>
                               <p className="text-[10px] text-muted-foreground">
                                 Confidence:{' '}
                                 {(
