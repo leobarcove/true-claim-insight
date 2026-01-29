@@ -178,7 +178,7 @@ export function UploadDetailPage() {
   return (
     <div className="flex flex-col h-full">
       <Header
-        title="Manual Upload Video"
+        title="Manual Upload"
         description={
           <span className="font-medium text-muted-foreground">
             Claim: {upload.claim.claimNumber}

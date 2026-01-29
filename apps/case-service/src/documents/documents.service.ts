@@ -2,6 +2,10 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { StorageService } from '../common/services/storage.service';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { DocumentStatus } from '@tci/shared-types';
 
 @Injectable()
 export class DocumentsService {
@@ -9,7 +13,9 @@ export class DocumentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -24,15 +30,65 @@ export class DocumentsService {
       `claims/${claimId}`
     );
 
-    const signedUrl = await this.storageService.getSignedUrl(storagePath);
-    return this.create(claimId, {
+    const signedUrl = await this.storageService.getSignedUrl(storagePath, 60 * 60 * 24 * 7);
+
+    // Create document record
+    const document = await this.create(claimId, {
       type: type as any,
+      status: DocumentStatus.QUEUED,
       filename: file.filename,
       storageUrl: signedUrl,
       mimeType: file.mimetype,
       fileSize: buffer.length,
       metadata: { storagePath },
     });
+
+    // Trigger Risk Engine Analysis (Fire and forget)
+    this.triggerRiskAnalysis(document.id).catch(err =>
+      this.logger.error(`Failed to trigger risk analysis for ${document.id}`, err)
+    );
+
+    return document;
+  }
+
+  private async triggerRiskAnalysis(documentId: string) {
+    const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3004';
+    const url = `${riskEngineUrl}/api/v1/risk/analyze/${documentId}`;
+    this.logger.log(`Triggering analysis at ${url}`);
+
+    await firstValueFrom(this.httpService.post(url, {}));
+  }
+
+  /**
+   * Manually trigger analysis/trinity check for all docs in a claim
+   */
+  async triggerTrinityCheck(claimId: string) {
+    const docs = await this.prisma.document.findMany({
+      where: { claimId },
+    });
+
+    if (docs.length === 0) {
+      throw new NotFoundException('No documents found for this claim');
+    }
+
+    // Trigger analysis for each document
+    const results = await Promise.all(
+      docs.map(async doc => {
+        try {
+          await this.triggerRiskAnalysis(doc.id);
+          return { id: doc.id, status: 'triggered' };
+        } catch (err) {
+          this.logger.error(`Manual trigger failed for doc ${doc.id}: ${err}`);
+          return { id: doc.id, status: 'failed', error: (err as any).message };
+        }
+      })
+    );
+
+    return {
+      claimId,
+      totalProcessed: docs.length,
+      results,
+    };
   }
 
   /**

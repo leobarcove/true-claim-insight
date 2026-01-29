@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  ForbiddenException,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
@@ -33,7 +28,7 @@ export class TenantService {
   buildTenantFilter<T extends Record<string, any>>(
     tenantContext: TenantContext | null,
     existingWhere: T = {} as T,
-    tenantField: string = 'tenantId',
+    tenantField: string = 'tenantId'
   ): T {
     if (!tenantContext || tenantContext.scope === TenantScope.NONE) {
       return existingWhere;
@@ -59,7 +54,7 @@ export class TenantService {
    */
   buildClaimTenantFilter(
     tenantContext: TenantContext | null,
-    existingWhere: Record<string, any> = {},
+    existingWhere: Record<string, any> = {}
   ): Record<string, any> {
     if (!tenantContext || tenantContext.scope === TenantScope.NONE) {
       return existingWhere;
@@ -72,12 +67,22 @@ export class TenantService {
       // Claims can be accessed if:
       // 1. The adjuster belongs to the same tenant, OR
       // 2. The insurer tenant matches
+      const tenantConditions = [
+        { adjuster: { tenantId: tenantContext.tenantId } },
+        { insurerTenantId: tenantContext.tenantId },
+      ];
+
+      if (existingWhere.OR) {
+        const { OR: existingOR, ...rest } = existingWhere;
+        return {
+          ...rest,
+          AND: [...(rest.AND || []), { OR: existingOR }, { OR: tenantConditions }],
+        } as any;
+      }
+
       return {
         ...existingWhere,
-        OR: [
-          { adjuster: { tenantId: tenantContext.tenantId } },
-          { insurerTenantId: tenantContext.tenantId },
-        ],
+        OR: tenantConditions,
       };
     }
 
@@ -95,7 +100,7 @@ export class TenantService {
   validateTenantAccess(
     resourceTenantId: string | null,
     tenantContext: TenantContext,
-    resourceName: string = 'Resource',
+    resourceName: string = 'Resource'
   ): void {
     if (tenantContext.scope === TenantScope.NONE) {
       return;
@@ -108,10 +113,10 @@ export class TenantService {
     if (resourceTenantId !== tenantContext.tenantId) {
       this.logger.warn(
         `Tenant access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
-        `attempted to access ${resourceName} belonging to tenant ${resourceTenantId}`,
+          `attempted to access ${resourceName} belonging to tenant ${resourceTenantId}`
       );
       throw new ForbiddenException(
-        `Access denied: ${resourceName} does not belong to your organisation`,
+        `Access denied: ${resourceName} does not belong to your organisation`
       );
     }
   }
@@ -119,10 +124,7 @@ export class TenantService {
   /**
    * Validate claim access based on adjuster's tenant or insurer tenant
    */
-  async validateClaimAccess(
-    claimId: string,
-    tenantContext: TenantContext,
-  ): Promise<void> {
+  async validateClaimAccess(claimId: string, tenantContext: TenantContext): Promise<void> {
     if (tenantContext.scope === TenantScope.NONE || this.canAccessCrossTenant(tenantContext)) {
       return;
     }
@@ -145,10 +147,10 @@ export class TenantService {
     if (!hasAccess) {
       this.logger.warn(
         `Claim access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
-        `attempted to access claim ${claimId}`,
+          `attempted to access claim ${claimId}`
       );
       throw new ForbiddenException(
-        'Access denied: This claim does not belong to your organisation',
+        'Access denied: This claim does not belong to your organisation'
       );
     }
   }

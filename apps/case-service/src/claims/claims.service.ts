@@ -5,6 +5,7 @@ import { TenantContext } from '../common/guards/tenant.guard';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { DocumentStatus } from '@tci/shared-types';
 
 @Injectable()
 export class ClaimsService {
@@ -97,6 +98,22 @@ export class ClaimsService {
       };
     }
 
+    if (query.hasAnalysis) {
+      where.AND = [
+        { trinityChecks: { some: {} } },
+        {
+          documents: {
+            some: {
+              OR: [
+                { analysis: { isNot: null } },
+                { status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] } },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
     // Apply tenant isolation filter
     if (tenantContext) {
       where = this.tenantService.buildClaimTenantFilter(tenantContext, where);
@@ -117,9 +134,11 @@ export class ClaimsService {
 
       // Combine search with existing filters
       if (where.OR) {
-        // If tenant filter already has OR, wrap everything in AND
+        // If filter already has OR, wrap everything in AND
+        const { OR: existingOR, ...rest } = where;
         where = {
-          AND: [{ OR: where.OR }, { OR: searchConditions }],
+          ...rest,
+          AND: [...(rest.AND || []), { OR: existingOR }, { OR: searchConditions }],
         };
       } else {
         where.OR = searchConditions;
@@ -159,6 +178,24 @@ export class ClaimsService {
               documents: true,
               sessions: true,
               notes: true,
+            },
+          },
+          documents: {
+            select: {
+              id: true,
+              type: true,
+              filename: true,
+              createdAt: true,
+            },
+          },
+          trinityChecks: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              status: true,
+              riskFactors: true,
             },
           },
         },
@@ -202,6 +239,10 @@ export class ClaimsService {
               orderBy: { createdAt: 'desc' },
             },
           },
+        },
+        trinityChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
         notes: {
           orderBy: { createdAt: 'desc' },

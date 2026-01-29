@@ -97,6 +97,16 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
+  async getTrinityCheck(claimId: string) {
+    const response = await fetch(`${this.baseUrl}/risk/claims/${claimId}/trinity`);
+    return this.handleResponse(response);
+  }
+
+  async getDocumentAnalysis(documentId: string) {
+    const response = await fetch(`${this.baseUrl}/risk/documents/${documentId}/analysis`);
+    return this.handleResponse(response);
+  }
+
   private async handleResponse(response: Response) {
     if (!response.ok) {
       const errorText = await response.text();

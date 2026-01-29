@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Search,
-  Video,
   FileText,
   Plus,
   List,
   Grid,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
   Eye,
   Calendar,
   Clock,
@@ -63,6 +60,7 @@ const typeLabels: Record<string, string> = {
 };
 
 export function ClaimsListPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchFromUrl = searchParams.get('search') || '';
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
@@ -219,16 +217,19 @@ export function ClaimsListPage() {
                           <Skeleton className="h-4 w-32" />
                         </TableCell>
                         <TableCell className="text-center">
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell className="text-center">
                           <Skeleton className="h-6 w-20 rounded-full" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-6 w-24 rounded-full" />
-                        </TableCell>
-                        <TableCell className="text-center">
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-4 w-24" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Skeleton className="h-8 w-8 ml-auto" />
@@ -270,64 +271,82 @@ export function ClaimsListPage() {
           ) : viewMode === 'table' ? (
             /* Table View */
             <div className="rounded-md border animate-in fade-in duration-300">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Claim Number</TableHead>
-                    <TableHead>Claimant</TableHead>
-                    <TableHead className="text-center">Type</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Incident Date</TableHead>
-                    <TableHead className="text-center">Created</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="bg-card">
-                  {claims.map(claim => (
-                    <TableRow
-                      key={claim.id}
-                      className="cursor-pointer hover:bg-accent/50"
-                      onClick={() => (window.location.href = `/claims/${claim.id}`)}
-                    >
-                      <TableCell className="font-medium">{claim.claimNumber}</TableCell>
-                      <TableCell>{claim.claimant?.fullName || claim.claimantId}</TableCell>
-                      <TableCell className="text-center">
-                        {typeLabels[claim.claimType] || claim.claimType}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
-                          {convertToTitleCase(statusConfig[claim.status]?.label || claim.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {formatDate(claim.incidentDate)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-col text-xs">
-                          <span>{format(new Date(claim.createdAt), 'MMM dd, yyyy')}</span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(new Date(claim.createdAt), 'hh:mm a')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center">
-                          <InfoTooltip
-                            content="View"
-                            direction="top"
-                            fontSize="text-[11px]"
-                            trigger={
-                              <Button size="icon" variant="ghost" className="h-8 w-8">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="bg-card rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-300">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-muted/50 border-b">
+                    <tr className="hover:bg-transparent">
+                      <th className="px-6 py-4 font-medium text-muted-foreground w-[200px]">
+                        Claim Number
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground">Claimant</th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Type
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Incident Date
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Created
+                      </th>
+                      <th className="px-6 py-4 font-medium text-muted-foreground text-center">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {claims.map(claim => (
+                      <tr key={claim.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-6 py-4 font-medium">{claim.claimNumber}</td>
+                        <td className="px-6 py-4">
+                          {claim.claimant?.fullName || claim.claimantId}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {typeLabels[claim.claimType] || claim.claimType}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
+                            {convertToTitleCase(statusConfig[claim.status]?.label || claim.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-center">{formatDate(claim.incidentDate)}</td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex flex-col text-xs">
+                            <span>{format(new Date(claim.createdAt), 'MMM dd, yyyy')}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {format(new Date(claim.createdAt), 'hh:mm a')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex justify-center">
+                            <InfoTooltip
+                              content="View"
+                              direction="top"
+                              fontSize="text-[11px]"
+                              trigger={
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate(`/claims/${claim.id}`);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              }
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             /* Card View */
@@ -336,7 +355,7 @@ export function ClaimsListPage() {
                 <Card
                   key={claim.id}
                   className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => (window.location.href = `/claims/${claim.id}`)}
+                  onClick={() => navigate(`/claims/${claim.id}`)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
