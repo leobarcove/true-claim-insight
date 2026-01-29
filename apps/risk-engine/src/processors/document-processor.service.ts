@@ -2,9 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service'; // Adjust path if needed
 import { GpuClientService } from '../llm/gpu-client.service';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
-import { DocumentType } from '@tci/shared-types';
+import { DocumentStatus, DocumentType } from '@tci/shared-types';
+import { ExtractionService } from './extraction/extraction.service';
 
 import { EventsGateway } from '../trinity/events.gateway';
+
+// Extraction schema and logic moved to ExtractionModule
 
 @Injectable()
 export class DocumentProcessorService {
@@ -14,7 +17,8 @@ export class DocumentProcessorService {
     private prisma: PrismaService,
     private gpu: GpuClientService,
     private trinity: TrinityCheckEngine,
-    private events: EventsGateway
+    private events: EventsGateway,
+    private extractionService: ExtractionService
   ) {}
 
   /**
@@ -45,7 +49,7 @@ export class DocumentProcessorService {
 
     try {
       // Update status to PROCESSING
-      await this.updateDocumentStatus(documentId, 'PROCESSING', doc.claimId);
+      await this.updateDocumentStatus(documentId, DocumentStatus.PROCESSING, doc.claimId);
 
       // Download the file
       const response = await fetch(doc.storageUrl);
@@ -55,17 +59,13 @@ export class DocumentProcessorService {
       const fileBuffer = Buffer.from(arrayBuffer);
 
       const mimeType = doc.mimeType || 'application/octet-stream';
-
       const result = await this.processDocument(documentId, fileBuffer, mimeType);
-
-      // Update status to COMPLETED
-      await this.updateDocumentStatus(documentId, 'COMPLETED', doc.claimId);
+      await this.updateDocumentStatus(documentId, DocumentStatus.COMPLETED, doc.claimId);
 
       return result;
     } catch (error) {
       this.logger.error(`Failed to download/process document ${documentId}: ${error}`);
-      // Update status to FAILED
-      await this.updateDocumentStatus(documentId, 'FAILED', doc.claimId);
+      await this.updateDocumentStatus(documentId, DocumentStatus.FAILED, doc.claimId);
       throw error;
     }
   }
@@ -86,27 +86,35 @@ export class DocumentProcessorService {
     try {
       // 1. Determine Strategy based on Doc Type and MIME
       const isImage = mimeType.startsWith('image/');
+      const docType = doc.type as DocumentType;
 
-      if (isImage && doc.type === 'DAMAGE_PHOTO') {
+      if (
+        isImage &&
+        [
+          DocumentType.NRIC,
+          DocumentType.MYKAD_FRONT,
+          DocumentType.DAMAGE_PHOTO,
+          DocumentType.REPAIR_QUOTATION,
+        ].includes(docType)
+      ) {
         // Vision Path
         modelUsed = 'qwen2.5vl:7b';
-        const prompt = this.getExtractionPrompt(doc.type as DocumentType);
+        const prompt = this.extractionService.getPrompt(docType);
         const resp = await this.gpu.visionJson(prompt, fileBuffer, doc.filename, modelUsed);
         visionData = resp.output || resp;
-        resultData = visionData;
+        resultData = this.extractionService.normalize(docType, visionData);
       } else {
-        // OCR + Text Extraction Path
-
-        // A. OCR
+        // OCR
         const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
         rawText = ocrResp.text || '';
 
-        // B. Extraction
+        // Extraction
         modelUsed = 'qwen2.5:7b';
-        const prompt = this.getExtractionPrompt(doc.type as DocumentType, rawText);
+        const prompt = this.extractionService.getPrompt(docType, rawText);
 
         const llmResp = await this.gpu.generateJson(prompt, modelUsed);
-        resultData = llmResp.output || llmResp;
+        const rawResult = llmResp.output || llmResp;
+        resultData = this.extractionService.normalize(docType, rawResult);
       }
 
       // 2. Save Analysis
@@ -129,11 +137,19 @@ export class DocumentProcessorService {
           updatedAt: new Date(),
         },
       });
+      this.logger.log(`Processed document ${doc.filename} (${docType})`);
 
-      this.logger.log(`Processed document ${doc.filename} (${doc.type})`);
-
-      // 3. Trigger Trinity Check for the whole claim
-      await this.runTrinityCheck(doc.claimId);
+      // Only trigger Trinity Check if all documents for this claim have been processed
+      const unfinishedDocs = await this.prisma.document.count({
+        where: {
+          claimId: doc.claimId,
+          id: { not: documentId },
+          status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] },
+        },
+      });
+      if (unfinishedDocs === 0) {
+        this.runTrinityCheck(doc.claimId);
+      }
     } catch (error) {
       this.logger.error(`Failed to process document ${documentId}: ${error}`);
       throw error;
@@ -144,17 +160,14 @@ export class DocumentProcessorService {
    * Runs the Cross-Check for a Claim
    */
   async runTrinityCheck(claimId: string) {
-    // 1. Fetch all analyzed docs for the claim
+    const dataBag: any = {
+      damagePhotos: [],
+    };
     const claimDocs = await this.prisma.document.findMany({
       where: { claimId },
       include: { analysis: true },
     });
 
-    const dataBag: any = {
-      damagePhotos: [],
-    };
-
-    // 2. Hydrate Data Bag
     for (const d of claimDocs) {
       if (!d.analysis?.extractedData && !d.analysis?.visionData) continue;
 
@@ -162,32 +175,29 @@ export class DocumentProcessorService {
       const vision = d.analysis.visionData as any;
 
       switch (d.type) {
-        case 'NRIC':
-        case 'MYKAD_FRONT':
+        case DocumentType.NRIC:
+        case DocumentType.MYKAD_FRONT:
           dataBag.nric = content;
           break;
-        case 'POLICY_DOCUMENT':
+        case DocumentType.POLICY_DOCUMENT:
           dataBag.policy = content;
           break;
-        case 'VEHICLE_REG_CARD':
+        case DocumentType.VEHICLE_REG_CARD:
           dataBag.registrationCard = content;
           break;
-        case 'POLICE_REPORT':
+        case DocumentType.POLICE_REPORT:
           dataBag.policeReport = content;
           break;
-        case 'REPAIR_QUOTATION':
+        case DocumentType.REPAIR_QUOTATION:
           dataBag.repairQuotation = content;
           break;
-        case 'DAMAGE_PHOTO':
+        case DocumentType.DAMAGE_PHOTO:
           if (vision) dataBag.damagePhotos.push(vision);
           break;
       }
     }
 
-    // 3. Run Engine
     const report = this.trinity.auditClaim(dataBag);
-
-    // 4. Save Trinity Check
     const trinityCheck = await this.prisma.trinityCheck.create({
       data: {
         claimId,
@@ -200,8 +210,6 @@ export class DocumentProcessorService {
     });
 
     this.logger.log(`Trinity Check completed for Claim ${claimId}: ${report.status}`);
-
-    // 5. Trigger Intelligence Reasoning (Reasoning v3)
     await this.runIntelligenceReasoning(claimId, trinityCheck.id, dataBag, report);
   }
 
@@ -217,8 +225,8 @@ export class DocumentProcessorService {
     this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
 
     const prompt = `
-      You are a senior insurance claim investigator. 
-      Analyze the following extracted data from multiple documents related to one claim.
+      You are a senior insurance claim investigator with experience in motor, personal accident, and general insurance claims.
+      Analyze the following extracted and consolidated data from multiple documents related to a single insurance claim.
       
       DOCUMENTS DATA:
       ${JSON.stringify(dataBag, null, 2)}
@@ -226,6 +234,9 @@ export class DocumentProcessorService {
       TRINITY CROSS-CHECK RESULTS:
       ${JSON.stringify(report, null, 2)}
       
+      Your task:
+      Evaluate the overall legitimacy, consistency, and risk profile of the claim based strictly on the provided data.
+
       Please provide:
       1. A detailed reasoning of the claim's legitimacy.
       2. Any hidden red flags or inconsistencies not caught by automated checks.
@@ -242,7 +253,8 @@ export class DocumentProcessorService {
     `;
 
     try {
-      const resp = await this.gpu.reasoningJson(prompt);
+      const model = 'deepseek-r1:14b';
+      const resp = await this.gpu.reasoningJson(prompt, model);
       const result = resp.output || resp;
 
       await this.prisma.trinityCheck.update({
@@ -250,10 +262,10 @@ export class DocumentProcessorService {
         data: {
           reasoning: result.reasoning,
           reasoningInsights: {
+            model,
             insights: result.insights,
             recommendation: result.recommendation,
             confidence: result.confidence,
-            model: 'deepseek-r1:14b',
           },
         },
       });
@@ -265,117 +277,5 @@ export class DocumentProcessorService {
     } catch (error) {
       this.logger.error(`Intelligence reasoning failed for Claim ${claimId}: ${error}`);
     }
-  }
-
-  private getExtractionPrompt(type: DocumentType, text?: string): string {
-    const schemas = {
-      NRIC: `
-      Extract Malaysian NRIC details into this specific JSON structure:
-      {
-        "full_name": "string",
-        "id_number": "string (without hyphens)",
-        "address": "string",
-        "date_of_birth": "string (YYYY-MM-DD)",
-        "gender": "MALE" | "FEMALE",
-        "confidence_score": number (0-1)
-      }`,
-      POLICY_DOCUMENT: `
-      Extract Insurance Policy details into this specific JSON structure:
-      {
-        "policy_number": "string",
-        "policy_holder_name": "string",
-        "policy_holder_nric": "string",
-        "vehicle_plate_number": "string",
-        "vehicle_chassis_number": "string",
-        "vehicle_make_model": "string",
-        "period_from": "string (YYYY-MM-DD)",
-        "period_to": "string (YYYY-MM-DD)",
-        "sum_insured": number,
-        "coverage_type": "Comprehensive" | "Third Party",
-        "confidence_score": number (0-1)
-      }`,
-      VEHICLE_REG_CARD: `
-      Extract Vehicle Registration Card (VOC) details into this specific JSON structure:
-      {
-        "registration_number": "string (Plate Number)",
-        "owner_name": "string",
-        "owner_nric": "string",
-        "chassis_number": "string",
-        "engine_number": "string",
-        "make": "string",
-        "model": "string",
-        "manufacturing_year": "string",
-        "confidence_score": number (0-1)
-      }`,
-      POLICE_REPORT: `
-      Extract Police Report details into this specific JSON structure:
-      {
-        "report_number": "string",
-        "report_date": "string (YYYY-MM-DD)",
-        "incident_date_time": "string (ISO8601 if possible)",
-        "incident_location": "string",
-        "complainant_name": "string",
-        "complainant_nric": "string",
-        "vehicle_number_involved": "string",
-        "incident_description": "string",
-        "confidence_score": number (0-1)
-      }`,
-      REPAIR_QUOTATION: `
-      Extract Repair Quotation details into this specific JSON structure:
-      {
-        "quotation_number": "string",
-        "workshop_name": "string",
-        "workshop_reg_no": "string",
-        "vehicle_plate": "string",
-        "total_parts_amount": number,
-        "total_labor_amount": number,
-        "total_amount": number,
-        "parts_list": [
-          {
-            "item_name": "string",
-            "quantity": number,
-            "price": number
-          }
-        ],
-        "confidence_score": number (0-1)
-      }`,
-      DAMAGE_PHOTO: `
-      Analyze this vehicle damage photo and extract insights into this specific JSON structure:
-      {
-        "vehicle_detected": boolean,
-        "plate_number_visible": "string (the license plate if visible, else null)",
-        "damage_severity": "Minor" | "Moderate" | "Severe",
-        "damage_location": ["string (e.g. Front Bumper, Left Headlight)"],
-        "parts_to_replace": ["string"],
-        "is_internal_damage_likely": boolean,
-        "confidence_score": number (0-1)
-      }`,
-      MYKAD_FRONT: `
-      Extract Malaysian MyKad (Front) details into this specific JSON structure:
-      {
-        "full_name": "string",
-        "id_number": "string (without hyphens)",
-        "address": "string",
-        "date_of_birth": "string (YYYY-MM-DD)",
-        "gender": "MALE" | "FEMALE",
-        "confidence_score": number (0-1)
-      }`,
-    };
-
-    const specificPrompt = (schemas as any)[type] || `Extract key information in JSON format.`;
-
-    let prompt = `You are a specialized data extraction AI.
-    ${specificPrompt}
-    
-    Ensure the output is valid JSON only. Do not wrap in markdown blocks.`;
-
-    if (text) {
-      prompt += `
-    
-    DOCUMENT TEXT:
-    ${text}`;
-    }
-
-    return prompt;
   }
 }

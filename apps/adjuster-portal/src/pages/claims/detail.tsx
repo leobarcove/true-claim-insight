@@ -698,32 +698,44 @@ export function ClaimDetailPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                title="View document"
-                                onClick={() => {
-                                  if (doc.storageUrl) {
-                                    window.open(doc.storageUrl, '_blank');
-                                  }
-                                }}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                title="Download document"
-                                onClick={() => {
-                                  if (doc.storageUrl) {
-                                    downloadFile(doc.storageUrl, doc.filename);
-                                  }
-                                }}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
+                              <InfoTooltip
+                                content="View"
+                                direction="top"
+                                fontSize="text-[11px]"
+                                trigger={
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => {
+                                      if (doc.storageUrl) {
+                                        window.open(doc.storageUrl, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                              <InfoTooltip
+                                content="Download"
+                                direction="top"
+                                fontSize="text-[11px]"
+                                trigger={
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => {
+                                      if (doc.storageUrl) {
+                                        downloadFile(doc.storageUrl, doc.filename);
+                                      }
+                                    }}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
                             </div>
                           </div>
                         ))}

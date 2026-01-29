@@ -71,7 +71,7 @@ export function NewClaimPage() {
       }
 
       const otherDocs = [
-        { key: 'policyDocument', type: 'SIGNED_STATEMENT', label: 'Policy Document' },
+        { key: 'policyDocument', type: 'POLICY_DOCUMENT', label: 'Policy Document' },
         { key: 'policeReportDocument', type: 'POLICE_REPORT', label: 'Police Report' },
         { key: 'myKadFront', type: 'MYKAD_FRONT', label: 'MyKad Front' },
         {

@@ -5,6 +5,7 @@ import { StorageService } from '../common/services/storage.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { DocumentStatus } from '@tci/shared-types';
 
 @Injectable()
 export class DocumentsService {
@@ -34,6 +35,7 @@ export class DocumentsService {
     // Create document record
     const document = await this.create(claimId, {
       type: type as any,
+      status: DocumentStatus.QUEUED,
       filename: file.filename,
       storageUrl: signedUrl,
       mimeType: file.mimetype,

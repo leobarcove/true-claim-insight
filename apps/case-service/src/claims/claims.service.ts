@@ -5,6 +5,7 @@ import { TenantContext } from '../common/guards/tenant.guard';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { DocumentStatus } from '@tci/shared-types';
 
 @Injectable()
 export class ClaimsService {
@@ -98,12 +99,15 @@ export class ClaimsService {
     }
 
     if (query.hasAnalysis) {
-      where.OR = [
+      where.AND = [
         { trinityChecks: { some: {} } },
         {
           documents: {
             some: {
-              OR: [{ analysis: { isNot: null } }, { status: 'QUEUED' }, { status: 'PROCESSING' }],
+              OR: [
+                { analysis: { isNot: null } },
+                { status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] } },
+              ],
             },
           },
         },
