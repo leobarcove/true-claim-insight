@@ -22,6 +22,8 @@ import { SettingsPage } from '@/pages/settings';
 import { HelpPage } from '@/pages/help';
 import { VehicleMakePage } from '@/pages/master-data/vehicle-make';
 import { VehicleModelPage } from '@/pages/master-data/vehicle-model';
+import { DocumentsListPage } from '@/pages/documents';
+import { DocumentDetailPage } from '@/pages/documents/detail';
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
@@ -106,6 +108,8 @@ export default function App() {
                 }
               />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
+              <Route path="/documents" element={<DocumentsListPage />} />
+              <Route path="/documents/:id" element={<DocumentDetailPage />} />
               <Route
                 path="/claims/:id/upload-video"
                 element={

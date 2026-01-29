@@ -25,6 +25,7 @@ export interface ClaimFilters {
   adjusterId?: string;
   scope?: 'tenant' | 'personal';
   scheduledFrom?: string;
+  hasAnalysis?: boolean;
 }
 
 export interface ClaimListResponse {
@@ -94,6 +95,7 @@ export function useClaims(filters: ClaimFilters = {}) {
       if (filters.adjusterId) params.append('adjusterId', filters.adjusterId);
       if (filters.scope) params.append('scope', filters.scope);
       if (filters.scheduledFrom) params.append('scheduledFrom', filters.scheduledFrom);
+      if (filters.hasAnalysis) params.append('hasAnalysis', 'true');
 
       const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>(
         `/claims?${params.toString()}`

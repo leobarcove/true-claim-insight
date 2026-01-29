@@ -86,4 +86,9 @@ export class ClaimQueryDto {
   @IsOptional()
   @IsString()
   scheduledFrom?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  hasAnalysis?: boolean;
 }

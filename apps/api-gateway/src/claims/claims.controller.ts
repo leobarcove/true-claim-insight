@@ -385,4 +385,27 @@ export class ClaimsController {
         })
       );
   }
+
+  @Post(':id/documents/trinity-check')
+  @ApiOperation({ summary: 'Trigger Trinity AI checks for all documents in a claim' })
+  triggerTrinityCheck(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+    };
+
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/${id}/documents/trinity-check`, {}, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to trigger Trinity check',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
 }

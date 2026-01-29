@@ -89,6 +89,16 @@ export enum DocumentType {
   MYKAD_FRONT = 'MYKAD_FRONT',
   VEHICLE_REG_CARD = 'VEHICLE_REG_CARD',
   REPAIR_QUOTATION = 'REPAIR_QUOTATION',
+  POLICY_DOCUMENT = 'POLICY_DOCUMENT',
+  NRIC = 'NRIC',
+  OTHER_DOCUMENT = 'OTHER_DOCUMENT',
+}
+
+export enum DocumentStatus {
+  QUEUED = 'QUEUED',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
 }
 
 export enum ActorType {
@@ -202,6 +212,19 @@ export interface Claim {
   adjuster?: Adjuster;
   documents?: Document[];
   sessions?: Session[];
+  trinityChecks?: TrinityCheck[];
+}
+
+export interface TrinityCheck {
+  id: string;
+  claimId: string;
+  score: number;
+  status: 'PASS' | 'FAIL' | 'WARNING' | 'REVIEW_NEEDED';
+  summary?: string;
+  checkResults: Record<string, any>;
+  riskFactors: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Session {
@@ -320,7 +343,9 @@ export interface RiskAssessmentResponse {
       flaggedQuestions: number;
     };
     visualAnalysis: {
-      deepfakeDetected: boolean; multiFaceDetected: boolean; contentModeration: string;
+      deepfakeDetected: boolean;
+      multiFaceDetected: boolean;
+      contentModeration: string;
     };
     attentionTracking: {
       averageAttentionScore: number;

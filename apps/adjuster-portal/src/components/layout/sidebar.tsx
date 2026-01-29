@@ -28,6 +28,7 @@ const navigation = [
   { name: 'Claims', href: '/claims', icon: FileText },
   { name: 'Sessions', href: '/sessions', icon: Video },
   { name: 'Schedule', href: '/schedule', icon: Calendar },
+  { name: 'Documents', href: '/documents', icon: FileText },
 ];
 
 const masterDataNavigation = [

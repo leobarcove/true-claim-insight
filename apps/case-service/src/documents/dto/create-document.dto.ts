@@ -1,20 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsEnum, IsOptional, IsInt, Min } from 'class-validator';
 
-export enum DocumentType {
-  DAMAGE_PHOTO = 'DAMAGE_PHOTO',
-  POLICE_REPORT = 'POLICE_REPORT',
-  ASSESSMENT_REPORT = 'ASSESSMENT_REPORT',
-  SIGNED_STATEMENT = 'SIGNED_STATEMENT',
-  IDENTITY_DOCUMENT = 'IDENTITY_DOCUMENT',
-  VEHICLE_REGISTRATION = 'VEHICLE_REGISTRATION',
-  OTHER = 'OTHER',
-}
+import { DocumentType, DocumentStatus } from '@tci/shared-types';
 
 export class CreateDocumentDto {
   @ApiProperty({ enum: DocumentType, example: DocumentType.DAMAGE_PHOTO })
   @IsEnum(DocumentType)
   type!: DocumentType;
+
+  @ApiProperty({ enum: DocumentStatus, example: DocumentStatus.QUEUED })
+  @IsEnum(DocumentStatus)
+  status!: DocumentStatus;
 
   @ApiProperty({ example: 'damage-photo-001.jpg' })
   @IsString()

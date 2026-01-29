@@ -145,6 +145,7 @@ model Claim {
   documents               Document[]
   sessions                Session[]
   videoUploads            VideoUpload[]
+  trinityChecks           TrinityCheck[]
 
   @@index([claimantId])
   @@index([nric])
@@ -231,14 +232,50 @@ model Document {
   storageUrl   String
   fileSize     Int?
   mimeType     String?
+  status       DocumentStatus @default(QUEUED)
   metadata     Json         @default("{}")
   signedAt     DateTime?
   documentHash String?
   createdAt    DateTime     @default(now())
-  claim        Claim        @relation(fields: [claimId], references: [id])
+  claim        Claim             @relation(fields: [claimId], references: [id])
+  analysis     DocumentAnalysis?
 
   @@index([claimId])
   @@map("documents")
+}
+
+model DocumentAnalysis {
+  id            String   @id @default(uuid())
+  documentId    String   @unique
+  rawText       String?  // OCR text
+  extractedData Json?    // Normalized data from LLM
+  visionData    Json?    // Vision analysis result from VLM
+  modelUsed     String?
+  confidence    Float?
+  processingTime Int?    // in ms
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_analyses")
+}
+
+model TrinityCheck {
+  id                String   @id @default(uuid())
+  claimId           String
+  claim             Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  score             Float?   // 0.0 to 100.0
+  status            String   // PASS, FAIL, WARNING, REVIEW_NEEDED
+  summary           String?
+  checkResults      Json     // Detailed pass/fail for each rule
+  riskFactors       Json     // Identified risks
+  reasoning         String?  @db.Text
+  reasoningInsights Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([claimId])
+  @@map("trinity_checks")
 }
 
 model AuditTrail {
@@ -365,6 +402,9 @@ enum DocumentType {
   MYKAD_FRONT
   VEHICLE_REG_CARD
   REPAIR_QUOTATION
+  POLICY_DOCUMENT
+  NRIC
+  OTHER_DOCUMENT
 }
 
 enum ActorType {
@@ -372,6 +412,13 @@ enum ActorType {
   ADJUSTER
   ADMIN
   SYSTEM
+}
+
+enum DocumentStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model VideoUpload {
