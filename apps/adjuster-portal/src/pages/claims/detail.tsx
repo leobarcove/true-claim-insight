@@ -642,7 +642,7 @@ export function ClaimDetailPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7"
+                        className="h-7 w-7 p-0"
                         onClick={() => navigate(`/documents/${claimId}`)}
                       >
                         <ExternalLink className="h-4 w-4" />
@@ -697,6 +697,20 @@ export function ClaimDetailPage() {
                               {claim.trinityChecks[0].score || 0}%
                             </Badge>
                           </div>
+                          {(claim.trinityChecks[0] as any)?.reasoningInsights?.recommendation && (
+                            <div className="mt-2">
+                              <Badge variant="secondary" className="flex items-start gap-2 w-fit">
+                                <span className="font-normal whitespace-nowrap">
+                                  Recommended Action:
+                                </span>
+                                <span className="font-semibold">
+                                  {convertToTitleCase(
+                                    (claim.trinityChecks[0] as any).reasoningInsights.recommendation
+                                  )}
+                                </span>
+                              </Badge>
+                            </div>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             {(claim.trinityChecks[0] as any)?.reasoning ||
                               'No detailed reasoning available.'}
@@ -854,7 +868,7 @@ export function ClaimDetailPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7"
+                        className="h-7 w-7 p-0"
                         onClick={() => navigate(`/sessions`)}
                       >
                         <ExternalLink className="h-4 w-4" />
