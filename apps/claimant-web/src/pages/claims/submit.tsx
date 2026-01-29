@@ -56,7 +56,7 @@ export function SubmitClaimPage() {
         });
       };
 
-      await uploadDoc(data.policyDocument, 'SIGNED_STATEMENT');
+      await uploadDoc(data.policyDocument, 'POLICY_DOCUMENT');
       await uploadDoc(data.policeReportDocument, 'POLICE_REPORT');
       await uploadDoc(data.myKadFront, 'MYKAD_FRONT');
       await uploadDoc(data.vehicleRegistrationCard, 'VEHICLE_REG_CARD');

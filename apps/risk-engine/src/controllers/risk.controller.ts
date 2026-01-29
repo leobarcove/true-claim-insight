@@ -42,7 +42,16 @@ export class RiskController {
       where: { claimId },
       orderBy: { createdAt: 'desc' },
     });
-    return check || null;
+
+    if (check) {
+      const sanitized = { ...check } as any;
+      if (sanitized?.reasoningInsights?.model) {
+        delete sanitized.reasoningInsights.model;
+      }
+      return sanitized;
+    }
+
+    return null;
   }
 
   @Get('documents/:documentId/analysis')
@@ -51,6 +60,11 @@ export class RiskController {
       where: { documentId },
     });
 
-    return analysis || null;
+    if (analysis) {
+      const { modelUsed, ...sanitized } = analysis as any;
+      return sanitized;
+    }
+
+    return null;
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DocumentProcessorService } from './document-processor.service';
 import { Subject, concatMap } from 'rxjs';
+import { DocumentStatus } from '@tci/shared-types';
 
 @Injectable()
 export class AnalysisQueue {
@@ -26,11 +27,13 @@ export class AnalysisQueue {
 
   async addJob(documentId: string) {
     this.logger.log(`Queuing job for document: ${documentId}`);
-    
+
     // Update status to QUEUED
-    await this.processor.updateDocumentStatus(documentId, 'QUEUED').catch(err => 
-      this.logger.error(`Failed to update status to QUEUED for ${documentId}: ${err}`)
-    );
+    await this.processor
+      .updateDocumentStatus(documentId, DocumentStatus.QUEUED)
+      .catch(err =>
+        this.logger.error(`Failed to update status to QUEUED for ${documentId}: ${err}`)
+      );
 
     this.jobSubject.next(documentId);
   }

@@ -892,7 +892,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
       fetchFile('police_report.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_1.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_2.jpg', 'image/jpeg'),
-      fetchFile('workshop_repair.jpg', 'image/jpeg'),
+      fetchFile('workshop_repair_2.jpg', 'image/jpeg'),
     ]);
 
     setFormData({

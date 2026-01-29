@@ -29,14 +29,18 @@ export class TrinityCheckEngine {
     const riskFactors: string[] = [];
 
     // --- C1. Identity Verification ---
-
     // 1. NRIC vs Policy Holder
     if (data.nric && data.policy) {
+      const nricName = data.nric.full_name || '';
+      const nricId = data.nric.ic_number || '';
+      const policyHolderName = data.policy.policyholder?.name || '';
+      const policyHolderId = data.policy.policyholder?.ic_number || '';
+
       checks['C1_IDENTITY_POLICY_MATCH'] = this.checkIdentityMatch(
-        data.nric.full_name,
-        data.policy.policy_holder_name,
-        data.nric.id_number,
-        data.policy.policy_holder_nric
+        nricName,
+        policyHolderName,
+        nricId,
+        policyHolderId
       );
     } else {
       checks['C1_IDENTITY_POLICY_MATCH'] = this.skipCheck(
@@ -48,8 +52,8 @@ export class TrinityCheckEngine {
     // 2. NRIC vs Vehicle Owner (if Reg Card present)
     if (data.nric && data.registrationCard) {
       checks['C1_IDENTITY_OWNER_MATCH'] = this.checkNameMatch(
-        data.nric.full_name,
-        data.registrationCard.owner_name,
+        data.nric.full_name || '',
+        data.registrationCard.owner_name || '',
         'C1_IDENTITY_OWNER_MATCH'
       );
     } else {
@@ -63,12 +67,26 @@ export class TrinityCheckEngine {
 
     // 3. Policy Vehicle vs Registration Card
     if (data.policy && data.registrationCard) {
-      checks['C2_VEHICLE_DETAILS_MATCH'] = this.checkVehicleDetails(
-        data.policy.vehicle_plate_number,
-        data.registrationCard.registration_number,
-        data.policy.vehicle_chassis_number,
-        data.registrationCard.chassis_number
-      );
+      const policyPlate =
+        data.policy.vehicle?.registration_number ||
+        this.extractPlateFromText(data.policy.coverage?.description || '');
+      const policyChassis = data.policy.vehicle?.chassis_number || '';
+      const regPlate = data.registrationCard.registration_number || '';
+      const regChassis = data.registrationCard.chassis_number || '';
+
+      if (!policyPlate && !policyChassis) {
+        checks['C2_VEHICLE_DETAILS_MATCH'] = this.skipCheck(
+          'C2_VEHICLE_DETAILS_MATCH',
+          'Vehicle details not found in Policy'
+        );
+      } else {
+        checks['C2_VEHICLE_DETAILS_MATCH'] = this.checkVehicleDetails(
+          policyPlate || '',
+          regPlate,
+          policyChassis,
+          regChassis
+        );
+      }
     } else {
       checks['C2_VEHICLE_DETAILS_MATCH'] = this.skipCheck(
         'C2_VEHICLE_DETAILS_MATCH',
@@ -78,11 +96,33 @@ export class TrinityCheckEngine {
 
     // 4. Incident Vehicle vs Policy
     if (data.policeReport && data.policy) {
-      checks['C2_INCIDENT_VEHICLE_MATCH'] = this.checkPlateMatch(
-        data.policeReport.vehicle_number_involved,
-        data.policy.vehicle_plate_number,
-        'C2_INCIDENT_VEHICLE_MATCH'
-      );
+      // Try to extract plate from incident description if not explicit
+      let incidentPlate = '';
+      if (data.policeReport.incident?.description) {
+        incidentPlate = this.extractPlateFromText(data.policeReport.incident.description);
+      }
+
+      const policyPlate =
+        data.policy.vehicle?.registration_number ||
+        this.extractPlateFromText(data.policy.coverage?.description || '');
+
+      if (!incidentPlate) {
+        checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
+          'C2_INCIDENT_VEHICLE_MATCH',
+          'Vehicle number not found in Police Report'
+        );
+      } else if (!policyPlate) {
+        checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
+          'C2_INCIDENT_VEHICLE_MATCH',
+          'Vehicle number not found in Policy'
+        );
+      } else {
+        checks['C2_INCIDENT_VEHICLE_MATCH'] = this.checkPlateMatch(
+          incidentPlate,
+          policyPlate,
+          'C2_INCIDENT_VEHICLE_MATCH'
+        );
+      }
     } else {
       checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
         'C2_INCIDENT_VEHICLE_MATCH',
@@ -94,10 +134,14 @@ export class TrinityCheckEngine {
 
     // 5. Incident Date vs Policy Period
     if (data.policeReport && data.policy) {
+      const incidentDate = data.policeReport.incident?.date || data.policeReport.report_date || '';
+      const policyStart = data.policy.effective_date || '';
+      const policyEnd = data.policy.expiry_date || '';
+
       checks['C3_POLICY_ACTIVE_AT_INCIDENT'] = this.checkPolicyActiveDate(
-        data.policeReport.incident_date_time,
-        data.policy.period_from,
-        data.policy.period_to
+        incidentDate,
+        policyStart,
+        policyEnd
       );
     } else {
       checks['C3_POLICY_ACTIVE_AT_INCIDENT'] = this.skipCheck(
@@ -110,10 +154,17 @@ export class TrinityCheckEngine {
 
     // 6. Repair amount vs Sum Insured
     if (data.repairQuotation && data.policy) {
-      checks['C4_REPAIR_WITHIN_INSURED_SUM'] = this.checkRepairCost(
-        data.repairQuotation.total_amount,
-        data.policy.sum_insured
-      );
+      const repairAmount = data.repairQuotation.costs?.total_amount || 0;
+      const sumInsured = data.policy.coverage?.sum_insured || 0;
+
+      if (repairAmount > 0 && sumInsured > 0) {
+        checks['C4_REPAIR_WITHIN_INSURED_SUM'] = this.checkRepairCost(repairAmount, sumInsured);
+      } else {
+        checks['C4_REPAIR_WITHIN_INSURED_SUM'] = this.skipCheck(
+          'C4_REPAIR_WITHIN_INSURED_SUM',
+          'Repair Amount or Sum Insured missing/zero'
+        );
+      }
     } else {
       checks['C4_REPAIR_WITHIN_INSURED_SUM'] = this.skipCheck(
         'C4_REPAIR_WITHIN_INSURED_SUM',
@@ -122,9 +173,11 @@ export class TrinityCheckEngine {
     }
 
     // 7. Visual Damage Consistency (Vision vs Quotation)
-    if (data.damagePhotos && data.damagePhotos.length > 0 && data.repairQuotation) {
+    const hasPhotos =
+      data.damagePhotos && Array.isArray(data.damagePhotos) && data.damagePhotos.length > 0;
+    if (hasPhotos && data.repairQuotation) {
       checks['C4_VISUAL_DAMAGE_CONSISTENCY'] = this.checkVisualConsistency(
-        data.damagePhotos,
+        data.damagePhotos!,
         data.repairQuotation
       );
     } else {
@@ -176,10 +229,6 @@ export class TrinityCheckEngine {
     if (!s1 || !s2) return 0;
     const a = s1.toLowerCase().replace(/[^a-z0-9]/g, '');
     const b = s2.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Simple implementation if string-similarity not available,
-    // but typically we'd use Levenshtein distance here.
-    // For this prototype, strict inclusion match if exact match fails
     if (a === b) return 1.0;
     if (a.includes(b) || b.includes(a)) return 0.8;
     return 0.0;
@@ -187,6 +236,14 @@ export class TrinityCheckEngine {
 
   private cleanPlate(plate: string): string {
     return plate ? plate.toUpperCase().replace(/\s+/g, '') : '';
+  }
+
+  private extractPlateFromText(text: string): string {
+    // Basic regex for Malaysian plates (e.g., WA1234F, W1234A, ABC1234)
+    // Matches 1-3 letters, 1-4 digits, optionally 1 letter
+    const regex = /\b([A-Z]{1,3}\s?\d{1,4}\s?[A-Z]?)\b/i;
+    const match = text.match(regex);
+    return match ? this.cleanPlate(match[0]) : '';
   }
 
   // --- Check Logic ---
@@ -311,21 +368,28 @@ export class TrinityCheckEngine {
   ): TrinityMatchResult {
     // Collect all damaged parts mentioned in visual AI analysis
     const visuallyDamagedParts = new Set<string>();
-    photos.forEach(p =>
-      p.damage_location.forEach(part => visuallyDamagedParts.add(part.toLowerCase()))
-    );
 
-    // Collect quoted parts
-    const quotedParts = quotation.parts_list.map(p => p.item_name.toLowerCase());
+    if (Array.isArray(photos)) {
+      photos.forEach(p => {
+        const areas = p.damage_assessment?.damaged_areas;
+        if (Array.isArray(areas)) {
+          areas.forEach(part => {
+            if (part) visuallyDamagedParts.add(part.toLowerCase());
+          });
+        }
+      });
+    }
 
-    // Basic overlap check
-    // We expect quoted parts to be somewhat related to visual damage
-    // This is hard to do strictly without embeddings, so we look for keyword overlap
+    // Collect quoted parts: support parts_list vs repairs.parts_items
+    const partsItems = quotation.repairs?.parts_items;
+    const quotedParts = Array.isArray(partsItems)
+      ? partsItems.map(p => (p.description || '').toLowerCase())
+      : [];
 
     let overlapCount = 0;
     for (const vPart of visuallyDamagedParts) {
       for (const qPart of quotedParts) {
-        if (qPart.includes(vPart) || vPart.includes(qPart)) {
+        if (qPart && vPart && (qPart.includes(vPart) || vPart.includes(qPart))) {
           overlapCount++;
           break; // Count this visual part as covered
         }

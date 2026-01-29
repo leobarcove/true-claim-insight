@@ -3,72 +3,102 @@ export interface BaseDocumentSchema {
 }
 
 export interface NRICSchema extends BaseDocumentSchema {
-  full_name: string;
-  id_number: string;
+  full_name?: string;
+  ic_number?: string;
   address?: string;
-  date_of_birth?: string; // YYYY-MM-DD
+  date_of_birth?: string;
   gender?: string;
 }
 
 export interface PolicyDocumentSchema extends BaseDocumentSchema {
-  policy_number: string;
-  policy_holder_name: string;
-  policy_holder_nric: string;
-  vehicle_plate_number: string;
-  vehicle_chassis_number: string;
-  vehicle_make_model: string;
-  period_from: string; // YYYY-MM-DD
-  period_to: string; // YYYY-MM-DD
-  sum_insured: number;
-  coverage_type: 'Comprehensive' | 'Third Party';
+  insurer_name?: string;
+  policy_number?: string;
+  policy_status?: string;
+  effective_date?: string;
+  expiry_date?: string;
+  policyholder?: {
+    name?: string;
+    ic_number?: string;
+    address?: string;
+    email?: string;
+  };
+  coverage?: {
+    sum_insured?: number;
+    premium_amount?: number;
+    description?: string; // Might contain vehicle info
+  };
+  vehicle?: {
+    registration_number?: string;
+    chassis_number?: string;
+    make?: string;
+    model?: string;
+  };
 }
 
 export interface VehicleRegistrationCardSchema extends BaseDocumentSchema {
-  registration_number: string; // Plate
-  owner_name: string;
-  owner_nric: string;
-  chassis_number: string;
-  engine_number: string;
-  make: string;
-  model: string;
-  manufacturing_year: string;
+  registration_number?: string;
+  owner_name?: string;
+  owner_ic_number?: string;
+  chassis_number?: string;
+  engine_number?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  year_of_manufacture?: string;
 }
 
 export interface PoliceReportSchema extends BaseDocumentSchema {
-  report_number: string;
-  report_date: string;
-  incident_date_time: string;
-  incident_location: string;
-  complainant_name: string;
-  complainant_nric: string;
-  vehicle_number_involved: string;
-  incident_description: string;
+  report_number?: string;
+  report_date?: string;
+  incident?: {
+    date?: string;
+    time?: string;
+    location?: string;
+    description?: string; // Vehicle plate usually here
+  };
+  complainant?: {
+    name?: string;
+    ic_number?: string;
+  };
 }
 
 export interface RepairQuotationSchema extends BaseDocumentSchema {
-  quotation_number: string;
-  workshop_name: string;
-  workshop_reg_no: string;
-  vehicle_plate: string;
-  total_parts_amount: number;
-  total_labor_amount: number;
-  total_amount: number;
-  parts_list: Array<{
-    item_name: string;
-    quantity: number;
-    price: number;
-  }>;
+  quotation_number?: string;
+  quotation_date?: string;
+  costs?: {
+    total_amount?: number;
+    subtotal_amount?: number;
+  };
+  repairs?: {
+    parts_items?: Array<{
+      description: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }>;
+    labor_items?: Array<{
+      description: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }>;
+  };
+  vehicle?: {
+    registration_number?: string;
+    make?: string;
+    model?: string;
+  };
 }
 
 export interface DamagePhotoAnalysisSchema extends BaseDocumentSchema {
-  vehicle_detected: boolean;
-  plate_number_visible?: string;
-  damage_severity: 'Minor' | 'Moderate' | 'Severe';
-  damage_location: string[]; // e.g., ["Front Bumper", "Headlight"]
-  parts_to_replace: string[];
-  estimated_cost_range?: {
-    min: number;
-    max: number;
+  image_count?: number;
+  damage_assessment?: {
+    damaged_areas?: string[];
+    damage_types?: string[];
+    structural_damage_visible?: string;
+  };
+  vehicle?: {
+    registration_number?: string;
+    type?: string;
   };
 }
 
