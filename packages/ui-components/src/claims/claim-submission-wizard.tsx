@@ -888,8 +888,8 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
     const [nric, policy, voc, police, photo1, photo2, quotation] = await Promise.all([
       fetchFile('nric.jpg', 'image/jpeg'),
       fetchFile('insurance_document.jpg', 'image/jpeg'),
-      fetchFile('voc.jpg', 'image/jpeg'),
-      fetchFile('police_report.jpg', 'image/jpeg'),
+      fetchFile('voc_2.jpg', 'image/jpeg'),
+      fetchFile('police_report_2.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_1.jpg', 'image/jpeg'),
       fetchFile('damaged_vehicle_2.jpg', 'image/jpeg'),
       fetchFile('workshop_repair_2.jpg', 'image/jpeg'),

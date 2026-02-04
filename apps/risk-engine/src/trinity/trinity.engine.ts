@@ -23,7 +23,8 @@ export class TrinityCheckEngine {
     registrationCard?: VehicleRegistrationCardSchema;
     policeReport?: PoliceReportSchema;
     repairQuotation?: RepairQuotationSchema;
-    damagePhotos?: DamagePhotoAnalysisSchema[]; // Array of photo analysis results
+    visualEvidence?: DamagePhotoAnalysisSchema[];
+    claim?: any;
   }): TrinityAuditReport {
     const checks: Record<string, TrinityMatchResult> = {};
     const riskFactors: string[] = [];
@@ -49,6 +50,21 @@ export class TrinityCheckEngine {
       );
     }
 
+    // NRIC-DOB Consistency (ID-005)
+    if (data.nric?.ic_number && data.nric?.date_of_birth) {
+      const ic6 = data.nric.ic_number.substring(0, 6);
+      const dob = data.nric.date_of_birth.replace(/-/g, '').substring(2); // YYMMDD
+      const isMatch = ic6 === dob;
+      checks['C1_NRIC_DOB_CONSISTENCY'] = {
+        check_id: 'C1_NRIC_DOB_CONSISTENCY',
+        is_pass: isMatch,
+        confidence: 1.0,
+        priority: 'HIGH',
+        details: isMatch ? 'NRIC matches DOB' : `NRIC Prefix ${ic6} does not match DOB ${dob}`,
+        status: 'RUN',
+      };
+    }
+
     // 2. NRIC vs Vehicle Owner (if Reg Card present)
     if (data.nric && data.registrationCard) {
       checks['C1_IDENTITY_OWNER_MATCH'] = this.checkNameMatch(
@@ -63,9 +79,30 @@ export class TrinityCheckEngine {
       );
     }
 
+    // 3. Unauthorized Driver (ID-002) - If complainant != policyholder, check if driver is named
+    if (data.policeReport?.complainant && data.policy) {
+      const compName = data.policeReport.complainant.name || '';
+      const holderName = data.policy.policyholder?.name || '';
+      if (this.fuzzyMatch(compName, holderName) < 0.8) {
+        // Different person, check named drivers or insured person
+        const insuredName = data.policy.insured_person?.name || '';
+        const isAuthorized = this.fuzzyMatch(compName, insuredName) > 0.8;
+        checks['C1_AUTHORIZED_DRIVER'] = {
+          check_id: 'C1_AUTHORIZED_DRIVER',
+          is_pass: isAuthorized,
+          confidence: 0.9,
+          priority: 'HIGH',
+          details: isAuthorized
+            ? 'Driver is authorized/named'
+            : `Driver ${compName} is not the policyholder or named insured`,
+          status: 'RUN',
+        };
+      }
+    }
+
     // --- C2. Vehicle Verification ---
 
-    // 3. Policy Vehicle vs Registration Card
+    // 4. Policy Vehicle vs Registration Card
     if (data.policy && data.registrationCard) {
       const policyPlate =
         data.policy.vehicle?.registration_number ||
@@ -94,7 +131,41 @@ export class TrinityCheckEngine {
       );
     }
 
-    // 4. Incident Vehicle vs Policy
+    // Road Tax Validity (VEH-003)
+    if (data.registrationCard?.road_tax_expiry && data.claim?.incidentDate) {
+      const expiry = new Date(data.registrationCard.road_tax_expiry);
+      const incident = new Date(data.claim.incidentDate);
+      const isValid = expiry >= incident;
+      checks['C2_ROAD_TAX_VALIDITY'] = {
+        check_id: 'C2_ROAD_TAX_VALIDITY',
+        is_pass: isValid,
+        confidence: 1.0,
+        priority: 'HIGH',
+        details: isValid
+          ? 'Road tax was valid'
+          : `Road tax expired on ${expiry.toDateString()} (Incident: ${incident.toDateString()})`,
+        status: 'RUN',
+      };
+    }
+
+    // Vehicle Visual Match (VEH-001) - Match Photos/RegCard Make&Model
+    if (data.visualEvidence?.length && data.registrationCard) {
+      const regMake = (data.registrationCard.vehicle_make || '').toLowerCase();
+      const photoMake = (data.visualEvidence[0].vehicle?.make || '').toLowerCase();
+      const isMatch = regMake.includes(photoMake) || photoMake.includes(regMake);
+      checks['C2_VEHICLE_VISUAL_MATCH'] = {
+        check_id: 'C2_VEHICLE_VISUAL_MATCH',
+        is_pass: isMatch,
+        confidence: 0.7,
+        priority: 'MEDIUM',
+        details: isMatch
+          ? 'Vehicle visual features match documentation'
+          : `Visual Make (${photoMake}) mismatch with Reg Card (${regMake})`,
+        status: 'RUN',
+      };
+    }
+
+    // 5. Incident Vehicle vs Policy
     if (data.policeReport && data.policy) {
       // Try to extract plate from incident description if not explicit
       let incidentPlate = '';
@@ -132,7 +203,7 @@ export class TrinityCheckEngine {
 
     // --- C3. Incident Validity ---
 
-    // 5. Incident Date vs Policy Period
+    // 6. Incident Date vs Policy Period
     if (data.policeReport && data.policy) {
       const incidentDate = data.policeReport.incident?.date || data.policeReport.report_date || '';
       const policyStart = data.policy.effective_date || '';
@@ -150,9 +221,45 @@ export class TrinityCheckEngine {
       );
     }
 
+    // Environment Consistency (LOG-005, LOG-006)
+    if (data.policeReport?.incident && data.visualEvidence?.length) {
+      const reportWeather = (data.policeReport.incident.weather || '').toLowerCase();
+      const photoWeather = (data.visualEvidence[0].weather_condition || '').toLowerCase();
+      if (reportWeather && photoWeather) {
+        const isMatch =
+          reportWeather.includes(photoWeather) || photoWeather.includes(reportWeather);
+        checks['C3_ENVIRONMENT_CONSISTENCY'] = {
+          check_id: 'C3_ENVIRONMENT_CONSISTENCY',
+          is_pass: isMatch,
+          confidence: 0.6,
+          priority: 'MEDIUM',
+          details: isMatch
+            ? 'Weather conditions consistent'
+            : `Weather mismatch: Report=${reportWeather}, Photos=${photoWeather}`,
+          status: 'RUN',
+        };
+      }
+    }
+
+    // Police Report Signatures (LOG-008)
+    if (data.policeReport?.signatures) {
+      const sigs = data.policeReport.signatures;
+      const isComplete = sigs.complainant_present && sigs.receiving_officer_present;
+      checks['C3_POLICE_REPORT_SIGNATURES'] = {
+        check_id: 'C3_POLICE_REPORT_SIGNATURES',
+        is_pass: isComplete,
+        confidence: 1.0,
+        priority: 'MEDIUM',
+        details: isComplete
+          ? 'Mandatory signatures present'
+          : 'Missing mandatory signatures on police report',
+        status: 'RUN',
+      };
+    }
+
     // --- C4. Damage & Cost Analysis ---
 
-    // 6. Repair amount vs Sum Insured
+    // 7. Repair amount vs Sum Insured
     if (data.repairQuotation && data.policy) {
       const repairAmount = data.repairQuotation.costs?.total_amount || 0;
       const sumInsured = data.policy.coverage?.sum_insured || 0;
@@ -172,12 +279,12 @@ export class TrinityCheckEngine {
       );
     }
 
-    // 7. Visual Damage Consistency (Vision vs Quotation)
+    // 8. Visual Damage Consistency (Vision vs Quotation)
     const hasPhotos =
-      data.damagePhotos && Array.isArray(data.damagePhotos) && data.damagePhotos.length > 0;
+      data.visualEvidence && Array.isArray(data.visualEvidence) && data.visualEvidence.length > 0;
     if (hasPhotos && data.repairQuotation) {
       checks['C4_VISUAL_DAMAGE_CONSISTENCY'] = this.checkVisualConsistency(
-        data.damagePhotos!,
+        data.visualEvidence!,
         data.repairQuotation
       );
     } else {
@@ -185,6 +292,23 @@ export class TrinityCheckEngine {
         'C4_VISUAL_DAMAGE_CONSISTENCY',
         'Photos or Quotation missing'
       );
+    }
+
+    // Airbag Deployment vs Severity Anomaly (LOG-007)
+    if (data.visualEvidence?.length) {
+      const photo = data.visualEvidence[0];
+      const severity = photo.accident_context?.impact_severity;
+      const airbag = photo.accident_context?.airbag_deployed;
+      if (severity === 'SEVERE' && airbag === 'false') {
+        checks['C4_AIRBAG_DEPLOYMENT_ANOMALY'] = {
+          check_id: 'C4_AIRBAG_DEPLOYMENT_ANOMALY',
+          is_pass: false,
+          confidence: 0.8,
+          priority: 'MEDIUM',
+          details: 'Severe impact visible but airbags did not deploy',
+          status: 'RUN',
+        };
+      }
     }
 
     // --- Aggregation ---

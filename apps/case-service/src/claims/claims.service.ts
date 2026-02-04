@@ -100,14 +100,10 @@ export class ClaimsService {
 
     if (query.hasAnalysis) {
       where.AND = [
-        { trinityChecks: { some: {} } },
         {
           documents: {
             some: {
-              OR: [
-                { analysis: { isNot: null } },
-                { status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] } },
-              ],
+              analysis: { isNot: null },
             },
           },
         },

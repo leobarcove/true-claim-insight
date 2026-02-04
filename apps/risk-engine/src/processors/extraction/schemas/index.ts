@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+const AuthenticitySchema = z
+  .object({
+    ai_generated: z.boolean().default(false),
+    screen_capture: z.boolean().default(false),
+    suspicious_elements: z.array(z.string()).default([]),
+    potential_manipulation: z.array(z.string()).default([]),
+  })
+  .optional();
+
 export const MyKadSchema = z.object({
   full_name: z.string().nullable(),
   ic_number: z.string().nullable(),
@@ -13,8 +22,7 @@ export const MyKadSchema = z.object({
   city: z.string().nullable(),
   state: z.string().nullable(),
   postcode: z.string().nullable(),
-  place_of_birth: z.string().nullable(),
-  issue_date: z.string().nullable(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });
 
@@ -25,7 +33,6 @@ export const VehicleRegCardSchema = z.object({
   owner_address: z.string().nullable(),
   vehicle_make: z.string().nullable(),
   vehicle_model: z.string().nullable(),
-  vehicle_type: z.string().nullable(),
   engine_number: z.string().nullable(),
   chassis_number: z.string().nullable(),
   engine_capacity_cc: z.number().nullable(),
@@ -35,6 +42,7 @@ export const VehicleRegCardSchema = z.object({
   date_of_registration: z.string().nullable(),
   road_tax_expiry: z.string().nullable(),
   issuing_authority: z.string().nullable(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });
 
@@ -51,7 +59,6 @@ export const PoliceReportSchema = z.object({
       name: z.string().nullable(),
       id: z.string().nullable(),
       rank: z.string().nullable(),
-      signature_present: z.boolean().default(false),
     })
     .optional(),
   complainant: z
@@ -68,7 +75,6 @@ export const PoliceReportSchema = z.object({
       phone_home: z.string().nullable(),
       phone_mobile: z.string().nullable(),
       phone_office: z.string().nullable(),
-      signature_present: z.boolean().default(false),
     })
     .optional(),
   incident: z
@@ -82,10 +88,12 @@ export const PoliceReportSchema = z.object({
   laws_referenced: z.array(z.string()).default([]),
   signatures: z
     .object({
-      receiving_officer_signature_present: z.boolean().default(false),
-      complainant_signature_present: z.boolean().default(false),
+      complainant_present: z.boolean().default(false),
+      interpreter_present: z.boolean().default(false),
+      receiving_officer_present: z.boolean().default(false),
     })
     .optional(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });
 
@@ -137,6 +145,7 @@ export const PolicyDocumentSchema = z.object({
       percentage: z.string().nullable(),
     })
     .optional(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });
 
@@ -189,6 +198,7 @@ export const RepairQuotationSchema = z.object({
       total_amount: z.union([z.number(), z.string()]).nullable(),
     })
     .optional(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });
 
@@ -239,5 +249,8 @@ export const DamagePhotoSchema = z.object({
       emergency_services_visible: z.boolean().default(false),
     })
     .optional(),
+  weather_condition: z.string().nullable(),
+  road_surface_condition: z.string().nullable(),
+  authenticity: AuthenticitySchema,
   confidence_score: z.number().default(0),
 });

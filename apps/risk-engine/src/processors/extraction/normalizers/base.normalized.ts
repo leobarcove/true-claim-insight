@@ -32,4 +32,21 @@ export abstract class BaseNormalizer<T> {
     }
     return !!val;
   }
+
+  protected toArray(val: any): any[] {
+    if (Array.isArray(val)) return val;
+    return [];
+  }
+
+  protected normalizeAuth(auth: any): any {
+    if (!auth) return undefined;
+    return {
+      ai_generated: !!auth.ai_generated,
+      screen_capture: !!auth.screen_capture,
+      suspicious_elements: Array.isArray(auth.suspicious_elements) ? auth.suspicious_elements : [],
+      potential_manipulation: Array.isArray(auth.potential_manipulation)
+        ? auth.potential_manipulation
+        : [],
+    };
+  }
 }

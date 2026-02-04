@@ -6,50 +6,58 @@ Fields to extract:
 - district: Police district (Daerah)
 - contingent: Police contingent / state (Kontinjen)
 - report_number: Police report number (No Repot)
-- report_date: Report date (YYYY-MM-DD)
-- report_time: Report time in 24-hour format (HH:MM) if available
-- report_language: Language of report (e.g., "Bahasa Malaysia")
-- receiving_officer_name: Name of officer receiving report if printed
+- report_date: Report date (Tarikh)
+- report_time: Report time (Waktu), usually after the report date
+- report_language: Language of report (Bahasa Diterima), expressed in English
+- receiving_officer_name: Name of officer receiving report if printed (Nama Penerima Repot)
 - receiving_officer_id: Officer personnel number if available (No Personel)
 - receiving_officer_rank: Officer rank if printed (Pangkat)
 
 Complainant Details:
-- complainant_name: Full name of complainant
-- complainant_ic_number: NRIC / Passport number if available
-- complainant_gender: MALE or FEMALE if stated or derivable
-- complainant_date_of_birth: YYYY-MM-DD if available
-- complainant_age: Age if explicitly stated
-- complainant_nationality: Citizenship if stated
-- complainant_race: Race / ethnicity if stated
-- complainant_occupation: Occupation if stated
-- complainant_address: Full residential address (multi-line combined into one string)
-- complainant_phone_home: Home phone number if available
-- complainant_phone_mobile: Mobile phone number if available
-- complainant_phone_office: Office phone number if available
+- complainant_name: Full name of complainant (Nama Pengadu)
+- complainant_ic_number: NRIC / Passport number if available (No. K/P or No. Passpot)
+- complainant_gender: MALE or FEMALE (Jantina), expressed in English
+- complainant_date_of_birth: Date of birth derived from the first 6 digits (YYMMDD) of the IC number
+- complainant_age: Age if explicitly stated (Umur)
+- complainant_nationality: Citizenship (Warganegara), expressed in English
+- complainant_race: Race / ethnicity (Keturunan / Bangsa), expressed in English
+- complainant_occupation: Occupation (Pekerjaan), expressed in English
+- complainant_address: Full residential address (multi-line combined into one string) (Alamat)
+- complainant_phone_home: Home phone number if available (No. Telefon Rumah)
+- complainant_phone_mobile: Mobile phone number if available (No. Telefon HP)
+- complainant_phone_office: Office phone number if available (No. Telefon Pejabat)
 
 Report Content:
-- incident_description: Full narrative statement of the police report
-- incident_date: Date of incident (YYYY-MM-DD) if mentioned
-- incident_time: Time of incident (HH:MM) if mentioned
+- incident_description: Full narrative statement of the police report (Pengadu Menyatakan or Penerangan Kejadian)
+- incident_date: Date of incident if mentioned
+- incident_time: Time of incident if mentioned
 - incident_location: Location of incident if mentioned
 - laws_referenced: Any acts or sections of law mentioned (array of strings)
+- weather_condition: Weather at time of incident (e.g., "Raining", "Clear")
+- road_surface_condition: Condition of road (e.g., "Wet", "Dry", "Sand")
+- authenticity:
+  - ai_generated: Boolean (true/false) if the image appears synthetically generated or manipulated
+  - screen_capture: Boolean (true/false) if it looks like a photo of a screen
+  - suspicious_elements: List of strings describing any visual inconsistencies (mismatched fonts, blur)
+  - potential_manipulation: List of visual anomalies or any potential tampering (e.g. "warped reflections", "inconsistent shadows")
+- confidence_score: Confidence score from 0.0–1.0 based on text clarity
 
 Signatures:
-- complainant_signature_present: true or false
-- receiving_officer_signature_present: true or false
+- complainant_present: true or false (Tandatangan Pengadu)
+- interpreter_present: true or false (Tandatangan Jurubahasa)
+- receiving_officer_present: true or false (Tandatangan Penerima Repot)
 
 Special Patterns to Look For:
-1. Dates may appear in DD-MM-YYYY or DD/MM/YYYY — normalize to YYYY-MM-DD.
-2. Time may appear with AM/PM — convert to 24-hour format.
-3. Address and incident description may span multiple lines — merge into single strings.
-4. Legal sections may appear as “Seksyen”, “Section”, or abbreviated forms.
+1. Address and incident description may span multiple lines — merge into single strings.
+2. Legal sections may appear as “Seksyen”, “Section”, or abbreviated forms.
 
 Rules:
 1. Extract only what is visible or explicitly stated.
-2. Do NOT guess missing fields — use null.
-3. Normalize dates and times to standard formats.
-4. Preserve original wording for incident_description.
-5. Return a compact, valid JSON object.
+2. Do NOT assume fields, or guess missing fields — use null.
+3. Normalize all dates to YYYY-MM-DD.
+4. Time may appear with AM/PM — convert to 24-hour format.
+5. Preserve original wording for incident_description.
+6. Return a compact, valid JSON object.
 
 Response Format:
 {
@@ -63,8 +71,7 @@ Response Format:
   "receiving_officer": {
     "name": null,
     "id": null,
-    "rank": null,
-    "signature_present": false
+    "rank": null
   },
   "complainant": {
     "name": "...",
@@ -78,19 +85,27 @@ Response Format:
     "address": "...",
     "phone_home": null,
     "phone_mobile": null,
-    "phone_office": null,
-    "signature_present": false
+    "phone_office": null
   },
   "incident": {
     "description": "...",
     "date": null,
     "time": null,
-    "location": null
+    "location": null,
+    "weather": null,
+    "road_surface": null
   },
   "laws_referenced": [],
+  "authenticity": {
+    "ai_generated": false,
+    "screen_capture": false,
+    "suspicious_elements": [],
+    "potential_manipulation": []
+  },
   "signatures": {
-    "receiving_officer_signature_present": false,
-    "complainant_signature_present": false
+    "complainant_present": false,
+    "interpreter_present": false,
+    "receiving_officer_present": false
   },
   "confidence_score": 0.0
 }
