@@ -223,7 +223,5 @@ export class DocumentsService {
         },
       },
     });
-
-    // TODO: Delete from S3 in production
   }
 }

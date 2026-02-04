@@ -230,7 +230,7 @@ export function DocumentDetailPage() {
                                 {doc.filename || doc.name}
                               </p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
                               <span className="text-[10px] text-muted-foreground">
                                 {doc.type.replace(/_/gi, ' ')}
                               </span>

@@ -5,6 +5,14 @@ General Information:
 - image_count: Number of images analyzed
 - image_quality: GOOD / FAIR / POOR based on clarity, lighting, and focus
 - analysis_confidence: LOW / MEDIUM / HIGH based on visibility of damage
+- weather_condition: Weather at time of incident (e.g., "Raining", "Clear")
+- road_surface_condition: Condition of road (e.g., "Wet", "Dry", "Sand")
+- authenticity:
+  - ai_generated: Boolean (true/false) if the image appears synthetically generated or manipulated
+  - screen_capture: Boolean (true/false) if it looks like a photo of a screen
+  - suspicious_elements: List of strings describing any visual inconsistencies (mismatched fonts, blur)
+  - potential_manipulation: List of visual anomalies or any potential tampering (e.g. "warped reflections", "inconsistent shadows")
+- confidence_score: Confidence score from 0.0–1.0
 
 Vehicle Identification (if visible):
 - vehicle_type: CAR / MOTORCYCLE / LORRY / BUS / VAN / OTHER
@@ -83,6 +91,14 @@ Response Format:
     "number_of_vehicles_involved": "...",
     "fire_or_smoke_visible": "...",
     "emergency_services_visible": "..."
+  },
+  "weather_condition": "...",
+  "road_surface_condition": "...",
+  "authenticity": {
+    "ai_generated": false,
+    "screen_capture": false,
+    "suspicious_elements": [],
+    "potential_manipulation": []
   },
   "confidence_score": 0.0
 }

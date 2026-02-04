@@ -17,8 +17,7 @@ export class MyKadNormalizer extends BaseNormalizer<any> {
       city: this.toString(raw.city),
       state: this.toString(raw.state),
       postcode: this.toString(raw.postcode),
-      place_of_birth: this.toString(raw.place_of_birth),
-      issue_date: this.toString(raw.issue_date),
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }
@@ -34,7 +33,6 @@ export class VehicleRegNormalizer extends BaseNormalizer<any> {
       owner_address: this.toString(raw.owner_address),
       vehicle_make: this.toString(raw.vehicle_make),
       vehicle_model: this.toString(raw.vehicle_model),
-      vehicle_type: this.toString(raw.vehicle_type),
       engine_number: this.toString(raw.engine_number),
       chassis_number: this.toString(raw.chassis_number),
       engine_capacity_cc: this.toInt(raw.engine_capacity_cc),
@@ -44,6 +42,7 @@ export class VehicleRegNormalizer extends BaseNormalizer<any> {
       date_of_registration: this.toString(raw.date_of_registration),
       road_tax_expiry: this.toString(raw.road_tax_expiry),
       issuing_authority: this.toString(raw.issuing_authority),
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }
@@ -65,7 +64,6 @@ export class PoliceReportNormalizer extends BaseNormalizer<any> {
             name: this.toString(raw.receiving_officer.name),
             id: this.toString(raw.receiving_officer.id),
             rank: this.toString(raw.receiving_officer.rank),
-            signature_present: this.toBool(raw.receiving_officer.signature_present),
           }
         : undefined,
       complainant: raw.complainant
@@ -82,7 +80,6 @@ export class PoliceReportNormalizer extends BaseNormalizer<any> {
             phone_home: this.toString(raw.complainant.phone_home),
             phone_mobile: this.toString(raw.complainant.phone_mobile),
             phone_office: this.toString(raw.complainant.phone_office),
-            signature_present: this.toBool(raw.complainant.signature_present),
           }
         : undefined,
       incident: raw.incident
@@ -91,6 +88,8 @@ export class PoliceReportNormalizer extends BaseNormalizer<any> {
             date: this.toString(raw.incident.date),
             time: this.toString(raw.incident.time),
             location: this.toString(raw.incident.location),
+            weather: this.toString(raw.incident.weather),
+            road_surface: this.toString(raw.incident.road_surface),
           }
         : undefined,
       laws_referenced: Array.isArray(raw.laws_referenced)
@@ -98,14 +97,12 @@ export class PoliceReportNormalizer extends BaseNormalizer<any> {
         : [],
       signatures: raw.signatures
         ? {
-            receiving_officer_signature_present: this.toBool(
-              raw.signatures.receiving_officer_signature_present
-            ),
-            complainant_signature_present: this.toBool(
-              raw.signatures.complainant_signature_present
-            ),
+            complainant_present: this.toBool(raw.signatures.complainant_present),
+            interpreter_present: this.toBool(raw.signatures.interpreter_present),
+            receiving_officer_present: this.toBool(raw.signatures.receiving_officer_present),
           }
         : undefined,
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }
@@ -168,6 +165,7 @@ export class PolicyDocumentNormalizer extends BaseNormalizer<any> {
             percentage: this.toString(raw.nominee.percentage),
           }
         : undefined,
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }
@@ -239,6 +237,7 @@ export class RepairQuotationNormalizer extends BaseNormalizer<any> {
             total_amount: this.toFloat(raw.costs.total_amount),
           }
         : undefined,
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }
@@ -308,6 +307,9 @@ export class DamagePhotoNormalizer extends BaseNormalizer<any> {
             ),
           }
         : undefined,
+      weather_condition: this.toString(raw.weather_condition),
+      road_surface_condition: this.toString(raw.road_surface_condition),
+      authenticity: this.normalizeAuth(raw.authenticity),
       confidence_score: this.toFloat(raw.confidence_score),
     };
   }

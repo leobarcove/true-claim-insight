@@ -7,9 +7,9 @@ Fields to extract:
 - policy_type: Type of policy (e.g., Motor, General)
 - policy_number: Policy number
 - policy_status: Active / Lapsed / Cancelled if stated
-- issue_date: Policy issue date (YYYY-MM-DD)
-- effective_date: Policy effective / commencement date (YYYY-MM-DD)
-- expiry_date: Policy expiry / maturity date (YYYY-MM-DD)
+- issue_date: Policy issue date
+- effective_date: Policy effective / commencement date
+- expiry_date: Policy expiry / maturity date
 - policy_currency: Currency code (e.g., MYR, USD)
 - policy_language: Language of document
 
@@ -19,7 +19,7 @@ Policyholder Details:
 - policyholder_date_of_birth: YYYY-MM-DD if available
 - policyholder_gender: MALE or FEMALE if stated
 - policyholder_nationality: Citizenship if stated
-- policyholder_address: Full address (merge multi-line into one string)
+- policyholder_address: Full address
 - policyholder_phone: Contact phone number if available
 - policyholder_email: Email address if available
 
@@ -28,6 +28,12 @@ Insured / Covered Person Details:
 - insured_ic_number: NRIC / Passport number if available
 - insured_relationship_to_policyholder: Relationship if stated
 - insured_date_of_birth: YYYY-MM-DD if available
+- authenticity:
+  - ai_generated: Boolean (true/false) if the image appears synthetically generated or manipulated
+  - screen_capture: Boolean (true/false) if it looks like a photo of a screen
+  - suspicious_elements: List of strings describing any visual inconsistencies (mismatched fonts, blur)
+  - potential_manipulation: List of visual anomalies or any potential tampering (e.g. "warped reflections", "inconsistent shadows")
+- confidence_score: Confidence score from 0.0–1.0 based on text clarity
 
 Coverage Details:
 - sum_insured: Total sum insured / coverage amount
@@ -43,17 +49,16 @@ Nominee / Beneficiary Details:
 - nominee_percentage: Percentage allocation if stated
 
 Special Patterns to Look For:
-1. Dates may appear in DD-MM-YYYY or DD/MM/YYYY — normalize to YYYY-MM-DD.
-2. Monetary values may include commas or currency symbols — normalize to numeric string.
-3. Coverage, exclusions, and benefits may span multiple lines — merge into single strings.
-4. Names may appear in uppercase — preserve original casing.
+1. Address, coverage, exclusions, and benefits may span multiple lines — merge into single strings.
+2. Names may appear in uppercase — preserve original casing.
 
 Rules:
 1. Extract only what is visible or explicitly stated.
-2. Do NOT guess missing fields — use null.
-3. Normalize dates and monetary values.
-4. Preserve original wording for coverage_description.
-5. Return a compact, valid JSON object.
+2. Do NOT assume fields, or guess missing fields — use null.
+3. Normalize all dates to YYYY-MM-DD.
+4. Monetary values may include commas or currency symbols — normalize to numeric string.
+5. Preserve original wording for coverage_description.
+6. Return a compact, valid JSON object.
 
 Response Format:
 {
@@ -95,6 +100,12 @@ Response Format:
     "name": null,
     "relationship": null,
     "percentage": null
+  },
+  "authenticity": {
+    "ai_generated": false,
+    "screen_capture": false,
+    "suspicious_elements": [],
+    "potential_manipulation": []
   },
   "confidence_score": 0.0
 }

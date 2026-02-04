@@ -1,5 +1,11 @@
 export interface BaseDocumentSchema {
   confidence_score: number;
+  authenticity?: {
+    ai_generated: boolean;
+    screen_capture: boolean;
+    suspicious_elements: string[];
+    potential_manipulation: string[];
+  };
 }
 
 export interface NRICSchema extends BaseDocumentSchema {
@@ -8,6 +14,7 @@ export interface NRICSchema extends BaseDocumentSchema {
   address?: string;
   date_of_birth?: string;
   gender?: string;
+  age?: number;
 }
 
 export interface PolicyDocumentSchema extends BaseDocumentSchema {
@@ -21,6 +28,12 @@ export interface PolicyDocumentSchema extends BaseDocumentSchema {
     ic_number?: string;
     address?: string;
     email?: string;
+  };
+  insured_person?: {
+    name?: string;
+    ic_number?: string;
+    relationship_to_policyholder?: string;
+    date_of_birth?: string;
   };
   coverage?: {
     sum_insured?: number;
@@ -44,6 +57,7 @@ export interface VehicleRegistrationCardSchema extends BaseDocumentSchema {
   vehicle_make?: string;
   vehicle_model?: string;
   year_of_manufacture?: string;
+  road_tax_expiry?: string;
 }
 
 export interface PoliceReportSchema extends BaseDocumentSchema {
@@ -54,10 +68,17 @@ export interface PoliceReportSchema extends BaseDocumentSchema {
     time?: string;
     location?: string;
     description?: string; // Vehicle plate usually here
+    weather?: string;
+    road_surface?: string;
   };
   complainant?: {
     name?: string;
     ic_number?: string;
+  };
+  signatures?: {
+    complainant_present: boolean;
+    interpreter_present: boolean;
+    receiving_officer_present: boolean;
   };
 }
 
@@ -86,6 +107,7 @@ export interface RepairQuotationSchema extends BaseDocumentSchema {
     registration_number?: string;
     make?: string;
     model?: string;
+    color?: string;
   };
 }
 
@@ -99,6 +121,19 @@ export interface DamagePhotoAnalysisSchema extends BaseDocumentSchema {
   vehicle?: {
     registration_number?: string;
     type?: string;
+    make?: string;
+    model?: string;
+    color?: string;
+  };
+  environment?: {
+    lighting_condition?: string;
+    road_condition?: string;
+  };
+  weather_condition?: string;
+  road_surface_condition?: string;
+  accident_context?: {
+    impact_severity?: string;
+    airbag_deployed?: string;
   };
 }
 

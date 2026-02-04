@@ -4,6 +4,9 @@ import { GpuClientService } from '../llm/gpu-client.service';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
 import { DocumentStatus, DocumentType } from '@tci/shared-types';
 import { ExtractionService } from './extraction/extraction.service';
+import sharp from 'sharp';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import { EventsGateway } from '../trinity/events.gateway';
 
@@ -88,19 +91,12 @@ export class DocumentProcessorService {
       const isImage = mimeType.startsWith('image/');
       const docType = doc.type as DocumentType;
 
-      if (
-        isImage &&
-        [
-          DocumentType.NRIC,
-          DocumentType.MYKAD_FRONT,
-          DocumentType.DAMAGE_PHOTO,
-          DocumentType.REPAIR_QUOTATION,
-        ].includes(docType)
-      ) {
+      if (isImage) {
         // Vision Path
         modelUsed = 'qwen2.5vl:7b';
         const prompt = this.extractionService.getPrompt(docType);
-        const resp = await this.gpu.visionJson(prompt, fileBuffer, doc.filename, modelUsed);
+        const optimizedBuffer = await this.preprocessImage(fileBuffer, docType, doc.filename);
+        const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename, modelUsed);
         visionData = resp.output || resp;
         resultData = this.extractionService.normalize(docType, visionData);
       } else {
@@ -161,7 +157,7 @@ export class DocumentProcessorService {
    */
   async runTrinityCheck(claimId: string) {
     const dataBag: any = {
-      damagePhotos: [],
+      visualEvidence: [],
     };
     const claimDocs = await this.prisma.document.findMany({
       where: { claimId },
@@ -173,6 +169,9 @@ export class DocumentProcessorService {
 
       const content = d.analysis.extractedData as any;
       const vision = d.analysis.visionData as any;
+
+      if (!content || !vision) continue;
+      if (vision) dataBag.visualEvidence.push(vision);
 
       switch (d.type) {
         case DocumentType.NRIC:
@@ -192,11 +191,17 @@ export class DocumentProcessorService {
           dataBag.repairQuotation = content;
           break;
         case DocumentType.DAMAGE_PHOTO:
-          if (vision) dataBag.damagePhotos.push(vision);
+          dataBag.damagePhoto = content;
           break;
       }
     }
 
+    const claim = await this.prisma.claim.findUnique({
+      where: { id: claimId },
+      include: { claimant: true },
+    });
+
+    dataBag.claim = claim;
     const report = this.trinity.auditClaim(dataBag);
     const trinityCheck = await this.prisma.trinityCheck.create({
       data: {
@@ -214,6 +219,75 @@ export class DocumentProcessorService {
   }
 
   /**
+   * Pre-processes images for VLM.
+   * Resizes large images and enhances document-like images for better text readability.
+   */
+  private async preprocessImage(
+    buffer: Buffer,
+    type: DocumentType,
+    filename: string
+  ): Promise<Buffer> {
+    try {
+      const metadata = await sharp(buffer).metadata();
+      const originalWidth = metadata.width || 1024;
+      const originalHeight = metadata.height || 1024;
+      const originalDpi = metadata.density || 72;
+
+      // Dynamic DPI scaling to stay under pixel limit
+      const MAX_PIXELS = 700000;
+      const widthInch = originalWidth / originalDpi;
+      const heightInch = originalHeight / originalDpi;
+
+      // Calculate max DPI that keeps us under pixel limit
+      const maxDpi = Math.sqrt(MAX_PIXELS / (widthInch * heightInch));
+      const safeDpi = Math.min(150, maxDpi); // Cap at 150 DPI for quality
+      this.logger.log(
+        `Optimizing ${filename}: ${originalWidth}x${originalHeight} (${originalDpi} DPI) -> Goal: ${Math.round(safeDpi)} DPI`
+      );
+
+      let pipeline = sharp(buffer).resize({
+        width: Math.round(widthInch * safeDpi),
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+
+      // Enhance for black-on-white text readability for documents
+      if (type !== DocumentType.DAMAGE_PHOTO) {
+        this.logger.log(`Applying document enhancement for ${type}`);
+        pipeline = pipeline
+          .grayscale()
+          .normalise()
+          .linear(1.2, -10)
+          .modulate({ brightness: 1.1 })
+          .sharpen();
+      } else {
+        this.logger.log(`Applying size optimization for photo ${type}`);
+      }
+
+      const optimizedBuffer = await pipeline
+        .withMetadata({ density: Math.round(safeDpi) })
+        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+        .toBuffer();
+
+      // TEMP: viewing
+      // try {
+      //   const tmpDir = path.join(process.cwd(), 'tmp');
+      //   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      //   const filePath = path.join(tmpDir, `opt_${filename}`);
+      //   fs.writeFileSync(filePath, optimizedBuffer);
+      //   this.logger.log(`Saved optimized image to: ${filePath}`);
+      // } catch (err: any) {
+      //   this.logger.warn(`Failed to save debug image: ${err.message}`);
+      // }
+
+      return optimizedBuffer;
+    } catch (error: any) {
+      this.logger.warn(`Image pre-processing failed: ${error.message}`);
+      return buffer;
+    }
+  }
+
+  /**
    * Intelligence Reasoning using LLM reasoning (e.g. DeepSeek-R1)
    */
   async runIntelligenceReasoning(
@@ -224,29 +298,68 @@ export class DocumentProcessorService {
   ) {
     this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
 
-    const prompt = `
-      You are a senior insurance claim investigator with experience in motor, personal accident, and general insurance claims.
-      Analyze the following extracted and consolidated data from multiple documents related to a single insurance claim.
-      
-      DOCUMENTS DATA:
-      ${JSON.stringify(dataBag, null, 2)}
-      
-      TRINITY CROSS-CHECK RESULTS:
-      ${JSON.stringify(report, null, 2)}
-      
-      Your task:
-      Evaluate the overall legitimacy, consistency, and risk profile of the claim based strictly on the provided data.
+    // Fetch Claim Details
+    const claim = await this.prisma.claim.findUnique({
+      where: { id: claimId },
+      include: { claimant: true },
+    });
+    if (!claim) {
+      this.logger.error(`Claim ${claimId} not found during reasoning`);
+      return;
+    }
 
-      Please provide:
-      1. A detailed reasoning of the claim's legitimacy.
-      2. Any hidden red flags or inconsistencies not caught by automated checks.
-      3. A final recommendation (APPROVE, INVESTIGATE, REJECT).
-      4. Key insights for the adjuster.
+    const prompt = `
+      You are a senior insurance claim investigator (PIAM compliant) with expertise in fraud detection and motor claims.
+      Your task is to perform a "Trinity Cross-Check" and fraud analysis on the provided claim documents and the DECLARED CLAIM DETAILS.
       
-      Format your response in a structured JSON:
+      You MUST analyze the following scenarios derived from our standard edge-case matrix:
+
+      1. **Authenticity & fabrication**:
+         - Verify "authenticity" flags for AI generation or screen captures across ALL docs.
+         - Look for metadata tampering (e.g., Edit software "Photoshop") or stock photo patterns.
+
+      2. **Person Identity**:
+         - **Ghost Driver**: Does the Police Report Complainant match the Policy Holder/Insured Person?
+         - **Unauthorized Driver**: Is the driver covered under the policy?
+         - **Identity Theft**: Does the NRIC document match the Claim NRIC provided?
+         - **NRIC Integrity**: Verify NRIC consistency (Date of Birth vs First 6 NRIC Digits) and check for Underage drivers.
+
+      3. **Asset/Vehicle**:
+         - **Klon Car**: Match Damage Photos (Make/Model/Color) against Vehicle Registration (VOC).
+         - **Details**: Verify Plate and Chassis numbers across VOC, Policy, and Police Report.
+         - **Legal**: Check VOC "road_tax_expiry" against Claim "incidentDate".
+         - **Phantom Vehicle**: Does the Police Report describe the same vehicle being claimed for?
+
+      4. **Incident Story**:
+         - **Time Consistency**: Incident Date (Report) vs Policy Period vs Claim Date.
+         - **Physics Check**: Does the collision description (e.g. "Rear-ended") match the visual damage areas (e.g. "front bumper")?
+         - **Environmental Anomaly**: Match Report "weather" and "lighting" against Visual Evidence. (e.g. Night vs Day, Raining vs Sunny).
+         - **Equipment**: Check Airbag deployment status vs Impact Severity.
+         - **Document Integrity**: Ensure mandatory Police Report signatures are present.
+
+      5. **Financial Padding**:
+         - Compare Repair Quotation items against visible damage in Photos. Flag "Repair Inflation".
+         - Check for "Unrelated Damage" (e.g., rust or old dents visible in photos but quoted as new).
+
+      DECLARED CLAIM DETAILS:
+      ${JSON.stringify(claim, null, 2)}
+
+      EXTRACTED DOCUMENTS DATA (Evidence):
+      ${JSON.stringify(dataBag, null, 2)}
+
+      AUTOMATED CHECKS REPORT:
+      ${JSON.stringify(report, null, 2)}
+
+      OUTPUT INSTRUCTIONS:
+      - Provide a "reasoning" narrative that explicitly walks through these checks for claim's legitimacy.
+      - List "red_flags" for any failed checks.
+      - List "insights" for the adjuster.
+      
+      Response Format (JSON Only):
       {
-        "reasoning": "multi-line string discussing the findings",
-        "insights": ["insight 1", "insight 2"],
+        "reasoning": "Detailed analysis discussing the findings",
+        "red_flags": ["Flag 1", "Flag 2"],
+        "insights": ["Insight 1", "Insight 2"],
         "recommendation": "APPROVE" | "INVESTIGATE" | "REJECT",
         "confidence": number (0-1)
       }
