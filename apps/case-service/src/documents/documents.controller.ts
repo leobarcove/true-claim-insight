@@ -54,6 +54,22 @@ export class DocumentsController {
     return this.documentsService.upload(claimId, file, type);
   }
 
+  @Post(':id/replace')
+  @ApiOperation({ summary: 'Replace an existing document' })
+  @ApiParam({ name: 'claimId', description: 'Claim UUID' })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  async replace(
+    @Param('claimId', ParseUUIDPipe) claimId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: any
+  ) {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.documentsService.replace(claimId, id, file);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all documents for a claim' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })

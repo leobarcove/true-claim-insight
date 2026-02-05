@@ -19,7 +19,10 @@ import {
   Play,
   ExternalLink,
   Brain,
+  RefreshCw,
+  X,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -37,7 +40,7 @@ import {
   downloadFile,
   convertToTitleCase,
 } from '@/lib/utils';
-import { useClaim, useUpdateClaimStatus } from '@/hooks/use-claims';
+import { useClaim, useUpdateClaimStatus, useReplaceDocument } from '@/hooks/use-claims';
 import { useTriggerTrinityCheck } from '@/hooks/use-trinity';
 import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video';
 import { useToast } from '@/hooks/use-toast';
@@ -237,6 +240,11 @@ export function ClaimDetailPage() {
   const [isNotifying, setIsNotifying] = useState(false);
   const triggerTrinity = useTriggerTrinityCheck();
   const [isTrinityConfirmOpen, setIsTrinityConfirmOpen] = useState(false);
+  const replaceDocument = useReplaceDocument(claimId || '');
+  const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
+  const [selectedDocForReplace, setSelectedDocForReplace] = useState<any>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
 
@@ -382,8 +390,64 @@ export function ClaimDetailPage() {
       });
     } catch (error: any) {
       toast({
-        title: 'Trigger Failed',
+        title: 'Analysis Failed',
         description: error.response?.data?.message || 'Failed to trigger document analysis.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: 'The document file size must be less than 5MB.',
+          variant: 'destructive',
+        });
+        e.target.value = '';
+        return;
+      }
+
+      // Validate file type (PDF or Image)
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        toast({
+          title: 'Invalid file type',
+          description: 'Only PDF and image files are allowed.',
+          variant: 'destructive',
+        });
+        e.target.value = '';
+        return;
+      }
+
+      setPendingFile(file);
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleConfirmReplace = async () => {
+    if (!selectedDocForReplace || !pendingFile) return;
+
+    try {
+      await replaceDocument.mutateAsync({
+        documentId: selectedDocForReplace.id,
+        file: pendingFile,
+      });
+      setIsReplaceConfirmOpen(false);
+      setSelectedDocForReplace(null);
+      setPendingFile(null);
+      toast({
+        title: 'Document Replaced',
+        description:
+          'The document has been successfully replaced, and the analysis has been rerun.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Replacement Failed',
+        description: error.response?.data?.message || 'Failed to replace document.',
         variant: 'destructive',
       });
     }
@@ -741,7 +805,8 @@ export function ClaimDetailPage() {
                         .slice()
                         .sort(
                           (a: any, b: any) =>
-                            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                            new Date(a.metadata?.replacedAt || a.createdAt).getTime() -
+                            new Date(b.metadata?.replacedAt || b.createdAt).getTime()
                         )
                         .slice((docPage - 1) * ITEMS_PER_PAGE, docPage * ITEMS_PER_PAGE)
                         .map((doc: any) => (
@@ -762,7 +827,9 @@ export function ClaimDetailPage() {
                                   <span>•</span>
                                   <span>{formatFileSize(doc.fileSize)}</span>
                                   <span>•</span>
-                                  <span>{formatDateTime(doc.createdAt)}</span>
+                                  <span>
+                                    {formatDateTime(doc.metadata?.replacedAt || doc.createdAt)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -802,6 +869,30 @@ export function ClaimDetailPage() {
                                     }}
                                   >
                                     <Download className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                              <InfoTooltip
+                                content="Replace"
+                                direction="top"
+                                fontSize="text-[11px]"
+                                trigger={
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 hover:bg-amber-600 transition-colors group"
+                                    onClick={() => {
+                                      setSelectedDocForReplace(doc);
+                                      setIsReplaceConfirmOpen(true);
+                                    }}
+                                    disabled={replaceDocument.isPending}
+                                  >
+                                    {replaceDocument.isPending &&
+                                    selectedDocForReplace?.id === doc.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    ) : (
+                                      <RefreshCw className="h-4 w-4 text-amber-600 group-hover:text-white transition-colors" />
+                                    )}
                                   </Button>
                                 }
                               />
@@ -1269,10 +1360,87 @@ export function ClaimDetailPage() {
         open={isTrinityConfirmOpen}
         onOpenChange={setIsTrinityConfirmOpen}
         title="Rerun Trinity Analysis"
-        description="This will re-trigger AI extraction and cross-check analysis for all documents in this claim. This process may take a minute. Are you sure you want to proceed?"
+        description="This will rerun AI extraction and cross-check analysis for all documents in this claim. This process may take a minute. Are you sure you want to proceed?"
         confirmText="Confirm"
         onConfirm={handleTriggerTrinity}
         isLoading={triggerTrinity.isPending}
+      />
+
+      <ConfirmationDialog
+        open={isReplaceConfirmOpen}
+        onOpenChange={open => {
+          setIsReplaceConfirmOpen(open);
+          if (!open) {
+            setPendingFile(null);
+            setSelectedDocForReplace(null);
+          }
+        }}
+        title="Replace Document"
+        description={
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to replace <b>{selectedDocForReplace?.filename}</b>? This will
+              rerun the AI extraction and cross-check analysis.
+            </p>
+
+            <div
+              className={cn(
+                'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
+                pendingFile ? 'border-solid border-primary/50 bg-primary/5' : 'border-border'
+              )}
+            >
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="bg-primary/10 p-2 rounded-full text-primary shrink-0">
+                  <FileText size={18} />
+                </div>
+                {pendingFile ? (
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{pendingFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(pendingFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    <p>Upload New</p>
+                  </div>
+                )}
+              </div>
+              {pendingFile ? (
+                <button
+                  onClick={() => {
+                    setTimeout(() => {
+                      setPendingFile(null);
+                    }, 500);
+                  }}
+                  className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Browse
+                </Button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf, image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+          </div>
+        }
+        confirmText="Confirm"
+        onConfirm={handleConfirmReplace}
+        isLoading={replaceDocument.isPending}
+        disabledConfirm={!pendingFile}
       />
     </div>
   );

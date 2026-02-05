@@ -386,6 +386,33 @@ export class ClaimsController {
       );
   }
 
+  @Post(':id/documents/:docId/replace')
+  @ApiOperation({ summary: 'Replace an existing document' })
+  async replaceDocument(@Param('id') id: string, @Param('docId') docId: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.user?.role,
+      'Content-Type': req.headers['content-type'],
+    };
+
+    // Forward the multipart request as a stream
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/${id}/documents/${docId}/replace`, req.raw, {
+        headers,
+      })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to replace document',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
   @Post(':id/documents/trinity-check')
   @ApiOperation({ summary: 'Trigger Trinity AI checks for all documents in a claim' })
   triggerTrinityCheck(@Param('id') id: string, @Req() req: any) {
