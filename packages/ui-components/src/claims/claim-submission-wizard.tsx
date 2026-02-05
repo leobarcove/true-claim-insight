@@ -1232,7 +1232,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 <div
                   className={cn(
                     'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
-                    formData.myKadFront ? 'border-primary/50 bg-primary/5' : 'border-border'
+                    formData.myKadFront
+                      ? 'border-solid border-primary/50 bg-primary/5'
+                      : 'border-border'
                   )}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
@@ -1293,7 +1295,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 <div
                   className={cn(
                     'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
-                    formData.policyDocument ? 'border-primary/50 bg-primary/5' : 'border-border'
+                    formData.policyDocument
+                      ? 'border-solid border-primary/50 bg-primary/5'
+                      : 'border-border'
                   )}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
@@ -1456,7 +1460,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                 className={cn(
                   'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
                   formData.vehicleRegistrationCard
-                    ? 'border-primary/50 bg-primary/5'
+                    ? 'border-solid border-primary/50 bg-primary/5'
                     : 'border-border'
                 )}
               >
@@ -1760,7 +1764,7 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
                   className={cn(
                     'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
                     formData.policeReportDocument
-                      ? 'border-primary/50 bg-primary/5'
+                      ? 'border-solid border-primary/50 bg-primary/5'
                       : 'border-border'
                   )}
                 >
@@ -1951,7 +1955,9 @@ export function ClaimSubmissionWizard({ mode, onSuccess, onCancel }: ClaimSubmis
               <div
                 className={cn(
                   'border border-dashed rounded-lg p-3 flex items-center justify-between transition-colors bg-muted/20 hover:bg-muted/40',
-                  formData.workshopQuotation ? 'border-primary/50 bg-primary/5' : 'border-border'
+                  formData.workshopQuotation
+                    ? 'border-solid border-primary/50 bg-primary/5'
+                    : 'border-border'
                 )}
               >
                 <div className="flex items-center gap-3 overflow-hidden">

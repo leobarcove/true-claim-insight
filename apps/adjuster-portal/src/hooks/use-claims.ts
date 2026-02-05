@@ -233,3 +233,30 @@ export function useScheduleSession() {
     },
   });
 }
+
+// Replace document mutation
+export function useReplaceDocument(claimId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ documentId, file }: { documentId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data } = await apiClient.post<ApiResponse<any>>(
+        `/claims/${claimId}/documents/${documentId}/replace`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: claimKeys.detail(claimId) });
+      queryClient.invalidateQueries({ queryKey: ['trinity'] });
+    },
+  });
+}

@@ -51,6 +51,64 @@ export class DocumentsService {
     return document;
   }
 
+  /**
+   * Replace an existing document with a new file
+   */
+  async replace(claimId: string, id: string, file: any) {
+    const existingDoc = await this.findOne(claimId, id);
+    const buffer = await file.toBuffer();
+    const storagePath = await this.storageService.uploadFile(
+      buffer,
+      file.filename,
+      file.mimetype,
+      `claims/${claimId}`
+    );
+
+    const signedUrl = await this.storageService.getSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    const updatedDoc = await this.prisma.document.update({
+      where: { id },
+      data: {
+        filename: file.filename,
+        storageUrl: signedUrl,
+        mimeType: file.mimetype,
+        fileSize: buffer.length,
+        status: DocumentStatus.QUEUED,
+        metadata: {
+          ...(existingDoc.metadata as any),
+          storagePath,
+          replacedAt: new Date(),
+          previousDoc: {
+            filename: existingDoc.filename,
+            storageUrl: existingDoc.storageUrl,
+            mimeType: existingDoc.mimeType,
+            fileSize: existingDoc.fileSize,
+          },
+        },
+      },
+    });
+
+    // Create audit trail
+    await this.prisma.auditTrail.create({
+      data: {
+        entityId: claimId,
+        entityType: 'CLAIM',
+        action: 'DOCUMENT_REPLACED',
+        metadata: {
+          documentId: id,
+          oldFilename: existingDoc.filename,
+          newFilename: file.filename,
+        },
+      },
+    });
+
+    // Trigger Risk Engine Analysis
+    this.triggerRiskAnalysis(updatedDoc.id).catch(err =>
+      this.logger.error(`Failed to trigger risk analysis for ${updatedDoc.id}`, err)
+    );
+
+    return updatedDoc;
+  }
+
   private async triggerRiskAnalysis(documentId: string) {
     const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3004';
     const url = `${riskEngineUrl}/api/v1/risk/analyze/${documentId}`;

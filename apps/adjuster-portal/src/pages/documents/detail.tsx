@@ -14,6 +14,8 @@ import {
   Loader2,
   Database,
   Brain,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { Header } from '@/components/layout/header';
@@ -36,6 +38,9 @@ export function DocumentDetailPage() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [previewError, setPreviewError] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [isTrinityProcessingLocally, setIsTrinityProcessingLocally] = useState(false);
+  const [fraudPage, setFraudPage] = useState(1);
+  const fraudItemsPerPage = 5;
 
   // WebSocket for real-time updates
   useEffect(() => {
@@ -60,6 +65,11 @@ export function DocumentDetailPage() {
 
     socket.on('trinity-update', (data: { claimId: string; status: string }) => {
       console.log('Trinity check update received:', data);
+      if (data.status === 'PROCESSING') {
+        setIsTrinityProcessingLocally(true);
+      } else if (data.status === 'COMPLETED') {
+        setIsTrinityProcessingLocally(false);
+      }
       queryClient.invalidateQueries({ queryKey: trinityKeys.check(id) });
     });
 
@@ -78,6 +88,10 @@ export function DocumentDetailPage() {
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       )
     : [];
+
+  const isAnyDocProcessing = sortedDocuments.some(
+    (doc: any) => doc.status === 'QUEUED' || doc.status === 'PROCESSING'
+  );
 
   // Reset error when doc changes
   useEffect(() => {
@@ -424,10 +438,18 @@ export function DocumentDetailPage() {
               </div>
               <div className="flex-1 overflow-auto p-4">
                 {loadingAnalysis ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+                  <div className="h-full">
+                    <Skeleton className="h-full min-h-[400px] w-full" />
+                  </div>
+                ) : selectedDoc?.status === 'QUEUED' || selectedDoc?.status === 'PROCESSING' ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                      <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Analysis in Progress</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      AI is currently extracting data from this document.
+                    </p>
                   </div>
                 ) : extractedData ? (
                   <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
@@ -518,16 +540,6 @@ export function DocumentDetailPage() {
                       ));
                     })()}
                   </div>
-                ) : selectedDoc?.status === 'QUEUED' || selectedDoc?.status === 'PROCESSING' ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                      <Loader2 className="h-6 w-6 text-primary animate-spin" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">Analysis in Progress</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      AI is currently processing this document.
-                    </p>
-                  </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-center p-4">
                     <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
@@ -549,96 +561,134 @@ export function DocumentDetailPage() {
             </div>
 
             <div className="flex-1 overflow-auto p-4 md:p-6">
-              {!trinityData ? (
+              {loadingTrinity ||
+              isAnyDocProcessing ||
+              trinityData?.status === 'PROCESSING' ||
+              isTrinityProcessingLocally ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-48 w-full" />
+                </div>
+              ) : !trinityData || trinityChecks.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">
                   <AlertTriangle className="h-8 w-8 mb-2 opacity-30" />
                   <p className="text-sm">No fraud analysis data available yet.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {trinityChecks
-                    .sort((a: any, b: any) => {
-                      // 1. Sort by Status: Failed > Warning > Passed
-                      const getStatusWeight = (check: any) => {
-                        if (check.is_pass === false) return 3; // Failed
-                        if (check.is_pass === undefined || check.is_pass === null) return 2; // Warning
-                        return 1; // Passed
-                      };
-                      const weightA = getStatusWeight(a);
-                      const weightB = getStatusWeight(b);
-                      if (weightA !== weightB) return weightB - weightA; // Higher weight first
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    {trinityChecks
+                      .sort((a: any, b: any) => {
+                        const getStatusWeight = (check: any) => {
+                          if (check.is_pass === false) return 3; // Failed
+                          if (check.is_pass === undefined || check.is_pass === null) return 2; // Warning
+                          return 1; // Passed
+                        };
+                        const weightA = getStatusWeight(a);
+                        const weightB = getStatusWeight(b);
+                        if (weightA !== weightB) return weightB - weightA;
 
-                      // 2. Sort by Priority: Critical > High > Medium > Low
-                      const priorityOrder: Record<string, number> = {
-                        CRITICAL: 4,
-                        HIGH: 3,
-                        MEDIUM: 2,
-                        LOW: 1,
-                      };
-                      const pA = priorityOrder[a.priority] || 0;
-                      const pB = priorityOrder[b.priority] || 0;
-                      return pB - pA;
-                    })
-                    .map((check: any) => (
-                      <div
-                        key={check.id}
-                        className={`group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 hover:shadow-sm ${
-                          check.is_pass === true
-                            ? 'bg-card hover:bg-green-500/5 hover:border-green-500/30 border-border/60'
-                            : check.is_pass === false
-                              ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
-                              : 'bg-yellow-500/5 border-yellow-500/20 hover:bg-yellow-500/10'
-                        }`}
-                      >
-                        <div className="flex items-start gap-4 flex-1 min-w-0">
-                          {/* Status Icon */}
-                          <div
-                            className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
-                              check.is_pass === true
-                                ? 'bg-green-500/10 border-green-500/20 text-green-600'
-                                : check.is_pass === false
-                                  ? 'bg-red-500/10 border-red-500/20 text-red-600'
-                                  : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-600'
-                            }`}
-                          >
-                            {check.is_pass === true ? (
-                              <Check className="h-4 w-4" />
-                            ) : check.is_pass === false ? (
-                              <X className="h-4 w-4" />
-                            ) : (
-                              <AlertTriangle className="h-4 w-4" />
-                            )}
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <h5 className="text-sm font-semibold tracking-tight text-foreground">
-                                {check.name ||
-                                  convertToTitleCase(check.check_id.split('_').slice(1).join('_'))}
-                              </h5>
+                        const priorityOrder: Record<string, number> = {
+                          CRITICAL: 4,
+                          HIGH: 3,
+                          MEDIUM: 2,
+                          LOW: 1,
+                        };
+                        const pA = priorityOrder[a.priority] || 0;
+                        const pB = priorityOrder[b.priority] || 0;
+                        return pB - pA;
+                      })
+                      .slice((fraudPage - 1) * fraudItemsPerPage, fraudPage * fraudItemsPerPage)
+                      .map((check: any) => (
+                        <div
+                          key={check.id}
+                          className={`group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 hover:shadow-sm ${
+                            check.is_pass === true
+                              ? 'bg-card hover:bg-green-500/5 hover:border-green-500/30 border-border/60'
+                              : check.is_pass === false
+                                ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
+                                : 'bg-yellow-500/5 border-yellow-500/20 hover:bg-yellow-500/10'
+                          }`}
+                        >
+                          <div className="flex items-start gap-4 flex-1 min-w-0">
+                            <div
+                              className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border ${
+                                check.is_pass === true
+                                  ? 'bg-green-500/10 border-green-500/20 text-green-600'
+                                  : check.is_pass === false
+                                    ? 'bg-red-500/10 border-red-500/20 text-red-600'
+                                    : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-600'
+                              }`}
+                            >
+                              {check.is_pass === true ? (
+                                <Check className="h-4 w-4" />
+                              ) : check.is_pass === false ? (
+                                <X className="h-4 w-4" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4" />
+                              )}
                             </div>
-                            <p className="text-xs text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none group-hover:text-foreground/80 transition-colors">
-                              {check.details}
-                            </p>
+
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-sm font-semibold tracking-tight text-foreground">
+                                  {check.name ||
+                                    convertToTitleCase(
+                                      check.check_id.split('_').slice(1).join('_')
+                                    )}
+                                </h5>
+                              </div>
+                              <p className="text-xs text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none group-hover:text-foreground/80 transition-colors">
+                                {check.details}
+                              </p>
+                            </div>
                           </div>
+
+                          {check.confidence !== undefined && (
+                            <div className="flex items-center gap-4 pl-4 border-l border-border/50 ml-4">
+                              <div className="text-center">
+                                <div className="text-xs font-bold uppercase tracking-wider">
+                                  {(check.confidence * 100).toFixed(0)}%
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-medium">
+                                  Confidence
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
+                      ))}
+                  </div>
 
-                        {/* Metadata Right */}
-                        {check.confidence !== undefined && (
-                          <div className="flex items-center gap-4 pl-4 border-l border-border/50 ml-4">
-                            <div className="text-center">
-                              <div className="text-xs font-bold uppercase tracking-wider">
-                                {(check.confidence * 100).toFixed(0)}%
-                              </div>
-                              <div className="text-[10px] text-muted-foreground font-medium">
-                                Confidence
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  {/* Pagination */}
+                  {trinityChecks.length > fraudItemsPerPage && (
+                    <div className="flex items-center justify-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => setFraudPage(p => Math.max(1, p - 1))}
+                        disabled={fraudPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Page {fraudPage} of {Math.ceil(trinityChecks.length / fraudItemsPerPage)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() =>
+                          setFraudPage(p =>
+                            Math.min(Math.ceil(trinityChecks.length / fraudItemsPerPage), p + 1)
+                          )
+                        }
+                        disabled={fraudPage >= Math.ceil(trinityChecks.length / fraudItemsPerPage)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -653,7 +703,30 @@ export function DocumentDetailPage() {
             </div>
 
             <div className="flex-1 overflow-auto p-4 md:p-6">
-              {trinityData?.reasoning ? (
+              {loadingTrinity ||
+              isAnyDocProcessing ||
+              trinityData?.status === 'PROCESSING' ||
+              isTrinityProcessingLocally ? (
+                <div className="flex flex-col lg:flex-row gap-6 h-[250px]">
+                  <div className="flex-1 bg-primary/5 rounded-2xl border border-primary/10 p-6 flex flex-col gap-4 animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary/10 rounded-xl" />
+                      <div className="space-y-2">
+                        <div className="h-4 w-32 bg-primary/10 rounded" />
+                        <div className="h-3 w-20 bg-primary/10 rounded" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-4 w-full bg-primary/10 rounded" />
+                      <div className="h-4 w-full bg-primary/10 rounded" />
+                      <div className="h-4 w-2/3 bg-primary/10 rounded" />
+                    </div>
+                  </div>
+                  <div className="lg:w-1/3 space-y-3">
+                    <Skeleton className="h-36 w-full" />
+                  </div>
+                </div>
+              ) : trinityData?.reasoning ? (
                 <div className="animate-in fade-in duration-700 h-full">
                   <div className="flex flex-col lg:flex-row gap-6 h-full">
                     {/* reasoning section */}

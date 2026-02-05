@@ -54,6 +54,9 @@ export class DocumentProcessorService {
       // Update status to PROCESSING
       await this.updateDocumentStatus(documentId, DocumentStatus.PROCESSING, doc.claimId);
 
+      // Emit Trinity Start
+      this.events.emitTrinityUpdate(doc.claimId, 'PROCESSING');
+
       // Download the file
       const response = await fetch(doc.storageUrl);
       if (!response.ok) throw new Error(`Failed to download document: ${response.statusText}`);
@@ -207,14 +210,14 @@ export class DocumentProcessorService {
       data: {
         claimId,
         score: report.total_score,
-        status: report.status,
+        status: 'PROCESSING',
         summary: report.summary,
         checkResults: report.checks as any,
         riskFactors: report.risk_factors as any,
       },
     });
 
-    this.logger.log(`Trinity Check completed for Claim ${claimId}: ${report.status}`);
+    this.logger.log(`Trinity Check started for Claim ${claimId}`);
     await this.runIntelligenceReasoning(claimId, trinityCheck.id, dataBag, report);
   }
 
@@ -251,34 +254,23 @@ export class DocumentProcessorService {
         withoutEnlargement: true,
       });
 
-      // Enhance for black-on-white text readability for documents
-      if (type !== DocumentType.DAMAGE_PHOTO) {
-        this.logger.log(`Applying document enhancement for ${type}`);
-        pipeline = pipeline
-          .grayscale()
-          .normalise()
-          .linear(1.2, -10)
-          .modulate({ brightness: 1.1 })
-          .sharpen();
-      } else {
-        this.logger.log(`Applying size optimization for photo ${type}`);
-      }
+      // Enhance text readability for documents
+      // if (type !== DocumentType.DAMAGE_PHOTO) {
+      //   this.logger.log(`Applying document enhancement for ${type}`);
+      //   pipeline = pipeline
+      //     .grayscale()
+      //     .normalise()
+      //     .linear(1.2, -10)
+      //     .modulate({ brightness: 1.1 })
+      //     .sharpen();
+      // } else {
+      //   this.logger.log(`Applying size optimization for photo ${type}`);
+      // }
 
       const optimizedBuffer = await pipeline
         .withMetadata({ density: Math.round(safeDpi) })
         .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
         .toBuffer();
-
-      // TEMP: viewing
-      // try {
-      //   const tmpDir = path.join(process.cwd(), 'tmp');
-      //   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      //   const filePath = path.join(tmpDir, `opt_${filename}`);
-      //   fs.writeFileSync(filePath, optimizedBuffer);
-      //   this.logger.log(`Saved optimized image to: ${filePath}`);
-      // } catch (err: any) {
-      //   this.logger.warn(`Failed to save debug image: ${err.message}`);
-      // }
 
       return optimizedBuffer;
     } catch (error: any) {
@@ -374,6 +366,7 @@ export class DocumentProcessorService {
         where: { id: trinityCheckId },
         data: {
           reasoning: result.reasoning,
+          status: report.status,
           reasoningInsights: {
             model,
             insights: result.insights,

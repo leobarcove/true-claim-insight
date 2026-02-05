@@ -19,6 +19,7 @@ interface ConfirmationDialogProps {
   cancelText?: string;
   variant?: 'default' | 'destructive';
   isLoading?: boolean;
+  disabledConfirm?: boolean;
 }
 
 export function ConfirmationDialog({
@@ -31,6 +32,7 @@ export function ConfirmationDialog({
   cancelText = 'Cancel',
   variant = 'default',
   isLoading = false,
+  disabledConfirm = false,
 }: ConfirmationDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -62,7 +64,7 @@ export function ConfirmationDialog({
           <Button
             variant={variant}
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || disabledConfirm}
             className={`flex-1 rounded-xl shadow-lg ${variant === 'destructive' ? 'shadow-destructive/20' : 'shadow-primary/20'}`}
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
