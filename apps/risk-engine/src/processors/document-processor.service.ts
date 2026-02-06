@@ -10,7 +10,10 @@ import * as path from 'path';
 
 import { EventsGateway } from '../trinity/events.gateway';
 
-// Extraction schema and logic moved to ExtractionModule
+// Round to multiple of 56 (2 * 28-pixel patch size)
+// This ensures BOTH dimensions have an even number of patches,
+// preventing GGML/VLM sequence alignment errors (e.g. 27x37 patches = 999 tokens).
+const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 
 @Injectable()
 export class DocumentProcessorService {
@@ -231,45 +234,42 @@ export class DocumentProcessorService {
     filename: string
   ): Promise<Buffer> {
     try {
-      const metadata = await sharp(buffer).metadata();
+      let pipeline = sharp(buffer);
+      const metadata = await pipeline.metadata();
       const originalWidth = metadata.width || 1024;
       const originalHeight = metadata.height || 1024;
-      const originalDpi = metadata.density || 72;
 
-      // Dynamic DPI scaling to stay under pixel limit
-      const MAX_PIXELS = 700000;
-      const widthInch = originalWidth / originalDpi;
-      const heightInch = originalHeight / originalDpi;
-
-      // Calculate max DPI that keeps us under pixel limit
-      const maxDpi = Math.sqrt(MAX_PIXELS / (widthInch * heightInch));
-      const safeDpi = Math.min(150, maxDpi); // Cap at 150 DPI for quality
+      const MAX_PIXELS = 800000;
+      const scale = Math.min(1.0, Math.sqrt(MAX_PIXELS / (originalWidth * originalHeight)));
+      const targetWidth = roundTo56(originalWidth * scale);
+      const targetHeight = roundTo56(originalHeight * scale);
       this.logger.log(
-        `Optimizing ${filename}: ${originalWidth}x${originalHeight} (${originalDpi} DPI) -> Goal: ${Math.round(safeDpi)} DPI`
+        `Optimizing ${filename}: ${originalWidth}x${originalHeight} -> ${targetWidth}x${targetHeight}`
       );
 
-      let pipeline = sharp(buffer).resize({
-        width: Math.round(widthInch * safeDpi),
-        fit: 'inside',
-        withoutEnlargement: true,
-      });
-
-      // Enhance text readability for documents
-      // if (type !== DocumentType.DAMAGE_PHOTO) {
-      //   this.logger.log(`Applying document enhancement for ${type}`);
-      //   pipeline = pipeline
-      //     .grayscale()
-      //     .normalise()
-      //     .linear(1.2, -10)
-      //     .modulate({ brightness: 1.1 })
-      //     .sharpen();
-      // } else {
-      //   this.logger.log(`Applying size optimization for photo ${type}`);
-      // }
+      // Enhance document text readability
+      if (
+        [
+          DocumentType.NRIC,
+          DocumentType.MYKAD_FRONT,
+          DocumentType.DRIVING_LICENCE,
+          DocumentType.VEHICLE_REG_CARD,
+        ].includes(type)
+      ) {
+        pipeline = pipeline
+          .grayscale()
+          .normalise()
+          .linear(1.2, -10)
+          .modulate({ brightness: 1.1 })
+          .sharpen();
+      }
 
       const optimizedBuffer = await pipeline
-        .withMetadata({ density: Math.round(safeDpi) })
-        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+        .resize({
+          width: targetWidth,
+          height: targetHeight,
+          fit: 'fill',
+        })
         .toBuffer();
 
       return optimizedBuffer;
@@ -369,6 +369,7 @@ export class DocumentProcessorService {
           status: report.status,
           reasoningInsights: {
             model,
+            flags: result.red_flags,
             insights: result.insights,
             recommendation: result.recommendation,
             confidence: result.confidence,

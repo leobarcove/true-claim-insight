@@ -79,6 +79,7 @@ export class ClaimsService {
       status,
       claimType,
       adjusterId,
+      claimantId,
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
@@ -92,6 +93,7 @@ export class ClaimsService {
     if (status) where.status = status;
     if (claimType) where.claimType = claimType;
     if (adjusterId) where.adjusterId = adjusterId;
+    if (claimantId) where.claimantId = claimantId;
     if (scheduledFrom) {
       where.scheduledAssessmentTime = {
         gte: new Date(scheduledFrom),

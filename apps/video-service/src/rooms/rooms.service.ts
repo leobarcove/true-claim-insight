@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { Session, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { DailyService } from '../daily/daily.service';
-import { CreateRoomDto, JoinRoomDto } from './dto/room.dto';
+import { CreateRoomDto, JoinRoomDto, SaveClientInfoDto } from './dto/room.dto';
 
 @Injectable()
 export class RoomsService {
@@ -385,5 +385,94 @@ export class RoomsService {
     )[0];
 
     return this.dailyService.getRecordingAccessLink(latest.id);
+  }
+
+  /**
+   * Parse browser name from user agent
+   */
+  private parseBrowser(userAgent: string): string {
+    if (!userAgent) return 'Unknown';
+    if (userAgent.includes('Firefox')) return 'Firefox';
+    if (userAgent.includes('Edg')) return 'Edge';
+    if (userAgent.includes('SamsungBrowser')) return 'Samsung Browser';
+    if (userAgent.includes('Chrome')) return 'Chrome';
+    if (userAgent.includes('Safari')) return 'Safari';
+    if (userAgent.includes('MSIE') || userAgent.includes('Trident')) return 'Internet Explorer';
+    return 'Other';
+  }
+
+  /**
+   * Save client info for a session
+   */
+  async saveClientInfo(sessionId: string, dto: SaveClientInfoDto, clientIp?: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session ${sessionId} not found`);
+    }
+
+    // Use backend-captured IP if available, fallback to DTO
+    let ip = clientIp || dto.ipAddress || '';
+
+    // Clean up IPv6 prefix if present in some environments (like ::ffff:1.2.3.4)
+    if (ip.startsWith('::ffff:')) {
+      ip = ip.substring(7);
+    }
+
+    let ipv4 = null;
+    let ipv6 = null;
+
+    if (ip) {
+      if (ip.includes(':')) {
+        ipv6 = ip;
+      } else {
+        ipv4 = ip;
+      }
+    }
+
+    // Backend Geo Lookup
+    let geoData: any = {};
+    if (ip && ip !== '127.0.0.1' && ip !== '::1') {
+      try {
+        const geoResponse = await fetch(
+          `http://ip-api.com/json/${ip}?fields=status,country,regionName,city,zip,lat,lon,org,as`
+        );
+        if (geoResponse.ok) {
+          const result = (await geoResponse.json()) as any;
+          if (result.status === 'success') {
+            geoData = result;
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to fetch geo info for IP ${ip}: ${err.message}`);
+      }
+    }
+
+    const browser = dto.browser || this.parseBrowser(dto.userAgent || '');
+
+    return this.prisma.sessionClientInfo.create({
+      data: {
+        sessionId,
+        latitude: dto.latitude || geoData.lat,
+        longitude: dto.longitude || geoData.lon,
+        ipv4: ipv4 || dto.ipv4,
+        ipv6: ipv6 || dto.ipv6,
+        userAgent: dto.userAgent,
+        language: dto.language,
+        browser,
+        platform: dto.platform,
+        screenResolution: dto.screenResolution,
+        timezone: dto.timezone,
+        city: geoData.city || dto.city,
+        region: geoData.regionName || dto.region,
+        country: geoData.country || dto.country,
+        postalCode: geoData.zip || dto.postalCode,
+        isp: geoData.org || dto.isp,
+        organisation: geoData.org || dto.organisation,
+        asn: geoData.as || dto.asn,
+      },
+    });
   }
 }

@@ -4,6 +4,7 @@ import { ApiResponse } from '@tci/shared-types';
 
 interface VerifyNricParams {
   nric: string;
+  phoneNumber: string;
   sessionId: string;
 }
 

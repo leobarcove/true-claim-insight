@@ -17,7 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { VideoService } from './video.service';
-import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/video.dto';
+import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto/video.dto';
 
 @ApiTags('video')
 @Controller('video')
@@ -62,6 +62,16 @@ export class VideoController {
   async joinRoom(@Param('id') id: string, @Body() dto: JoinRoomDto) {
     try {
       return await this.videoService.joinRoom(id, dto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Post('rooms/:id/client-info')
+  @ApiOperation({ summary: 'Save client information for a session' })
+  async saveClientInfo(@Param('id') id: string, @Body() dto: SaveClientInfoDto) {
+    try {
+      return await this.videoService.saveClientInfo(id, dto);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

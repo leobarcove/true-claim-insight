@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 
 @Injectable()
@@ -39,7 +33,7 @@ export class OtpService {
     if (recentOtps >= this.RATE_LIMIT_PER_HOUR) {
       throw new HttpException(
         'Too many OTP requests. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS,
+        HttpStatus.TOO_MANY_REQUESTS
       );
     }
   }
@@ -78,8 +72,6 @@ export class OtpService {
     });
 
     // TODO: Send SMS via provider (Twilio, Vonage, etc.)
-    // For now, log to console for development
-    this.logger.log(`[DEV] OTP for ${phoneNumber}: ${code}`);
     console.log(`\n${'='.repeat(50)}`);
     console.log(`📱 OTP Code for ${phoneNumber}: ${code}`);
     console.log(`   Expires in ${this.OTP_EXPIRY_MINUTES} minutes`);
@@ -109,9 +101,7 @@ export class OtpService {
 
     // Check attempts
     if (otpRecord.attempts >= this.MAX_ATTEMPTS) {
-      throw new BadRequestException(
-        'Too many failed attempts. Please request a new OTP.',
-      );
+      throw new BadRequestException('Too many failed attempts. Please request a new OTP.');
     }
 
     // Increment attempts
@@ -123,9 +113,7 @@ export class OtpService {
     // Verify code
     if (otpRecord.code !== code) {
       const remainingAttempts = this.MAX_ATTEMPTS - otpRecord.attempts - 1;
-      throw new BadRequestException(
-        `Invalid OTP code. ${remainingAttempts} attempts remaining.`,
-      );
+      throw new BadRequestException(`Invalid OTP code. ${remainingAttempts} attempts remaining.`);
     }
 
     // Mark as verified

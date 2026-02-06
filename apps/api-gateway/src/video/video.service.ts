@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ConfigService } from '@nestjs/config';
-import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/video.dto';
+import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto/video.dto';
 import { RiskService } from '../risk/risk.service';
 
 @Injectable()
@@ -79,6 +79,16 @@ export class VideoService {
 
   async getConfigStatus() {
     const response = await fetch(`${this.baseUrl}/rooms/config/status`);
+    return this.handleResponse(response);
+  }
+
+  async saveClientInfo(sessionId: string, dto: SaveClientInfoDto) {
+    const response = await fetch(`${this.baseUrl}/rooms/${sessionId}/client-info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dto),
+    });
+
     return this.handleResponse(response);
   }
 

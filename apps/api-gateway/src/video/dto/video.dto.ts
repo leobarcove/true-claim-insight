@@ -30,3 +30,47 @@ export class EndRoomDto {
   @IsOptional()
   reason?: string;
 }
+
+export class SaveClientInfoDto {
+  @IsOptional()
+  latitude?: number;
+
+  @IsOptional()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  ipAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  ipv4?: string;
+
+  @IsOptional()
+  @IsString()
+  ipv6?: string;
+
+  @IsOptional()
+  @IsString()
+  userAgent?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsString()
+  browser?: string;
+
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  screenResolution?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+}

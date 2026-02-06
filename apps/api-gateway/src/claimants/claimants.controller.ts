@@ -16,11 +16,18 @@ export class ClaimantsController {
   })
   @ApiResponse({ status: 200, description: 'NRIC verified successfully' })
   @ApiResponse({ status: 400, description: 'Invalid NRIC' })
-  async verifyNric(@Body('nric') nric: string, @Body('sessionId') sessionId: string) {
-    this.logger.log(`Verifying NRIC for session ${sessionId}`);
+  async verifyNric(
+    @Body('nric') nric: string,
+    @Body('phoneNumber') phoneNumber: string,
+    @Body('sessionId') sessionId: string
+  ) {
+    this.logger.log(`Verifying credentials for session ${sessionId}`);
 
-    if (!nric || !sessionId) {
-      throw new HttpException('NRIC and Session ID are required', HttpStatus.BAD_REQUEST);
+    if (!nric || !sessionId || !phoneNumber) {
+      throw new HttpException(
+        'NRIC, Phone Number and Session ID are required',
+        HttpStatus.BAD_REQUEST
+      );
     }
 
     // Get the session to find the associated claim
@@ -44,15 +51,22 @@ export class ClaimantsController {
       throw new HttpException('Claimant not found for this session', HttpStatus.NOT_FOUND);
     }
 
-    //  Compare NRIC
+    // Compare NRIC and Phone
     const expectedNric = claimant.nric || session.claim.nric;
-    const isDemoUser =
-      claimant.phoneNumber === '+60123456789' || claimant.fullName === 'Kumar Claimant';
-    const isValid = (expectedNric && nric === expectedNric) || (isDemoUser && nric.length >= 6);
+    const expectedPhone = claimant.phoneNumber;
 
-    if (!isValid) {
+    // Normalize phone numbers for comparison (remove + prefix if present)
+    const normalize = (p: string) => p.replace(/\+/g, '').replace(/^60/g, '0');
+    const normalizedInputPhone = normalize(phoneNumber);
+    const normalizedExpectedPhone = normalize(expectedPhone);
+
+    const isNricValid = expectedNric && nric === expectedNric;
+    const isPhoneValid = normalizedInputPhone === normalizedExpectedPhone;
+
+    if (!isNricValid || !isPhoneValid) {
+      this.logger.warn(`Verification failed for session ${sessionId}: Invalid NRIC or Phone`);
       throw new HttpException(
-        'NRIC verification failed. Please check your credentials.',
+        'Identity verification failed. Information does not match our records.',
         HttpStatus.BAD_REQUEST
       );
     }

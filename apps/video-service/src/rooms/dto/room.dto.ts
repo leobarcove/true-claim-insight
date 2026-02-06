@@ -17,7 +17,7 @@ export class JoinRoomDto {
   @IsString()
   userId!: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Role of the user joining',
     enum: ['CLAIMANT', 'ADJUSTER'],
   })
@@ -32,3 +32,92 @@ export class EndRoomDto {
   reason?: string;
 }
 
+export class SaveClientInfoDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  latitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  longitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ipAddress?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ipv4?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ipv6?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userAgent?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  browser?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  screenResolution?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  region?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  isp?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  organisation?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  asn?: string;
+}

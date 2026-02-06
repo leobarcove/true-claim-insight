@@ -4,6 +4,7 @@ import { CheckCircle2, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useVerifyNRIC } from '@/hooks/use-claimants';
+import { useAuthStore } from '@/stores/auth-store';
 
 // Malaysian NRIC validation
 const validateNRIC = (nric: string): { valid: boolean; error?: string } => {
@@ -50,6 +51,7 @@ export function VerifyNRICPage() {
   const [nric, setNric] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const { user } = useAuthStore();
   const verifyMutation = useVerifyNRIC();
 
   const handleNRICChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,53 +77,57 @@ export function VerifyNRICPage() {
 
     try {
       const nricDigits = nric.replace(/\D/g, '');
-      await verifyMutation.mutateAsync({ nric: nricDigits, sessionId });
+      await verifyMutation.mutateAsync({
+        nric: nricDigits,
+        phoneNumber: user?.phoneNumber || '',
+        sessionId,
+      });
 
       // Store verification in sessionStorage for the session
       sessionStorage.setItem(`nric_verified_${sessionId}`, 'true');
 
-      // Proceed to the video call
-      navigate(`/video/${sessionId}`);
+      // Proceed to the location verification
+      navigate(`/video/${sessionId}/location`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Verification failed. Please check your NRIC.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         {/* Header Decor */}
         <div className="flex justify-center mb-8">
-          <div className="bg-white p-4 rounded-3xl shadow-xl shadow-primary/10 border border-primary/10 transition-transform hover:scale-105 duration-300">
+          <div className="bg-card p-4 rounded-3xl shadow-xl shadow-primary/10 border border-border transition-transform hover:scale-105 duration-300">
             <img src="/logo.png" alt="Logo" className="w-12 h-12" />
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/60 p-10 border border-slate-100">
+        <div className="bg-card rounded-[2.5rem] shadow-2xl shadow-slate-200/20 p-10 border border-border">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
+            <h1 className="text-3xl font-bold text-foreground mb-3 tracking-tight">
               Identity Verification
             </h1>
-            <p className="text-slate-500 text-lg leading-relaxed">
+            <p className="text-muted-foreground text-lg leading-relaxed">
               Please enter your NRIC to proceed to the secure video assessment.
             </p>
           </div>
 
           <form onSubmit={handleVerify} className="space-y-6">
             <div className="space-y-2">
-              <label htmlFor="nric" className="text-sm font-semibold text-slate-700 ml-1">
+              <label htmlFor="nric" className="text-sm font-semibold text-foreground/80 ml-1">
                 NRIC Number
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-primary text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-primary text-muted-foreground">
                   <Lock className="w-5 h-5" />
                 </div>
                 <Input
                   id="nric"
                   type="text"
                   placeholder="e.g. 850101-14-1234"
-                  className="pl-12 h-14 rounded-2xl border-slate-200 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-lg"
+                  className="pl-12 h-14 rounded-2xl border-border bg-background focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-lg"
                   value={nric}
                   onChange={handleNRICChange}
                   disabled={verifyMutation.isPending}
@@ -129,18 +135,20 @@ export function VerifyNRICPage() {
                   maxLength={14}
                 />
               </div>
-              <p className="text-xs text-slate-400 ml-1 mt-2">Format: YYMMDD-XX-XXXX (12 digits)</p>
+              <p className="text-xs text-muted-foreground ml-1 mt-2">
+                Format: YYMMDD-XX-XXXX (12 digits)
+              </p>
             </div>
 
             {validationError && (
-              <div className="bg-amber-50 border border-amber-100 text-amber-700 px-4 py-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
+              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 px-4 py-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="text-sm font-medium">{validationError}</span>
               </div>
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="text-sm font-medium">{error}</span>
               </div>
@@ -168,11 +176,11 @@ export function VerifyNRICPage() {
 
         {/* Security Footer */}
         <div className="mt-8 text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
+          <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
             <CheckCircle2 className="w-4 h-4" />
             <span>End-to-End Encrypted Identity Verification</span>
           </div>
-          <p className="text-[10px] uppercase tracking-widest text-slate-300 font-bold">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-bold">
             Protected by True Claim Insight Security
           </p>
         </div>
