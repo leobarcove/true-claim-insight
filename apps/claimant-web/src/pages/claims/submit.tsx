@@ -70,12 +70,12 @@ export function SubmitClaimPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="flex-1 bg-background pb-12">
       {/* Mobile Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10 flex items-center gap-4">
+      <header className="bg-card border-b border-border px-4 py-4 sticky top-0 z-10 flex items-center gap-4">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:bg-muted rounded-full transition-colors"
         >
           <ArrowLeft size={20} />
         </button>

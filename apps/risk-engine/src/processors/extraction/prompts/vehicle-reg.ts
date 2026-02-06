@@ -25,7 +25,7 @@ Fields to extract:
 - confidence_score: Confidence score from 0.0–1.0 based on text clarity
 
 Special Patterns to Look For:
-1. Owner address may span multiple lines — merge into a single string.
+1. Owner address may span multiple lines reading from left to right; merge into a single string.
 2. Engine capacity may include "cc" — extract numeric value only.
 
 Rules:

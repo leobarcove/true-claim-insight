@@ -12,7 +12,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           url:
             process.env.DATABASE_URL +
             (process.env.DATABASE_URL?.includes('?') ? '&' : '?') +
-            'connection_limit=3',
+            'connection_limit=5',
         },
       },
     });

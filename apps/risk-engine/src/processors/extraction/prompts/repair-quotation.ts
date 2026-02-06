@@ -10,7 +10,7 @@ Fields to extract:
 Workshop Details:
 - workshop_name: Name of workshop
 - workshop_registration_number: Business registration number if stated
-- workshop_address: Full address (merge multi-line into one string)
+- workshop_address: Full address (merge multi-line reading from left to right; merge into one string)
 - workshop_phone: Phone number if available
 - workshop_email: Email address if available
 

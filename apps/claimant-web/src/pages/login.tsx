@@ -43,7 +43,7 @@ export function LoginPage() {
 
     try {
       const result = await sendOtp.mutateAsync(data.phoneNumber);
-      
+
       // Navigate to OTP verification page with phone number and optional redirect path
       navigate('/verify-otp', {
         state: {
@@ -59,7 +59,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col flex-1 bg-background">
       {/* Header */}
       <header className="px-4 py-4">
         <Link
@@ -109,9 +109,7 @@ export function LoginPage() {
                 />
               </div>
               {errors.phoneNumber && (
-                <p className="text-sm text-destructive">
-                  {errors.phoneNumber.message}
-                </p>
+                <p className="text-sm text-destructive">{errors.phoneNumber.message}</p>
               )}
               <p className="text-xs text-muted-foreground">
                 Example: 012 345 6789 or 011 2345 6789
@@ -153,4 +151,3 @@ export function LoginPage() {
     </div>
   );
 }
-

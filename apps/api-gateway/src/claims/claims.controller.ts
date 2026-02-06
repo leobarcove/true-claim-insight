@@ -132,6 +132,11 @@ export class ClaimsController {
       params.adjusterId = req.user.adjuster.id;
     }
 
+    // Force claimant-only view if user is a claimant
+    if (req.user?.role === 'CLAIMANT') {
+      params.claimantId = req.user.id;
+    }
+
     // Remove scope parameter as it's not supported by case-service DTO
     delete params.scope;
 

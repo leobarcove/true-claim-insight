@@ -49,7 +49,7 @@ Nominee / Beneficiary Details:
 - nominee_percentage: Percentage allocation if stated
 
 Special Patterns to Look For:
-1. Address, coverage, exclusions, and benefits may span multiple lines — merge into single strings.
+1. Address, coverage, exclusions, and benefits may span multiple lines reading from left to right; merge into single strings.
 2. Names may appear in uppercase — preserve original casing.
 
 Rules:

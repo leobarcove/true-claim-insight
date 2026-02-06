@@ -22,11 +22,11 @@ const features = [
 
 export function WelcomePage() {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col flex-1 bg-background">
       {/* Header */}
       <header className="px-6 py-4">
         <div className="flex justify-center mb-8">
-          <div className="bg-white p-4 rounded-3xl shadow-xl shadow-primary/10 border border-primary/10 transition-transform hover:scale-105 duration-300">
+          <div className="bg-card p-4 rounded-3xl shadow-xl shadow-primary/10 border border-border transition-transform hover:scale-105 duration-300">
             <img src="/logo.png" alt="Logo" className="w-12 h-12" />
           </div>
         </div>

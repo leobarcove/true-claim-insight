@@ -48,7 +48,7 @@ Signatures:
 - receiving_officer_present: true or false (Tandatangan Penerima Repot)
 
 Special Patterns to Look For:
-1. Address and incident description may span multiple lines — merge into single strings.
+1. Address and incident description may span multiple lines reading from left to right; merge into a single string.
 2. Legal sections may appear as “Seksyen”, “Section”, or abbreviated forms.
 
 Rules:

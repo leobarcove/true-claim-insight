@@ -80,12 +80,18 @@ export function ClaimantVideoCallPage() {
   useEffect(() => {
     // Check for NRIC verification in sessionStorage
     const isVerified = sessionStorage.getItem(`nric_verified_${sessionId}`) === 'true';
+    const locationVerified = sessionStorage.getItem(`location_verified_${sessionId}`) === 'true';
 
     if (!isVerified && sessionId) {
       console.log(
         `[ClaimantVideoCallPage] NRIC not verified for session ${sessionId}, redirecting...`
       );
       navigate(`/video/${sessionId}/verify-nric`);
+      return;
+    }
+
+    if (!locationVerified && sessionId) {
+      navigate(`/video/${sessionId}/location`);
       return;
     }
 
@@ -179,10 +185,10 @@ export function ClaimantVideoCallPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-slate-950 text-slate-200">
-        <XCircle className="h-16 w-16 text-red-500 mb-4" />
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-background text-foreground">
+        <XCircle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-xl font-bold mb-2">Connection Failed</h2>
-        <p className="text-slate-400 mb-6 max-w-xs">{error}</p>
+        <p className="text-muted-foreground mb-6 max-w-xs">{error}</p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <Button onClick={attemptRetry} className="w-full">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -199,7 +205,7 @@ export function ClaimantVideoCallPage() {
 
   if (!joinData) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
         <p className="text-lg font-medium">Entering video room...</p>
       </div>
@@ -208,15 +214,15 @@ export function ClaimantVideoCallPage() {
 
   return (
     <DailyProvider callObject={callObject}>
-      <div className="fixed inset-0 bg-black flex flex-col z-50">
+      <div className="absolute inset-0 bg-background flex flex-col z-50">
         {/* Mobile Header */}
-        <div className="bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-800">
+        <div className="bg-card/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-border">
           <div>
-            <h1 className="text-white font-semibold text-sm">Remote Assessment</h1>
+            <h1 className="text-foreground font-semibold text-sm">Remote Assessment</h1>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-400">Secure Professional Connection</p>
+              <p className="text-xs text-muted-foreground">Secure Professional Connection</p>
               {(isAudioRecording || isVideoRecording) && (
-                <span className="flex items-center text-[10px] text-red-400 gap-1 bg-red-900/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                <span className="flex items-center text-[10px] text-red-500 gap-1 bg-red-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
                   <Mic className="h-3 w-3" /> REC {isVideoRecording && 'VIDEO'}
                 </span>
               )}
@@ -228,7 +234,7 @@ export function ClaimantVideoCallPage() {
         </div>
 
         {/* Fullscreen Video Area */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden bg-black">
           <DailyVideoPlayer
             ref={playerRef}
             url={joinData.url}
@@ -240,38 +246,8 @@ export function ClaimantVideoCallPage() {
         </div>
 
         {/* Mobile Footer / Info */}
-        <div className="p-4 bg-slate-950 text-center">
-          {/* <div className="absolute top-4 left-4 z-50 bg-black/50 p-2 rounded text-white text-left">
-            <p>Audio: {isAudioRecording ? '🔴' : '⚪'}</p>
-            <p>Video: {isVideoRecording ? '🔴' : '⚪'}</p>
-            <button
-              className="mt-2 bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 font-bold"
-              onClick={handleUploadAudio}
-            >
-              🐞 Test Upload
-            </button>
-            <button
-              className="mt-2 ml-2 bg-purple-500 px-3 py-1 rounded hover:bg-purple-600 font-bold"
-              onClick={async () => {
-                try {
-                  const blob = await getVideoBlob();
-                  if (blob) {
-                    await analyzeExpression.mutateAsync({
-                      sessionId: sessionId || '',
-                      videoBlob: blob,
-                    });
-                    console.log('Expression analysis triggered manually');
-                  }
-                } catch (err) {
-                  console.error('Expression analysis failed:', err);
-                }
-              }}
-              disabled={analyzeExpression.isPending}
-            >
-              {analyzeExpression.isPending ? 'Analyzing...' : '🐞 Analyze Expression'}
-            </button>
-          </div> */}
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+        <div className="p-4 bg-background text-center border-t border-border">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
             End-to-End Encrypted Session
           </p>
         </div>

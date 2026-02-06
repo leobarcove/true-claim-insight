@@ -1,7 +1,18 @@
-import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  HttpCode,
+  HttpStatus,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { FastifyRequest } from 'fastify';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { RoomsService } from './rooms.service';
-import { CreateRoomDto, JoinRoomDto, EndRoomDto } from './dto/room.dto';
+import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto/room.dto';
 import { DailyService } from '../daily/daily.service';
 
 @ApiTags('rooms')
@@ -184,5 +195,20 @@ export class RoomsController {
       success: true,
       data: link,
     };
+  }
+
+  @Post(':id/client-info')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Save client information for a session' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  async saveClientInfo(
+    @Param('id') id: string,
+    @Body() dto: SaveClientInfoDto,
+    @Req() req: FastifyRequest
+  ) {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || '';
+
+    return this.roomsService.saveClientInfo(id, dto, clientIp);
   }
 }
