@@ -7,7 +7,6 @@ import type { Claim } from '@tci/shared-types';
 
 export function AssessmentTrackerPage() {
   const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
 
   const { data: claimsData, isLoading: isLoadingClaims } = useClaims(user?.id);
   const activeClaims =
@@ -90,12 +89,12 @@ export function AssessmentTrackerPage() {
           ) : (
             <div className="text-center py-12 bg-card rounded-3xl border border-dashed border-border">
               <p className="text-muted-foreground font-medium">No active claims found.</p>
-              <button
+              {/* <button
                 onClick={() => navigate('/claims/submit')}
                 className="mt-4 text-primary font-bold hover:underline"
               >
                 Submit a new claim
-              </button>
+              </button> */}
             </div>
           )}
         </div>
@@ -112,9 +111,10 @@ function ClaimCard({
   getStatusColor: (s: string) => string;
 }) {
   const navigate = useNavigate();
-  // Fetch active session for this specific claim
   const { data: sessions } = useClaimSessions(claim.id);
-  const activeSession = sessions?.find(s => s.status === 'ACTIVE' || s.status === 'SCHEDULED');
+  const activeSession = sessions?.find(
+    s => s.status === 'IN_PROGRESS' || s.status === 'WAITING' || s.status === 'SCHEDULED'
+  );
 
   return (
     <div
@@ -167,31 +167,39 @@ function ClaimCard({
         </div>
 
         {activeSession && (
-          <div
-            className="animate-in fade-in slide-in-from-bottom-2 duration-500 pt-2"
-            onClick={e => {
-              e.stopPropagation();
-              navigate(`/video/${activeSession.id}/join`);
-            }}
-          >
-            <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground p-3.5 rounded-xl flex items-center justify-center gap-2.5 font-bold transition-all shadow-lg shadow-primary/20 active:scale-[0.98] group-hover:translate-y-[-2px]">
-              <Video size={18} fill="currentColor" className="animate-pulse" />
-              <span>Join Live Assessment</span>
-            </button>
-            <p className="text-[10px] text-center text-muted-foreground font-semibold mt-2.5 flex items-center justify-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-              Assessment Ready
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 pt-2">
+            <p
+              className={cn(
+                'text-[10px] text-center font-bold flex items-center justify-center gap-1.5 uppercase tracking-widest',
+                activeSession.status === 'IN_PROGRESS'
+                  ? 'text-green-600 animate-pulse'
+                  : 'text-muted-foreground'
+              )}
+            >
+              <span
+                className={cn(
+                  'w-2 h-2 rounded-full',
+                  activeSession.status === 'IN_PROGRESS'
+                    ? 'bg-green-600 animate-ping'
+                    : 'bg-green-500'
+                )}
+              ></span>
+              {activeSession.status === 'IN_PROGRESS'
+                ? 'Session In Progress'
+                : activeSession.status === 'WAITING'
+                  ? 'Adjuster Waiting'
+                  : 'Assessment Scheduled'}
             </p>
           </div>
         )}
       </div>
 
-      <div className="px-6 py-3 bg-muted/30 border-t border-border flex justify-between items-center group-hover:bg-muted/50 transition-colors">
+      <div className="p-5 bg-muted/30 border-t border-border flex justify-between items-center group-hover:bg-muted/50 transition-colors">
         <span className="text-xs text-muted-foreground font-medium">
           Created: {formatDate(claim.createdAt)}
         </span>
         <div className="flex items-center gap-1 text-xs text-primary font-bold group-hover:translate-x-1 transition-transform">
-          View Details <ArrowRight size={14} />
+          View <ArrowRight size={14} />
         </div>
       </div>
     </div>

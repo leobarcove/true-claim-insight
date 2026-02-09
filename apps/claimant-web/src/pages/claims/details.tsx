@@ -19,7 +19,9 @@ export function ClaimDetailsPage() {
   const { data: sessions } = useClaimSessions(id || '');
 
   // Find active session for this claim
-  const activeSession = sessions?.find(s => s.status === 'ACTIVE' || s.status === 'SCHEDULED');
+  const activeSession = sessions?.find(
+    s => s.status === 'IN_PROGRESS' || s.status === 'WAITING' || s.status === 'SCHEDULED'
+  );
 
   if (isLoadingClaim) {
     return (
@@ -93,26 +95,56 @@ export function ClaimDetailsPage() {
       </header>
 
       <main className="flex-1 p-4 md:p-6 space-y-6 max-w-3xl mx-auto w-full">
-        {/* Active Session CTA */}
-        {activeSession && (
-          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-5 shadow-sm">
+        {activeSession?.sessionId && (
+          <div
+            className={cn(
+              'border rounded-2xl p-5 shadow-sm',
+              activeSession.status === 'IN_PROGRESS'
+                ? 'bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20'
+                : activeSession.status === 'WAITING'
+                  ? 'bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20'
+                  : 'bg-card border-border'
+            )}
+          >
             <div className="flex items-start gap-4">
-              <div className="bg-primary/20 p-3 rounded-xl shrink-0">
-                <Video className="w-6 h-6 text-primary animate-pulse" />
+              <div
+                className={cn(
+                  'p-3 rounded-xl shrink-0',
+                  activeSession.status === 'IN_PROGRESS' ? 'bg-green-500/20' : 'bg-primary/20'
+                )}
+              >
+                <Video
+                  className={cn(
+                    'w-6 h-6',
+                    activeSession.status === 'IN_PROGRESS' || activeSession.status === 'WAITING'
+                      ? 'text-green-600 dark:text-green-400 animate-pulse'
+                      : 'text-primary'
+                  )}
+                />
               </div>
               <div className="flex-1">
-                <h3 className="font-bold text-foreground">Video Assessment Ready</h3>
+                <h3 className="font-bold text-foreground">
+                  {activeSession.status === 'IN_PROGRESS'
+                    ? 'Video Assessment In Progress'
+                    : activeSession.status === 'WAITING'
+                      ? 'Video Assessment Ready'
+                      : 'Video Assessment Scheduled'}
+                </h3>
                 <p className="text-sm text-muted-foreground mt-1 mb-4">
-                  An adjuster is waiting to conduct your live assessment. Please join now.
+                  {activeSession.status === 'IN_PROGRESS'
+                    ? 'The session has started. Please join immediately.'
+                    : activeSession.status === 'WAITING'
+                      ? 'An adjuster is waiting for you. Please join now.'
+                      : `Scheduled at ${activeSession.scheduledTime ? formatDate(activeSession.scheduledTime) : 'a later time'}.`}
                 </p>
-                <button
-                  onClick={() => navigate(`/video/${activeSession.id}/join`)}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl font-bold transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
-                >
-                  Join Meeting
-                </button>
               </div>
             </div>
+            <button
+              onClick={() => navigate(`/video/${activeSession.sessionId}/join`)}
+              className="w-full py-3 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] bg-green-600 hover:bg-green-700 text-white shadow-green-500/20"
+            >
+              Join Now
+            </button>
           </div>
         )}
 
