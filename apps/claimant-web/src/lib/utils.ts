@@ -37,3 +37,31 @@ export function isValidMalaysianPhone(phone: string): boolean {
 
   return mobilePattern.test(cleanPhone);
 }
+
+/**
+ * Convert string to Title Case nicely handling underscores
+ * e.g. "THIRD_PARTY_BODILY_INJURY" -> "Third Party Bodily Injury"
+ */
+export function convertToTitleCase(input: string): string {
+  if (!input) return '';
+  return input
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Format date to YYYY-MM-DD
+ */
+export function formatDate(date: string | Date): string {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
