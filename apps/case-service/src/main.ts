@@ -34,7 +34,11 @@ async function bootstrap() {
   await app.register(compression, { encodings: ['gzip', 'deflate'] });
 
   // Multipart for file uploads
-  await app.register(multipart);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB
+    },
+  });
 
   // API versioning
   app.enableVersioning({

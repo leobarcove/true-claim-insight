@@ -79,6 +79,7 @@ export class RoomsController {
         roomUrl: { type: 'string' },
         token: { type: 'string' },
         sessionId: { type: 'string' },
+        claimId: { type: 'string' },
       },
     },
   })

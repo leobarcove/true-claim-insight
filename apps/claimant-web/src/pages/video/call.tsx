@@ -18,7 +18,9 @@ export function ClaimantVideoCallPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
+  const [joinData, setJoinData] = useState<{ url: string; token: string; claimId: string } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [callObject, setCallObject] = useState<any>(null);
   const hasAttemptedJoin = useRef(false);
@@ -36,6 +38,7 @@ export function ClaimantVideoCallPage() {
     startRecording: startVideoRecording,
     stopRecording: stopVideoRecording,
     getVideoBlob,
+    takeSnapshot,
     isRecording: isVideoRecording,
   } = useVideoRecorder({ bufferDurationMs: 5000 });
   const playerRef = useRef<DailyVideoPlayerRef>(null);
@@ -117,7 +120,11 @@ export function ClaimantVideoCallPage() {
           sessionId,
           userId: user.id,
         });
-        setJoinData({ url: result.roomUrl, token: result.token });
+        setJoinData({
+          url: result.roomUrl,
+          token: result.token,
+          claimId: result.claimId,
+        });
 
         // Start recording immediately when joining
         startAudioRecording();
@@ -144,9 +151,55 @@ export function ClaimantVideoCallPage() {
     navigate('/tracker');
   };
 
+  // Handle uploading screenshot
+  const handleUploadScreenshot = useCallback(async () => {
+    if (!sessionId || !joinData?.claimId) {
+      return;
+    }
+
+    try {
+      const blob = await takeSnapshot();
+      if (!blob) {
+        playerRef.current?.sendAppMessage({ type: 'screenshot-uploaded', success: false });
+        return;
+      }
+
+      console.log(`[VideoCallPage] Screenshot captured: ${blob.size} bytes`);
+      const formData = new FormData();
+      formData.append('type', 'CLAIMANT_SCREENSHOT');
+      formData.append('file', blob, `screenshot-${Date.now()}.png`);
+      const uploadUrl = `/claims/${joinData.claimId}/documents/upload`;
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+      const response = await fetch(`${baseUrl}${uploadUrl}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${useAuthStore.getState().accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        playerRef.current?.sendAppMessage({ type: 'screenshot-uploaded', success: true });
+      } else {
+        const errText = await response.text();
+        console.error('[VideoCallPage] Screenshot upload failed', response.status, errText);
+        playerRef.current?.sendAppMessage({ type: 'screenshot-uploaded', success: false });
+      }
+    } catch (error) {
+      console.error('[VideoCallPage] Failed to capture/upload screenshot:', error);
+      playerRef.current?.sendAppMessage({ type: 'screenshot-uploaded', success: false });
+    }
+  }, [sessionId, joinData?.claimId, takeSnapshot]);
+
   // Handle Daily app messages (signaling)
   const handleAppMessage = useCallback(
     async (e: any) => {
+      if (e?.data?.type === 'request-screenshot') {
+        console.log('[VideoCallPage] Triggering screenshot capture');
+        handleUploadScreenshot();
+        return;
+      }
+
       if (e?.data?.type === 'request-voice-analysis') {
         console.log('[VideoCallPage] Triggering audio upload from signal');
         try {
@@ -191,7 +244,14 @@ export function ClaimantVideoCallPage() {
         }
       }
     },
-    [handleUploadAudio, sessionId, analyzeExpression, analyzeVisualBehavior, getVideoBlob]
+    [
+      handleUploadAudio,
+      handleUploadScreenshot,
+      sessionId,
+      analyzeExpression,
+      analyzeVisualBehavior,
+      getVideoBlob,
+    ]
   );
 
   if (error) {

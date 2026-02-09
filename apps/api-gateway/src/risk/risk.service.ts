@@ -54,6 +54,24 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
+  async uploadScreenshot(fileBuffer: Buffer, sessionId: string) {
+    const form = new FormData();
+    const blob = new Blob([fileBuffer], { type: 'image/png' });
+    form.append('file', blob, 'screenshot.png');
+    form.append('sessionId', sessionId);
+
+    this.logger.log(
+      `Proxying screenshot upload for session ${sessionId}, size: ${fileBuffer.length}`
+    );
+
+    const response = await fetch(`${this.baseUrl}/assessments/upload-screenshot`, {
+      method: 'POST',
+      body: form,
+    });
+
+    return this.handleResponse(response);
+  }
+
   async analyzeExpression(fileBuffer: Buffer, sessionId: string) {
     const form = new FormData();
     const blob = new Blob([fileBuffer], { type: 'video/webm' });

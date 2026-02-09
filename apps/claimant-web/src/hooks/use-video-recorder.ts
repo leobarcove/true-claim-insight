@@ -141,5 +141,45 @@ export function useVideoRecorder({ bufferDurationMs = 5000 }: VideoRecorderOptio
     stopRecording,
     getVideoBlob,
     stream: streamRef.current,
+    takeSnapshot: async (): Promise<Blob | null> => {
+      if (!streamRef.current) return null;
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      if (!videoTrack) return null;
+
+      const imageCapture = new (window as any).ImageCapture(videoTrack);
+      try {
+        const blob = await imageCapture.takePhoto();
+        return blob;
+      } catch (e) {
+        // Fallback to canvas method if ImageCapture fails or is not supported
+        try {
+          const video = document.createElement('video');
+          video.srcObject = new MediaStream([videoTrack]);
+          video.muted = true;
+          video.playsInline = true;
+          await video.play();
+
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+
+          ctx.drawImage(video, 0, 0);
+
+          return new Promise(resolve => {
+            canvas.toBlob(blob => {
+              video.srcObject = null;
+              video.remove();
+              canvas.remove();
+              resolve(blob);
+            }, 'image/png');
+          });
+        } catch (e2) {
+          console.error('Snapshot failed', e2);
+          return null;
+        }
+      }
+    },
   };
 }
