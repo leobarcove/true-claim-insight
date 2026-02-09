@@ -1,24 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Phone,
-  Lock,
-  MapPin,
-  ChevronRight,
-  ChevronLeft,
-  ShieldCheck,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Info,
-} from 'lucide-react';
+import { MapPin, Loader2, AlertCircle, LogOut, Smartphone, Info, User, Radius } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useVerifyNRIC } from '@/hooks/use-claimants';
-import { cn } from '@/lib/utils';
 
 // --- Helpers ---
 
@@ -41,17 +29,32 @@ const formatNRIC = (value: string): string => {
   return `${digitsOnly.substring(0, 6)}-${digitsOnly.substring(6, 8)}-${digitsOnly.substring(8, 12)}`;
 };
 
-const normalizePhone = (p: string) => p.replace(/\+/g, '').replace(/^60/g, '0');
+const InfoTooltip = ({ text }: { text: string }) => (
+  <div className="group relative inline-block ml-1.5 align-middle">
+    <Info className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+    <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2.5 bg-card text-foreground text-[11px] leading-relaxed rounded-xl shadow-xl border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-center">
+      {text}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-border" />
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-card" />
+    </div>
+  </div>
+);
+
+const ErrorMessage = ({ message }: { message: string }) => (
+  <p className="text-sm text-destructive mt-1 animate-in fade-in slide-in-from-top-1 ml-1 flex items-center gap-1.5">
+    <AlertCircle className="w-3 h-3" />
+    {message}
+  </p>
+);
 
 // --- Component ---
 
 export function VideoAssessmentWizard() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
 
   const [step, setStep] = useState(0);
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
   const [nric, setNric] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,14 +62,10 @@ export function VideoAssessmentWizard() {
 
   const verifyNricMutation = useVerifyNRIC();
 
-  const steps = [
-    { title: 'Information', icon: Phone },
-    { title: 'Identity', icon: Lock },
-    { title: 'Security', icon: MapPin },
-  ];
+  const totalSteps = 3; // 0: Phone, 1: NRIC, 2: Location
 
   useEffect(() => {
-    // Check if permission was already granted or denied
+    setError(null);
     if (navigator.permissions && step === 2) {
       navigator.permissions.query({ name: 'geolocation' as any }).then(result => {
         setPermissionStatus(result.state);
@@ -78,15 +77,16 @@ export function VideoAssessmentWizard() {
   }, [step]);
 
   const handleNext = async () => {
-    setError(null);
-
+    // Step 0: Phone Confirmation
     if (step === 0) {
-      if (!phoneNumber) {
-        setError('Phone number is required');
+      if (!user?.phoneNumber) {
+        setError('Phone number not found. Please login again.');
         return;
       }
       setStep(1);
-    } else if (step === 1) {
+    }
+    // Step 1: Identity (NRIC)
+    else if (step === 1) {
       const validation = validateNRIC(nric);
       if (!validation.valid) {
         setError(validation.error || 'Invalid NRIC');
@@ -96,9 +96,10 @@ export function VideoAssessmentWizard() {
       try {
         setLoading(true);
         const nricDigits = nric.replace(/\D/g, '');
+        const phoneDigits = user!.phoneNumber.replace(/\D/g, '');
         await verifyNricMutation.mutateAsync({
           nric: nricDigits,
-          phoneNumber,
+          phoneNumber: phoneDigits,
           sessionId: sessionId!,
         });
 
@@ -109,7 +110,9 @@ export function VideoAssessmentWizard() {
       } finally {
         setLoading(false);
       }
-    } else if (step === 2) {
+    }
+    // Step 2: Security (Location)
+    else if (step === 2) {
       handleFinalize();
     }
   };
@@ -120,12 +123,9 @@ export function VideoAssessmentWizard() {
   };
 
   const handleFinalize = () => {
-    setLoading(true);
     setError(null);
-
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
-      setLoading(false);
       return;
     }
 
@@ -147,14 +147,10 @@ export function VideoAssessmentWizard() {
           navigate(`/video/${sessionId}`);
         } catch (err: any) {
           setError('We could not securely verify your location. Please try again.');
-        } finally {
-          setLoading(false);
         }
       },
       err => {
-        setLoading(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setError('Location access was denied. You must allow it to proceed.');
           setPermissionStatus('denied');
         } else {
           setError('Position unavailable. Please ensure GPS is enabled.');
@@ -165,231 +161,183 @@ export function VideoAssessmentWizard() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-muted/10">
-      {/* Header & Progress */}
-      <div className="bg-background/80 backdrop-blur-md border-b border-border px-6 pt-10 pb-6 sticky top-0 z-20">
-        <div className="max-w-md mx-auto w-full">
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-3">
-              <div className="bg-primary/10 p-2.5 rounded-xl">
-                <img src="/logo.png" alt="Logo" className="w-6 h-6" />
-              </div>
-              <h2 className="font-bold text-lg tracking-tight">Assessment Setup</h2>
-            </div>
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full">
-              Step {step + 1} of 3
-            </span>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="relative h-1.5 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(var(--primary),0.5)]"
-              style={{ width: `${((step + 1) / steps.length) * 100}%` }}
-            />
-          </div>
-
-          <div className="flex justify-between mt-4">
-            {steps.map((s, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 transition-colors duration-300',
-                  i <= step ? 'text-primary' : 'text-muted-foreground/40'
-                )}
-              >
-                <div
-                  className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all',
-                    i < step
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : i === step
-                        ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--primary),0.1)]'
-                        : 'border-muted-foreground/20'
-                  )}
-                >
-                  {i < step ? <CheckCircle2 className="w-5 h-5" /> : <s.icon className="w-4 h-4" />}
-                </div>
-                <span className="text-[10px] uppercase tracking-wider font-bold">{s.title}</span>
-              </div>
-            ))}
-          </div>
+    <div className="flex flex-col flex-1 bg-background">
+      {/* Header */}
+      <header className="bg-card px-6 py-4 border-b border-border flex justify-between items-center sticky top-0 z-10 transition-all">
+        <div className="font-bold text-primary flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" className="h-8 w-8" />
+          True Claim Insight
         </div>
-      </div>
+        <button
+          onClick={logout}
+          className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+          title="Logout"
+        >
+          <LogOut size={20} />
+        </button>
+      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center p-6 mt-4">
-        <div className="max-w-md w-full bg-card rounded-[2.5rem] shadow-xl shadow-foreground/[0.02] dark:shadow-none border border-border overflow-hidden transition-all duration-500 animate-in fade-in slide-in-from-bottom-4">
-          <div className="p-8 md:p-10">
+      {/* Content */}
+      <main className="flex-1 flex flex-col justify-center px-14 py-8">
+        <div className="space-y-8">
+          {/* Progress Indicator */}
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-full">
+              <div className="relative h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(var(--primary),0.5)]"
+                  style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Form Area to match Login UI/UX */}
+          <div className="space-y-8">
             {step === 0 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-bold tracking-tight">Confirm Details</h1>
-                  <p className="text-muted-foreground text-sm">
-                    Please ensure your contact number is correct.
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="space-y-2 flex flex-col items-center text-center">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 shadow-inner">
+                    <Smartphone className="h-8 w-8 text-primary" />
+                  </div>
+                  <h1 className="text-xl font-bold tracking-tight">Confirm Details</h1>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Please ensure your registered phone number is correct.
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="relative group">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
-                        <Phone className="w-5 h-5" />
+                    <div className="flex items-center">
+                      <Label htmlFor="phone" className="text-base">
+                        Phone Number
+                      </Label>
+                      <InfoTooltip text="This number is linked to your claim record and will be used for session security." />
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground font-medium">
+                        +60
                       </div>
                       <Input
                         id="phone"
-                        value={phoneNumber}
-                        onChange={e => setPhoneNumber(e.target.value)}
-                        className="pl-12 h-14 rounded-2xl border-border bg-muted/20 text-lg transition-all focus:ring-4 focus:ring-primary/5"
-                        placeholder="e.g. +60123456789"
+                        value={user?.phoneNumber?.replace(/^\+60/g, '') || ''}
+                        readOnly
+                        className="pl-12 h-14 text-lg bg-muted/50 border-dashed cursor-not-allowed"
                       />
                     </div>
-                  </div>
-
-                  <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 flex gap-4">
-                    <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-600/80 dark:text-blue-400 leading-relaxed font-medium">
-                      This number must match the one linked to your insurance claim.
-                    </p>
+                    {error && step === 0 && <ErrorMessage message={error} />}
                   </div>
                 </div>
               </div>
             )}
 
             {step === 1 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-bold tracking-tight">Identity Check</h1>
-                  <p className="text-muted-foreground text-sm">
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="space-y-2 flex flex-col items-center text-center">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 shadow-inner">
+                    <User className="h-8 w-8 text-primary" />
+                  </div>
+                  <h1 className="text-xl font-bold tracking-tight">Identity Check</h1>
+                  <p className="text-muted-foreground leading-relaxed">
                     Enter your 12-digit NRIC number to verify your identity.
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nric">NRIC Number</Label>
-                    <div className="relative group">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
-                        <Lock className="w-5 h-5" />
-                      </div>
-                      <Input
-                        id="nric"
-                        value={nric}
-                        onChange={e => setNric(formatNRIC(e.target.value))}
-                        className="pl-12 h-14 rounded-2xl border-border bg-muted/20 text-lg transition-all focus:ring-4 focus:ring-primary/5"
-                        placeholder="YYMMDD-XX-XXXX"
-                        maxLength={14}
-                      />
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <Label htmlFor="nric" className="text-base">
+                      NRIC Number
+                    </Label>
+                    <InfoTooltip text="Your data will be used for identity verification purposes." />
+                  </div>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      <User className="w-5 h-5 ml-1" />
                     </div>
-                    <p className="text-[10px] text-muted-foreground px-1 font-bold uppercase tracking-widest">
-                      Format: 12 Digits (e.g. 850101-14-1234)
-                    </p>
+                    <Input
+                      id="nric"
+                      value={nric}
+                      onChange={e => setNric(formatNRIC(e.target.value))}
+                      className="pl-12 h-14 text-lg"
+                      placeholder="e.g. 850101-14-1234"
+                      maxLength={14}
+                    />
                   </div>
-
-                  <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4 flex gap-4">
-                    <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-emerald-600/80 dark:text-emerald-400 leading-relaxed font-medium">
-                      Your data is encrypted and used only for identity validation purposes.
-                    </p>
-                  </div>
+                  {error && step === 1 && <ErrorMessage message={error} />}
                 </div>
               </div>
             )}
 
             {step === 2 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-bold tracking-tight">Location Access</h1>
-                  <p className="text-muted-foreground text-sm">
-                    Mandatory for regulatory compliance in this assessment.
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="space-y-2 flex flex-col items-center text-center">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 shadow-inner">
+                    <MapPin className="h-8 w-8 text-primary" />
+                  </div>
+                  <h1 className="text-xl font-bold tracking-tight">Location Access</h1>
+                  <p className="text-muted-foreground leading-relaxed">
+                    This ensures the assessment is conducted within clear boundaries.
                   </p>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="flex justify-center py-6">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150 opacity-20" />
-                      <div className="relative bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center text-primary shadow-inner">
-                        <MapPin className="w-12 h-12" />
-                      </div>
+                <div className="flex justify-center py-1">
+                  <div className="relative">
+                    <div
+                      className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-110 opacity-20"
+                      style={{ animationDuration: '1.5s' }}
+                    />
+                    <div className="relative bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center text-primary shadow-inner">
+                      <Radius
+                        className="w-10 h-10 animate-spin"
+                        style={{ animationDuration: '2s' }}
+                      />
                     </div>
                   </div>
-
-                  <div className="bg-muted/30 rounded-2xl p-5 border border-border flex gap-4">
-                    <ShieldCheck className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center shrink-0 text-primary shadow-sm" />
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-foreground text-sm">Secure Verification</h3>
-                      <p className="text-xs text-muted-foreground leading-normal">
-                        This ensures the assessment happens within approved boundaries to prevent
-                        fraud.
-                      </p>
-                    </div>
-                  </div>
-
-                  {permissionStatus === 'denied' && (
-                    <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 px-4 py-4 rounded-2xl flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold">Access Required</p>
-                        <p className="text-xs leading-normal font-medium">
-                          Please reset location permissions in your browser settings and refresh.
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
+
+                {permissionStatus === 'denied' && (
+                  <ErrorMessage message="Location access denied. You must allow it to proceed." />
+                )}
+                {error && step === 2 && <ErrorMessage message={error} />}
               </div>
             )}
 
-            {error && (
-              <div className="mt-6 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-4 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                <p className="text-sm font-semibold">{error}</p>
-              </div>
-            )}
+            <div className="space-y-4 pt-4">
+              <Button
+                onClick={handleNext}
+                size="lg"
+                className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98] group"
+                disabled={loading}
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Verifying...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <span>{step === 2 ? 'Enable & Join' : 'Continue'}</span>
+                  </div>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full h-12 text-lg border-2 text-muted-foreground hover:bg-foreground hover:text-background font-medium transition-colors"
+                onClick={handleBack}
+                disabled={loading}
+              >
+                Back
+              </Button>
+            </div>
           </div>
         </div>
 
-        <p className="mt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-black opacity-50">
+        <p className="mt-12 text-[10px] uppercase text-muted-foreground font-black opacity-30 text-center">
           True Claim Insight Secure Gateway
         </p>
       </main>
-
-      {/* Footer Navigation */}
-      <footer className="bg-background border-t border-border p-6 pb-12">
-        <div className="max-w-md mx-auto w-full flex gap-4">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            className="flex-1 h-16 rounded-2xl font-bold border-2 transition-all active:scale-95 group overflow-hidden"
-            disabled={loading}
-          >
-            <ChevronLeft className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" />
-            <span className="relative z-10">{step === 0 ? 'Cancel' : 'Back'}</span>
-          </Button>
-
-          <Button
-            onClick={handleNext}
-            className="flex-[2] h-16 rounded-2xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-95 group"
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Processing...</span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-2">
-                <span>{step === 2 ? 'Enable & Join' : 'Continue'}</span>
-                {step !== 2 && (
-                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                )}
-              </div>
-            )}
-          </Button>
-        </div>
-      </footer>
     </div>
   );
 }

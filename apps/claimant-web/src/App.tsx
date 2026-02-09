@@ -66,7 +66,7 @@ function AssessmentTrackerPage() {
         </button>
       </header>
 
-      <main className="flex-1 p-6 space-y-6 w-full">
+      <main className="flex-1 px-14 py-6 space-y-12 w-full">
         {/* Profile Card */}
         <div className="bg-card rounded-2xl p-6 shadow-sm border border-border transition-colors">
           <div className="flex items-center gap-4">
@@ -130,7 +130,7 @@ function AssessmentTrackerPage() {
                 {activeSession && (
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <button
-                      onClick={() => navigate(`/video/${activeSession.id}/setup`)}
+                      onClick={() => navigate(`/video/${activeSession.id}/join`)}
                       className="w-full bg-primary hover:bg-primary/90 text-primary-foreground p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
                     >
                       <Video size={20} fill="currentColor" />
@@ -155,9 +155,7 @@ function AssessmentTrackerPage() {
               <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto">
                 <FileText size={24} className="text-muted-foreground/30" />
               </div>
-              <p className="text-muted-foreground text-sm font-medium">
-                No active cases found for this account.
-              </p>
+              <p className="text-muted-foreground text-sm font-medium">No active cases found.</p>
             </div>
           )}
         </div>
@@ -208,7 +206,7 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<WelcomePage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/verify-otp" element={<VerifyOtpPage />} />
+              <Route path="/otp" element={<VerifyOtpPage />} />
 
               {/* Protected routes */}
               <Route
@@ -227,30 +225,24 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/video/:sessionId"
-                element={
-                  <ProtectedRoute>
-                    <ClaimantVideoCallPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/video/:sessionId/setup"
-                element={
-                  <ProtectedRoute>
-                    <VideoAssessmentWizard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/video/:sessionId/verify-nric"
-                element={<Navigate to="../setup" replace />}
-              />
-              <Route
-                path="/video/:sessionId/location"
-                element={<Navigate to="../setup" replace />}
-              />
+              <Route path="/video/:sessionId">
+                <Route
+                  index
+                  element={
+                    <ProtectedRoute>
+                      <ClaimantVideoCallPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="join"
+                  element={
+                    <ProtectedRoute>
+                      <VideoAssessmentWizard />
+                    </ProtectedRoute>
+                  }
+                />
+              </Route>
 
               {/* Catch-all redirect */}
               <Route path="*" element={<Navigate to="/tracker" replace />} />

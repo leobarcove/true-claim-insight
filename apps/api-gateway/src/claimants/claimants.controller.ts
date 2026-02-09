@@ -2,6 +2,10 @@ import { Controller, Post, Body, HttpStatus, HttpException, Logger } from '@nest
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../config/prisma.service';
 
+const normalizeNric = (n: string) => n?.replace(/\D/g, '') || '';
+
+const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/g, '0') || '';
+
 @ApiTags('claimants')
 @Controller('claimants')
 export class ClaimantsController {
@@ -52,21 +56,15 @@ export class ClaimantsController {
     }
 
     // Compare NRIC and Phone
-    const expectedNric = claimant.nric || session.claim.nric;
-    const expectedPhone = claimant.phoneNumber;
-
-    // Normalize phone numbers for comparison (remove + prefix if present)
-    const normalize = (p: string) => p.replace(/\+/g, '').replace(/^60/g, '0');
-    const normalizedInputPhone = normalize(phoneNumber);
-    const normalizedExpectedPhone = normalize(expectedPhone);
-
-    const isNricValid = expectedNric && nric === expectedNric;
-    const isPhoneValid = normalizedInputPhone === normalizedExpectedPhone;
+    const isNricValid =
+      normalizeNric(nric) === normalizeNric(claimant.nric || session.claim.nric || '');
+    const isPhoneValid =
+      normalizePhoneNumber(phoneNumber) === normalizePhoneNumber(claimant.phoneNumber);
 
     if (!isNricValid || !isPhoneValid) {
       this.logger.warn(`Verification failed for session ${sessionId}: Invalid NRIC or Phone`);
       throw new HttpException(
-        'Identity verification failed. Information does not match our records.',
+        'Verification failed. Invalid NRIC or Phone Number.',
         HttpStatus.BAD_REQUEST
       );
     }
