@@ -8,7 +8,7 @@ import {
 } from '@/hooks/use-video';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
-import { XCircle, Loader2, RefreshCw, ArrowLeft, Mic } from 'lucide-react';
+import { XCircle, Loader2, Mic } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/use-audio-recorder';
 import { useVideoRecorder } from '@/hooks/use-video-recorder';
 import { DailyProvider } from '@daily-co/daily-react';
@@ -39,6 +39,17 @@ export function ClaimantVideoCallPage() {
     isRecording: isVideoRecording,
   } = useVideoRecorder({ bufferDurationMs: 5000 });
   const playerRef = useRef<DailyVideoPlayerRef>(null);
+
+  // Ensure user has completed the verification wizard
+  useEffect(() => {
+    if (!sessionId) return;
+    const nricVerified = sessionStorage.getItem(`nric_verified_${sessionId}`);
+    const locationVerified = sessionStorage.getItem(`location_verified_${sessionId}`);
+
+    if (!nricVerified || !locationVerified) {
+      navigate(`/video/${sessionId}/join`, { replace: true });
+    }
+  }, [sessionId, navigate]);
 
   // Handle uploading audio for analysis
   const handleUploadAudio = useCallback(async () => {
@@ -191,12 +202,10 @@ export function ClaimantVideoCallPage() {
         <p className="text-muted-foreground mb-6 max-w-xs">{error}</p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <Button onClick={attemptRetry} className="w-full">
-            <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
           </Button>
           <Button onClick={() => navigate('/tracker')} variant="outline" className="w-full">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Tracker
+            Back
           </Button>
         </div>
       </div>

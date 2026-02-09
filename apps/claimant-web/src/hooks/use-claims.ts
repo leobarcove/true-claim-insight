@@ -19,11 +19,16 @@ export interface ClaimListResponse {
   };
 }
 
-export function useClaims() {
+export function useClaims(claimantId?: string) {
   return useQuery({
-    queryKey: claimKeys.lists(),
+    queryKey: claimantId ? [...claimKeys.lists(), claimantId] : claimKeys.lists(),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>('/claims');
+      const params = new URLSearchParams();
+      if (claimantId) params.append('claimantId', claimantId);
+
+      const { data } = await apiClient.get<ApiResponse<ClaimListResponse>>(
+        `/claims?${params.toString()}`
+      );
       return data.data;
     },
     staleTime: 30 * 1000,

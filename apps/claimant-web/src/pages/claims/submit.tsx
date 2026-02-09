@@ -72,7 +72,7 @@ export function SubmitClaimPage() {
   return (
     <div className="flex-1 bg-background pb-12">
       {/* Mobile Header */}
-      <header className="bg-card border-b border-border px-4 py-4 sticky top-0 z-10 flex items-center gap-4">
+      <header className="z-50 bg-card border-b border-border px-4 py-4 sticky top-0 z-10 flex items-center gap-4">
         <button
           onClick={() => navigate(-1)}
           className="p-2 hover:bg-muted rounded-full transition-colors"

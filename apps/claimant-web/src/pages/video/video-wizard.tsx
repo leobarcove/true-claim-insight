@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Loader2, AlertCircle, LogOut, Smartphone, Info, User, Radius } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -59,6 +59,7 @@ export function VideoAssessmentWizard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<string>('prompt');
+  const isFinalizingRef = useRef(false);
 
   const verifyNricMutation = useVerifyNRIC();
 
@@ -77,6 +78,8 @@ export function VideoAssessmentWizard() {
   }, [step]);
 
   const handleNext = async () => {
+    setError(null);
+
     // Step 0: Phone Confirmation
     if (step === 0) {
       if (!user?.phoneNumber) {
@@ -123,11 +126,19 @@ export function VideoAssessmentWizard() {
   };
 
   const handleFinalize = () => {
+    // Prevent duplicate calls if already in progress
+    if (isFinalizingRef.current) {
+      return;
+    }
+
     setError(null);
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
       return;
     }
+
+    isFinalizingRef.current = true;
+    setLoading(true);
 
     navigator.geolocation.getCurrentPosition(
       async position => {
@@ -147,6 +158,8 @@ export function VideoAssessmentWizard() {
           navigate(`/video/${sessionId}`);
         } catch (err: any) {
           setError('We could not securely verify your location. Please try again.');
+          isFinalizingRef.current = false;
+          setLoading(false);
         }
       },
       err => {
@@ -155,6 +168,8 @@ export function VideoAssessmentWizard() {
         } else {
           setError('Position unavailable. Please ensure GPS is enabled.');
         }
+        isFinalizingRef.current = false;
+        setLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
