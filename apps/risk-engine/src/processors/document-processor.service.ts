@@ -4,6 +4,7 @@ import { GpuClientService } from '../llm/gpu-client.service';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
 import { DocumentStatus, DocumentType } from '@tci/shared-types';
 import { ExtractionService } from './extraction/extraction.service';
+import { getNormalizer } from './extraction/normalizers';
 import sharp from 'sharp';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -97,49 +98,58 @@ export class DocumentProcessorService {
       const isImage = mimeType.startsWith('image/');
       const docType = doc.type as DocumentType;
 
-      if (isImage) {
-        // Vision Path
-        modelUsed = 'qwen2.5vl:7b';
-        const prompt = this.extractionService.getPrompt(docType);
-        const optimizedBuffer = await this.preprocessImage(fileBuffer, docType, doc.filename);
-        const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename, modelUsed);
-        visionData = resp.output || resp;
-        resultData = this.extractionService.normalize(docType, visionData);
+      // Check if we have a normalizer for this document type
+      const normalizer = getNormalizer(docType);
+      if (normalizer) {
+        if (isImage) {
+          // Vision Path
+          modelUsed = 'qwen2.5vl:7b';
+          const prompt = this.extractionService.getPrompt(docType);
+          const optimizedBuffer = await this.preprocessImage(fileBuffer, docType, doc.filename);
+          const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename, modelUsed);
+          visionData = resp.output || resp;
+          resultData = this.extractionService.normalize(docType, visionData);
+        } else {
+          // OCR
+          const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
+          rawText = ocrResp.text || '';
+
+          // Extraction
+          modelUsed = 'qwen2.5:7b';
+          const prompt = this.extractionService.getPrompt(docType, rawText);
+
+          const llmResp = await this.gpu.generateJson(prompt, modelUsed);
+          const rawResult = llmResp.output || llmResp;
+          resultData = this.extractionService.normalize(docType, rawResult);
+        }
+
+        // 2. Save Analysis
+        await this.prisma.documentAnalysis.upsert({
+          where: { documentId: doc.id },
+          create: {
+            documentId: doc.id,
+            rawText: rawText,
+            extractedData: resultData,
+            visionData: visionData,
+            modelUsed: modelUsed,
+            confidence: 0.9,
+            processingTime: Date.now() - startTime,
+          },
+          update: {
+            rawText: rawText,
+            extractedData: resultData,
+            visionData: visionData,
+            modelUsed: modelUsed,
+            updatedAt: new Date(),
+          },
+        });
+        this.logger.log(`Processed document ${doc.filename} (${docType})`);
       } else {
-        // OCR
-        const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
-        rawText = ocrResp.text || '';
-
-        // Extraction
-        modelUsed = 'qwen2.5:7b';
-        const prompt = this.extractionService.getPrompt(docType, rawText);
-
-        const llmResp = await this.gpu.generateJson(prompt, modelUsed);
-        const rawResult = llmResp.output || llmResp;
-        resultData = this.extractionService.normalize(docType, rawResult);
+        this.logger.log(
+          `Skipping extraction/analysis for ${docType} (no normalizer found). Marking as COMPLETED.`
+        );
+        // Status will be updated to COMPLETED by processDocumentFromUrl caller
       }
-
-      // 2. Save Analysis
-      await this.prisma.documentAnalysis.upsert({
-        where: { documentId: doc.id },
-        create: {
-          documentId: doc.id,
-          rawText: rawText,
-          extractedData: resultData,
-          visionData: visionData,
-          modelUsed: modelUsed,
-          confidence: 0.9,
-          processingTime: Date.now() - startTime,
-        },
-        update: {
-          rawText: rawText,
-          extractedData: resultData,
-          visionData: visionData,
-          modelUsed: modelUsed,
-          updatedAt: new Date(),
-        },
-      });
-      this.logger.log(`Processed document ${doc.filename} (${docType})`);
 
       // Only trigger Trinity Check if all documents for this claim have been processed
       const unfinishedDocs = await this.prisma.document.count({

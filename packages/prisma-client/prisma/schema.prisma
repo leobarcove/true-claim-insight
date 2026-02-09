@@ -406,6 +406,7 @@ enum DocumentType {
   POLICY_DOCUMENT
   NRIC
   OTHER_DOCUMENT
+  CLAIMANT_SCREENSHOT
 }
 
 enum ActorType {

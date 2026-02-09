@@ -17,6 +17,7 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
+import { DocumentType } from '@prisma/client';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -49,7 +50,7 @@ export class DocumentsController {
     }
 
     // Extract additional fields from form data if needed
-    const type = file.fields?.type?.value || 'OTHER';
+    const type = file.fields?.type?.value || DocumentType.OTHER_DOCUMENT;
 
     return this.documentsService.upload(claimId, file, type);
   }

@@ -110,6 +110,57 @@ export class RiskController {
     }
   }
 
+  @Post('upload-screenshot')
+  @Public()
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        sessionId: { type: 'string' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload claimant screenshot' })
+  async uploadScreenshot(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new HttpException('Request is not multipart', HttpStatus.BAD_REQUEST);
+    }
+
+    let buf: Buffer | null = null;
+    let sessionId: string | null = null;
+
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === 'file') {
+          if (part.fieldname === 'file') {
+            buf = await part.toBuffer();
+          } else {
+            await part.toBuffer();
+          }
+        } else {
+          if (part.fieldname === 'sessionId') {
+            sessionId = part.value as string;
+          }
+        }
+      }
+
+      if (!buf) {
+        throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
+      }
+
+      if (!sessionId) {
+        const query = req.query as any;
+        sessionId = query.sessionId || 'unknown';
+      }
+
+      return await this.riskService.uploadScreenshot(buf, sessionId as string);
+    } catch (error: any) {
+      throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
   @Post('analyze-expression')
   @Public()
   @ApiConsumes('multipart/form-data')

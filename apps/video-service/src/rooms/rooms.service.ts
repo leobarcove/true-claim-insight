@@ -140,6 +140,7 @@ export class RoomsService {
     roomUrl: string;
     token: string;
     sessionId: string;
+    claimId: string;
   }> {
     const session = await this.getRoom(sessionId);
 
@@ -182,6 +183,7 @@ export class RoomsService {
       roomUrl: session.roomUrl || '',
       token,
       sessionId,
+      claimId: session.claimId,
     };
   }
 

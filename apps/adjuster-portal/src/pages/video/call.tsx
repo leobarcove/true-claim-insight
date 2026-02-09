@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw, Camera } from 'lucide-react';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -285,6 +285,7 @@ export function VideoCallPage() {
   const [analysisMode, setAnalysisMode] = useState<'manual' | 'auto' | 'off'>('off');
   const [isJoined, setIsJoined] = useState(false);
   const [isClaimantInRoom, setIsClaimantInRoom] = useState(false);
+  const [isScreenshotting, setIsScreenshotting] = useState(false);
   const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
 
   // Deception Score Query
@@ -346,13 +347,6 @@ export function VideoCallPage() {
 
       try {
         playerRef.current.sendAppMessage({ type: 'request-voice-analysis' });
-        if (showToast) {
-          toast({
-            title: 'Request Sent',
-            description: 'Asking claimant device to send audio sample...',
-          });
-        }
-
         isAnalyzingRef.current = true;
         setTimeout(() => {
           isAnalyzingRef.current = false;
@@ -411,6 +405,74 @@ export function VideoCallPage() {
       }
     },
     [isJoined, toast]
+  );
+
+  const handleCaptureScreenshot = useCallback(() => {
+    if (!playerRef.current) return;
+
+    if (isScreenshotting) {
+      return;
+    }
+
+    if (!isClaimantInRoom) {
+      toast({
+        title: 'Claimant Not Available',
+        description: 'The claimant must be in the room to capture a screenshot.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsScreenshotting(true);
+
+    // Fallback: Re-enable button after 10s if no response received
+    setTimeout(() => {
+      setIsScreenshotting(prev => {
+        if (prev) {
+          console.log('Screenshot timeout reached, resetting state');
+          return false;
+        }
+        return prev;
+      });
+    }, 10000);
+
+    try {
+      playerRef.current.sendAppMessage({ type: 'request-screenshot' });
+      toast({
+        title: 'Capturing...',
+        description: 'Request sent to claimant device.',
+      });
+    } catch (e) {
+      console.error('Failed to request screenshot:', e);
+      setIsScreenshotting(false);
+      toast({
+        title: 'Error',
+        description: 'Failed to send screenshot request.',
+        variant: 'destructive',
+      });
+    }
+  }, [isClaimantInRoom, isScreenshotting, toast]);
+
+  const handleAppMessage = useCallback(
+    (e: any) => {
+      if (e?.data?.type === 'screenshot-uploaded') {
+        setIsScreenshotting(false);
+        if (e.data.success) {
+          toast({
+            title: 'Screenshot Captured',
+            description: 'Image has been successfully uploaded.',
+            variant: 'default', /// or success if available
+          });
+        } else {
+          toast({
+            title: 'Capture Failed',
+            description: 'Failed to upload screenshot from claimant device.',
+            variant: 'destructive',
+          });
+        }
+      }
+    },
+    [toast]
   );
 
   // Auto-analysis effect
@@ -586,6 +648,7 @@ export function VideoCallPage() {
             }}
             onJoined={() => setIsJoined(true)}
             onCallFrameCreated={handleCallFrameCreated}
+            onAppMessage={handleAppMessage}
           />
         </div>
 
@@ -758,6 +821,31 @@ export function VideoCallPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* Capture Screenshot Button */}
+                <div className="pt-4 mt-4 mb-2 border-t border-border">
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCaptureScreenshot}
+                      className="w-full text-xs flex items-center gap-2 h-8"
+                      disabled={!isClaimantInRoom || isScreenshotting}
+                    >
+                      {isScreenshotting ? (
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <Camera className="h-3.5 w-3.5" />
+                      )}
+                      {isScreenshotting ? 'Capturing...' : 'Capture Screenshot'}
+                    </Button>
+                    <InfoTooltip
+                      title="Remote Screenshot"
+                      content="Captures a snapshot from the claimant's active camera."
+                      direction="top"
+                    />
+                  </div>
                 </div>
               </Card>
             </div>

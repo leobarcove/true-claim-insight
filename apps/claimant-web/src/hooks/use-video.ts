@@ -10,6 +10,7 @@ export interface JoinRoomResponse {
   roomUrl: string;
   token: string;
   sessionId: string;
+  claimId: string;
 }
 
 export function useJoinVideoRoom() {
