@@ -86,12 +86,12 @@ export function ClaimantVideoCallPage() {
       console.log(
         `[ClaimantVideoCallPage] NRIC not verified for session ${sessionId}, redirecting...`
       );
-      navigate(`/video/${sessionId}/verify-nric`);
+      navigate(`/video/${sessionId}/join`);
       return;
     }
 
     if (!locationVerified && sessionId) {
-      navigate(`/video/${sessionId}/location`);
+      navigate(`/video/${sessionId}/join`);
       return;
     }
 
@@ -234,7 +234,7 @@ export function ClaimantVideoCallPage() {
         </div>
 
         {/* Fullscreen Video Area */}
-        <div className="flex-1 relative overflow-hidden bg-black">
+        <div className="flex-1 relative overflow-hidden">
           <DailyVideoPlayer
             ref={playerRef}
             url={joinData.url}
