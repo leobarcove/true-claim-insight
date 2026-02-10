@@ -21,11 +21,13 @@
     "prisma:migrate": "pnpm --filter @tci/prisma-client migrate:dev",
     "prisma:studio": "pnpm --filter @tci/prisma-client studio",
     "prisma:seed": "pnpm --filter @tci/prisma-client seed",
+    "prisma:clean": "rm -rf packages/prisma-client/prisma/migrations/* && mkdir -p packages/prisma-client/prisma/migrations/initial_schema && pnpm --silent --filter @tci/prisma-client exec prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > packages/prisma-client/prisma/migrations/initial_schema/migration.sql",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "docker:reset": "docker-compose down -v && docker-compose up -d",
-    "setup": "pnpm install && cp -n .env.example .env || true && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:generate",
+    "setup": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
+    "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
     "prepare": "husky install"
   },
   "devDependencies": {

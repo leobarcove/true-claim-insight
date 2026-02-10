@@ -21,10 +21,13 @@ export class VideoService {
     this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
-  async createRoom(dto: CreateRoomDto) {
+  async createRoom(dto: CreateRoomDto, tenantId: string) {
     const response = await fetch(`${this.baseUrl}/rooms`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
       body: JSON.stringify(dto),
     });
 
@@ -36,11 +39,13 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async getAllSessions(page?: number, limit?: number) {
+  async getAllSessions(tenantId?: string, page?: number, limit?: number) {
     const url = new URL(`${this.baseUrl}/rooms`);
     if (page) url.searchParams.append('page', page.toString());
     if (limit) url.searchParams.append('limit', limit.toString());
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), {
+      headers: tenantId ? { 'X-Tenant-Id': tenantId } : undefined,
+    });
     return this.handleResponse(response);
   }
 
@@ -114,11 +119,13 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async getAllUploads(page?: number, limit?: number) {
+  async getAllUploads(tenantId?: string, page?: number, limit?: number) {
     const url = new URL(`${this.baseUrl}/uploads`);
     if (page) url.searchParams.append('page', page.toString());
     if (limit) url.searchParams.append('limit', limit.toString());
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), {
+      headers: tenantId ? { 'X-Tenant-Id': tenantId } : undefined,
+    });
     return this.handleResponse(response);
   }
 
@@ -200,8 +207,10 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async getClaimUploads(claimId: string) {
-    const response = await fetch(`${this.baseUrl}/uploads/claim/${claimId}`);
+  async getClaimUploads(claimId: string, tenantId: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/claim/${claimId}`, {
+      headers: { 'X-Tenant-Id': tenantId },
+    });
     return this.handleResponse(response);
   }
 

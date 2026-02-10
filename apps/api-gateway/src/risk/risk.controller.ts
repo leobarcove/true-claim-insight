@@ -13,22 +13,25 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nes
 import { FastifyRequest } from 'fastify';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
+import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 import { RiskService } from './risk.service';
 
 @ApiTags('risk')
 @Controller('risk')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class RiskController {
   constructor(private readonly riskService: RiskService) {}
 
   @Get('session/:sessionId')
   @ApiOperation({ summary: 'Get risk assessments for a session' })
-  async getAssessments(@Param('sessionId') sessionId: string) {
+  async getAssessments(@Param('sessionId') sessionId: string, @CurrentTenant() tenantId: string) {
     try {
-      return await this.riskService.getAssessments(sessionId);
+      return await this.riskService.getAssessments(sessionId, tenantId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -49,10 +52,11 @@ export class RiskController {
   @ApiOperation({ summary: 'Trigger a real-time risk assessment' })
   async triggerAssessment(
     @Body('sessionId') sessionId: string,
-    @Body('assessmentType') assessmentType: string
+    @Body('assessmentType') assessmentType: string,
+    @CurrentTenant() tenantId: string
   ) {
     try {
-      return await this.riskService.triggerAssessment(sessionId, assessmentType);
+      return await this.riskService.triggerAssessment(sessionId, assessmentType, tenantId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -265,9 +269,9 @@ export class RiskController {
 
   @Get('claims/:claimId/trinity')
   @ApiOperation({ summary: 'Get trinity check results for a claim' })
-  async getTrinityCheck(@Param('claimId') claimId: string) {
+  async getTrinityCheck(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string) {
     try {
-      return await this.riskService.getTrinityCheck(claimId);
+      return await this.riskService.getTrinityCheck(claimId, tenantId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

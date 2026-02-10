@@ -15,13 +15,15 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 import { VideoService } from './video.service';
 import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto/video.dto';
 
 @ApiTags('video')
 @Controller('video')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class VideoController {
   constructor(private readonly videoService: VideoService) {}
@@ -29,9 +31,9 @@ export class VideoController {
   @Post('rooms')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Create a video room (Adjuster only)' })
-  async createRoom(@Body() dto: CreateRoomDto) {
+  async createRoom(@Body() dto: CreateRoomDto, @CurrentTenant() tenantId: string) {
     try {
-      return await this.videoService.createRoom(dto);
+      return await this.videoService.createRoom(dto, tenantId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -39,9 +41,13 @@ export class VideoController {
 
   @Get('rooms')
   @ApiOperation({ summary: 'Get all video sessions' })
-  async getAllSessions(@Query('page') page?: number, @Query('limit') limit?: number) {
+  async getAllSessions(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @CurrentTenant() tenantId?: string
+  ) {
     try {
-      return await this.videoService.getAllSessions(page, limit);
+      return await this.videoService.getAllSessions(tenantId, page, limit);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -125,9 +131,13 @@ export class VideoController {
 
   @Get('uploads')
   @ApiOperation({ summary: 'Get all video uploads' })
-  async getAllUploads(@Query('page') page?: number, @Query('limit') limit?: number) {
+  async getAllUploads(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @CurrentTenant() tenantId?: string
+  ) {
     try {
-      return await this.videoService.getAllUploads(page, limit);
+      return await this.videoService.getAllUploads(tenantId, page, limit);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -211,9 +221,9 @@ export class VideoController {
 
   @Get('uploads/claim/:claimId')
   @ApiOperation({ summary: 'Get all video uploads for a claim' })
-  async getClaimUploads(@Param('claimId') claimId: string) {
+  async getClaimUploads(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string) {
     try {
-      return await this.videoService.getClaimUploads(claimId);
+      return await this.videoService.getClaimUploads(claimId, tenantId);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
