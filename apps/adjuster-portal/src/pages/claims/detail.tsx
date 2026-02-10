@@ -366,7 +366,7 @@ export function ClaimDetailPage() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Navigate adjuster to video call
-      navigate(`/video/${sessionId}`);
+      navigate(`/claims/${claimId}/live-session/${sessionId}`);
     } catch (error: any) {
       toast({
         title: 'Error',
