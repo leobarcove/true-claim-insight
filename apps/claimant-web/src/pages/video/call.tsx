@@ -179,7 +179,12 @@ export function ClaimantVideoCallPage() {
       });
 
       if (response.ok) {
-        playerRef.current?.sendAppMessage({ type: 'screenshot-uploaded', success: true });
+        const result = await response.json();
+        playerRef.current?.sendAppMessage({
+          type: 'screenshot-uploaded',
+          success: true,
+          document: result.data || result,
+        });
       } else {
         const errText = await response.text();
         console.error('[VideoCallPage] Screenshot upload failed', response.status, errText);

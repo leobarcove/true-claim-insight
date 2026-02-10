@@ -169,10 +169,16 @@ export class UploadsService {
               include: {
                 tenant: true,
                 user: {
-                  select: { fullName: true },
+                  select: {
+                    fullName: true,
+                    email: true,
+                    phoneNumber: true,
+                    // role filtering can be added
+                  },
                 },
               },
             },
+            insurerTenant: true,
           },
         },
       },
@@ -722,7 +728,11 @@ export class UploadsService {
       claimId: upload.claimId,
       claimant: {
         name: upload.claim.claimant?.fullName || 'N/A',
-        nric: upload.claim.claimant?.nricHash || 'N/A',
+        nric:
+          upload.claim.claimant?.nric ||
+          upload.claim.nric ||
+          upload.claim.claimant?.nricHash ||
+          'N/A',
         phone: upload.claim.claimant?.phoneNumber || 'N/A',
         email: upload.claim.claimant?.email || 'N/A',
       },
@@ -731,6 +741,11 @@ export class UploadsService {
         policyNumber: upload.claim.policyNumber || 'N/A',
         incidentDate: upload.claim.incidentDate || new Date().toISOString(),
         vehiclePlate: upload.claim.vehiclePlateNumber || 'N/A',
+        vehicleYear: upload.claim.vehicleYear?.toString() || 'N/A',
+        vehicleMake: upload.claim.vehicleMake || 'N/A',
+        vehicleModel: upload.claim.vehicleModel || 'N/A',
+        engineNumber: upload.claim.vehicleEngineNumber || 'N/A',
+        chassisNumber: upload.claim.vehicleChassisNumber || 'N/A',
         location: (upload.claim.incidentLocation as any)?.address || 'N/A',
       },
       analysis: {
@@ -741,7 +756,23 @@ export class UploadsService {
       },
       adjuster: {
         name: upload.claim.adjuster?.user?.fullName || 'System',
-        firmName: upload.claim.adjuster?.tenant?.name || 'True Claim Insight',
+        firmName:
+          upload.claim.adjuster?.tenant?.name ||
+          upload.claim.insurerTenant?.name ||
+          'True Claim Insight',
+        firmAddress:
+          (upload.claim.adjuster?.tenant?.settings as any)?.address ||
+          (upload.claim.insurerTenant?.settings as any)?.address ||
+          'No. 202 Jalan Raja Laut\nKuala Lumpur City Centre 50450\nKuala Lumpur, Malaysia',
+        firmPhone:
+          (upload.claim.adjuster?.tenant?.settings as any)?.phone ||
+          (upload.claim.insurerTenant?.settings as any)?.phone ||
+          upload.claim.adjuster?.user?.phoneNumber ||
+          '+60 3-2789 4567',
+        firmLogo:
+          (upload.claim.adjuster?.tenant?.settings as any)?.logoUrl ||
+          (upload.claim.insurerTenant?.settings as any)?.logoUrl ||
+          'N/A',
       },
     };
 

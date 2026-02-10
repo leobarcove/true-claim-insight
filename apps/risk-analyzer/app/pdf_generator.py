@@ -14,26 +14,48 @@ def format_date_str(date_str):
 
 class PIAMConsentPDF(FPDF):
     def __init__(self, tenant_info=None):
-        super().__init__()
+        # Default A4, Portrait, mm
+        super().__init__(orientation='P', unit='mm', format='A4')
         self.tenant_info = tenant_info or {}
         self.set_auto_page_break(auto=True, margin=15)
 
     def header(self):
         # Draw top logo section area (Simulating the TUNE PROTECT style)
         self.set_fill_color(255, 255, 255)
+
+        # Generated Date/Time (Top Right)
+        self.set_font('Helvetica', 'I', 7)
+        self.set_text_color(150, 150, 150)
+        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        self.set_xy(150, 10)
+        self.cell(50, 5, f"Generated: {now_str}", 0, 0, 'R')
+        
+        # Reset to Top Left for Firm Info
+        self.set_xy(10, 10)
         
         # Firm Info (Top Left Placeholder for Logo + Text)
         self.set_font('Helvetica', 'B', 14)
-        self.set_text_color(180, 0, 0) # Dark red like the sample
-        self.cell(0, 8, self.tenant_info.get('firmName', 'TRUE CLAIM INSIGHT').upper(), 0, 1, 'L')
+        self.set_text_color(11, 116, 50)
+
+        firm_name = self.tenant_info.get('firmName', 'TRUE CLAIM INSIGHT')
+        if not firm_name or firm_name == 'N/A':
+            firm_name = 'TRUE CLAIM INSIGHT'
+            
+        self.cell(0, 8, firm_name.upper(), 0, 1, 'L')
         
         self.set_font('Helvetica', '', 8)
         self.set_text_color(0, 0, 0)
         
-        address = self.tenant_info.get('firmAddress', 'No. 202 Jalan Raja Laut\nKuala Lumpur City Centre 50450\nKuala Lumpur, Malaysia')
+        address = self.tenant_info.get('firmAddress', 'N/A')
+        if not address or address == 'N/A':
+            address = 'Kuala Lumpur, Malaysia'
         self.multi_cell(110, 4, address, 0, 'L')
         
-        phone = self.tenant_info.get('firmPhone', '+60 3-2789 4567')
+        phone = self.tenant_info.get('firmPhone', 'N/A')
+        if not phone or phone == 'N/A':
+            phone = '(General Line)'
+        
+        self.set_x(10) # Align left with the address
         self.cell(0, 4, f"Tel: {phone}", 0, 1, 'L')
         
         self.ln(5)
@@ -165,7 +187,12 @@ def generate_consent_form(data: dict) -> str:
     pdf.add_field("Year Make", "Tahun Dibuat", claim.get('vehicleYear', 'N/A'))
     
     current_y = pdf.get_y()
-    pdf.add_field("Make & Model", "Buatan & Model", f"{claim.get('vehicleMake', 'N/A')} {claim.get('vehicleModel', '')}")
+    make = claim.get('vehicleMake', 'N/A')
+    model = claim.get('vehicleModel', '')
+    make_model = f"{make} {model}".strip()
+    if not make_model or make_model == 'N/A':
+        make_model = 'N/A'
+    pdf.add_field("Make & Model", "Buatan & Model", make_model)
     
     current_y = pdf.get_y()
     pdf.add_field("Engine No.", "No. Enjin", claim.get('engineNumber', 'N/A'))
@@ -193,7 +220,8 @@ def generate_consent_form(data: dict) -> str:
     pdf.set_xy(10, y + 34)
     pdf.cell(85, 4, f"Date / Tarikh: {format_date_str(datetime.now().isoformat())}", 0, 0, 'C')
     pdf.set_xy(115, y + 34)
-    pdf.cell(85, 4, f"Name: {adjuster_info.get('name', 'N/A')}", 0, 0, 'C')
+    adjuster_name = adjuster_info.get('name', 'N/A')
+    pdf.cell(85, 4, f"Name / Nama: {adjuster_name}", 0, 0, 'C')
 
     # Save
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:

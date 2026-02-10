@@ -127,7 +127,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/video/:sessionId"
+                path="/claims/:id/live-session/:sessionId"
                 element={
                   <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
                     <VideoCallPage />

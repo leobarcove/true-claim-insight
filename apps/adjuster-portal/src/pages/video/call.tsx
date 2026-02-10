@@ -1,6 +1,17 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { ArrowLeft, Maximize2, XCircle, AlertCircle, RefreshCw, Camera } from 'lucide-react';
+import {
+  ArrowLeft,
+  Maximize2,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from 'lucide-react';
+import { format } from 'date-fns';
 import { DailyVideoPlayer, DailyVideoPlayerRef } from '@tci/ui-components';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +26,7 @@ import {
   RiskAssessment,
 } from '@/hooks/use-video';
 import { Header } from '@/components/layout/header';
-import { useClaim } from '@/hooks/use-claims';
+import { useClaim, claimKeys } from '@/hooks/use-claims';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { ShieldAlert, ShieldCheck, ShieldMinus, Zap, Activity } from 'lucide-react';
@@ -28,7 +39,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Switch } from '@/components/ui/switch';
 import { InfoTooltip } from '@/components/ui/tooltip';
@@ -129,6 +140,7 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
               title={title}
               content={tooltip}
               direction="left"
+              fontSize="text-[11px]"
               contentClassName="min-w-[450px]"
             />
           )}
@@ -259,10 +271,11 @@ const RiskAssessmentCard = memo(({ title, data, type, tooltip }: RiskAssessmentC
 });
 
 export function VideoCallPage() {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { id: claimId, sessionId } = useParams<{ id: string; sessionId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const playerRef = useRef<DailyVideoPlayerRef>(null);
 
   const [joinData, setJoinData] = useState<{ url: string; token: string } | null>(null);
@@ -270,7 +283,7 @@ export function VideoCallPage() {
   const hasAttemptedJoin = useRef(false);
 
   const { data: session } = useVideoSession(sessionId || '');
-  const { data: claim, isLoading: isClaimLoading } = useClaim(session?.claimId || '');
+  const { data: claim, isLoading: isClaimLoading } = useClaim(claimId || '');
   const { data: assessments } = useRiskAssessments(sessionId || '');
 
   const joinRoom = useJoinVideoRoom();
@@ -287,6 +300,52 @@ export function VideoCallPage() {
   const [isClaimantInRoom, setIsClaimantInRoom] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
   const [metricsHistory, setMetricsHistory] = useState<any[]>([]);
+
+  // Screenshot Gallery state
+  const [screenshotIndex, setScreenshotIndex] = useState(0);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const screenshots = useMemo(() => {
+    return (
+      claim?.documents
+        ?.filter((d: any) => d.type === 'CLAIMANT_SCREENSHOT')
+        ?.sort((a: any, b: any) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA;
+        }) || []
+    );
+  }, [claim?.documents]);
+
+  const handleNextScreenshot = useCallback(() => {
+    if (screenshots.length === 0) return;
+    setScreenshotIndex(prev => (prev + 1) % screenshots.length);
+  }, [screenshots.length]);
+
+  const handlePrevScreenshot = useCallback(() => {
+    if (screenshots.length === 0) return;
+    setScreenshotIndex(prev => (prev - 1 + screenshots.length) % screenshots.length);
+  }, [screenshots.length]);
+
+  // Reset index if screenshots change to empty or out of bounds
+  useEffect(() => {
+    if (screenshots.length > 0 && screenshotIndex >= screenshots.length) {
+      setScreenshotIndex(0);
+    }
+  }, [screenshots.length, screenshotIndex]);
+
+  // Modal keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!previewImage) return;
+
+      if (e.key === 'Escape') setPreviewImage(null);
+      if (e.key === 'ArrowRight') handleNextScreenshot();
+      if (e.key === 'ArrowLeft') handlePrevScreenshot();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage, handleNextScreenshot, handlePrevScreenshot]);
 
   // Deception Score Query
   const { data: deceptionData, refetch: refetchDeception } = useQuery({
@@ -438,10 +497,6 @@ export function VideoCallPage() {
 
     try {
       playerRef.current.sendAppMessage({ type: 'request-screenshot' });
-      toast({
-        title: 'Capturing...',
-        description: 'Request sent to claimant device.',
-      });
     } catch (e) {
       console.error('Failed to request screenshot:', e);
       setIsScreenshotting(false);
@@ -461,8 +516,32 @@ export function VideoCallPage() {
           toast({
             title: 'Screenshot Captured',
             description: 'Image has been successfully uploaded.',
-            variant: 'default', /// or success if available
+            variant: 'default',
           });
+
+          // Manually append the latest document into cache for immediate view
+          if (e.data.document && claimId) {
+            const newDoc = {
+              ...e.data.document,
+              createdAt: e.data.document.createdAt || new Date().toISOString(),
+            };
+
+            queryClient.setQueryData(claimKeys.detail(claimId), (oldData: any) => {
+              if (!oldData) return oldData;
+              const safeDocuments = oldData.documents || [];
+              // Prevent duplicates if server already pushed update
+              if (safeDocuments.some((d: any) => d.id === newDoc.id)) return oldData;
+              return {
+                ...oldData,
+                documents: [newDoc, ...safeDocuments],
+              };
+            });
+
+            // Fallback: Invalidate to ensure consistency with server state
+            queryClient.invalidateQueries({ queryKey: claimKeys.detail(claimId) });
+
+            setScreenshotIndex(0);
+          }
         } else {
           toast({
             title: 'Capture Failed',
@@ -472,7 +551,7 @@ export function VideoCallPage() {
         }
       }
     },
-    [toast]
+    [toast, queryClient, claimId, setScreenshotIndex]
   );
 
   // Auto-analysis effect
@@ -610,21 +689,21 @@ export function VideoCallPage() {
       {/* Video Header */}
       <Header
         title="Live Session"
-        description={`Secure • Encrypted • ${session?.claimId || 'Loading...'}`}
+        description={`Secure • Encrypted • ${claim?.claimNumber || claim?.id || 'Loading...'}`}
       >
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <Button
+          {/* <Button
             variant="outline"
             size="sm"
             onClick={() => playerRef.current?.requestFullscreen()}
           >
             <Maximize2 className="h-4 w-4 mr-2" />
             Fullscreen
-          </Button>
+          </Button> */}
           <Button variant="destructive" size="sm" onClick={handleEndCall}>
             <XCircle className="h-4 w-4 mr-2" />
             End Assessment
@@ -661,7 +740,7 @@ export function VideoCallPage() {
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold">Claim ID</p>
                 <p className="text-xs text-muted-foreground">
-                  {isClaimLoading ? 'Loading...' : claim?.id || 'N/A'}
+                  {isClaimLoading ? 'Loading...' : claim?.claimNumber || claim?.id || 'N/A'}
                 </p>
               </div>
               <div>
@@ -682,9 +761,9 @@ export function VideoCallPage() {
           {/* Analysis Columns */}
           <div className="flex flex-1 gap-4 min-h-0">
             {/* Deception Score */}
-            <div className="w-60 flex flex-col">
-              <Card className="bg-card border-border p-2 flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-2">
+            <div className="w-60 flex flex-col overflow-hidden">
+              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4 shrink-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Deception Score
@@ -692,160 +771,239 @@ export function VideoCallPage() {
                     <InfoTooltip
                       title="Analysis Info"
                       content="Metrics are calculated only from claimant footage. Use the toggle to turn analysis on or off."
-                      direction="left"
+                      direction="top"
+                      fontSize="text-[11px]"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch
-                      checked={analysisMode !== 'off'}
-                      onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
-                      className="scale-75 origin-right"
+                    <InfoTooltip
+                      content="Toggle"
+                      direction="top"
+                      fontSize="text-[11px]"
+                      trigger={
+                        <Switch
+                          checked={analysisMode !== 'off'}
+                          onCheckedChange={checked => setAnalysisMode(checked ? 'auto' : 'off')}
+                          className="scale-75 origin-right"
+                        />
+                      }
                     />
                   </div>
                 </div>
 
-                <div className="flex items-end gap-2 mb-4">
-                  <span className="text-md font-bold text-foreground">
-                    {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
-                  </span>
-                  <span className="text-xs text-muted-foreground mb-1">/ 100.00</span>
-                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <div className="flex items-end gap-2 mb-4">
+                    <span className="text-md font-bold text-foreground">
+                      {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-muted-foreground mb-1">/ 100.00</span>
+                  </div>
 
-                {/* Metrics Graph */}
-                <div className="pt-4 border-t border-border h-60">
-                  <p className="text-[10px] text-muted-foreground font-bold mb-2 uppercase">
-                    Metrics
-                  </p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={metricsHistory}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="currentColor"
-                        className="text-muted-foreground/20"
-                      />
-                      <XAxis dataKey="time" hide />
-                      <YAxis domain={[0, 1]} hide />
-                      <Tooltip
-                        contentStyle={{
-                          fontSize: '9px',
-                          borderRadius: '8px',
-                          borderColor: 'hsl(var(--border))',
-                          backgroundColor: 'hsl(var(--card))',
-                          color: 'hsl(var(--card-foreground))',
-                        }}
-                        itemStyle={{ fontSize: '9px' }}
-                        labelStyle={{
-                          color: 'hsl(var(--foreground))',
-                          textAlign: 'center',
-                          marginBottom: '4px',
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="deception"
-                        name="Deception Score"
-                        stroke="#A855F7"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="voice"
-                        name="Voice Stress"
-                        stroke="#72B0F2"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="visual"
-                        name="Visual Behavior"
-                        stroke="#2EE797"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="expression"
-                        name="Expression Measurement"
-                        stroke="#E884B6"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeOpacity={0.5}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Progress Bars */}
-                <div className="mt-auto space-y-3">
-                  {[
-                    {
-                      label: 'Deception Score',
-                      value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
-                      color: '#A855F7',
-                    },
-                    {
-                      label: 'Voice Stress',
-                      value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
-                      color: '#72B0F2',
-                    },
-                    {
-                      label: 'Visual Behavior',
-                      value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
-                      color: '#2EE797',
-                    },
-                    {
-                      label: 'Expression Measurement',
-                      value: ((deceptionData?.breakdown?.expressionMeasurement || 0) * 100).toFixed(
-                        2
-                      ),
-                      color: '#E884B6',
-                    },
-                  ].map(metric => (
-                    <div key={metric.label} className="mb-2">
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-muted-foreground">{metric.label}</span>
-                        <span className="text-foreground font-mono">{metric.value}%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full transition-all duration-500"
-                          style={{
-                            width: `${metric.value}%`,
-                            backgroundColor: metric.color,
+                  {/* Metrics Graph */}
+                  <div className="pt-4 border-t border-border h-44 mb-8">
+                    <p className="text-[10px] text-muted-foreground font-bold mb-2 uppercase">
+                      Metrics
+                    </p>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={metricsHistory}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="currentColor"
+                          className="text-muted-foreground/20"
+                        />
+                        <XAxis dataKey="time" hide />
+                        <YAxis domain={[0, 1]} hide />
+                        <Tooltip
+                          contentStyle={{
+                            fontSize: '9px',
+                            borderRadius: '8px',
+                            borderColor: 'hsl(var(--border))',
+                            backgroundColor: 'hsl(var(--card))',
+                            color: 'hsl(var(--card-foreground))',
+                          }}
+                          itemStyle={{ fontSize: '9px' }}
+                          labelStyle={{
+                            color: 'hsl(var(--foreground))',
+                            textAlign: 'center',
+                            marginBottom: '4px',
                           }}
                         />
+                        <Line
+                          type="monotone"
+                          dataKey="deception"
+                          name="Deception Score"
+                          stroke="#A855F7"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="voice"
+                          name="Voice Stress"
+                          stroke="#72B0F2"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="visual"
+                          name="Visual Behavior"
+                          stroke="#2EE797"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="expression"
+                          name="Expression Measurement"
+                          stroke="#E884B6"
+                          strokeWidth={1}
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Progress Bars */}
+                  <div className="mt-auto space-y-3">
+                    {[
+                      {
+                        label: 'Deception Score',
+                        value: ((deceptionData?.deceptionScore || 0) * 100).toFixed(2),
+                        color: '#A855F7',
+                      },
+                      {
+                        label: 'Voice Stress',
+                        value: ((deceptionData?.breakdown?.voiceStress || 0) * 100).toFixed(2),
+                        color: '#72B0F2',
+                      },
+                      {
+                        label: 'Visual Behavior',
+                        value: ((deceptionData?.breakdown?.visualBehavior || 0) * 100).toFixed(2),
+                        color: '#2EE797',
+                      },
+                      {
+                        label: 'Expression Measurement',
+                        value: (
+                          (deceptionData?.breakdown?.expressionMeasurement || 0) * 100
+                        ).toFixed(2),
+                        color: '#E884B6',
+                      },
+                    ].map(metric => (
+                      <div key={metric.label} className="mb-2">
+                        <div className="flex justify-between text-[10px] mb-1">
+                          <span className="text-muted-foreground">{metric.label}</span>
+                          <span className="text-foreground font-mono">{metric.value}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full transition-all duration-500"
+                            style={{
+                              width: `${metric.value}%`,
+                              backgroundColor: metric.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Remote Screenshot */}
+                  <div className="pt-4 mt-4 border-t border-border flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                        Remote Screenshot
+                      </h3>
+                      <InfoTooltip
+                        title="Remote Screenshot"
+                        content="Captures a snapshot from the claimant's active camera."
+                        direction="top"
+                        fontSize="text-[11px]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <InfoTooltip
+                        content="Capture"
+                        direction="top"
+                        fontSize="text-[11px]"
+                        className={`${!isClaimantInRoom || isScreenshotting ? 'cursor-not-allowed' : ''}`}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-md bg-background shadow-sm"
+                            onClick={handleCaptureScreenshot}
+                            disabled={!isClaimantInRoom || isScreenshotting}
+                          >
+                            {isScreenshotting ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            ) : (
+                              <Camera className="h-4 w-4" />
+                            )}
+                          </Button>
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Screenshot Gallery Carousel */}
+                  {screenshots.length > 0 && (
+                    <div className="mt-1 relative group h-[7.7rem] bg-black/5 rounded-md overflow-hidden border border-border/50">
+                      <img
+                        key={screenshotIndex}
+                        src={screenshots[screenshotIndex]?.storageUrl}
+                        alt={`Screenshot ${screenshotIndex + 1}`}
+                        className="w-full h-full object-contain bg-black/90 cursor-pointer animate-in fade-in slide-in-from-right-2 duration-300"
+                        onClick={() => setPreviewImage(screenshots[screenshotIndex]?.storageUrl)}
+                      />
+
+                      {/* Controls overlay */}
+                      <div className="absolute inset-0 flex items-center justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-full bg-black/50 text-white hover:bg-black/70 hover:text-white pointer-events-auto"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handlePrevScreenshot();
+                          }}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-full bg-black/50 text-white hover:bg-black/70 hover:text-white pointer-events-auto"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleNextScreenshot();
+                          }}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {/* Date display */}
+                      <div className="absolute bottom-0 w-full flex flex-col items-center pb-1 pt-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                        <span className="text-[10px] text-white/90 font-mono">
+                          {screenshots[screenshotIndex]?.createdAt
+                            ? format(
+                                new Date(screenshots[screenshotIndex].createdAt),
+                                'MMM dd, yyyy - hh:mm a'
+                              )
+                            : '-'}
+                        </span>
+                      </div>
+
+                      {/* Counter badge */}
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm pointer-events-none z-10">
+                        {screenshotIndex + 1} / {screenshots.length}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Capture Screenshot Button */}
-                <div className="pt-4 mt-4 mb-2 border-t border-border">
-                  <div className="flex items-center justify-between gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCaptureScreenshot}
-                      className="w-full text-xs flex items-center gap-2 h-8"
-                      disabled={!isClaimantInRoom || isScreenshotting}
-                    >
-                      {isScreenshotting ? (
-                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Camera className="h-3.5 w-3.5" />
-                      )}
-                      {isScreenshotting ? 'Capturing...' : 'Capture Screenshot'}
-                    </Button>
-                    <InfoTooltip
-                      title="Remote Screenshot"
-                      content="Captures a snapshot from the claimant's active camera."
-                      direction="top"
-                    />
-                  </div>
+                  )}
                 </div>
               </Card>
             </div>
@@ -1053,13 +1211,96 @@ export function VideoCallPage() {
         </div>
       </div>
 
-      {/* Control Bar (Mobile Style or Bottom Controls) */}
+      {/* Control Bar */}
       <div className="bg-card/80 backdrop-blur-md border-t border-border px-6 py-3 flex justify-center gap-4">
-        {/* Daily.co handles most controls, but we can add custom ones here if needed */}
         <p className="text-xs text-muted-foreground py-2">
           Assessment session is being recorded for quality and compliance.
         </p>
       </div>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={e => {
+              if (e.target === e.currentTarget) setPreviewImage(null);
+            }}
+          />
+          <div
+            className="relative max-w-[95vw] max-h-[90vh] bg-black rounded-lg overflow-hidden shadow-2xl border border-white/10 flex items-center justify-center animate-in zoom-in-95 duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <img
+              key={screenshotIndex}
+              src={screenshots[screenshotIndex]?.storageUrl || undefined}
+              alt="Preview"
+              className="max-w-full max-h-[90vh] object-contain block mx-auto animate-in fade-in slide-in-from-right-5 duration-500"
+            />
+
+            {/* Internal Overlay Controls */}
+            <div className="absolute inset-0 pointer-events-none">
+              {/* Close Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-3 right-3 text-white/50 hover:text-white hover:bg-white/20 rounded-full h-10 w-10 z-[60] pointer-events-auto backdrop-blur-sm shadow-lg transition-all"
+                onClick={e => {
+                  e.stopPropagation();
+                  setPreviewImage(null);
+                }}
+              >
+                <X className="h-6 w-6" />
+              </Button>
+
+              {/* Index Badge */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-md border border-white/10 z-[60] font-mono tracking-wide shadow-lg">
+                {screenshotIndex + 1} / {screenshots.length}
+              </div>
+
+              {/* Navigation Arrows */}
+              <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full bg-black/40 text-white/60 hover:bg-black/60 hover:text-white pointer-events-auto transition-all backdrop-blur-md border border-white/5 shadow-xl active:scale-95"
+                  onClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handlePrevScreenshot();
+                  }}
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full bg-black/40 text-white/60 hover:bg-black/60 hover:text-white pointer-events-auto transition-all backdrop-blur-md border border-white/5 shadow-xl active:scale-95"
+                  onClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleNextScreenshot();
+                  }}
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
+              </div>
+
+              {/* Date display */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-lg px-4 py-1.5 rounded-full border border-white/10 pointer-events-none shadow-xl border-t border-white/20">
+                <span className="text-sm text-white/70 font-mono tracking-tight uppercase whitespace-nowrap">
+                  {screenshots[screenshotIndex]?.createdAt
+                    ? format(
+                        new Date(screenshots[screenshotIndex].createdAt),
+                        'MMM dd, yyyy - hh:mm a'
+                      )
+                    : '-'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -122,10 +122,15 @@ export class AssessmentsService {
               include: {
                 tenant: true,
                 user: {
-                  select: { fullName: true },
+                  select: {
+                    fullName: true,
+                    phoneNumber: true,
+                    // role filtering can be added
+                  },
                 },
               },
             },
+            insurerTenant: true,
             documents: true,
           },
         },
@@ -141,9 +146,13 @@ export class AssessmentsService {
       sessionId,
       claimId: session.claimId,
       claimant: {
-        name: session.claim.claimant.fullName,
-        nric: session.claim.claimant.nricHash || '880101-12-1234',
-        phone: session.claim.claimant.phoneNumber,
+        name: session.claim.claimant.fullName || 'N/A',
+        nric:
+          session.claim.claimant.nric ||
+          session.claim.nric ||
+          session.claim.claimant.nricHash ||
+          'N/A',
+        phone: session.claim.claimant.phoneNumber || 'N/A',
         email: session.claim.claimant.email || 'N/A',
       },
       claim: {
@@ -152,9 +161,9 @@ export class AssessmentsService {
         incidentDate: session.claim.incidentDate,
         claimType: session.claim.claimType,
         vehiclePlate: session.claim.vehiclePlateNumber || 'N/A',
+        vehicleYear: session.claim.vehicleYear?.toString() || 'N/A',
         vehicleMake: session.claim.vehicleMake || 'N/A',
         vehicleModel: session.claim.vehicleModel || 'N/A',
-        vehicleYear: session.claim.vehicleYear || 'N/A',
         engineNumber: session.claim.vehicleEngineNumber || 'N/A',
         chassisNumber: session.claim.vehicleChassisNumber || 'N/A',
         location: (session.claim.incidentLocation as any)?.address || 'N/A',
@@ -166,13 +175,22 @@ export class AssessmentsService {
         breakdown: scores.breakdown,
       },
       adjuster: {
-        name: session.claim.adjuster?.user?.fullName || 'Pacific Adjuster',
-        firmName: session.claim.adjuster?.tenant?.name || 'True Claim Insight',
+        name: session.claim.adjuster?.user?.fullName || 'N/A',
+        firmName:
+          session.claim.adjuster?.tenant?.name || session.claim.insurerTenant?.name || 'N/A',
         firmAddress:
           (session.claim.adjuster?.tenant?.settings as any)?.address ||
+          (session.claim.insurerTenant?.settings as any)?.address ||
           'No. 202 Jalan Raja Laut\nKuala Lumpur City Centre 50450\nKuala Lumpur, Malaysia',
-        firmPhone: (session.claim.adjuster?.tenant?.settings as any)?.phone || '+60 3-2789 4567',
-        firmLogo: (session.claim.adjuster?.tenant?.settings as any)?.logoUrl,
+        firmPhone:
+          (session.claim.adjuster?.tenant?.settings as any)?.phone ||
+          (session.claim.insurerTenant?.settings as any)?.phone ||
+          session.claim.adjuster?.user?.phoneNumber ||
+          '+60 3-2789 4567',
+        firmLogo:
+          (session.claim.adjuster?.tenant?.settings as any)?.logoUrl ||
+          (session.claim.insurerTenant?.settings as any)?.logoUrl ||
+          'N/A',
       },
     };
 
