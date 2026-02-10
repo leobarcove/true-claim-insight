@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
-import { useAuthStore, User } from '@/stores/auth-store';
+import { useAuthStore, User, UserTenant } from '@/stores/auth-store';
 import { useNavigate } from 'react-router-dom';
 
 // Types matching api-gateway auth responses
@@ -27,6 +27,7 @@ export interface TokenPair {
 
 export interface AuthResponse {
   user: User;
+  userTenants: UserTenant[];
   tokens: TokenPair;
 }
 
@@ -47,14 +48,11 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async (credentials: LoginCredentials) => {
-      const { data } = await apiClient.post<ApiResponse<AuthResponse>>(
-        '/auth/login',
-        credentials
-      );
+      const { data } = await apiClient.post<ApiResponse<AuthResponse>>('/auth/login', credentials);
       return data.data;
     },
-    onSuccess: (data) => {
-      setAuth(data.user, data.tokens.accessToken);
+    onSuccess: data => {
+      setAuth(data.user, data.tokens.accessToken, data.userTenants);
       queryClient.invalidateQueries({ queryKey: authKeys.user() });
       navigate('/');
     },
@@ -72,14 +70,11 @@ export function useRegister() {
 
   return useMutation({
     mutationFn: async (input: RegisterInput) => {
-      const { data } = await apiClient.post<ApiResponse<AuthResponse>>(
-        '/auth/register',
-        input
-      );
+      const { data } = await apiClient.post<ApiResponse<AuthResponse>>('/auth/register', input);
       return data.data;
     },
-    onSuccess: (data) => {
-      setAuth(data.user, data.tokens.accessToken);
+    onSuccess: data => {
+      setAuth(data.user, data.tokens.accessToken, data.userTenants);
       queryClient.invalidateQueries({ queryKey: authKeys.user() });
       navigate('/');
     },
@@ -116,16 +111,42 @@ export function useLogout() {
  * Calls GET /auth/me to fetch current user profile
  */
 export function useCurrentUser() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, setUserTenants } = useAuthStore();
 
   return useQuery({
     queryKey: authKeys.user(),
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<User>>('/auth/me');
+      const { data } = await apiClient.get<ApiResponse<User & { userTenants: any[] }>>('/auth/me');
+      // Update user tenants in store
+      if (data.data.userTenants) {
+        setUserTenants(data.data.userTenants);
+      }
       return data.data;
     },
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: false,
+  });
+}
+
+/**
+ * Switch tenant mutation hook
+ * Calls POST /auth/switch-tenant and updates auth state
+ */
+export function useSwitchTenant() {
+  const { setAuth, switchTenant } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (tenantId: string) => {
+      const { data } = await apiClient.post<ApiResponse<any>>('/auth/switch-tenant', { tenantId });
+      return data.data;
+    },
+    onSuccess: data => {
+      // Update user with new tenant context
+      setAuth(data.user, data.tokens.accessToken, data.userTenants);
+      switchTenant(data.user.currentTenantId);
+      queryClient.invalidateQueries(); // Invalidate all queries to refetch with new tenant context
+    },
   });
 }

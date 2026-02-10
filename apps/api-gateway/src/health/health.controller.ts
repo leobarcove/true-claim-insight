@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import {
   HealthCheck,
@@ -8,16 +8,20 @@ import {
 } from '@nestjs/terminus';
 
 import { Public } from '../auth/decorators/public.decorator';
+import { TenantGuard } from '../auth/guards/tenant.guard';
+import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 import { PrismaHealthIndicator } from './prisma.health';
 
 @ApiTags('health')
 @Controller('health')
+@UseGuards(TenantGuard)
+@SkipTenantCheck()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly prismaHealth: PrismaHealthIndicator,
     private readonly memory: MemoryHealthIndicator,
-    private readonly disk: DiskHealthIndicator,
+    private readonly disk: DiskHealthIndicator
   ) {}
 
   @Get()
@@ -64,8 +68,6 @@ export class HealthController {
   @ApiResponse({ status: 200, description: 'Service is ready' })
   @ApiResponse({ status: 503, description: 'Service is not ready' })
   readiness() {
-    return this.health.check([
-      () => this.prismaHealth.isHealthy('database'),
-    ]);
+    return this.health.check([() => this.prismaHealth.isHealthy('database')]);
   }
 }

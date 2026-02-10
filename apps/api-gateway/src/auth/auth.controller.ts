@@ -114,6 +114,8 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@CurrentUser() user: Express.User) {
+    const userTenants = await this.authService.getUserTenants(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -122,8 +124,32 @@ export class AuthController {
       phoneNumber: user.phoneNumber,
       licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
       tenantId: user.tenantId,
-      tenantName: user.tenant?.name,
+      currentTenantId: (user as any).currentTenantId || user.tenantId,
+      tenantName: user.tenant?.name || (user as any).currentTenant?.name,
+      userTenants,
     };
+  }
+
+  @Post('switch-tenant')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Switch to a different tenant context' })
+  @ApiResponse({ status: 200, description: 'Tenant switched successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized or no access to tenant' })
+  async switchTenant(
+    @CurrentUser() user: Express.User,
+    @Body() dto: any, // Import SwitchTenantDto
+    @Req() request: any,
+    @Res({ passthrough: true }) response: FastifyReply
+  ) {
+    const ipAddress = request.ip;
+    const userAgent = request.headers['user-agent'];
+
+    const result = await this.authService.switchTenant(user.id, dto.tenantId, ipAddress, userAgent);
+    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+
+    return result;
   }
 
   @Post('change-password')

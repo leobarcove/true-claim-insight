@@ -1,6 +1,16 @@
-import { Controller, Post, Body, HttpStatus, HttpException, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpStatus,
+  HttpException,
+  Logger,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../config/prisma.service';
+import { TenantGuard } from '../auth/guards/tenant.guard';
+import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 
 const normalizeNric = (n: string) => n?.replace(/\D/g, '') || '';
 
@@ -8,6 +18,7 @@ const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/
 
 @ApiTags('claimants')
 @Controller('claimants')
+@UseGuards(TenantGuard)
 export class ClaimantsController {
   private readonly logger = new Logger(ClaimantsController.name);
 

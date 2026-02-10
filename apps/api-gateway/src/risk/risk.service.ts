@@ -14,8 +14,10 @@ export class RiskService {
     this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
-  async getAssessments(sessionId: string) {
-    const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}`);
+  async getAssessments(sessionId: string, tenantId: string) {
+    const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}`, {
+      headers: { 'X-Tenant-Id': tenantId },
+    });
     return this.handleResponse(response);
   }
 
@@ -26,10 +28,13 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
-  async triggerAssessment(sessionId: string, assessmentType: string) {
+  async triggerAssessment(sessionId: string, assessmentType: string, tenantId: string) {
     const response = await fetch(`${this.baseUrl}/assessments/trigger`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
       body: JSON.stringify({ sessionId, assessmentType }),
     });
 
@@ -115,8 +120,10 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
-  async getTrinityCheck(claimId: string) {
-    const response = await fetch(`${this.baseUrl}/risk/claims/${claimId}/trinity`);
+  async getTrinityCheck(claimId: string, tenantId: string) {
+    const response = await fetch(`${this.baseUrl}/risk/claims/${claimId}/trinity`, {
+      headers: { 'X-Tenant-Id': tenantId },
+    });
     return this.handleResponse(response);
   }
 

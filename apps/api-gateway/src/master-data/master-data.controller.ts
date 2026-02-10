@@ -15,12 +15,15 @@ import { CreateVehicleMakeDto } from './dto/create-vehicle-make.dto';
 import { CreateVehicleModelDto } from './dto/create-vehicle-model.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 
 @ApiTags('master-data')
 @Controller('master-data')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@SkipTenantCheck()
 @ApiBearerAuth('access-token')
 export class MasterDataController {
   constructor(private readonly masterDataService: MasterDataService) {}

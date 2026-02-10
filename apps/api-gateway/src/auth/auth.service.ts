@@ -12,7 +12,9 @@ export interface JwtPayload {
   sub: string;
   email?: string;
   role: string;
-  tenantId: string | null;
+  tenantId: string | null; // Deprecated: for backward compatibility
+  currentTenantId: string | null; // Active tenant context
+  tenantIds?: string[]; // All tenants user has access to
   iat?: number;
   exp?: number;
 }
@@ -32,8 +34,16 @@ export interface AuthResponse {
     phoneNumber: string;
     licenseNumber?: string | null;
     tenantId: string | null;
+    currentTenantId: string | null;
     tenantName: string;
   };
+  userTenants: Array<{
+    tenantId: string;
+    tenantName: string;
+    role: string;
+    isDefault: boolean;
+    status: string;
+  }>;
   tokens: TokenPair;
 }
 
@@ -58,15 +68,13 @@ export class AuthService {
     // Hash password
     const saltRounds = this.configService.get<number>('bcrypt.saltRounds', 12);
     const hashedPassword = await bcrypt.hash(registerDto.password, saltRounds);
-
-    // Create user
     const user = await this.usersService.create({
       ...registerDto,
       password: hashedPassword,
     });
 
-    // Generate tokens
     const tokens = await this.generateTokens(user);
+    const userTenants = await this.getUserTenants(user.id);
 
     this.logger.log(`User registered: ${user.email}`);
 
@@ -79,8 +87,10 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         tenantId: user.tenantId,
-        tenantName: user.tenant?.name || '',
+        currentTenantId: (user as any).currentTenantId || user.tenantId,
+        tenantName: (user as any).tenant?.name || (user as any).currentTenant?.name || '',
       },
+      userTenants,
       tokens,
     };
   }
@@ -95,8 +105,8 @@ export class AuthService {
     // Update last login
     await this.usersService.updateLastLogin(user.id);
 
-    // Generate tokens
     const tokens = await this.generateTokens(user);
+    const userTenants = await this.getUserTenants(user.id);
 
     this.logger.log(`User logged in: ${user.email}`);
 
@@ -109,8 +119,10 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         tenantId: user.tenantId,
-        tenantName: user.tenant?.name || '',
+        currentTenantId: (user as any).currentTenantId || user.tenantId,
+        tenantName: (user as any).tenant?.name || (user as any).currentTenant?.name || '',
       },
+      userTenants,
       tokens,
     };
   }
@@ -195,17 +207,71 @@ export class AuthService {
     return user;
   }
 
+  async switchTenant(
+    userId: string,
+    tenantId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<AuthResponse> {
+    // Verify user has access to this tenant
+    const userTenant = await this.usersService.getUserTenant(userId, tenantId);
+    if (!userTenant || userTenant.status !== 'ACTIVE') {
+      throw new UnauthorizedException('You do not have access to this tenant');
+    }
+
+    const user = await this.usersService.updateCurrentTenant(userId, tenantId);
+    await this.usersService.logTenantAccess(
+      userId,
+      (user as any).currentTenantId,
+      tenantId,
+      ipAddress,
+      userAgent
+    );
+
+    const tokens = await this.generateTokens(user);
+    const userTenants = await this.getUserTenants(user.id);
+    this.logger.log(`User ${user.email} switched to tenant ${tenantId}`);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        phoneNumber: user.phoneNumber,
+        licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+        tenantId: user.tenantId,
+        currentTenantId: (user as any).currentTenantId,
+        tenantName: (user as any).currentTenant?.name || '',
+      },
+      userTenants,
+      tokens,
+    };
+  }
+
+  async getUserTenants(userId: string) {
+    return this.usersService.getUserTenants(userId);
+  }
+
   private async generateTokens(user: {
     id: string;
     email?: string;
     role: string;
     tenantId: string | null;
+    currentTenantId?: string | null;
+    userTenants?: any[];
   }): Promise<TokenPair> {
+    // Get all tenant IDs if not provided
+    const userTenants = user.userTenants || (await this.getUserTenants(user.id));
+    const tenantIds = userTenants.map((ut: any) => ut.tenantId);
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
+      currentTenantId: user.currentTenantId || user.tenantId,
+      tenantIds,
     };
 
     const accessExpiresIn = this.configService.get<string>('jwt.accessExpiresIn', '15m');

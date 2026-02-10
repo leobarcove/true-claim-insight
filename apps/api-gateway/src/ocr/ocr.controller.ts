@@ -1,15 +1,18 @@
 import { Controller, Post, Body, Req, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { OcrService } from './ocr.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TenantGuard } from '../auth/guards/tenant.guard';
+import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 
 @ApiTags('OCR')
 @Controller('ocr')
+@UseGuards(JwtAuthGuard, TenantGuard)
+@ApiBearerAuth('access-token')
 export class OcrController {
   constructor(private readonly ocrService: OcrService) {}
 
   @Post('extract')
-  // @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Extract data from uploaded documents' })
   @ApiResponse({ status: 200, description: 'Successfully extracted data' })
   async extract(@Req() req: any) {

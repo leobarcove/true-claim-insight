@@ -140,9 +140,12 @@ async function main() {
     phoneNumber: string,
     tenantId: string | null = null
   ) => {
-    return prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { email },
-      update: { password: hashedPassword },
+      update: {
+        password: hashedPassword,
+        currentTenantId: tenantId || undefined,
+      },
       create: {
         email,
         password: hashedPassword,
@@ -150,8 +153,33 @@ async function main() {
         phoneNumber,
         role,
         tenantId,
+        currentTenantId: tenantId,
       },
     });
+
+    if (tenantId) {
+      await prisma.userTenant.upsert({
+        where: {
+          userId_tenantId: {
+            userId: user.id,
+            tenantId: tenantId,
+          },
+        },
+        update: {
+          role: role,
+          status: 'ACTIVE',
+        },
+        create: {
+          userId: user.id,
+          tenantId: tenantId,
+          role: role,
+          isDefault: true,
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    return user;
   };
 
   // 3. Create 10 Demo Users

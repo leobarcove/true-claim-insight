@@ -1,9 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { LocationService } from './location.service';
+import { TenantGuard } from '../auth/guards/tenant.guard';
+import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 
 @ApiTags('location')
 @Controller('location')
+@UseGuards(TenantGuard)
+@SkipTenantCheck()
 export class LocationController {
   constructor(private readonly locationService: LocationService) {}
 

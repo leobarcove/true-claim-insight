@@ -16,11 +16,13 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TenantGuard } from '../auth/guards/tenant.guard';
+import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 import { ClaimantsService } from '../claimants/claimants.service';
 
 @ApiTags('Claims')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('claims')
 export class ClaimsController {
   private caseServiceUrl: string;

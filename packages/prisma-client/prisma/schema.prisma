@@ -8,37 +8,85 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password      String
-  fullName      String
-  phoneNumber   String
-  role          UserRole
-  licenseNumber String?
-  tenantId      String?
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  adjuster      Adjuster?
-  siuClaims     Claim[]   @relation("SIUInvestigator")
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  id               String             @id @default(uuid())
+  email            String             @unique
+  password         String
+  fullName         String
+  phoneNumber      String
+  role             UserRole
+  licenseNumber    String?
+  tenantId         String? // Deprecated: kept for backward compatibility
+  currentTenantId  String? // Active tenant context for current session
+  lastLoginAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  adjuster         Adjuster?
+  siuClaims        Claim[]            @relation("SIUInvestigator")
+  tenant           Tenant?            @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
+  currentTenant    Tenant?            @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
+  userTenants      UserTenant[]       // Many-to-many relationship with tenants
+  tenantAccessLogs TenantAccessLog[]
 
   @@index([tenantId])
+  @@index([currentTenantId])
   @@index([email])
   @@map("users")
 }
 
+model UserTenant {
+  id             String    @id @default(uuid())
+  userId         String
+  tenantId       String
+  role           UserRole // Role specific to this tenant
+  isDefault      Boolean   @default(false) // Default tenant for this user
+  status         UserTenantStatus @default(ACTIVE)
+  joinedAt       DateTime  @default(now())
+  lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([userId, tenantId])
+  @@map("user_tenants")
+}
+
+model TenantAccessLog {
+  id            String   @id @default(uuid())
+  userId        String
+  fromTenantId  String?
+  toTenantId    String
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromTenant    Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
+  toTenant      Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@map("tenant_access_logs")
+}
+
 model Tenant {
-  id               String           @id @default(uuid())
-  name             String
-  type             TenantType
-  subscriptionTier SubscriptionTier @default(BASIC)
-  settings         Json             @default("{}")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  adjusters        Adjuster[]
-  claims           Claim[]          @relation("InsurerClaims")
-  users            User[]
+  id                  String            @id @default(uuid())
+  name                String
+  type                TenantType
+  subscriptionTier    SubscriptionTier  @default(BASIC)
+  settings            Json              @default("{}")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  adjusters           Adjuster[]
+  claims              Claim[]           @relation("InsurerClaims")
+  users               User[]            @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
+  currentUsers        User[]            @relation("UserCurrentTenant") // Users currently in this tenant context
+  userTenants         UserTenant[]      // Many-to-many relationship with users
+  tenantAccessLogsFrom TenantAccessLog[] @relation("TenantAccessFrom")
+  tenantAccessLogsTo   TenantAccessLog[] @relation("TenantAccessTo")
+  sessions            Session[]
 
   @@map("tenants")
 }
@@ -172,6 +220,7 @@ model ClaimNote {
 model Session {
   id              String           @id @default(uuid())
   claimId         String
+  tenantId        String? // Tenant context for this session
   roomId          BigInt
   status          SessionStatus    @default(SCHEDULED)
   scheduledTime   DateTime?
@@ -187,8 +236,10 @@ model Session {
   deceptionScores DeceptionScore[]
   clientInfos     SessionClientInfo[]
   claim           Claim            @relation(fields: [claimId], references: [id])
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
 
   @@index([claimId])
+  @@index([tenantId])
   @@map("sessions")
 }
 
@@ -334,6 +385,14 @@ enum KycStatus {
   FAILED
   EXPIRED
 }
+
+enum UserTenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_APPROVAL
+}
+
 
 enum ClaimType {
   OWN_DAMAGE
