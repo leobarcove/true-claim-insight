@@ -83,10 +83,20 @@ export function DocumentDetailPage() {
   );
   const analysisData = (analysisResponse as any)?.data;
   const extractedData = analysisData?.extractedData;
+  const NORMALIZABLE_TYPES = [
+    'MYKAD_FRONT',
+    'NRIC',
+    'VEHICLE_REG_CARD',
+    'POLICE_REPORT',
+    'REPAIR_QUOTATION',
+    'DAMAGE_PHOTO',
+    'POLICY_DOCUMENT',
+  ];
+
   const sortedDocuments = claim?.documents
-    ? [...claim.documents].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      )
+    ? [...claim.documents]
+        .filter((doc: any) => NORMALIZABLE_TYPES.includes(doc.type))
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     : [];
 
   const isAnyDocProcessing = sortedDocuments.some(
