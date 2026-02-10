@@ -228,6 +228,16 @@ const SessionChart = ({
   );
 };
 
+const NORMALIZABLE_TYPES = [
+  'MYKAD_FRONT',
+  'NRIC',
+  'VEHICLE_REG_CARD',
+  'POLICE_REPORT',
+  'REPAIR_QUOTATION',
+  'DAMAGE_PHOTO',
+  'POLICY_DOCUMENT',
+];
+
 export function ClaimDetailPage() {
   const { id: claimId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1360,7 +1370,24 @@ export function ClaimDetailPage() {
         open={isTrinityConfirmOpen}
         onOpenChange={setIsTrinityConfirmOpen}
         title="Rerun Trinity Analysis"
-        description="This will rerun AI extraction and cross-check analysis for all documents in this claim. This process may take a minute. Are you sure you want to proceed?"
+        description={
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-muted-foreground">
+              This will rerun AI extraction and cross-check analysis for the following documents in
+              this claim. This process may take a minute. Are you sure you want to proceed?
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              {claim.documents
+                ?.filter((doc: any) => NORMALIZABLE_TYPES.includes(doc.type))
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                .map((doc: any) => (
+                  <li key={doc.id} className="text-xs text-muted-foreground font-medium">
+                    {doc.filename || doc.name}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        }
         confirmText="Confirm"
         onConfirm={handleTriggerTrinity}
         isLoading={triggerTrinity.isPending}
