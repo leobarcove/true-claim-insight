@@ -42,8 +42,26 @@ export class TenantGuard implements CanActivate {
     }
 
     // Add validated tenant context to request for easy access in controllers
-    request.tenantId = currentTenantId;
+    request.tenantContext = {
+      tenantId: currentTenantId,
+      userId: user.id || user.sub,
+      userRole: user.role,
+    };
 
     return true;
+  }
+}
+
+export interface TenantContext {
+  tenantId: string;
+  userId: string;
+  userRole: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      tenantContext?: TenantContext;
+    }
   }
 }

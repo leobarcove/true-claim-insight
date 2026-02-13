@@ -27,9 +27,10 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InfoTooltip } from '@/components/ui/tooltip';
-import { convertToTitleCase, formatDate } from '@/lib/utils';
+import { convertToTitleCase, formatDate, cn } from '@/lib/utils';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useAuthStore } from '@/stores/auth-store';
 
 const statusConfig: Record<
   string,
@@ -66,10 +67,13 @@ export function ClaimsListPage() {
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const debouncedSearchQuery = useDebounce(searchQuery, 400);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [userFilter, setUserFilter] = useState<'ALL' | 'MY_CLAIMS'>('ALL');
 
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [page, setPage] = useState(1);
   const limit = 10;
+
+  const { user } = useAuthStore();
 
   // Sync searchQuery with URL
   useEffect(() => {
@@ -102,9 +106,12 @@ export function ClaimsListPage() {
     limit,
     sortBy: 'createdAt',
     sortOrder: 'desc',
+    createdById: userFilter === 'MY_CLAIMS' ? user?.id : undefined,
   });
 
-  const { data: statsData } = useClaimStats();
+  const { data: statsData } = useClaimStats({
+    createdById: userFilter === 'MY_CLAIMS' ? user?.id : undefined,
+  });
 
   const claims = data?.claims || [];
   const pagination = data?.pagination;
@@ -159,38 +166,92 @@ export function ClaimsListPage() {
             ))}
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center bg-muted/50 rounded-lg p-1 mb-1">
-            <InfoTooltip
-              content="List"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'table' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('table')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              }
-            />
-            <InfoTooltip
-              content="Grid"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'card' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('card')}
-                >
-                  <Grid className="h-4 w-4" />
-                </Button>
-              }
-            />
+          <div className="flex items-center gap-2 mb-1">
+            {/* User Filter */}
+            <div className="relative flex items-center bg-muted/30 border border-border/80 rounded-full overflow-hidden shadow-sm">
+              <div
+                className={cn(
+                  'absolute inset-y-1 transition-all duration-300 ease-out bg-primary/80 rounded-full z-0 shadow-sm',
+                  userFilter === 'ALL' ? 'left-1 w-16' : 'left-[50%] ml-px w-16'
+                )}
+              />
+              <InfoTooltip
+                content="Show all claims"
+                direction="top"
+                fontSize="text-[11px]"
+                trigger={
+                  <button
+                    onClick={() => setUserFilter('ALL')}
+                    className={cn(
+                      'relative z-10 w-16 py-1 text-[10px] font-medium transition-colors duration-300 text-center ml-1',
+                      userFilter === 'ALL'
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground hover:text-primary'
+                    )}
+                  >
+                    All
+                  </button>
+                }
+              />
+              <InfoTooltip
+                content="Show only claims created by you"
+                direction="top"
+                fontSize="text-[11px]"
+                trigger={
+                  <button
+                    onClick={() => setUserFilter('MY_CLAIMS')}
+                    className={cn(
+                      'relative z-10 w-16 py-1 text-[10px] font-medium transition-colors duration-300 text-center',
+                      userFilter === 'MY_CLAIMS'
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground hover:text-primary'
+                    )}
+                  >
+                    My Claims
+                  </button>
+                }
+              />
+            </div>
+
+            {/* View Toggle */}
+            <div className="flex items-center bg-muted/50 rounded-lg p-1">
+              <InfoTooltip
+                content="List"
+                direction="top"
+                fontSize="text-[11px]"
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-7 w-7 rounded-md',
+                      viewMode === 'table' && 'bg-background shadow-sm'
+                    )}
+                    onClick={() => setViewMode('table')}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <InfoTooltip
+                content="Grid"
+                direction="top"
+                fontSize="text-[11px]"
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-7 w-7 rounded-md',
+                      viewMode === 'card' && 'bg-background shadow-sm'
+                    )}
+                    onClick={() => setViewMode('card')}
+                  >
+                    <Grid className="h-4 w-4" />
+                  </Button>
+                }
+              />
+            </div>
           </div>
         </div>
 

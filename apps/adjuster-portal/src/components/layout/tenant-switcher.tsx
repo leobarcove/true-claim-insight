@@ -7,20 +7,15 @@ import { cn } from '@/lib/utils';
 
 export function TenantSwitcher() {
   const { user, userTenants } = useAuthStore();
-  const [isOpen, setIsOpen] = useState(false);
   const switchTenantMutation = useSwitchTenant();
   const { toast } = useToast();
 
-  if (!user || userTenants.length <= 1) {
-    return null; // Don't show switcher if user has only one tenant
+  if (!user || userTenants.length === 0) {
+    return null;
   }
-
-  const currentTenant =
-    userTenants.find(t => t.tenantId === user.currentTenantId) || userTenants[0];
 
   const handleSwitchTenant = async (tenant: UserTenant) => {
     if (tenant.tenantId === user.currentTenantId) {
-      setIsOpen(false);
       return;
     }
 
@@ -30,7 +25,6 @@ export function TenantSwitcher() {
         title: 'Tenant switched',
         description: `Now viewing ${tenant.tenantName}`,
       });
-      setIsOpen(false);
     } catch (error) {
       toast({
         title: 'Switch failed',
@@ -41,71 +35,47 @@ export function TenantSwitcher() {
   };
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-3 px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-accent transition-all duration-200 text-left"
-      >
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Building2 className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">
-            {currentTenant.tenantName}
-          </p>
-          <p className="text-[10px] text-muted-foreground truncate capitalize">
-            {currentTenant.tenantType.toLowerCase().replace('_', ' ')}
-          </p>
-        </div>
-        <ChevronDown
-          className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform duration-200',
-            isOpen && 'rotate-180'
-          )}
-        />
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute bottom-full left-0 right-0 mb-2 z-20 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
-            <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
-              {userTenants.map(tenant => (
-                <button
-                  key={tenant.tenantId}
-                  onClick={() => handleSwitchTenant(tenant)}
-                  disabled={switchTenantMutation.isPending}
-                  className={cn(
-                    'flex w-full items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left',
-                    tenant.tenantId === user.currentTenantId
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-accent text-foreground',
-                    switchTenantMutation.isPending && 'opacity-50 cursor-not-allowed'
-                  )}
-                >
-                  <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Building2 className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{tenant.tenantName}</p>
-                    <p className="text-xs text-muted-foreground truncate capitalize">
-                      {tenant.role.toLowerCase().replace('_', ' ')}
-                    </p>
-                  </div>
-                  {tenant.tenantId === user.currentTenantId && (
-                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                  )}
-                  {tenant.isDefault && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex-shrink-0">
-                      Default
-                    </span>
-                  )}
-                </button>
-              ))}
+    <div className="space-y-1.5">
+      {userTenants.map(tenant => {
+        const isActive = tenant.tenantId === user.currentTenantId;
+        return (
+          <button
+            key={tenant.tenantId}
+            onClick={() => handleSwitchTenant(tenant)}
+            disabled={switchTenantMutation.isPending}
+            className={cn(
+              'flex w-full items-center gap-3 p-1 px-1.5 rounded-xl border transition-all duration-200 text-left group',
+              isActive
+                ? 'bg-primary/5 border-primary/20 shadow-sm'
+                : 'hover:bg-accent border-transparent hover:border-border text-foreground'
+            )}
+          >
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-background shadow-sm overflow-hidden ring-1 ring-primary/5">
+              <span className="text-xs font-bold text-primary">
+                {tenant.tenantName.substring(0, 2).toUpperCase()}
+              </span>
             </div>
-          </div>
-        </>
-      )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold truncate group-hover:text-primary transition-colors">
+                {tenant.tenantName}
+              </p>
+              <p className="text-[10px] text-muted-foreground truncate opacity-80 capitalize">
+                {tenant.role.toLowerCase().replace('_', ' ')}
+              </p>
+            </div>
+            <div
+              className={cn(
+                'h-3 w-3 rounded-full border-2 flex items-center justify-center transition-all duration-300',
+                isActive
+                  ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]'
+                  : 'border-muted-foreground/30 group-hover:border-primary/50'
+              )}
+            >
+              {isActive && <div className="h-1 w-1 rounded-full bg-primary-foreground" />}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }

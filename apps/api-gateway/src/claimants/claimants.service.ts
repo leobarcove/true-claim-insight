@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Claimant } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
+import { TenantContext } from '../auth/guards/tenant.guard';
 
 @Injectable()
 export class ClaimantsService {
@@ -11,28 +12,50 @@ export class ClaimantsService {
   /**
    * Find claimant by phone number
    */
-  async findByPhone(phoneNumber: string): Promise<Claimant | null> {
+  async findByPhone(phoneNumber: string, tenant?: TenantContext): Promise<Claimant | null> {
     return this.prisma.claimant.findFirst({
-      where: { phoneNumber },
+      where: {
+        phoneNumber,
+        ...(tenant && {
+          OR: [
+            { tenantId: null },
+            { tenantId: tenant.tenantId },
+          ],
+        }),
+      },
     });
   }
 
   /**
    * Find claimant by NRIC
    */
-  async findByNric(nric: string): Promise<Claimant | null> {
-    return this.prisma.claimant.findUnique({
-      where: { nric },
+  async findByNric(nric: string, tenant?: TenantContext): Promise<Claimant | null> {
+    return this.prisma.claimant.findFirst({
+      where: {
+        nric,
+        ...(tenant && {
+          OR: [
+            { tenantId: null },
+            { tenantId: tenant.tenantId },
+          ],
+        }),
+      },
     });
   }
 
   /**
    * Find claimant by ID
    */
-  async findById(id: string): Promise<Claimant | null> {
-    return this.prisma.claimant.findUnique({
+  async findById(id: string, tenant?: TenantContext): Promise<Claimant | null> {
+    const claimant = await this.prisma.claimant.findUnique({
       where: { id },
     });
+
+    if (claimant && tenant && claimant.tenantId && claimant.tenantId !== tenant.tenantId) {
+      return null;
+    }
+
+    return claimant;
   }
 
   /**
@@ -42,7 +65,7 @@ export class ClaimantsService {
     phoneNumber: string;
     nric?: string;
     fullName?: string;
-  }): Promise<Claimant> {
+  }, tenant?: TenantContext): Promise<Claimant> {
     this.logger.log(`Creating new claimant for phone: ${data.phoneNumber}, NRIC: ${data.nric}`);
 
     return this.prisma.claimant.create({
@@ -50,6 +73,8 @@ export class ClaimantsService {
         phoneNumber: data.phoneNumber,
         nric: data.nric,
         fullName: data.fullName,
+        tenantId: tenant?.tenantId,
+        userId: tenant?.userId,
       },
     });
   }
@@ -61,15 +86,15 @@ export class ClaimantsService {
     nric?: string;
     phoneNumber: string;
     fullName?: string;
-  }): Promise<Claimant> {
+  }, tenant?: TenantContext): Promise<Claimant> {
     let existing: Claimant | null = null;
 
     if (data.nric) {
-      existing = await this.findByNric(data.nric);
+      existing = await this.findByNric(data.nric, tenant);
     }
 
     if (!existing) {
-      existing = await this.findByPhone(data.phoneNumber);
+      existing = await this.findByPhone(data.phoneNumber, tenant);
     }
 
     if (existing) {
@@ -84,14 +109,14 @@ export class ClaimantsService {
       });
     }
 
-    return this.createClaimant(data);
+    return this.createClaimant(data, tenant);
   }
 
   /**
    * Find or create claimant by phone number (Legacy/OTP Flow)
    */
-  async findOrCreateByPhone(phoneNumber: string): Promise<Claimant> {
-    return this.findOrCreate({ phoneNumber });
+  async findOrCreateByPhone(phoneNumber: string, tenant?: TenantContext): Promise<Claimant> {
+    return this.findOrCreate({ phoneNumber }, tenant);
   }
 
   /**
@@ -105,8 +130,14 @@ export class ClaimantsService {
       email?: string;
       nricHash?: string;
       nricEncrypted?: Uint8Array<ArrayBuffer>;
-    }
+    },
+    tenant?: TenantContext
   ): Promise<Claimant> {
+    if (tenant) {
+      const existing = await this.findById(id, tenant);
+      if (!existing) throw new NotFoundException('Claimant not found or access denied');
+    }
+
     return this.prisma.claimant.update({
       where: { id },
       data: {
@@ -124,8 +155,14 @@ export class ClaimantsService {
    */
   async updateKycStatus(
     id: string,
-    status: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED'
+    status: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED',
+    tenant?: TenantContext
   ): Promise<Claimant> {
+    if (tenant) {
+      const existing = await this.findById(id, tenant);
+      if (!existing) throw new NotFoundException('Claimant not found or access denied');
+    }
+
     return this.prisma.claimant.update({
       where: { id },
       data: {

@@ -17,6 +17,7 @@ import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 import { RiskService } from './risk.service';
 
@@ -29,9 +30,13 @@ export class RiskController {
 
   @Get('session/:sessionId')
   @ApiOperation({ summary: 'Get risk assessments for a session' })
-  async getAssessments(@Param('sessionId') sessionId: string, @CurrentTenant() tenantId: string) {
+  async getAssessments(
+    @Param('sessionId') sessionId: string,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.riskService.getAssessments(sessionId, tenantId);
+      return await this.riskService.getAssessments(sessionId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -39,24 +44,34 @@ export class RiskController {
 
   @Get('session/:sessionId/deception-score')
   @ApiOperation({ summary: 'Get deception score for a session' })
-  async getDeceptionScore(@Param('sessionId') sessionId: string) {
+  async getDeceptionScore(
+    @Param('sessionId') sessionId: string,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.riskService.getDeceptionScore(sessionId);
+      return await this.riskService.getDeceptionScore(sessionId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
   }
 
-  @Post('trigger')
-  @Roles('ADJUSTER', 'ADMIN')
-  @ApiOperation({ summary: 'Trigger a real-time risk assessment' })
+  @Post('assessments/trigger')
+  @ApiOperation({ summary: 'Trigger a new assessment' })
   async triggerAssessment(
     @Body('sessionId') sessionId: string,
     @Body('assessmentType') assessmentType: string,
-    @CurrentTenant() tenantId: string
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
   ) {
     try {
-      return await this.riskService.triggerAssessment(sessionId, assessmentType, tenantId);
+      return await this.riskService.triggerAssessment(
+        sessionId,
+        assessmentType,
+        tenantId,
+        user?.id || user?.sub,
+        user?.role
+      );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -108,7 +123,7 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.uploadAudio(audioBuffer, sessionId as string);
+      return await this.riskService.uploadAudio(audioBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -159,7 +174,7 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.uploadScreenshot(buf, sessionId as string);
+      return await this.riskService.uploadScreenshot(buf, sessionId as string, 'system', 'system', 'SYSTEM');
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -210,7 +225,7 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.analyzeExpression(videoBuffer, sessionId as string);
+      return await this.riskService.analyzeExpression(videoBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -261,7 +276,7 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.analyzeVideo(videoBuffer, sessionId as string);
+      return await this.riskService.analyzeVideo(videoBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -269,9 +284,13 @@ export class RiskController {
 
   @Get('claims/:claimId/trinity')
   @ApiOperation({ summary: 'Get trinity check results for a claim' })
-  async getTrinityCheck(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string) {
+  async getTrinityCheck(
+    @Param('claimId') claimId: string,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.riskService.getTrinityCheck(claimId, tenantId);
+      return await this.riskService.getTrinityCheck(claimId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -279,9 +298,13 @@ export class RiskController {
 
   @Get('documents/:documentId/analysis')
   @ApiOperation({ summary: 'Get analysis for a document' })
-  async getDocumentAnalysis(@Param('documentId') documentId: string) {
+  async getDocumentAnalysis(
+    @Param('documentId') documentId: string,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.riskService.getDocumentAnalysis(documentId);
+      return await this.riskService.getDocumentAnalysis(documentId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

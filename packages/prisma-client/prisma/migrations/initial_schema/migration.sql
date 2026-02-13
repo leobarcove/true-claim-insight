@@ -143,6 +143,8 @@ CREATE TABLE "claimants" (
     "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "claimants_pkey" PRIMARY KEY ("id")
 );
@@ -156,6 +158,8 @@ CREATE TABLE "otp_codes" (
     "verified" BOOLEAN NOT NULL DEFAULT false,
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "otp_codes_pkey" PRIMARY KEY ("id")
 );
@@ -194,13 +198,17 @@ CREATE TABLE "claims" (
     "complianceNotes" JSONB DEFAULT '{}',
     "priority" "Priority" NOT NULL DEFAULT 'NORMAL',
     "scheduledAssessmentTime" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
     "siuInvestigatorId" TEXT,
     "approvedAmount" DECIMAL(65,30),
     "excessAmount" DECIMAL(65,30),
     "vehicleEngineNumber" TEXT,
     "vehicleYear" INTEGER,
+    "tenantId" TEXT,
+    "userId" TEXT,
+    "createdById" TEXT,
+    "updatedById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "claims_pkey" PRIMARY KEY ("id")
 );
@@ -209,11 +217,13 @@ CREATE TABLE "claims" (
 CREATE TABLE "claim_notes" (
     "id" TEXT NOT NULL,
     "claimId" TEXT NOT NULL,
-    "authorId" TEXT NOT NULL,
-    "authorType" "ActorType" NOT NULL,
     "content" TEXT NOT NULL,
     "isPrivate" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
+    "authorId" TEXT NOT NULL,
+    "authorType" "ActorType" NOT NULL,
 
     CONSTRAINT "claim_notes_pkey" PRIMARY KEY ("id")
 );
@@ -234,6 +244,7 @@ CREATE TABLE "sessions" (
     "screenshots" JSONB NOT NULL DEFAULT '[]',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "roomUrl" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );
@@ -247,6 +258,8 @@ CREATE TABLE "deception_scores" (
     "visualBehavior" DECIMAL(5,4) NOT NULL,
     "expressionMeasurement" DECIMAL(5,4) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "deception_scores_pkey" PRIMARY KEY ("id")
 );
@@ -264,6 +277,8 @@ CREATE TABLE "risk_assessments" (
     "rawResponse" JSONB,
     "contextData" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "risk_assessments_pkey" PRIMARY KEY ("id")
 );
@@ -282,6 +297,8 @@ CREATE TABLE "documents" (
     "signedAt" TIMESTAMP(3),
     "documentHash" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "documents_pkey" PRIMARY KEY ("id")
 );
@@ -298,6 +315,8 @@ CREATE TABLE "document_analyses" (
     "processingTime" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "document_analyses_pkey" PRIMARY KEY ("id")
 );
@@ -315,6 +334,8 @@ CREATE TABLE "trinity_checks" (
     "reasoningInsights" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "trinity_checks_pkey" PRIMARY KEY ("id")
 );
@@ -333,6 +354,8 @@ CREATE TABLE "audit_trail" (
     "newValues" JSONB,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "audit_trail_pkey" PRIMARY KEY ("id")
 );
@@ -349,8 +372,10 @@ CREATE TABLE "video_uploads" (
     "processedUntil" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "status" "VideoUploadStatus" NOT NULL DEFAULT 'PENDING',
     "uploadedBy" TEXT,
+    "userId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
 
     CONSTRAINT "video_uploads_pkey" PRIMARY KEY ("id")
 );
@@ -361,6 +386,8 @@ CREATE TABLE "vehicle_makes" (
     "name" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "vehicle_makes_pkey" PRIMARY KEY ("id")
 );
@@ -372,6 +399,8 @@ CREATE TABLE "vehicle_models" (
     "makeId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "vehicle_models_pkey" PRIMARY KEY ("id")
 );
@@ -399,6 +428,8 @@ CREATE TABLE "session_client_info" (
     "asn" TEXT,
     "metadata" JSONB DEFAULT '{}',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tenantId" TEXT,
+    "userId" TEXT,
 
     CONSTRAINT "session_client_info_pkey" PRIMARY KEY ("id")
 );
@@ -458,10 +489,22 @@ CREATE INDEX "claimants_phoneNumber_idx" ON "claimants"("phoneNumber");
 CREATE INDEX "claimants_nric_idx" ON "claimants"("nric");
 
 -- CreateIndex
+CREATE INDEX "claimants_tenantId_idx" ON "claimants"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "claimants_userId_idx" ON "claimants"("userId");
+
+-- CreateIndex
 CREATE INDEX "otp_codes_phoneNumber_code_idx" ON "otp_codes"("phoneNumber", "code");
 
 -- CreateIndex
 CREATE INDEX "otp_codes_expiresAt_idx" ON "otp_codes"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "otp_codes_tenantId_idx" ON "otp_codes"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "otp_codes_userId_idx" ON "otp_codes"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "claims_claimNumber_key" ON "claims"("claimNumber");
@@ -479,10 +522,22 @@ CREATE INDEX "claims_adjusterId_idx" ON "claims"("adjusterId");
 CREATE INDEX "claims_status_idx" ON "claims"("status");
 
 -- CreateIndex
+CREATE INDEX "claims_tenantId_idx" ON "claims"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "claims_userId_idx" ON "claims"("userId");
+
+-- CreateIndex
 CREATE INDEX "claims_createdAt_idx" ON "claims"("createdAt" DESC);
 
 -- CreateIndex
 CREATE INDEX "claim_notes_claimId_idx" ON "claim_notes"("claimId");
+
+-- CreateIndex
+CREATE INDEX "claim_notes_tenantId_idx" ON "claim_notes"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "claim_notes_userId_idx" ON "claim_notes"("userId");
 
 -- CreateIndex
 CREATE INDEX "sessions_claimId_idx" ON "sessions"("claimId");
@@ -515,6 +570,12 @@ CREATE INDEX "audit_trail_entityType_entityId_idx" ON "audit_trail"("entityType"
 CREATE INDEX "audit_trail_createdAt_idx" ON "audit_trail"("createdAt" DESC);
 
 -- CreateIndex
+CREATE INDEX "audit_trail_tenantId_idx" ON "audit_trail"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "audit_trail_userId_idx" ON "audit_trail"("userId");
+
+-- CreateIndex
 CREATE INDEX "video_uploads_claimId_idx" ON "video_uploads"("claimId");
 
 -- CreateIndex
@@ -524,13 +585,31 @@ CREATE INDEX "video_uploads_status_idx" ON "video_uploads"("status");
 CREATE UNIQUE INDEX "vehicle_makes_name_key" ON "vehicle_makes"("name");
 
 -- CreateIndex
+CREATE INDEX "vehicle_makes_tenantId_idx" ON "vehicle_makes"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "vehicle_makes_userId_idx" ON "vehicle_makes"("userId");
+
+-- CreateIndex
 CREATE INDEX "vehicle_models_makeId_idx" ON "vehicle_models"("makeId");
+
+-- CreateIndex
+CREATE INDEX "vehicle_models_tenantId_idx" ON "vehicle_models"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "vehicle_models_userId_idx" ON "vehicle_models"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "vehicle_models_makeId_name_key" ON "vehicle_models"("makeId", "name");
 
 -- CreateIndex
 CREATE INDEX "session_client_info_sessionId_idx" ON "session_client_info"("sessionId");
+
+-- CreateIndex
+CREATE INDEX "session_client_info_tenantId_idx" ON "session_client_info"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "session_client_info_userId_idx" ON "session_client_info"("userId");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -560,10 +639,28 @@ ALTER TABLE "adjusters" ADD CONSTRAINT "adjusters_tenantId_fkey" FOREIGN KEY ("t
 ALTER TABLE "adjusters" ADD CONSTRAINT "adjusters_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "claimants" ADD CONSTRAINT "claimants_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claimants" ADD CONSTRAINT "claimants_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "otp_codes" ADD CONSTRAINT "otp_codes_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "otp_codes" ADD CONSTRAINT "otp_codes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "claims" ADD CONSTRAINT "claims_adjusterId_fkey" FOREIGN KEY ("adjusterId") REFERENCES "adjusters"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "claims" ADD CONSTRAINT "claims_claimantId_fkey" FOREIGN KEY ("claimantId") REFERENCES "claimants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claims" ADD CONSTRAINT "claims_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claims" ADD CONSTRAINT "claims_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "claims" ADD CONSTRAINT "claims_insurerTenantId_fkey" FOREIGN KEY ("insurerTenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -575,32 +672,101 @@ ALTER TABLE "claims" ADD CONSTRAINT "claims_siuInvestigatorId_fkey" FOREIGN KEY 
 ALTER TABLE "claim_notes" ADD CONSTRAINT "claim_notes_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "claims"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "claim_notes" ADD CONSTRAINT "claim_notes_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claim_notes" ADD CONSTRAINT "claim_notes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "claims"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "deception_scores" ADD CONSTRAINT "deception_scores_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "deception_scores" ADD CONSTRAINT "deception_scores_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "deception_scores" ADD CONSTRAINT "deception_scores_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "risk_assessments" ADD CONSTRAINT "risk_assessments_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "risk_assessments" ADD CONSTRAINT "risk_assessments_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "risk_assessments" ADD CONSTRAINT "risk_assessments_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "documents" ADD CONSTRAINT "documents_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "claims"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "documents" ADD CONSTRAINT "documents_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "documents" ADD CONSTRAINT "documents_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "document_analyses" ADD CONSTRAINT "document_analyses_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "documents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "document_analyses" ADD CONSTRAINT "document_analyses_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "document_analyses" ADD CONSTRAINT "document_analyses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "trinity_checks" ADD CONSTRAINT "trinity_checks_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "claims"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "trinity_checks" ADD CONSTRAINT "trinity_checks_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "trinity_checks" ADD CONSTRAINT "trinity_checks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_trail" ADD CONSTRAINT "audit_trail_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_trail" ADD CONSTRAINT "audit_trail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "video_uploads" ADD CONSTRAINT "video_uploads_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "claims"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "video_uploads" ADD CONSTRAINT "video_uploads_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "video_uploads" ADD CONSTRAINT "video_uploads_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehicle_makes" ADD CONSTRAINT "vehicle_makes_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehicle_makes" ADD CONSTRAINT "vehicle_makes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "vehicle_models" ADD CONSTRAINT "vehicle_models_makeId_fkey" FOREIGN KEY ("makeId") REFERENCES "vehicle_makes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "vehicle_models" ADD CONSTRAINT "vehicle_models_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vehicle_models" ADD CONSTRAINT "vehicle_models_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "session_client_info" ADD CONSTRAINT "session_client_info_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "session_client_info" ADD CONSTRAINT "session_client_info_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "session_client_info" ADD CONSTRAINT "session_client_info_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

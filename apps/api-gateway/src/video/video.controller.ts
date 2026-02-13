@@ -18,6 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { VideoService } from './video.service';
 import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto/video.dto';
 
@@ -31,9 +32,9 @@ export class VideoController {
   @Post('rooms')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Create a video room (Adjuster only)' })
-  async createRoom(@Body() dto: CreateRoomDto, @CurrentTenant() tenantId: string) {
+  async createRoom(@Body() dto: CreateRoomDto, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.createRoom(dto, tenantId);
+      return await this.videoService.createRoom(dto, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -44,10 +45,11 @@ export class VideoController {
   async getAllSessions(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @CurrentTenant() tenantId?: string
+    @CurrentTenant() tenantId?: string,
+    @CurrentUser() user?: any
   ) {
     try {
-      return await this.videoService.getAllSessions(tenantId, page, limit);
+      return await this.videoService.getAllSessions(tenantId, page, limit, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -55,9 +57,9 @@ export class VideoController {
 
   @Get('rooms/:id')
   @ApiOperation({ summary: 'Get room details' })
-  async getRoom(@Param('id') id: string) {
+  async getRoom(@Param('id') id: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getRoom(id);
+      return await this.videoService.getRoom(id, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -65,9 +67,14 @@ export class VideoController {
 
   @Post('rooms/:id/join')
   @ApiOperation({ summary: 'Join a video room and get Daily.co token' })
-  async joinRoom(@Param('id') id: string, @Body() dto: JoinRoomDto) {
+  async joinRoom(
+    @Param('id') id: string,
+    @Body() dto: JoinRoomDto,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.videoService.joinRoom(id, dto);
+      return await this.videoService.joinRoom(id, dto, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -75,9 +82,14 @@ export class VideoController {
 
   @Post('rooms/:id/client-info')
   @ApiOperation({ summary: 'Save client information for a session' })
-  async saveClientInfo(@Param('id') id: string, @Body() dto: SaveClientInfoDto) {
+  async saveClientInfo(
+    @Param('id') id: string,
+    @Body() dto: SaveClientInfoDto,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.videoService.saveClientInfo(id, dto);
+      return await this.videoService.saveClientInfo(id, dto, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -86,9 +98,14 @@ export class VideoController {
   @Post('rooms/:id/end')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'End a video session (Adjuster only)' })
-  async endRoom(@Param('id') id: string, @Body() dto: EndRoomDto) {
+  async endRoom(
+    @Param('id') id: string,
+    @Body() dto: EndRoomDto,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.videoService.endRoom(id, dto);
+      return await this.videoService.endRoom(id, dto, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -96,9 +113,9 @@ export class VideoController {
 
   @Get('claims/:claimId/sessions')
   @ApiOperation({ summary: 'Get all video sessions for a claim' })
-  async getSessions(@Param('claimId') claimId: string) {
+  async getSessions(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getSessionsForClaim(claimId);
+      return await this.videoService.getSessionsForClaim(claimId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -119,11 +136,11 @@ export class VideoController {
   @Post('uploads/upload-assessment')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Upload a video for assessment' })
-  async uploadAssessment(@Req() req: any) {
+  async uploadAssessment(@Req() req: any, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
       // For Fastify, we can pass the raw request through or use multipart utility
       // Here we assume the service handles the proxying of the stream/body
-      return await this.videoService.uploadAssessment(req);
+      return await this.videoService.uploadAssessment(req, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -134,10 +151,11 @@ export class VideoController {
   async getAllUploads(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @CurrentTenant() tenantId?: string
+    @CurrentTenant() tenantId?: string,
+    @CurrentUser() user?: any
   ) {
     try {
-      return await this.videoService.getAllUploads(tenantId, page, limit);
+      return await this.videoService.getAllUploads(tenantId, page, limit, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -145,9 +163,9 @@ export class VideoController {
 
   @Get('uploads/:uploadId')
   @ApiOperation({ summary: 'Get video upload details' })
-  async getUpload(@Param('uploadId') uploadId: string) {
+  async getUpload(@Param('uploadId') uploadId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getUpload(uploadId);
+      return await this.videoService.getUpload(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -155,9 +173,9 @@ export class VideoController {
 
   @Get('uploads/:uploadId/segments')
   @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
-  async getUploadSegments(@Param('uploadId') uploadId: string) {
+  async getUploadSegments(@Param('uploadId') uploadId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getUploadSegments(uploadId);
+      return await this.videoService.getUploadSegments(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -178,10 +196,12 @@ export class VideoController {
   @ApiOperation({ summary: 'Process a video segment' })
   async processSegment(
     @Param('uploadId') uploadId: string,
-    @Body() dto: { startTime: number; endTime: number }
+    @Body() dto: { startTime: number; endTime: number },
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
   ) {
     try {
-      return await this.videoService.processSegment(uploadId, dto);
+      return await this.videoService.processSegment(uploadId, dto, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -190,9 +210,9 @@ export class VideoController {
   @Post('uploads/:uploadId/prepare')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Prepare video locally for processing' })
-  async prepareUpload(@Param('uploadId') uploadId: string) {
+  async prepareUpload(@Param('uploadId') uploadId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.prepareUpload(uploadId);
+      return await this.videoService.prepareUpload(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -200,9 +220,9 @@ export class VideoController {
 
   @Get('uploads/:uploadId/deception-score')
   @ApiOperation({ summary: 'Get deception score for uploaded video' })
-  async getDeceptionScore(@Param('uploadId') uploadId: string) {
+  async getDeceptionScore(@Param('uploadId') uploadId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getDeceptionScore(uploadId);
+      return await this.videoService.getDeceptionScore(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -211,9 +231,14 @@ export class VideoController {
   @Post('uploads/:uploadId/generate-consent')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Generate consent form after processing' })
-  async generateConsent(@Param('uploadId') uploadId: string, @Body() _body?: any) {
+  async generateConsent(
+    @Param('uploadId') uploadId: string,
+    @Body() _body: any,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any
+  ) {
     try {
-      return await this.videoService.generateConsent(uploadId);
+      return await this.videoService.generateConsent(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -221,9 +246,9 @@ export class VideoController {
 
   @Get('uploads/claim/:claimId')
   @ApiOperation({ summary: 'Get all video uploads for a claim' })
-  async getClaimUploads(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string) {
+  async getClaimUploads(@Param('claimId') claimId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.getClaimUploads(claimId, tenantId);
+      return await this.videoService.getClaimUploads(claimId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -232,9 +257,9 @@ export class VideoController {
   @Delete('uploads/:uploadId')
   @Roles('ADJUSTER', 'ADMIN')
   @ApiOperation({ summary: 'Delete a video upload' })
-  async deleteUpload(@Param('uploadId') uploadId: string) {
+  async deleteUpload(@Param('uploadId') uploadId: string, @CurrentTenant() tenantId: string, @CurrentUser() user: any) {
     try {
-      return await this.videoService.deleteUpload(uploadId);
+      return await this.videoService.deleteUpload(uploadId, tenantId, user?.id || user?.sub, user?.role);
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

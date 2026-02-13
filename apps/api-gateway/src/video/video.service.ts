@@ -21,12 +21,12 @@ export class VideoService {
     this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
-  async createRoom(dto: CreateRoomDto, tenantId: string) {
+  async createRoom(dto: CreateRoomDto, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/rooms`, {
       method: 'POST',
       headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
         'Content-Type': 'application/json',
-        'X-Tenant-Id': tenantId,
       },
       body: JSON.stringify(dto),
     });
@@ -34,42 +34,50 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async getRoom(id: string) {
-    const response = await fetch(`${this.baseUrl}/rooms/${id}`);
-    return this.handleResponse(response);
-  }
-
-  async getAllSessions(tenantId?: string, page?: number, limit?: number) {
-    const url = new URL(`${this.baseUrl}/rooms`);
-    if (page) url.searchParams.append('page', page.toString());
-    if (limit) url.searchParams.append('limit', limit.toString());
-    const response = await fetch(url.toString(), {
-      headers: tenantId ? { 'X-Tenant-Id': tenantId } : undefined,
+  async getRoom(id: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/rooms/${id}`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async joinRoom(id: string, dto: JoinRoomDto) {
+  async getAllSessions(tenantId?: string, page?: number, limit?: number, userId?: string, userRole?: string) {
+    const url = new URL(`${this.baseUrl}/rooms`);
+    if (page) url.searchParams.append('page', page.toString());
+    if (limit) url.searchParams.append('limit', limit.toString());
+    const response = await fetch(url.toString(), {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
+    return this.handleResponse(response);
+  }
+
+  async joinRoom(id: string, dto: JoinRoomDto, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/rooms/${id}/join`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(dto),
     });
 
     return this.handleResponse(response);
   }
 
-  async endRoom(id: string, dto: EndRoomDto) {
+  async endRoom(id: string, dto: EndRoomDto, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/rooms/${id}/end`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(dto),
     });
 
     const result = await this.handleResponse(response);
     try {
       this.logger.log(`Session ${id} ended. Generating consent form...`);
-      this.riskService.generateConsentForm(id);
+      this.riskService.generateConsentForm(id, tenantId, userId, userRole);
     } catch (error: any) {
       this.logger.error(`Failed to generate consent form for session ${id}: ${error.message}`);
     }
@@ -77,8 +85,10 @@ export class VideoService {
     return result;
   }
 
-  async getSessionsForClaim(claimId: string) {
-    const response = await fetch(`${this.baseUrl}/rooms/claim/${claimId}`);
+  async getSessionsForClaim(claimId: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/rooms/claim/${claimId}`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
     return this.handleResponse(response);
   }
 
@@ -87,10 +97,13 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async saveClientInfo(sessionId: string, dto: SaveClientInfoDto) {
+  async saveClientInfo(sessionId: string, dto: SaveClientInfoDto, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/rooms/${sessionId}/client-info`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(dto),
     });
 
@@ -99,12 +112,13 @@ export class VideoService {
 
   // --- Video Upload Methods ---
 
-  async uploadAssessment(req: any) {
+  async uploadAssessment(req: any, tenantId: string, userId?: string, userRole?: string) {
     const contentType = req.headers['content-type'];
     const url = new URL(req.url, 'http://localhost');
     const response = await fetch(`${this.baseUrl}/uploads/upload-assessment${url.search}`, {
       method: 'POST',
       headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
         'content-type': contentType,
       },
       body: req.raw, // Pass the raw stream through
@@ -114,23 +128,27 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
-  async getUpload(uploadId: string) {
-    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`);
-    return this.handleResponse(response);
-  }
-
-  async getAllUploads(tenantId?: string, page?: number, limit?: number) {
-    const url = new URL(`${this.baseUrl}/uploads`);
-    if (page) url.searchParams.append('page', page.toString());
-    if (limit) url.searchParams.append('limit', limit.toString());
-    const response = await fetch(url.toString(), {
-      headers: tenantId ? { 'X-Tenant-Id': tenantId } : undefined,
+  async getUpload(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async getUploadSegments(uploadId: string) {
-    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/segments`);
+  async getAllUploads(tenantId?: string, page?: number, limit?: number, userId?: string, userRole?: string) {
+    const url = new URL(`${this.baseUrl}/uploads`);
+    if (page) url.searchParams.append('page', page.toString());
+    if (limit) url.searchParams.append('limit', limit.toString());
+    const response = await fetch(url.toString(), {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getUploadSegments(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/segments`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
     return this.handleResponse(response);
   }
 
@@ -175,50 +193,76 @@ export class VideoService {
     }
   }
 
-  async processSegment(uploadId: string, dto: { startTime: number; endTime: number }) {
+  async processSegment(
+    uploadId: string,
+    dto: { startTime: number; endTime: number },
+    tenantId: string,
+    userId?: string,
+    userRole?: string
+  ) {
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/process-segment`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(dto),
     });
     return this.handleResponse(response);
   }
 
-  async prepareUpload(uploadId: string) {
+  async prepareUpload(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/prepare`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({}),
     });
     return this.handleResponse(response);
   }
 
-  async getDeceptionScore(uploadId: string) {
-    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/deception-score`);
+  async getDeceptionScore(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/deception-score`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
     return this.handleResponse(response);
   }
 
-  async generateConsent(uploadId: string) {
+  async generateConsent(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/generate-consent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({}),
     });
     return this.handleResponse(response);
   }
 
-  async getClaimUploads(claimId: string, tenantId: string) {
+  async getClaimUploads(claimId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/uploads/claim/${claimId}`, {
-      headers: { 'X-Tenant-Id': tenantId },
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async deleteUpload(uploadId: string) {
+  async deleteUpload(uploadId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}`, {
       method: 'DELETE',
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
+  }
+
+  private buildHeaders(tenantId?: string, userId?: string, userRole?: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (tenantId) headers['X-Tenant-Id'] = tenantId;
+    if (userId) headers['X-User-Id'] = userId;
+    if (userRole) headers['X-User-Role'] = userRole;
+    return headers;
   }
 
   private async handleResponse(response: Response) {

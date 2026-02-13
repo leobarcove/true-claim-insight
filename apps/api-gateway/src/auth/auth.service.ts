@@ -204,7 +204,13 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    return user;
+    // Attach multi-tenant context from payload
+    return {
+      ...user,
+      currentTenantId: payload.currentTenantId,
+      tenantIds:
+        payload.tenantIds || (user as any).userTenants?.map((ut: any) => ut.tenantId) || [],
+    };
   }
 
   async switchTenant(

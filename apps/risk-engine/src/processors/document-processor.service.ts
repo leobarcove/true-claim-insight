@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../config/prisma.service'; // Adjust path if needed
+import { PrismaService } from '../config/prisma.service';
 import { GpuClientService } from '../llm/gpu-client.service';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
 import { DocumentStatus, DocumentType } from '@tci/shared-types';
@@ -11,9 +11,6 @@ import * as path from 'path';
 
 import { EventsGateway } from '../trinity/events.gateway';
 
-// Round to multiple of 56 (2 * 28-pixel patch size)
-// This ensures BOTH dimensions have an even number of patches,
-// preventing GGML/VLM sequence alignment errors (e.g. 27x37 patches = 999 tokens).
 const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 
 @Injectable()
@@ -28,9 +25,6 @@ export class DocumentProcessorService {
     private extractionService: ExtractionService
   ) {}
 
-  /**
-   * Helper to update document status and emit events
-   */
   async updateDocumentStatus(documentId: string, status: any, claimId?: string) {
     this.logger.log(`Updating document ${documentId} status to: ${status}`);
     const updated = await this.prisma.document.update({
@@ -45,9 +39,6 @@ export class DocumentProcessorService {
     }
   }
 
-  /**
-   * Orchestrates the analysis of a single document by ID (fetches content from Storage URL)
-   */
   async processDocumentFromUrl(documentId: string) {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new Error('Document not found');
@@ -55,13 +46,9 @@ export class DocumentProcessorService {
     if (!doc.storageUrl) throw new Error('Document has no storage URL');
 
     try {
-      // Update status to PROCESSING
       await this.updateDocumentStatus(documentId, DocumentStatus.PROCESSING, doc.claimId);
-
-      // Emit Trinity Start
       this.events.emitTrinityUpdate(doc.claimId, 'PROCESSING');
 
-      // Download the file
       const response = await fetch(doc.storageUrl);
       if (!response.ok) throw new Error(`Failed to download document: ${response.statusText}`);
 
@@ -80,9 +67,6 @@ export class DocumentProcessorService {
     }
   }
 
-  /**
-   * Core processing logic
-   */
   async processDocument(documentId: string, fileBuffer: Buffer, mimeType: string) {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new Error('Document not found');
@@ -94,15 +78,12 @@ export class DocumentProcessorService {
     let modelUsed = '';
 
     try {
-      // 1. Determine Strategy based on Doc Type and MIME
       const isImage = mimeType.startsWith('image/');
       const docType = doc.type as DocumentType;
 
-      // Check if we have a normalizer for this document type
       const normalizer = getNormalizer(docType);
       if (normalizer) {
         if (isImage) {
-          // Vision Path
           modelUsed = 'qwen2.5vl:7b';
           const prompt = this.extractionService.getPrompt(docType);
           const optimizedBuffer = await this.preprocessImage(fileBuffer, docType, doc.filename);
@@ -110,24 +91,22 @@ export class DocumentProcessorService {
           visionData = resp.output || resp;
           resultData = this.extractionService.normalize(docType, visionData);
         } else {
-          // OCR
           const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
           rawText = ocrResp.text || '';
 
-          // Extraction
           modelUsed = 'qwen2.5:7b';
           const prompt = this.extractionService.getPrompt(docType, rawText);
-
           const llmResp = await this.gpu.generateJson(prompt, modelUsed);
           const rawResult = llmResp.output || llmResp;
           resultData = this.extractionService.normalize(docType, rawResult);
         }
 
-        // 2. Save Analysis
         await this.prisma.documentAnalysis.upsert({
           where: { documentId: doc.id },
           create: {
             documentId: doc.id,
+            tenantId: doc.tenantId,
+            userId: doc.userId,
             rawText: rawText,
             extractedData: resultData,
             visionData: visionData,
@@ -144,23 +123,17 @@ export class DocumentProcessorService {
           },
         });
         this.logger.log(`Processed document ${doc.filename} (${docType})`);
-      } else {
-        this.logger.log(
-          `Skipping extraction/analysis for ${docType} (no normalizer found). Marking as COMPLETED.`
-        );
-        // Status will be updated to COMPLETED by processDocumentFromUrl caller
       }
 
-      // Only trigger Trinity Check if all documents for this claim have been processed
       const unfinishedDocs = await this.prisma.document.count({
         where: {
           claimId: doc.claimId,
           id: { not: documentId },
-          status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] },
+          status: { in: [DocumentStatus.QUEUED, DocumentStatus.PROCESSING] as any },
         },
       });
       if (unfinishedDocs === 0) {
-        this.runTrinityCheck(doc.claimId);
+        this.runTrinityCheck(doc.claimId, doc.tenantId || undefined, doc.userId || undefined);
       }
     } catch (error) {
       this.logger.error(`Failed to process document ${documentId}: ${error}`);
@@ -168,13 +141,8 @@ export class DocumentProcessorService {
     }
   }
 
-  /**
-   * Runs the Cross-Check for a Claim
-   */
-  async runTrinityCheck(claimId: string) {
-    const dataBag: any = {
-      visualEvidence: [],
-    };
+  async runTrinityCheck(claimId: string, tenantId?: string, userId?: string) {
+    const dataBag: any = { visualEvidence: [] };
     const claimDocs = await this.prisma.document.findMany({
       where: { claimId },
       include: { analysis: true },
@@ -182,33 +150,25 @@ export class DocumentProcessorService {
 
     for (const d of claimDocs) {
       if (!d.analysis?.extractedData && !d.analysis?.visionData) continue;
-
       const content = d.analysis.extractedData as any;
       const vision = d.analysis.visionData as any;
 
-      if (!content || !vision) continue;
       if (vision) dataBag.visualEvidence.push(vision);
 
       switch (d.type) {
         case DocumentType.NRIC:
         case DocumentType.MYKAD_FRONT:
-          dataBag.nric = content;
-          break;
+          dataBag.nric = content; break;
         case DocumentType.POLICY_DOCUMENT:
-          dataBag.policy = content;
-          break;
+          dataBag.policy = content; break;
         case DocumentType.VEHICLE_REG_CARD:
-          dataBag.registrationCard = content;
-          break;
+          dataBag.registrationCard = content; break;
         case DocumentType.POLICE_REPORT:
-          dataBag.policeReport = content;
-          break;
+          dataBag.policeReport = content; break;
         case DocumentType.REPAIR_QUOTATION:
-          dataBag.repairQuotation = content;
-          break;
+          dataBag.repairQuotation = content; break;
         case DocumentType.DAMAGE_PHOTO:
-          dataBag.damagePhoto = content;
-          break;
+          dataBag.damagePhoto = content; break;
       }
     }
 
@@ -219,9 +179,12 @@ export class DocumentProcessorService {
 
     dataBag.claim = claim;
     const report = this.trinity.auditClaim(dataBag);
+    
     const trinityCheck = await this.prisma.trinityCheck.create({
       data: {
         claimId,
+        tenantId: tenantId || claim?.insurerTenantId,
+        userId: userId,
         score: report.total_score,
         status: 'PROCESSING',
         summary: report.summary,
@@ -234,15 +197,7 @@ export class DocumentProcessorService {
     await this.runIntelligenceReasoning(claimId, trinityCheck.id, dataBag, report);
   }
 
-  /**
-   * Pre-processes images for VLM.
-   * Resizes large images and enhances document-like images for better text readability.
-   */
-  private async preprocessImage(
-    buffer: Buffer,
-    type: DocumentType,
-    filename: string
-  ): Promise<Buffer> {
+  private async preprocessImage(buffer: Buffer, type: DocumentType, filename: string): Promise<Buffer> {
     try {
       let pipeline = sharp(buffer);
       const metadata = await pipeline.metadata();
@@ -253,63 +208,19 @@ export class DocumentProcessorService {
       const scale = Math.min(1.0, Math.sqrt(MAX_PIXELS / (originalWidth * originalHeight)));
       const targetWidth = roundTo56(originalWidth * scale);
       const targetHeight = roundTo56(originalHeight * scale);
-      this.logger.log(
-        `Optimizing ${filename}: ${originalWidth}x${originalHeight} -> ${targetWidth}x${targetHeight}`
-      );
 
-      // Enhance document text readability
-      if (
-        [
-          DocumentType.NRIC,
-          DocumentType.MYKAD_FRONT,
-          DocumentType.DRIVING_LICENCE,
-          DocumentType.VEHICLE_REG_CARD,
-        ].includes(type)
-      ) {
-        pipeline = pipeline
-          .grayscale()
-          .normalise()
-          .linear(1.2, -10)
-          .modulate({ brightness: 1.1 })
-          .sharpen();
+      if ([DocumentType.NRIC, DocumentType.MYKAD_FRONT, DocumentType.DRIVING_LICENCE, DocumentType.VEHICLE_REG_CARD].includes(type)) {
+        pipeline = pipeline.grayscale().normalise().linear(1.2, -10).modulate({ brightness: 1.1 }).sharpen();
       }
 
-      const optimizedBuffer = await pipeline
-        .resize({
-          width: targetWidth,
-          height: targetHeight,
-          fit: 'fill',
-        })
-        .toBuffer();
-
-      return optimizedBuffer;
+      return await pipeline.resize({ width: targetWidth, height: targetHeight, fit: 'fill' }).toBuffer();
     } catch (error: any) {
-      this.logger.warn(`Image pre-processing failed: ${error.message}`);
       return buffer;
     }
   }
 
-  /**
-   * Intelligence Reasoning using LLM reasoning (e.g. DeepSeek-R1)
-   */
-  async runIntelligenceReasoning(
-    claimId: string,
-    trinityCheckId: string,
-    dataBag: any,
-    report: any
-  ) {
+  async runIntelligenceReasoning(claimId: string, trinityCheckId: string, dataBag: any, report: any) {
     this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
-
-    // Fetch Claim Details
-    const claim = await this.prisma.claim.findUnique({
-      where: { id: claimId },
-      include: { claimant: true },
-    });
-    if (!claim) {
-      this.logger.error(`Claim ${claimId} not found during reasoning`);
-      return;
-    }
-
     const prompt = `
       You are a senior insurance claim investigator (PIAM compliant) with expertise in fraud detection and motor claims.
       Your task is to perform a "Trinity Cross-Check" and fraud analysis on the provided claim documents and the DECLARED CLAIM DETAILS.
@@ -344,7 +255,7 @@ export class DocumentProcessorService {
          - Check for "Unrelated Damage" (e.g., rust or old dents visible in photos but quoted as new).
 
       DECLARED CLAIM DETAILS:
-      ${JSON.stringify(claim, null, 2)}
+      ${JSON.stringify(dataBag.claim, null, 2)}
 
       EXTRACTED DOCUMENTS DATA (Evidence):
       ${JSON.stringify(dataBag, null, 2)}
@@ -376,20 +287,17 @@ export class DocumentProcessorService {
         where: { id: trinityCheckId },
         data: {
           reasoning: result.reasoning,
-          status: report.status,
+          status: (report as any).status || 'COMPLETED',
           reasoningInsights: {
             model,
             flags: result.red_flags,
             insights: result.insights,
             recommendation: result.recommendation,
             confidence: result.confidence,
-          },
+          } as any,
         },
       });
 
-      this.logger.log(`Intelligence reasoning completed for Claim ${claimId}`);
-
-      // Emit Trinity Update
       this.events.emitTrinityUpdate(claimId, 'COMPLETED');
     } catch (error) {
       this.logger.error(`Intelligence reasoning failed for Claim ${claimId}: ${error}`);

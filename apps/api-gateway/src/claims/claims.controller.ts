@@ -40,7 +40,7 @@ export class ClaimsController {
   async create(@Body() createClaimDto: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -81,7 +81,7 @@ export class ClaimsController {
   getStats(@Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -94,7 +94,7 @@ export class ClaimsController {
       ? `${this.caseServiceUrl}/api/v1/claims/stats`
       : `${this.caseServiceUrl}/api/v1/adjusters/${adjusterId}/stats`;
 
-    return this.httpService.get(endpoint, { headers }).pipe(
+    return this.httpService.get(endpoint, { headers, params: req.query }).pipe(
       map(response => {
         const data = response.data.data;
         return {
@@ -122,7 +122,7 @@ export class ClaimsController {
   findAll(@Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -163,7 +163,7 @@ export class ClaimsController {
   findOne(@Param('id') id: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -184,7 +184,7 @@ export class ClaimsController {
   update(@Param('id') id: string, @Body() updateClaimDto: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -207,7 +207,7 @@ export class ClaimsController {
   updateStatus(@Param('id') id: string, @Body('status') status: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -230,7 +230,7 @@ export class ClaimsController {
   assignAdjuster(@Param('id') id: string, @Body() assignAdjusterDto: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -253,7 +253,7 @@ export class ClaimsController {
   getTimeline(@Param('id') id: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -276,7 +276,7 @@ export class ClaimsController {
   addNote(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -300,7 +300,7 @@ export class ClaimsController {
   addDocument(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -323,7 +323,7 @@ export class ClaimsController {
   async uploadDocument(@Param('id') id: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
       'Content-Type': req.headers['content-type'],
@@ -352,7 +352,7 @@ export class ClaimsController {
   getDocuments(@Param('id') id: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -375,7 +375,7 @@ export class ClaimsController {
   deleteDocument(@Param('id') id: string, @Param('docId') docId: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };
@@ -398,7 +398,7 @@ export class ClaimsController {
   async replaceDocument(@Param('id') id: string, @Param('docId') docId: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
       'Content-Type': req.headers['content-type'],
@@ -425,7 +425,7 @@ export class ClaimsController {
   triggerTrinityCheck(@Param('id') id: string, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
-      'X-Tenant-Id': req.user?.tenantId,
+      'X-Tenant-Id': req.tenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.user?.role,
     };

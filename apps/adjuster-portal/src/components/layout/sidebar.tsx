@@ -270,10 +270,8 @@ export function Sidebar() {
                 ))}
               </div>
 
-              <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
-
               {/* Switch Account Section */}
-              <div className="space-y-1 pt-2 border-t border-border/50">
+              {/* <div className="space-y-1 pt-2 border-t border-border/50">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] px-4">
                   Switch Account
                 </p>
@@ -290,7 +288,7 @@ export function Sidebar() {
                     </div>
                   </button>
                 </div>
-              </div>
+              </div> */}
 
               <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
             </div>
@@ -303,7 +301,6 @@ export function Sidebar() {
                 className="w-full h-9 rounded-xl shadow-lg shadow-destructive/20 text-sm font-bold transition-all duration-300 active:scale-[0.98] gap-2.5"
               >
                 Logout
-                <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </PopoverContent>
