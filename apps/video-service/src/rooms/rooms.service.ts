@@ -3,6 +3,8 @@ import { Session, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { DailyService } from '../daily/daily.service';
 import { CreateRoomDto, JoinRoomDto, SaveClientInfoDto } from './dto/room.dto';
+import { TenantService } from '../tenant/tenant.service';
+import { TenantContext } from '../common/guards/tenant.guard';
 
 @Injectable()
 export class RoomsService {
@@ -10,25 +12,26 @@ export class RoomsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly dailyService: DailyService
+    private readonly dailyService: DailyService,
+    private readonly tenantService: TenantService
   ) {}
 
   /**
    * Create a new video room for a claim assessment
-   * If an active session already exists for the claim, return that instead
    */
-  async createRoom(dto: CreateRoomDto): Promise<{
+  async createRoom(
+    dto: CreateRoomDto,
+    tenantContext: TenantContext
+  ): Promise<{
     session: Session;
     roomUrl: string;
   }> {
-    // Verify claim exists
+    // Verify claim exists and tenant has access
+    await this.tenantService.validateClaimAccess(dto.claimId, tenantContext);
+
     const claim = await this.prisma.claim.findUnique({
       where: { id: dto.claimId },
     });
-
-    if (!claim) {
-      throw new NotFoundException(`Claim ${dto.claimId} not found`);
-    }
 
     // Check for existing active session for this claim
     const existingSession = await this.prisma.session.findFirst({
@@ -53,6 +56,7 @@ export class RoomsService {
           data: {
             scheduledAssessmentTime: new Date(dto.scheduledTime),
             status: 'SCHEDULED',
+            updatedById: tenantContext.userId,
           },
         });
       }
@@ -68,6 +72,8 @@ export class RoomsService {
     const session = await this.prisma.session.create({
       data: {
         claimId: dto.claimId,
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
         roomId: BigInt(Date.now()), // Use timestamp as numeric ID
         roomUrl: dailyRoom.url,
         status: dto.scheduledTime ? SessionStatus.SCHEDULED : SessionStatus.WAITING,
@@ -80,7 +86,8 @@ export class RoomsService {
       where: { id: dto.claimId },
       data: {
         scheduledAssessmentTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
-        status: dto.scheduledTime ? 'SCHEDULED' : claim.status,
+        status: dto.scheduledTime ? 'SCHEDULED' : claim?.status || 'SUBMITTED',
+        updatedById: tenantContext.userId,
       },
     });
 
@@ -91,7 +98,9 @@ export class RoomsService {
   /**
    * Get room details by session ID
    */
-  async getRoom(sessionId: string): Promise<any> {
+  async getRoom(sessionId: string, tenantContext: TenantContext): Promise<any> {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: {
@@ -118,7 +127,7 @@ export class RoomsService {
 
     if (session.status === SessionStatus.COMPLETED && this.dailyService.isReady()) {
       try {
-        const recording = await this.getRecordingLink(session.id);
+        const recording = await this.getRecordingLink(session.id, tenantContext);
         if (recording && recording.download_link) {
           return { ...session, recordingUrl: recording.download_link };
         }
@@ -135,14 +144,15 @@ export class RoomsService {
    */
   async joinRoom(
     sessionId: string,
-    dto: JoinRoomDto
+    dto: JoinRoomDto,
+    tenantContext: TenantContext
   ): Promise<{
     roomUrl: string;
     token: string;
     sessionId: string;
     claimId: string;
   }> {
-    const session = await this.getRoom(sessionId);
+    const session = await this.getRoom(sessionId, tenantContext);
 
     // Check if session can be joined
     if (session.status === SessionStatus.COMPLETED) {
@@ -190,8 +200,15 @@ export class RoomsService {
   /**
    * End a video session
    */
-  async endRoom(sessionId: string, reason?: string): Promise<Session> {
-    const session = await this.getRoom(sessionId);
+  async endRoom(
+    sessionId: string,
+    reason: string | undefined,
+    tenantContext: TenantContext
+  ): Promise<Session> {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+
+    if (!session) throw new NotFoundException('Session not found');
 
     if (session.status === SessionStatus.COMPLETED) {
       throw new BadRequestException('Session already ended');
@@ -218,7 +235,9 @@ export class RoomsService {
   /**
    * Get sessions for a claim
    */
-  async getSessionsForClaim(claimId: string): Promise<Session[]> {
+  async getSessionsForClaim(claimId: string, tenantContext: TenantContext): Promise<Session[]> {
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
     return this.prisma.session.findMany({
       where: { claimId },
       orderBy: { createdAt: 'desc' },
@@ -228,8 +247,7 @@ export class RoomsService {
   /**
    * Get all sessions with pagination
    */
-  async getAllSessions(page = 1, limit = 10, search?: string) {
-    // Check if Daily.co is ready. If not, we can't provide valid recordings.
+  async getAllSessions(page = 1, limit = 10, search?: string, tenantContext?: TenantContext) {
     if (!this.dailyService.isReady()) {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
@@ -237,11 +255,8 @@ export class RoomsService {
     const skip = (page - 1) * limit;
     const recordingsRes = (await this.dailyService.listRecordings()) as any;
     const allRecordings = recordingsRes.data || [];
-    if (allRecordings.length === 0) {
-      return { data: [], total: 0, page, limit, totalPages: 0 };
-    }
 
-    // Map room names to their latest recording info for fast lookup
+    // Map room names to their latest recording info
     const roomToLatestRecording = new Map<string, any>();
     for (const rec of allRecordings) {
       const existing = roomToLatestRecording.get(rec.room_name);
@@ -251,22 +266,24 @@ export class RoomsService {
     }
 
     const recordedRoomNames = Array.from(roomToLatestRecording.keys());
-    const whereClause: any = {
+    let whereClause = this.tenantService.buildSessionTenantFilter(tenantContext || null, {
       status: { in: [SessionStatus.COMPLETED, SessionStatus.IN_PROGRESS] },
       OR: recordedRoomNames.map(name => ({
         roomUrl: { contains: name },
       })),
-    };
+    });
 
     if (search) {
-      whereClause.AND = [
-        {
-          OR: [
-            { claim: { claimNumber: { contains: search, mode: 'insensitive' } } },
-            { claim: { claimant: { fullName: { contains: search, mode: 'insensitive' } } } },
-          ],
-        },
+      const searchConditions = [
+        { claim: { claimNumber: { contains: search, mode: 'insensitive' } } },
+        { claim: { claimant: { fullName: { contains: search, mode: 'insensitive' } } } },
       ];
+
+      if (whereClause.AND) {
+        whereClause.AND.push({ OR: searchConditions });
+      } else {
+        whereClause.AND = [{ OR: searchConditions }];
+      }
     }
 
     const [sessions, total] = await Promise.all([
@@ -326,8 +343,11 @@ export class RoomsService {
   /**
    * Cancel a scheduled session
    */
-  async cancelSession(sessionId: string): Promise<Session> {
-    const session = await this.getRoom(sessionId);
+  async cancelSession(sessionId: string, tenantContext: TenantContext): Promise<Session> {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+
+    if (!session) throw new NotFoundException('Session not found');
 
     if (session.status === SessionStatus.IN_PROGRESS) {
       throw new BadRequestException('Cannot cancel an in-progress session');
@@ -337,7 +357,6 @@ export class RoomsService {
       throw new BadRequestException('Cannot cancel a completed session');
     }
 
-    // Delete Daily.co room
     const roomName = session.roomUrl?.split('/').pop();
     if (roomName) {
       await this.dailyService.deleteRoom(roomName);
@@ -352,7 +371,8 @@ export class RoomsService {
   /**
    * Get recordings for a session
    */
-  async getRecordings(sessionId: string) {
+  async getRecordings(sessionId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       select: { roomUrl: true },
@@ -366,7 +386,8 @@ export class RoomsService {
   /**
    * Get the most recent recording link for a session
    */
-  async getRecordingLink(sessionId: string) {
+  async getRecordingLink(sessionId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       select: { roomUrl: true },
@@ -381,7 +402,6 @@ export class RoomsService {
       return null;
     }
 
-    // Sort by creation time to get the latest
     const latest = recordings.data.sort(
       (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )[0];
@@ -389,9 +409,6 @@ export class RoomsService {
     return this.dailyService.getRecordingAccessLink(latest.id);
   }
 
-  /**
-   * Parse browser name from user agent
-   */
   private parseBrowser(userAgent: string): string {
     if (!userAgent) return 'Unknown';
     if (userAgent.includes('Firefox')) return 'Firefox';
@@ -406,19 +423,15 @@ export class RoomsService {
   /**
    * Save client info for a session
    */
-  async saveClientInfo(sessionId: string, dto: SaveClientInfoDto, clientIp?: string) {
-    const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
-    });
+  async saveClientInfo(
+    sessionId: string,
+    dto: SaveClientInfoDto,
+    clientIp: string,
+    tenantContext: TenantContext
+  ) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
 
-    if (!session) {
-      throw new NotFoundException(`Session ${sessionId} not found`);
-    }
-
-    // Use backend-captured IP if available, fallback to DTO
     let ip = clientIp || dto.ipAddress || '';
-
-    // Clean up IPv6 prefix if present in some environments (like ::ffff:1.2.3.4)
     if (ip.startsWith('::ffff:')) {
       ip = ip.substring(7);
     }
@@ -434,7 +447,6 @@ export class RoomsService {
       }
     }
 
-    // Backend Geo Lookup
     let geoData: any = {};
     if (ip && ip !== '127.0.0.1' && ip !== '::1') {
       try {
@@ -457,6 +469,9 @@ export class RoomsService {
     return this.prisma.sessionClientInfo.create({
       data: {
         sessionId,
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+        metadata: tenantContext.userRole === 'CLAIMANT' ? { claimantId: tenantContext.userId } : {},
         latitude: dto.latitude || geoData.lat,
         longitude: dto.longitude || geoData.lon,
         ipv4: ipv4 || dto.ipv4,
@@ -474,7 +489,7 @@ export class RoomsService {
         isp: geoData.org || dto.isp,
         organisation: geoData.org || dto.organisation,
         asn: geoData.as || dto.asn,
-      },
+      } as any,
     });
   }
 }

@@ -9,7 +9,7 @@ import { DocumentProcessorService } from './processors/document-processor.servic
 import { AnalysisQueue } from './processors/analysis.queue';
 import { RiskController } from './controllers/risk.controller';
 import { ExtractionModule } from './processors/extraction/extraction.module';
-
+import { TenantModule } from './tenant/tenant.module';
 import { EventsGateway } from './trinity/events.gateway';
 
 @Module({
@@ -22,6 +22,7 @@ import { EventsGateway } from './trinity/events.gateway';
     PrismaModule,
     AssessmentsModule,
     ExtractionModule,
+    TenantModule,
   ],
   controllers: [RiskController],
   providers: [

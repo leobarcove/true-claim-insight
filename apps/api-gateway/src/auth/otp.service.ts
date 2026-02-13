@@ -20,12 +20,13 @@ export class OtpService {
   /**
    * Check rate limit for phone number
    */
-  private async checkRateLimit(phoneNumber: string): Promise<void> {
+  private async checkRateLimit(phoneNumber: string, tenantId?: string): Promise<void> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
     const recentOtps = await this.prisma.otpCode.count({
       where: {
         phoneNumber,
+        tenantId,
         createdAt: { gte: oneHourAgo },
       },
     });
@@ -40,16 +41,16 @@ export class OtpService {
 
   /**
    * Send OTP to phone number
-   * In production, this would integrate with an SMS gateway (e.g., Twilio, Vonage)
    */
-  async sendOtp(phoneNumber: string): Promise<{ expiresIn: number }> {
+  async sendOtp(phoneNumber: string, tenantId?: string, userId?: string): Promise<{ expiresIn: number }> {
     // Check rate limit
-    await this.checkRateLimit(phoneNumber);
+    await this.checkRateLimit(phoneNumber, tenantId);
 
-    // Invalidate any existing unused OTPs for this phone
+    // Invalidate any existing unused OTPs for this phone/tenant
     await this.prisma.otpCode.updateMany({
       where: {
         phoneNumber,
+        tenantId,
         verified: false,
         expiresAt: { gt: new Date() },
       },
@@ -68,12 +69,15 @@ export class OtpService {
         phoneNumber,
         code,
         expiresAt,
+        tenantId,
+        userId,
       },
     });
 
-    // TODO: Send SMS via provider (Twilio, Vonage, etc.)
+    // TODO: Send SMS via provider
     console.log(`\n${'='.repeat(50)}`);
     console.log(`📱 OTP Code for ${phoneNumber}: ${code}`);
+    if (tenantId) console.log(`   Tenant: ${tenantId}`);
     console.log(`   Expires in ${this.OTP_EXPIRY_MINUTES} minutes`);
     console.log(`${'='.repeat(50)}\n`);
 
@@ -82,13 +86,13 @@ export class OtpService {
 
   /**
    * Verify OTP code
-   * Returns true if valid, throws error if invalid
    */
-  async verifyOtp(phoneNumber: string, code: string): Promise<boolean> {
+  async verifyOtp(phoneNumber: string, code: string, tenantId?: string): Promise<boolean> {
     // Find the most recent unexpired, unverified OTP
     const otpRecord = await this.prisma.otpCode.findFirst({
       where: {
         phoneNumber,
+        tenantId,
         expiresAt: { gt: new Date() },
         verified: false,
       },
@@ -130,7 +134,7 @@ export class OtpService {
   }
 
   /**
-   * Cleanup expired OTP codes (can be called via cron job)
+   * Cleanup expired OTP codes
    */
   async cleanupExpired(): Promise<number> {
     const result = await this.prisma.otpCode.deleteMany({

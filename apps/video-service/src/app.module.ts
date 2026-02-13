@@ -8,6 +8,7 @@ import { DailyModule } from './daily/daily.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { TenantModule } from './tenant/tenant.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { UploadsModule } from './uploads/uploads.module';
     RoomsModule,
     WebhooksModule,
     UploadsModule,
+    TenantModule,
   ],
 })
 export class AppModule {}

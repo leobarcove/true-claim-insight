@@ -19,7 +19,7 @@ export class ClaimsService {
   /**
    * Create a new claim
    */
-  async create(createClaimDto: CreateClaimDto) {
+  async create(createClaimDto: CreateClaimDto, tenantContext: TenantContext) {
     const claimNumber = await this.generateClaimNumber();
 
     const claim = await this.prisma.claim.create({
@@ -32,7 +32,9 @@ export class ClaimsService {
         description: createClaimDto.description,
         claimantId: createClaimDto.claimantId,
         nric: createClaimDto.nric,
-        insurerTenantId: createClaimDto.tenantId,
+        insurerTenantId: tenantContext.tenantId,
+        tenantId: tenantContext.tenantId, // Standardized field
+        userId: tenantContext.userId, // Standardized field
         vehiclePlateNumber: createClaimDto.vehiclePlateNumber,
         vehicleMake: createClaimDto.vehicleMake,
         vehicleModel: createClaimDto.vehicleModel,
@@ -45,6 +47,8 @@ export class ClaimsService {
           ? new Date(createClaimDto.policeReportDate)
           : null,
         isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
+        createdById: tenantContext?.userId,
+        updatedById: tenantContext?.userId,
       },
       include: {
         claimant: {
@@ -58,10 +62,15 @@ export class ClaimsService {
     });
 
     // Log audit trail
-    await this.createAuditTrail(claim.id, 'CLAIM_CREATED', {
-      claimNumber,
-      claimType: createClaimDto.claimType,
-    });
+    await this.createAuditTrail(
+      claim.id,
+      'CLAIM_CREATED',
+      {
+        claimNumber,
+        claimType: createClaimDto.claimType,
+      },
+      tenantContext
+    );
 
     this.logger.log(`Claim created: ${claimNumber}`);
 
@@ -84,6 +93,7 @@ export class ClaimsService {
       sortBy = 'createdAt',
       sortOrder = 'desc',
       scheduledFrom,
+      createdById,
     } = query;
     const skip = (page - 1) * limit;
 
@@ -94,6 +104,7 @@ export class ClaimsService {
     if (claimType) where.claimType = claimType;
     if (adjusterId) where.adjusterId = adjusterId;
     if (claimantId) where.claimantId = claimantId;
+    if (createdById) where.createdById = createdById;
     if (scheduledFrom) {
       where.scheduledAssessmentTime = {
         gte: new Date(scheduledFrom),
@@ -115,11 +126,6 @@ export class ClaimsService {
     // Apply tenant isolation filter
     if (tenantContext) {
       where = this.tenantService.buildClaimTenantFilter(tenantContext, where);
-
-      // Enforce claimant isolation - they can only see their own claims
-      if (tenantContext.userRole === 'CLAIMANT') {
-        where.claimantId = tenantContext.userId;
-      }
     }
 
     // Apply search filter (must be after tenant filter to combine properly)
@@ -254,11 +260,6 @@ export class ClaimsService {
 
     // Validate tenant access if context provided
     if (tenantContext) {
-      // Enforce claimant isolation check first
-      if (tenantContext.userRole === 'CLAIMANT' && claim.claimantId !== tenantContext.userId) {
-        throw new NotFoundException(`Claim with ID ${id} not found`); // Obfuscate existence
-      }
-
       await this.tenantService.validateClaimAccess(id, tenantContext);
     }
 
@@ -333,6 +334,7 @@ export class ClaimsService {
         estimatedRepairCost: updateClaimDto.estimatedRepairCost,
         isPdpaCompliant: updateClaimDto.isPdpaCompliant,
         slaDeadline: updateClaimDto.slaDeadline ? new Date(updateClaimDto.slaDeadline) : undefined,
+        updatedById: tenantContext?.userId,
         updatedAt: new Date(),
       },
       include: {
@@ -351,9 +353,14 @@ export class ClaimsService {
       },
     });
 
-    await this.createAuditTrail(id, 'CLAIM_UPDATED', {
-      changes: updateClaimDto,
-    });
+    await this.createAuditTrail(
+      id,
+      'CLAIM_UPDATED',
+      {
+        changes: updateClaimDto,
+      },
+      tenantContext
+    );
 
     return this.findOne(id, tenantContext);
   }
@@ -375,10 +382,15 @@ export class ClaimsService {
       },
     });
 
-    await this.createAuditTrail(id, 'STATUS_CHANGED', {
-      from: existingClaim.status,
-      to: status,
-    });
+    await this.createAuditTrail(
+      id,
+      'STATUS_CHANGED',
+      {
+        from: existingClaim.status,
+        to: status,
+      },
+      tenantContext
+    );
 
     this.logger.log(
       `Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`
@@ -431,10 +443,15 @@ export class ClaimsService {
       },
     });
 
-    await this.createAuditTrail(claimId, 'ADJUSTER_ASSIGNED', {
-      adjusterId,
-      adjusterName: adjuster.user.fullName,
-    });
+    await this.createAuditTrail(
+      claimId,
+      'ADJUSTER_ASSIGNED',
+      {
+        adjusterId,
+        adjusterName: adjuster.user.fullName,
+      },
+      tenantContext
+    );
 
     this.logger.log(`Adjuster ${adjuster.user.fullName} assigned to claim ${claim.claimNumber}`);
 
@@ -455,9 +472,14 @@ export class ClaimsService {
       },
     });
 
-    await this.createAuditTrail(id, 'CLAIM_CLOSED', {
-      reason: 'Manually closed',
-    });
+    await this.createAuditTrail(
+      id,
+      'CLAIM_CLOSED',
+      {
+        reason: 'Manually closed',
+      },
+      tenantContext
+    );
 
     this.logger.log(`Claim ${claim.claimNumber} closed`);
   }
@@ -469,7 +491,11 @@ export class ClaimsService {
     await this.findOne(id, tenantContext);
 
     const auditTrail = await this.prisma.auditTrail.findMany({
-      where: { entityId: id, entityType: 'CLAIM' },
+      where: {
+        entityId: id,
+        entityType: 'CLAIM',
+        ...(tenantContext?.tenantId && { tenantId: tenantContext.tenantId }),
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -479,8 +505,11 @@ export class ClaimsService {
   /**
    * Get tenant-wide claim statistics
    */
-  async getStats(tenantContext: TenantContext) {
-    const where = this.tenantService.buildClaimTenantFilter(tenantContext);
+  async getStats(tenantContext: TenantContext, createdById?: string) {
+    let where = this.tenantService.buildClaimTenantFilter(tenantContext);
+    if (createdById) {
+      where = { ...where, createdById };
+    }
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -597,7 +626,7 @@ export class ClaimsService {
   /**
    * Add a note to a claim with tenant validation
    */
-  async addNote(claimId: string, content: string, authorId: string, tenantContext?: TenantContext) {
+  async addNote(claimId: string, content: string, authorId: string, tenantContext: TenantContext) {
     await this.findOne(claimId, tenantContext);
 
     const note = await this.prisma.claimNote.create({
@@ -605,13 +634,20 @@ export class ClaimsService {
         claimId,
         content,
         authorId,
-        authorType: 'ADJUSTER', // Default to adjuster for now
+        authorType: (tenantContext.userRole as any) || 'ADJUSTER',
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
       },
     });
 
-    await this.createAuditTrail(claimId, 'NOTE_ADDED', {
-      noteId: note.id,
-    });
+    await this.createAuditTrail(
+      claimId,
+      'NOTE_ADDED',
+      {
+        noteId: note.id,
+      },
+      tenantContext
+    );
 
     return note;
   }
@@ -635,13 +671,43 @@ export class ClaimsService {
   /**
    * Create audit trail entry
    */
-  private async createAuditTrail(entityId: string, action: string, metadata: any) {
+  private async createAuditTrail(
+    entityId: string,
+    action: string,
+    metadata: any,
+    tenantContext?: TenantContext
+  ) {
+    let actorType: 'CLAIMANT' | 'ADJUSTER' | 'ADMIN' | 'SYSTEM' = 'SYSTEM';
+
+    if (tenantContext?.userRole) {
+      const role = tenantContext.userRole;
+      if (role === 'CLAIMANT') {
+        actorType = 'CLAIMANT';
+      } else if (role === 'ADJUSTER') {
+        actorType = 'ADJUSTER';
+      } else if (
+        [
+          'FIRM_ADMIN',
+          'INSURER_ADMIN',
+          'SUPER_ADMIN',
+          'INSURER_STAFF',
+          'SIU_INVESTIGATOR',
+        ].includes(role)
+      ) {
+        actorType = 'ADMIN';
+      }
+    }
+
     await this.prisma.auditTrail.create({
       data: {
         entityId,
         entityType: 'CLAIM',
         action,
         metadata,
+        tenantId: tenantContext?.tenantId,
+        userId: tenantContext?.userId,
+        actorId: tenantContext?.userId,
+        actorType,
       },
     });
   }

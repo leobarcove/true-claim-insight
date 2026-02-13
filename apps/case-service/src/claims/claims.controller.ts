@@ -55,8 +55,8 @@ export class ClaimsController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Invalid input data',
   })
-  async create(@Body() createClaimDto: CreateClaimDto) {
-    return this.claimsService.create(createClaimDto);
+  async create(@Body() createClaimDto: CreateClaimDto, @Tenant() tenantContext: TenantContext) {
+    return this.claimsService.create(createClaimDto, tenantContext);
   }
 
   @Get()
@@ -213,7 +213,10 @@ export class ClaimsController {
     status: HttpStatus.OK,
     description: 'Returns tenant-scoped claim stats',
   })
-  async getStats(@Tenant() tenantContext: TenantContext) {
-    return this.claimsService.getStats(tenantContext);
+  async getStats(
+    @Tenant() tenantContext: TenantContext,
+    @Query('createdById') createdById?: string
+  ) {
+    return this.claimsService.getStats(tenantContext, createdById);
   }
 }

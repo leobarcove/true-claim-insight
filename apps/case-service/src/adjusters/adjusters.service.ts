@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -23,13 +23,9 @@ export class AdjustersService {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
     }
 
-    // Validate tenant access - ensure adjuster belongs to user's organisation
+    // Validate access - ensure adjuster belongs to user's organisation and matches the user
     if (tenantContext) {
-      this.tenantService.validateTenantAccess(
-        adjuster.tenantId,
-        tenantContext,
-        'Adjuster',
-      );
+      this.validateAdjusterAccess(adjuster, tenantContext);
     }
 
     const where: any = { adjusterId };
@@ -93,13 +89,9 @@ export class AdjustersService {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
     }
 
-    // Validate tenant access
+    // Validate access
     if (tenantContext) {
-      this.tenantService.validateTenantAccess(
-        adjuster.tenantId,
-        tenantContext,
-        'Adjuster',
-      );
+      this.validateAdjusterAccess(adjuster, tenantContext);
     }
 
     const now = new Date();
@@ -187,13 +179,9 @@ export class AdjustersService {
       throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
     }
 
-    // Validate tenant access
+    // Validate access
     if (tenantContext) {
-      this.tenantService.validateTenantAccess(
-        adjuster.tenantId,
-        tenantContext,
-        'Adjuster',
-      );
+      this.validateAdjusterAccess(adjuster, tenantContext);
     }
 
     const activeClaims = await this.prisma.claim.count({
@@ -279,5 +267,21 @@ export class AdjustersService {
       availableAdjusters: adjustersWithWorkload.filter((a) => a.isAvailable).length,
       adjusters: adjustersWithWorkload,
     };
+  }
+
+  /**
+   * Helper to validate that the caller has access to the adjuster data
+   */
+  private validateAdjusterAccess(adjuster: any, tenantContext: TenantContext) {
+    // 1. Check tenant isolation
+    this.tenantService.validateTenantAccess(adjuster.tenantId, tenantContext, 'Adjuster');
+
+    // 2. Check user isolation: Adjuster role can only see their own data
+    // Admin roles can see any adjuster in their tenant
+    const isAdmin = ['FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN'].includes(tenantContext.userRole);
+
+    if (tenantContext.userRole === 'ADJUSTER' && adjuster.userId !== tenantContext.userId && !isAdmin) {
+      throw new ForbiddenException('Access denied: You can only access your own data');
+    }
   }
 }

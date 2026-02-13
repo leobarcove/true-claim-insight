@@ -108,11 +108,14 @@ async function main() {
   const hashedPassword = await bcrypt.hash(password, 12);
 
   // 1. Create Tenants
+  const ALLIANZ_ID = 'd601d36d-2d41-471b-9d41-325091726a57';
+  const PACIFIC_ID = '87a93415-373b-4835-9616-832f05786720';
+
   const insurerTenant = await prisma.tenant.upsert({
-    where: { id: 'allianz-id' },
+    where: { id: ALLIANZ_ID },
     update: {},
     create: {
-      id: 'allianz-id',
+      id: ALLIANZ_ID,
       name: 'Allianz Insurance Malaysia',
       type: TenantType.INSURER,
       settings: {},
@@ -120,10 +123,10 @@ async function main() {
   });
 
   const adjusterTenant = await prisma.tenant.upsert({
-    where: { id: 'pacific-adjusters-id' },
+    where: { id: PACIFIC_ID },
     update: {},
     create: {
-      id: 'pacific-adjusters-id',
+      id: PACIFIC_ID,
       name: 'Pacific Adjusters Sdn Bhd',
       type: TenantType.ADJUSTING_FIRM,
       settings: {},
@@ -250,7 +253,7 @@ async function main() {
     where: { phoneNumber: '+60123456789' },
     update: {},
     create: {
-      id: 'demo-claimant-id',
+      id: 'a3f67ba7-d335-4d52-95cc-63e5a14c1014',
       phoneNumber: '+60123456789',
       fullName: 'Kumar Claimant',
       kycStatus: 'VERIFIED',
@@ -278,12 +281,17 @@ async function main() {
   // 5. Create Sample Claim
   await prisma.claim.upsert({
     where: { claimNumber: 'TC-2025-001' },
-    update: {},
+    update: {
+      tenantId: insurerTenant.id,
+      userId: insurerStaff.id,
+    } as any,
     create: {
       claimNumber: 'TC-2025-001',
       claimantId: claimant.id,
       adjusterId: adjusterProfile.id,
       insurerTenantId: insurerTenant.id,
+      tenantId: insurerTenant.id,
+      userId: insurerStaff.id,
       policyNumber: 'POL-667788',
       claimType: ClaimType.OWN_DAMAGE,
       status: ClaimStatus.ASSIGNED,
@@ -295,8 +303,8 @@ async function main() {
       vehicleModel: 'X50',
       isPdpaCompliant: true,
       complianceNotes: { initialAudit: 'Completed', timestamp: new Date().toISOString() },
-    },
-  });
+    } as any,
+  } as any);
 
   console.log('🚗 Sample claim created.');
 

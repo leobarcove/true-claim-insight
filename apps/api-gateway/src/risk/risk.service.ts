@@ -14,26 +14,35 @@ export class RiskService {
     this.baseUrl = `${serviceUrl}/api/v1`;
   }
 
-  async getAssessments(sessionId: string, tenantId: string) {
+  async getAssessments(sessionId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}`, {
-      headers: { 'X-Tenant-Id': tenantId },
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async getDeceptionScore(sessionId: string) {
+  async getDeceptionScore(sessionId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(
-      `${this.baseUrl}/assessments/session/${sessionId}/deception-score`
+      `${this.baseUrl}/assessments/session/${sessionId}/deception-score`,
+      {
+        headers: this.buildHeaders(tenantId, userId, userRole),
+      }
     );
     return this.handleResponse(response);
   }
 
-  async triggerAssessment(sessionId: string, assessmentType: string, tenantId: string) {
+  async triggerAssessment(
+    sessionId: string,
+    assessmentType: string,
+    tenantId: string,
+    userId?: string,
+    userRole?: string
+  ) {
     const response = await fetch(`${this.baseUrl}/assessments/trigger`, {
       method: 'POST',
       headers: {
+        ...this.buildHeaders(tenantId, userId, userRole),
         'Content-Type': 'application/json',
-        'X-Tenant-Id': tenantId,
       },
       body: JSON.stringify({ sessionId, assessmentType }),
     });
@@ -41,7 +50,7 @@ export class RiskService {
     return this.handleResponse(response);
   }
 
-  async uploadAudio(fileBuffer: Buffer, sessionId: string) {
+  async uploadAudio(fileBuffer: Buffer, sessionId: string, tenantId?: string, userId?: string, userRole?: string) {
     // Use native FormData (Node 18+)
     const form = new FormData();
     const blob = new Blob([fileBuffer], { type: 'audio/webm' });
@@ -52,14 +61,15 @@ export class RiskService {
 
     const response = await fetch(`${this.baseUrl}/assessments/upload-audio`, {
       method: 'POST',
+      headers: this.buildHeaders(tenantId, userId, userRole),
       body: form,
-      // Native fetch with FormData sets headers automatically
+      // Native fetch with FormData sets headers automatically, but we need our custom ones too
     });
 
     return this.handleResponse(response);
   }
 
-  async uploadScreenshot(fileBuffer: Buffer, sessionId: string) {
+  async uploadScreenshot(fileBuffer: Buffer, sessionId: string, tenantId?: string, userId?: string, userRole?: string) {
     const form = new FormData();
     const blob = new Blob([fileBuffer], { type: 'image/png' });
     form.append('file', blob, 'screenshot.png');
@@ -71,13 +81,14 @@ export class RiskService {
 
     const response = await fetch(`${this.baseUrl}/assessments/upload-screenshot`, {
       method: 'POST',
+      headers: this.buildHeaders(tenantId, userId, userRole),
       body: form,
     });
 
     return this.handleResponse(response);
   }
 
-  async analyzeExpression(fileBuffer: Buffer, sessionId: string) {
+  async analyzeExpression(fileBuffer: Buffer, sessionId: string, tenantId?: string, userId?: string, userRole?: string) {
     const form = new FormData();
     const blob = new Blob([fileBuffer], { type: 'video/webm' });
     form.append('file', blob, 'expression.webm');
@@ -89,13 +100,14 @@ export class RiskService {
 
     const response = await fetch(`${this.baseUrl}/assessments/analyze-expression`, {
       method: 'POST',
+      headers: this.buildHeaders(tenantId, userId, userRole),
       body: form,
     });
 
     return this.handleResponse(response);
   }
 
-  async analyzeVideo(fileBuffer: Buffer, sessionId: string) {
+  async analyzeVideo(fileBuffer: Buffer, sessionId: string, tenantId?: string, userId?: string, userRole?: string) {
     const form = new FormData();
     const blob = new Blob([fileBuffer], { type: 'video/webm' });
     form.append('file', blob, 'visual-behavior.webm');
@@ -107,29 +119,41 @@ export class RiskService {
 
     const response = await fetch(`${this.baseUrl}/assessments/analyze-video`, {
       method: 'POST',
+      headers: this.buildHeaders(tenantId, userId, userRole),
       body: form,
     });
 
     return this.handleResponse(response);
   }
 
-  async generateConsentForm(sessionId: string) {
+  async generateConsentForm(sessionId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/assessments/session/${sessionId}/consent-form`, {
       method: 'POST',
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async getTrinityCheck(claimId: string, tenantId: string) {
+  async getTrinityCheck(claimId: string, tenantId: string, userId?: string, userRole?: string) {
     const response = await fetch(`${this.baseUrl}/risk/claims/${claimId}/trinity`, {
-      headers: { 'X-Tenant-Id': tenantId },
+      headers: this.buildHeaders(tenantId, userId, userRole),
     });
     return this.handleResponse(response);
   }
 
-  async getDocumentAnalysis(documentId: string) {
-    const response = await fetch(`${this.baseUrl}/risk/documents/${documentId}/analysis`);
+  async getDocumentAnalysis(documentId: string, tenantId: string, userId?: string, userRole?: string) {
+    const response = await fetch(`${this.baseUrl}/risk/documents/${documentId}/analysis`, {
+      headers: this.buildHeaders(tenantId, userId, userRole),
+    });
     return this.handleResponse(response);
+  }
+
+  private buildHeaders(tenantId?: string, userId?: string, userRole?: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (tenantId) headers['X-Tenant-Id'] = tenantId;
+    if (userId) headers['X-User-Id'] = userId;
+    if (userRole) headers['X-User-Role'] = userRole;
+    return headers;
   }
 
   private async handleResponse(response: Response) {

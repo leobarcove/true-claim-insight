@@ -12,13 +12,17 @@ import {
   Res,
   StreamableFile,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
 import { extname } from 'path';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pipeline } from 'stream/promises';
+import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
 
 // Ensure upload directory exists
 const uploadDir = './uploads/videos';
@@ -27,7 +31,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 @ApiTags('video-uploads')
+@ApiBearerAuth('access-token')
 @Controller('uploads')
+@UseGuards(InternalAuthGuard, TenantGuard)
+@TenantIsolation(TenantScope.STRICT)
 export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 
@@ -35,7 +42,7 @@ export class UploadsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Upload a video for assessment' })
   @ApiResponse({ status: 201, description: 'Video uploaded successfully' })
-  async uploadVideo(@Req() req: any) {
+  async uploadVideo(@Req() req: any, @Tenant() tenantContext: TenantContext) {
     // Fastify-specific multipart handling
     if (!req.isMultipart()) {
       throw new BadRequestException('Request must be multipart');
@@ -51,7 +58,6 @@ export class UploadsController {
       throw new BadRequestException('Only video files are allowed');
     }
 
-    // claimId is usually sent as a field in multipart, but we also check query params as a fallback
     const claimIdField = data.fields?.claimId;
     const claimId = claimIdField?.value || claimIdField || (req.query as any)?.claimId;
 
@@ -74,7 +80,8 @@ export class UploadsController {
       data.filename,
       stats.size,
       data.mimetype,
-      filePath
+      filePath,
+      tenantContext
     );
 
     return {
@@ -92,8 +99,8 @@ export class UploadsController {
   @ApiOperation({ summary: 'Get video upload details' })
   @ApiResponse({ status: 200, description: 'Upload details retrieved' })
   @ApiResponse({ status: 404, description: 'Upload not found' })
-  async getUpload(@Param('uploadId') uploadId: string) {
-    const upload = await this.uploadsService.getUpload(uploadId);
+  async getUpload(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+    const upload = await this.uploadsService.getUpload(uploadId, tenantContext);
     return upload;
   }
 
@@ -101,8 +108,8 @@ export class UploadsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Prepare video locally for processing' })
   @ApiResponse({ status: 200, description: 'Video prepared locally' })
-  async prepareVideo(@Param('uploadId') uploadId: string) {
-    return await this.uploadsService.prepareVideo(uploadId);
+  async prepareVideo(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+    return await this.uploadsService.prepareVideo(uploadId, false, tenantContext);
   }
 
   @Post(':uploadId/process-segment')
@@ -111,9 +118,10 @@ export class UploadsController {
   @ApiResponse({ status: 200, description: 'Segment processed' })
   async processSegment(
     @Param('uploadId') uploadId: string,
-    @Body() body: { startTime: number; endTime: number }
+    @Body() body: { startTime: number; endTime: number },
+    @Tenant() tenantContext: TenantContext
   ) {
-    const result = await this.uploadsService.processSegment(uploadId, body.startTime, body.endTime);
+    const result = await this.uploadsService.processSegment(uploadId, body.startTime, body.endTime, tenantContext);
     return result;
   }
 
@@ -121,16 +129,20 @@ export class UploadsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate consent form after video processing' })
   @ApiResponse({ status: 200, description: 'Consent form generated' })
-  async generateConsent(@Param('uploadId') uploadId: string, @Body() _body?: any) {
-    const result = await this.uploadsService.generateConsent(uploadId);
+  async generateConsent(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+    const result = await this.uploadsService.generateConsent(uploadId, tenantContext);
     return result;
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all video uploads' })
   @ApiResponse({ status: 200, description: 'All uploads retrieved' })
-  async getAllUploads(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    const result = await this.uploadsService.getAllUploads(page, limit);
+  async getAllUploads(
+    @Query('page') page: number = 1, 
+    @Query('limit') limit: number = 10,
+    @Tenant() tenantContext?: TenantContext
+  ) {
+    const result = await this.uploadsService.getAllUploads(page, limit, tenantContext);
     return {
       data: result.data,
       total: result.total,
@@ -143,16 +155,16 @@ export class UploadsController {
   @Get(':uploadId/segments')
   @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
   @ApiResponse({ status: 200, description: 'Segments retrieved' })
-  async getUploadSegments(@Param('uploadId') uploadId: string) {
-    const segments = await this.uploadsService.getUploadSegments(uploadId);
+  async getUploadSegments(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+    const segments = await this.uploadsService.getUploadSegments(uploadId, tenantContext);
     return segments;
   }
 
   @Get('claim/:claimId')
   @ApiOperation({ summary: 'Get all video uploads for a claim' })
   @ApiResponse({ status: 200, description: 'Uploads retrieved' })
-  async getClaimUploads(@Param('claimId') claimId: string) {
-    const uploads = await this.uploadsService.getClaimUploads(claimId);
+  async getClaimUploads(@Param('claimId') claimId: string, @Tenant() tenantContext: TenantContext) {
+    const uploads = await this.uploadsService.getClaimUploads(claimId, tenantContext);
     return uploads;
   }
 
@@ -161,8 +173,12 @@ export class UploadsController {
   async streamVideo(
     @Param('uploadId') uploadId: string,
     @Res({ passthrough: true }) res: any,
-    @Req() req: any
+    @Req() req: any,
+    @Tenant() tenantContext: TenantContext
   ) {
+    // Basic access check
+    await this.uploadsService.getUpload(uploadId, tenantContext);
+
     const { stream, size, total, isPartial, start, end } = await this.uploadsService.streamVideo(
       uploadId,
       req.headers.range
@@ -185,8 +201,8 @@ export class UploadsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a video upload' })
   @ApiResponse({ status: 200, description: 'Upload deleted' })
-  async deleteUpload(@Param('uploadId') uploadId: string) {
-    const result = await this.uploadsService.deleteUpload(uploadId);
+  async deleteUpload(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+    const result = await this.uploadsService.deleteUpload(uploadId, tenantContext);
     return result;
   }
 }

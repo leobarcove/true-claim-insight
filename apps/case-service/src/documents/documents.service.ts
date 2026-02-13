@@ -6,6 +6,8 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { DocumentStatus } from '@tci/shared-types';
+import { TenantService } from '../tenant/tenant.service';
+import { TenantContext } from '../common/guards/tenant.guard';
 
 @Injectable()
 export class DocumentsService {
@@ -15,13 +17,16 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly tenantService: TenantService
   ) {}
 
   /**
    * Upload and create a document
    */
-  async upload(claimId: string, file: any, type: string) {
+  async upload(claimId: string, file: any, type: string, tenantContext: TenantContext) {
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
     const buffer = await file.toBuffer();
     const storagePath = await this.storageService.uploadFile(
       buffer,
@@ -41,10 +46,10 @@ export class DocumentsService {
       mimeType: file.mimetype,
       fileSize: buffer.length,
       metadata: { storagePath },
-    });
+    }, tenantContext);
 
     // Trigger Risk Engine Analysis (Fire and forget)
-    this.triggerRiskAnalysis(document.id).catch(err =>
+    this.triggerRiskAnalysis(document.id, tenantContext).catch(err =>
       this.logger.error(`Failed to trigger risk analysis for ${document.id}`, err)
     );
 
@@ -54,8 +59,8 @@ export class DocumentsService {
   /**
    * Replace an existing document with a new file
    */
-  async replace(claimId: string, id: string, file: any) {
-    const existingDoc = await this.findOne(claimId, id);
+  async replace(claimId: string, id: string, file: any, tenantContext: TenantContext) {
+    const existingDoc = await this.findOne(claimId, id, tenantContext);
     const buffer = await file.toBuffer();
     const storagePath = await this.storageService.uploadFile(
       buffer,
@@ -93,6 +98,10 @@ export class DocumentsService {
         entityId: claimId,
         entityType: 'CLAIM',
         action: 'DOCUMENT_REPLACED',
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
+        actorId: tenantContext.userId,
+        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {
           documentId: id,
           oldFilename: existingDoc.filename,
@@ -102,25 +111,35 @@ export class DocumentsService {
     });
 
     // Trigger Risk Engine Analysis
-    this.triggerRiskAnalysis(updatedDoc.id).catch(err =>
+    this.triggerRiskAnalysis(updatedDoc.id, tenantContext).catch(err =>
       this.logger.error(`Failed to trigger risk analysis for ${updatedDoc.id}`, err)
     );
 
     return updatedDoc;
   }
 
-  private async triggerRiskAnalysis(documentId: string) {
+  private async triggerRiskAnalysis(documentId: string, tenantContext: TenantContext) {
     const riskEngineUrl = this.configService.get('RISK_ENGINE_URL') || 'http://localhost:3004';
     const url = `${riskEngineUrl}/api/v1/risk/analyze/${documentId}`;
     this.logger.log(`Triggering analysis at ${url}`);
 
-    await firstValueFrom(this.httpService.post(url, {}));
+    await firstValueFrom(
+      this.httpService.post(url, {}, {
+        headers: {
+          'x-tenant-id': tenantContext.tenantId,
+          'x-user-id': tenantContext.userId,
+          'x-user-role': tenantContext.userRole,
+        },
+      })
+    );
   }
 
   /**
    * Manually trigger analysis/trinity check for all docs in a claim
    */
-  async triggerTrinityCheck(claimId: string) {
+  async triggerTrinityCheck(claimId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
     const docs = await this.prisma.document.findMany({
       where: { claimId },
     });
@@ -133,7 +152,7 @@ export class DocumentsService {
     const results = await Promise.all(
       docs.map(async doc => {
         try {
-          await this.triggerRiskAnalysis(doc.id);
+          await this.triggerRiskAnalysis(doc.id, tenantContext);
           return { id: doc.id, status: 'triggered' };
         } catch (err) {
           this.logger.error(`Manual trigger failed for doc ${doc.id}: ${err}`);
@@ -152,15 +171,9 @@ export class DocumentsService {
   /**
    * Add a document to a claim
    */
-  async create(claimId: string, createDocumentDto: CreateDocumentDto) {
-    // Verify claim exists
-    const claim = await this.prisma.claim.findUnique({
-      where: { id: claimId },
-    });
-
-    if (!claim) {
-      throw new NotFoundException(`Claim with ID ${claimId} not found`);
-    }
+  async create(claimId: string, createDocumentDto: CreateDocumentDto, tenantContext: TenantContext) {
+    // Verify claim exists and tenant has access
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
 
     const document = await this.prisma.document.create({
       data: {
@@ -171,6 +184,8 @@ export class DocumentsService {
         mimeType: createDocumentDto.mimeType,
         fileSize: createDocumentDto.fileSize,
         metadata: createDocumentDto.metadata || {},
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
       },
     });
 
@@ -180,6 +195,10 @@ export class DocumentsService {
         entityId: claimId,
         entityType: 'CLAIM',
         action: 'DOCUMENT_UPLOADED',
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
+        actorId: tenantContext.userId,
+        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {
           documentId: document.id,
           filename: document.filename,
@@ -194,15 +213,9 @@ export class DocumentsService {
   /**
    * Get all documents for a claim
    */
-  async findAll(claimId: string) {
-    // Verify claim exists
-    const claim = await this.prisma.claim.findUnique({
-      where: { id: claimId },
-    });
-
-    if (!claim) {
-      throw new NotFoundException(`Claim with ID ${claimId} not found`);
-    }
+  async findAll(claimId: string, tenantContext: TenantContext) {
+    // Verify claim exists and tenant has access
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
 
     const documents = await this.prisma.document.findMany({
       where: { claimId },
@@ -219,7 +232,9 @@ export class DocumentsService {
   /**
    * Get a document by ID
    */
-  async findOne(claimId: string, id: string) {
+  async findOne(claimId: string, id: string, tenantContext: TenantContext) {
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
     const document = await this.prisma.document.findFirst({
       where: { id, claimId },
     });
@@ -234,8 +249,8 @@ export class DocumentsService {
   /**
    * Get presigned download URL
    */
-  async getDownloadUrl(claimId: string, id: string) {
-    const document = await this.findOne(claimId, id);
+  async getDownloadUrl(claimId: string, id: string, tenantContext: TenantContext) {
+    const document = await this.findOne(claimId, id, tenantContext);
     const storagePath = (document.metadata as any)?.storagePath;
     let downloadUrl = document.storageUrl;
 
@@ -261,8 +276,8 @@ export class DocumentsService {
   /**
    * Delete a document
    */
-  async remove(claimId: string, id: string) {
-    const document = await this.findOne(claimId, id);
+  async remove(claimId: string, id: string, tenantContext: TenantContext) {
+    const document = await this.findOne(claimId, id, tenantContext);
 
     // Delete from database (soft delete in production)
     await this.prisma.document.delete({
@@ -275,6 +290,9 @@ export class DocumentsService {
         entityId: claimId,
         entityType: 'CLAIM',
         action: 'DOCUMENT_DELETED',
+        tenantId: tenantContext.tenantId,
+        actorId: tenantContext.userId,
+        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {
           documentId: document.id,
           filename: document.filename,

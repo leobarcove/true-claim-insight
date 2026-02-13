@@ -54,18 +54,22 @@ const getStatusBadge = (status: string) => {
 
 export function DashboardPage() {
   const { user } = useAuthStore();
+  const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [recentClaimsView, setRecentClaimsView] = useState<'table' | 'card'>('card');
   const [recentClaimsPage, setRecentClaimsPage] = useState(1);
   const [sessionsView, setSessionsView] = useState<'table' | 'card'>('card');
   const [sessionsPage, setSessionsPage] = useState(1);
 
-  const { data: statsData, isLoading: statsLoading } = useClaimStats();
+  const createdById = userFilter === 'my' ? user?.id : undefined;
+
+  const { data: statsData, isLoading: statsLoading } = useClaimStats({ createdById });
 
   const { data: claimsData, isLoading: claimsLoading } = useClaims({
     limit: 5,
     page: recentClaimsPage,
     sortBy: 'createdAt',
     sortOrder: 'desc',
+    createdById,
   });
 
   const sessionsFilters = useMemo(
@@ -76,8 +80,9 @@ export function DashboardPage() {
       sortBy: 'scheduledAssessmentTime',
       sortOrder: 'asc' as const,
       scheduledFrom: new Date().toISOString(),
+      createdById,
     }),
-    [sessionsPage]
+    [sessionsPage, createdById]
   );
 
   const { data: sessionsData, isLoading: sessionsLoading } = useClaims(sessionsFilters);
