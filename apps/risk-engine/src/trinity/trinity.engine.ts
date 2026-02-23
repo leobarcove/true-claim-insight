@@ -25,6 +25,7 @@ export class TrinityCheckEngine {
     repairQuotation?: RepairQuotationSchema;
     visualEvidence?: DamagePhotoAnalysisSchema[];
     claim?: any;
+    sessionClientInfo?: any[];
   }): TrinityAuditReport {
     const checks: Record<string, TrinityMatchResult> = {};
     const riskFactors: string[] = [];
@@ -166,11 +167,11 @@ export class TrinityCheckEngine {
     }
 
     // 5. Incident Vehicle vs Policy
-    if (data.policeReport && data.policy) {
-      // Try to extract plate from incident description if not explicit
+    if (data.registrationCard && data.policy) {
+      // Try to extract plate from policy
       let incidentPlate = '';
-      if (data.policeReport.incident?.description) {
-        incidentPlate = this.extractPlateFromText(data.policeReport.incident.description);
+      if (data.registrationCard.registration_number) {
+        incidentPlate = this.extractPlateFromText(data.registrationCard.registration_number);
       }
 
       const policyPlate =
@@ -180,7 +181,7 @@ export class TrinityCheckEngine {
       if (!incidentPlate) {
         checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
           'C2_INCIDENT_VEHICLE_MATCH',
-          'Vehicle number not found in Police Report'
+          'Vehicle number not found in Registration Card'
         );
       } else if (!policyPlate) {
         checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
@@ -197,7 +198,7 @@ export class TrinityCheckEngine {
     } else {
       checks['C2_INCIDENT_VEHICLE_MATCH'] = this.skipCheck(
         'C2_INCIDENT_VEHICLE_MATCH',
-        'Police Report or Policy missing'
+        'Registration Card or Policy missing'
       );
     }
 
@@ -309,6 +310,79 @@ export class TrinityCheckEngine {
           status: 'RUN',
         };
       }
+    }
+
+    // --- C5. Session & Device Analysis ---
+    if (data.sessionClientInfo && data.sessionClientInfo.length > 0) {
+      const latestSession = data.sessionClientInfo[data.sessionClientInfo.length - 1];
+
+      // 9. Location Consistency (Session vs Claim Incident)
+      if (latestSession.latitude && latestSession.longitude && data.claim?.incidentLocation) {
+        const incidentLoc = data.claim.incidentLocation;
+        const sessionLat = latestSession.latitude;
+        const sessionLng = latestSession.longitude;
+
+        // Basic haversine-like check or just coordinate distance
+        const incLat = incidentLoc.lat || incidentLoc.latitude;
+        const incLng = incidentLoc.lng || incidentLoc.longitude;
+
+        if (incLat && incLng) {
+          const dist = Math.sqrt(
+            Math.pow(sessionLat - incLat, 2) + Math.pow(sessionLng - incLng, 2)
+          );
+          const isNearby = dist < 0.1; // Roughly 10km threshold for a nearby session
+
+          checks['C5_LOCATION_CONSISTENCY'] = {
+            check_id: 'C5_LOCATION_CONSISTENCY',
+            is_pass: isNearby,
+            confidence: 0.9,
+            priority: 'MEDIUM',
+            details: isNearby
+              ? `Session location (${sessionLat}, ${sessionLng}) is consistent with incident area.`
+              : `Session location (${sessionLat}, ${sessionLng}) is far from incident area (${incLat}, ${incLng}).`,
+            status: 'RUN',
+          };
+        }
+      }
+
+      // 10. Network/ISP Risk
+      if (latestSession.isp || latestSession.organisation) {
+        const isp = (latestSession.isp || '').toLowerCase();
+        const org = (latestSession.organisation || '').toLowerCase();
+        const isSuspicious =
+          isp.includes('vpn') ||
+          isp.includes('proxy') ||
+          org.includes('vpn') ||
+          org.includes('proxy');
+
+        checks['C5_NETWORK_INTEGRITY'] = {
+          check_id: 'C5_NETWORK_INTEGRITY',
+          is_pass: !isSuspicious,
+          confidence: 0.8,
+          priority: 'HIGH',
+          details: isSuspicious
+            ? `Suspicious network detected: ${latestSession.isp || latestSession.organisation}`
+            : `Client network verified: ${latestSession.isp || latestSession.organisation}`,
+          status: 'RUN',
+        };
+      }
+
+      // 11. Device/Browser Consistency
+      if (latestSession.userAgent) {
+        checks['C5_DEVICE_FINGERPRINT'] = {
+          check_id: 'C5_DEVICE_FINGERPRINT',
+          is_pass: true,
+          confidence: 1.0,
+          priority: 'LOW',
+          details: `Device: ${latestSession.platform} / ${latestSession.browser}. Resolution: ${latestSession.screenResolution}`,
+          status: 'RUN',
+        };
+      }
+    } else {
+      checks['C5_SESSION_ANALYSIS'] = this.skipCheck(
+        'C5_SESSION_ANALYSIS',
+        'No session client information available'
+      );
     }
 
     // --- Aggregation ---

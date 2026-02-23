@@ -34,7 +34,7 @@ export class ClaimsService {
         nric: createClaimDto.nric,
         insurerTenantId: tenantContext.tenantId,
         tenantId: tenantContext.tenantId, // Standardized field
-        userId: tenantContext.userId, // Standardized field
+        userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext.userId, // Standardized field
         vehiclePlateNumber: createClaimDto.vehiclePlateNumber,
         vehicleMake: createClaimDto.vehicleMake,
         vehicleModel: createClaimDto.vehicleModel,
@@ -47,8 +47,8 @@ export class ClaimsService {
           ? new Date(createClaimDto.policeReportDate)
           : null,
         isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
-        createdById: tenantContext?.userId,
-        updatedById: tenantContext?.userId,
+        createdById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
+        updatedById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
       },
       include: {
         claimant: {
@@ -99,8 +99,13 @@ export class ClaimsService {
 
     // Build base where clause
     let where: any = {};
-
-    if (status) where.status = status;
+    if (status) {
+      if (status === 'SCHEDULED') {
+        where.status = { in: ['SCHEDULED', 'IN_ASSESSMENT'] };
+      } else {
+        where.status = status;
+      }
+    }
     if (claimType) where.claimType = claimType;
     if (adjusterId) where.adjusterId = adjusterId;
     if (claimantId) where.claimantId = claimantId;
@@ -242,6 +247,7 @@ export class ClaimsService {
             deceptionScores: {
               orderBy: { createdAt: 'desc' },
             },
+            clientInfos: true,
           },
         },
         trinityChecks: {
@@ -636,7 +642,7 @@ export class ClaimsService {
         authorId,
         authorType: (tenantContext.userRole as any) || 'ADJUSTER',
         tenantId: tenantContext.tenantId,
-        userId: tenantContext.userId,
+        userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
       },
     });
 
@@ -705,7 +711,7 @@ export class ClaimsService {
         action,
         metadata,
         tenantId: tenantContext?.tenantId,
-        userId: tenantContext?.userId,
+        userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
         actorId: tenantContext?.userId,
         actorType,
       },

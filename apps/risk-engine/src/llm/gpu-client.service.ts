@@ -9,7 +9,7 @@ export class GpuClientService {
   constructor(private configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
       'GPU_SERVICE_URL',
-      'https://thirty-clearly-pillow-considering.trycloudflare.com'
+      'https://begins-bottles-nicholas-resulted.trycloudflare.com'
     );
   }
 

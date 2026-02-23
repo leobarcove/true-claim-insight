@@ -38,15 +38,19 @@ export class DocumentsService {
     const signedUrl = await this.storageService.getSignedUrl(storagePath, 60 * 60 * 24 * 7);
 
     // Create document record
-    const document = await this.create(claimId, {
-      type: type as any,
-      status: DocumentStatus.QUEUED,
-      filename: file.filename,
-      storageUrl: signedUrl,
-      mimeType: file.mimetype,
-      fileSize: buffer.length,
-      metadata: { storagePath },
-    }, tenantContext);
+    const document = await this.create(
+      claimId,
+      {
+        type: type as any,
+        status: DocumentStatus.QUEUED,
+        filename: file.filename,
+        storageUrl: signedUrl,
+        mimeType: file.mimetype,
+        fileSize: buffer.length,
+        metadata: { storagePath },
+      },
+      tenantContext
+    );
 
     // Trigger Risk Engine Analysis (Fire and forget)
     this.triggerRiskAnalysis(document.id, tenantContext).catch(err =>
@@ -92,6 +96,8 @@ export class DocumentsService {
       },
     });
 
+    const uploaderUserId = tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId;
+
     // Create audit trail
     await this.prisma.auditTrail.create({
       data: {
@@ -99,7 +105,7 @@ export class DocumentsService {
         entityType: 'CLAIM',
         action: 'DOCUMENT_REPLACED',
         tenantId: tenantContext.tenantId,
-        userId: tenantContext.userId,
+        userId: uploaderUserId,
         actorId: tenantContext.userId,
         actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {
@@ -124,13 +130,17 @@ export class DocumentsService {
     this.logger.log(`Triggering analysis at ${url}`);
 
     await firstValueFrom(
-      this.httpService.post(url, {}, {
-        headers: {
-          'x-tenant-id': tenantContext.tenantId,
-          'x-user-id': tenantContext.userId,
-          'x-user-role': tenantContext.userRole,
-        },
-      })
+      this.httpService.post(
+        url,
+        {},
+        {
+          headers: {
+            'x-tenant-id': tenantContext.tenantId,
+            'x-user-id': tenantContext.userId,
+            'x-user-role': tenantContext.userRole,
+          },
+        }
+      )
     );
   }
 
@@ -171,9 +181,15 @@ export class DocumentsService {
   /**
    * Add a document to a claim
    */
-  async create(claimId: string, createDocumentDto: CreateDocumentDto, tenantContext: TenantContext) {
+  async create(
+    claimId: string,
+    createDocumentDto: CreateDocumentDto,
+    tenantContext: TenantContext
+  ) {
     // Verify claim exists and tenant has access
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
+    const uploaderUserId = tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId;
 
     const document = await this.prisma.document.create({
       data: {
@@ -185,7 +201,7 @@ export class DocumentsService {
         fileSize: createDocumentDto.fileSize,
         metadata: createDocumentDto.metadata || {},
         tenantId: tenantContext.tenantId,
-        userId: tenantContext.userId,
+        userId: uploaderUserId,
       },
     });
 
@@ -196,7 +212,7 @@ export class DocumentsService {
         entityType: 'CLAIM',
         action: 'DOCUMENT_UPLOADED',
         tenantId: tenantContext.tenantId,
-        userId: tenantContext.userId,
+        userId: uploaderUserId,
         actorId: tenantContext.userId,
         actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {
@@ -284,6 +300,8 @@ export class DocumentsService {
       where: { id },
     });
 
+    const actorUserId = tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId;
+
     // Create audit trail
     await this.prisma.auditTrail.create({
       data: {
@@ -291,6 +309,7 @@ export class DocumentsService {
         entityType: 'CLAIM',
         action: 'DOCUMENT_DELETED',
         tenantId: tenantContext.tenantId,
+        userId: actorUserId,
         actorId: tenantContext.userId,
         actorType: (tenantContext.userRole as any) || 'ADJUSTER',
         metadata: {

@@ -23,4 +23,13 @@ export class LocationController {
   async search(@Query('q') query: string) {
     return this.locationService.searchAddress(query);
   }
+
+  @Get('reverse')
+  @ApiOperation({ summary: 'Reverse geocode coordinates to address' })
+  @ApiQuery({ name: 'lat', required: true, type: Number })
+  @ApiQuery({ name: 'lon', required: true, type: Number })
+  @ApiResponse({ status: 200, description: 'Address details' })
+  async reverse(@Query('lat') lat: number, @Query('lon') lon: number) {
+    return this.locationService.reverseGeocode(lat, lon);
+  }
 }
