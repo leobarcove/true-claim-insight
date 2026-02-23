@@ -52,19 +52,16 @@ export function DocumentDetailPage() {
     });
 
     socket.on('connect', () => {
-      console.log('Connected to risk-engine events');
       socket.emit('join-claim', id);
     });
 
     socket.on('document-status-update', (data: { documentId: string; status: string }) => {
-      console.log('Document status update received:', data);
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['claims', 'detail', id] });
       queryClient.invalidateQueries({ queryKey: trinityKeys.analysis(data.documentId) });
     });
 
     socket.on('trinity-update', (data: { claimId: string; status: string }) => {
-      console.log('Trinity check update received:', data);
       if (data.status === 'PROCESSING') {
         setIsTrinityProcessingLocally(true);
       } else if (data.status === 'COMPLETED') {

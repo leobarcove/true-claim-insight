@@ -158,28 +158,44 @@ export class DocumentProcessorService {
       switch (d.type) {
         case DocumentType.NRIC:
         case DocumentType.MYKAD_FRONT:
-          dataBag.nric = content; break;
+          dataBag.nric = content;
+          break;
         case DocumentType.POLICY_DOCUMENT:
-          dataBag.policy = content; break;
+          dataBag.policy = content;
+          break;
         case DocumentType.VEHICLE_REG_CARD:
-          dataBag.registrationCard = content; break;
+          dataBag.registrationCard = content;
+          break;
         case DocumentType.POLICE_REPORT:
-          dataBag.policeReport = content; break;
+          dataBag.policeReport = content;
+          break;
         case DocumentType.REPAIR_QUOTATION:
-          dataBag.repairQuotation = content; break;
+          dataBag.repairQuotation = content;
+          break;
         case DocumentType.DAMAGE_PHOTO:
-          dataBag.damagePhoto = content; break;
+          dataBag.damagePhoto = content;
+          break;
       }
     }
 
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
-      include: { claimant: true },
+      include: {
+        claimant: true,
+        sessions: {
+          include: {
+            clientInfos: true,
+          },
+        },
+      },
     });
 
     dataBag.claim = claim;
+    const sessionClientInfos = claim?.sessions.flatMap(s => s.clientInfos) || [];
+    dataBag.sessionClientInfo = sessionClientInfos;
+
     const report = this.trinity.auditClaim(dataBag);
-    
+
     const trinityCheck = await this.prisma.trinityCheck.create({
       data: {
         claimId,
@@ -197,29 +213,52 @@ export class DocumentProcessorService {
     await this.runIntelligenceReasoning(claimId, trinityCheck.id, dataBag, report);
   }
 
-  private async preprocessImage(buffer: Buffer, type: DocumentType, filename: string): Promise<Buffer> {
+  private async preprocessImage(
+    buffer: Buffer,
+    type: DocumentType,
+    filename: string
+  ): Promise<Buffer> {
     try {
       let pipeline = sharp(buffer);
       const metadata = await pipeline.metadata();
       const originalWidth = metadata.width || 1024;
       const originalHeight = metadata.height || 1024;
 
-      const MAX_PIXELS = 800000;
+      const MAX_PIXELS = 700000;
       const scale = Math.min(1.0, Math.sqrt(MAX_PIXELS / (originalWidth * originalHeight)));
       const targetWidth = roundTo56(originalWidth * scale);
       const targetHeight = roundTo56(originalHeight * scale);
 
-      if ([DocumentType.NRIC, DocumentType.MYKAD_FRONT, DocumentType.DRIVING_LICENCE, DocumentType.VEHICLE_REG_CARD].includes(type)) {
-        pipeline = pipeline.grayscale().normalise().linear(1.2, -10).modulate({ brightness: 1.1 }).sharpen();
+      if (
+        [
+          DocumentType.NRIC,
+          DocumentType.MYKAD_FRONT,
+          DocumentType.DRIVING_LICENCE,
+          DocumentType.VEHICLE_REG_CARD,
+        ].includes(type)
+      ) {
+        pipeline = pipeline
+          .grayscale()
+          .normalise()
+          .linear(1.2, -10)
+          .modulate({ brightness: 1.1 })
+          .sharpen();
       }
 
-      return await pipeline.resize({ width: targetWidth, height: targetHeight, fit: 'fill' }).toBuffer();
+      return await pipeline
+        .resize({ width: targetWidth, height: targetHeight, fit: 'fill' })
+        .toBuffer();
     } catch (error: any) {
       return buffer;
     }
   }
 
-  async runIntelligenceReasoning(claimId: string, trinityCheckId: string, dataBag: any, report: any) {
+  async runIntelligenceReasoning(
+    claimId: string,
+    trinityCheckId: string,
+    dataBag: any,
+    report: any
+  ) {
     this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
     const prompt = `
       You are a senior insurance claim investigator (PIAM compliant) with expertise in fraud detection and motor claims.
@@ -254,17 +293,22 @@ export class DocumentProcessorService {
          - Compare Repair Quotation items against visible damage in Photos. Flag "Repair Inflation".
          - Check for "Unrelated Damage" (e.g., rust or old dents visible in photos but quoted as new).
 
+      6. **Session & Digital Breadcrumbs (True Claim Intelligence)**:
+         - **Geolocation**: Compare the claimant's session location (GPS) against the reported Accident Location.
+         - **Device Integrity**: Check for multiple sessions from different devices or suspicious networks (VPN/Proxy).
+         - **IP/ISP Analysis**: Verify if the ISP/Organisation matches the expected region.
+
       DECLARED CLAIM DETAILS:
-      ${JSON.stringify(dataBag.claim, null, 2)}
+      ${JSON.stringify(dataBag.claim, (key, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}
 
       EXTRACTED DOCUMENTS DATA (Evidence):
-      ${JSON.stringify(dataBag, null, 2)}
+      ${JSON.stringify(dataBag, (key, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}
 
       AUTOMATED CHECKS REPORT:
-      ${JSON.stringify(report, null, 2)}
+      ${JSON.stringify(report, (key, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}
 
       OUTPUT INSTRUCTIONS:
-      - Provide a "reasoning" narrative that explicitly walks through these checks for claim's legitimacy.
+      - Provide a comprehensive "reasoning" narrative that explicitly walks through these checks for claim's legitimacy.
       - List "red_flags" for any failed checks.
       - List "insights" for the adjuster.
       

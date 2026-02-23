@@ -950,7 +950,7 @@ export function VideoCallPage() {
                   </div>
 
                   {/* Screenshot Gallery Carousel */}
-                  {screenshots.length > 0 && (
+                  {screenshots.length > 0 ? (
                     <div className="mt-1 relative group h-[7.7rem] bg-black/5 rounded-md overflow-hidden border border-border/50">
                       <img
                         key={screenshotIndex}
@@ -1002,6 +1002,11 @@ export function VideoCallPage() {
                       <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm pointer-events-none z-10">
                         {screenshotIndex + 1} / {screenshots.length}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="mt-1 h-[7.7rem] bg-muted/30 rounded-md border border-border/50 flex flex-col items-center justify-center gap-2">
+                      <Camera className="h-8 w-8 text-muted-foreground/40" />
+                      <span className="text-xs text-muted-foreground/60">No data</span>
                     </div>
                   )}
                 </div>

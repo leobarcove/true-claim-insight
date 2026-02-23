@@ -44,4 +44,32 @@ export class LocationService {
       return [];
     }
   }
+
+  async reverseGeocode(lat: number, lon: number) {
+    try {
+      this.logger.debug(`Reverse geocoding for: ${lat}, ${lon}`);
+
+      const { data } = await firstValueFrom(
+        this.httpService.get('https://nominatim.openstreetmap.org/reverse', {
+          params: {
+            lat,
+            lon,
+            format: 'json',
+            addressdetails: 1,
+          },
+          headers: {
+            'User-Agent': 'TrueClaimInsight/1.0',
+          },
+        })
+      );
+
+      return {
+        displayName: data.display_name,
+        address: data.address,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to reverse geocode from Nominatim: ${error.message}`, error.stack);
+      return null;
+    }
+  }
 }

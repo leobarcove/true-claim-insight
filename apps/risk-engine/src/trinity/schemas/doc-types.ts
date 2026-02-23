@@ -137,6 +137,30 @@ export interface DamagePhotoAnalysisSchema extends BaseDocumentSchema {
   };
 }
 
+export interface SessionClientInfoSchema {
+  id: string;
+  sessionId: string;
+  latitude?: number;
+  longitude?: number;
+  ipv4?: string;
+  ipv6?: string;
+  userAgent?: string;
+  language?: string;
+  browser?: string;
+  platform?: string;
+  screenResolution?: string;
+  timezone?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  postalCode?: string;
+  isp?: string;
+  organisation?: string;
+  asn?: string;
+  metadata?: any;
+  createdAt: string;
+}
+
 // Result Interface
 export interface TrinityMatchResult {
   check_id: string;

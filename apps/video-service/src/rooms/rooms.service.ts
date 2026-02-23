@@ -330,13 +330,15 @@ export class RoomsService {
     );
 
     const finalData = enhancedSessions.filter(s => s !== null);
+    const validRatio = sessions.length > 0 ? finalData.length / sessions.length : 0;
+    const adjustedTotal = Math.round(total * validRatio);
 
     return {
       data: finalData,
-      total,
+      total: adjustedTotal,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(adjustedTotal / limit),
     };
   }
 

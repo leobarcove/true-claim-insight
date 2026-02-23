@@ -120,6 +120,17 @@ export const PolicyDocumentSchema = z.object({
       email: z.string().nullable(),
     })
     .optional(),
+  vehicle: z
+    .object({
+      make: z.string().nullable(),
+      model: z.string().nullable(),
+      year: z.string().nullable(),
+      color: z.string().nullable(),
+      registration_number: z.string().nullable(),
+      chassis_number: z.string().nullable(),
+      engine_number: z.string().nullable(),
+    })
+    .optional(),
   insured_person: z
     .object({
       name: z.string().nullable(),
