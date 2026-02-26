@@ -397,6 +397,7 @@ model TrinityCheck {
   riskFactors       Json     // Identified risks
   reasoning         String?  @db.Text
   reasoningInsights Json?
+  reportUrl         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   tenantId          String?  // Organization ownership

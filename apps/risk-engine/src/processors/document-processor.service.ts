@@ -10,6 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { EventsGateway } from '../trinity/events.gateway';
+import { StorageService } from '../common/services/storage.service';
+import { TrinityReportGenerator } from '../trinity/trinity-report.generator';
 
 const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 
@@ -22,7 +24,9 @@ export class DocumentProcessorService {
     private gpu: GpuClientService,
     private trinity: TrinityCheckEngine,
     private events: EventsGateway,
-    private extractionService: ExtractionService
+    private extractionService: ExtractionService,
+    private storage: StorageService,
+    private reportGenerator: TrinityReportGenerator
   ) {}
 
   async updateDocumentStatus(documentId: string, status: any, claimId?: string) {
@@ -308,15 +312,37 @@ export class DocumentProcessorService {
       ${JSON.stringify(report, (key, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}
 
       OUTPUT INSTRUCTIONS:
-      - Provide a comprehensive "reasoning" narrative that explicitly walks through these checks for claim's legitimacy.
-      - List "red_flags" for any failed checks.
-      - List "insights" for the adjuster.
+      - Provide a comprehensive "reasoning" narrative that explicitly walks through these checks for claim's legitimacy:
+        • Explicitly walk through every validation check performed on the claim.
+        • Clearly explain what was reviewed (documents, timelines, amounts, policy terms, claimant behavior, supporting evidence, inconsistencies, etc.).
+        • Describe both confirming and contradicting findings.
+        • Explain why each finding strengthens or weakens the legitimacy of the claim.
+        • Include risk indicators, fraud markers (if any), and contextual factors.
+        • Demonstrate logical progression from evidence → analysis → conclusion.
+        • Avoid vague statements — provide specific analytical commentary.
+        • Be substantially detailed (multiple well-developed paragraphs).
+
+      - Clearly list all detected "red_flags".
+        • Each red flag should be specific and actionable.
+        • If no red flags are present, explicitly state "None identified."
+
+      - Clearly list practical "insights" for the adjuster.
+        • Include investigative suggestions, documentation gaps, behavioral observations, and risk mitigation considerations.
+        • Provide forward-looking guidance (what should be verified next, what to monitor, etc.).
+
+      - Provide a final "recommendation" based strictly on the analytical findings:
+        • APPROVE
+        • INVESTIGATE
+        • REJECT
+        (The recommendation must logically align with the reasoning.)
+
+      - Provide a "confidence" score between 0 and 1 reflecting the strength and completeness of the analysis.
       
       Response Format (JSON Only):
       {
-        "reasoning": "Detailed analysis discussing the findings",
-        "red_flags": ["Flag 1", "Flag 2"],
-        "insights": ["Insight 1", "Insight 2"],
+        "reasoning": "Extensive, step-by-step analytical narrative explaining validation checks, findings, contradictions, and logical conclusions.",
+        "red_flags": ["Specific issue 1", "Specific issue 2"],
+        "insights": ["Actionable insight 1", "Actionable insight 2"],
         "recommendation": "APPROVE" | "INVESTIGATE" | "REJECT",
         "confidence": number (0-1)
       }
@@ -341,6 +367,52 @@ export class DocumentProcessorService {
           } as any,
         },
       });
+
+      // Generate and Upload Report
+      try {
+        const finalTrinityCheck = await this.prisma.trinityCheck.findUnique({
+          where: { id: trinityCheckId },
+          include: {
+            claim: {
+              include: {
+                claimant: true,
+                tenant: true,
+                documents: {
+                  include: {
+                    analysis: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (finalTrinityCheck) {
+          const reportBuffer = await this.reportGenerator.generate({
+            claim: finalTrinityCheck.claim,
+            claimant: finalTrinityCheck.claim.claimant,
+            trinityCheck: finalTrinityCheck,
+            documents: (finalTrinityCheck.claim as any).documents || [],
+            tenant: finalTrinityCheck.claim.tenant,
+          });
+
+          const storagePath = await this.storage.uploadFile(
+            reportBuffer,
+            `trinity_report_${finalTrinityCheck.claim.claimNumber}.pdf`,
+            'application/pdf'
+          );
+
+          const signedUrl = await this.storage.getSignedUrl(storagePath, 60 * 60 * 24 * 7);
+          await this.prisma.trinityCheck.update({
+            where: { id: trinityCheckId },
+            data: { reportUrl: signedUrl },
+          });
+
+          this.logger.log(`Trinity Report generated and uploaded (Signed URL): ${signedUrl}`);
+        }
+      } catch (reportError) {
+        this.logger.error(`Failed to generate/upload report: ${reportError}`);
+      }
 
       this.events.emitTrinityUpdate(claimId, 'COMPLETED');
     } catch (error) {

@@ -11,6 +11,8 @@ import { RiskController } from './controllers/risk.controller';
 import { ExtractionModule } from './processors/extraction/extraction.module';
 import { TenantModule } from './tenant/tenant.module';
 import { EventsGateway } from './trinity/events.gateway';
+import { StorageService } from './common/services/storage.service';
+import { TrinityReportGenerator } from './trinity/trinity-report.generator';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { EventsGateway } from './trinity/events.gateway';
     DocumentProcessorService,
     AnalysisQueue,
     EventsGateway,
+    StorageService,
+    TrinityReportGenerator,
   ],
 })
 export class AppModule {}

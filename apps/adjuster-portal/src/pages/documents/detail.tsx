@@ -96,6 +96,8 @@ export function DocumentDetailPage() {
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     : [];
 
+  const currentDoc = sortedDocuments.find((doc: any) => doc.id === selectedDoc?.id) || selectedDoc;
+
   const isAnyDocProcessing = sortedDocuments.some(
     (doc: any) => doc.status === 'QUEUED' || doc.status === 'PROCESSING'
   );
@@ -203,128 +205,123 @@ export function DocumentDetailPage() {
                 </div>
               </div>
               <div className="flex-1 overflow-auto">
-                {viewMode === 'list' ? (
+                {sortedDocuments.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                      <FileText className="h-6 w-6 text-muted-foreground/30" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">No Data</p>
+                  </div>
+                ) : viewMode === 'list' ? (
                   <div className="p-2 space-y-1">
-                    {sortedDocuments.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        No documents found
-                      </div>
-                    ) : (
-                      sortedDocuments.map((doc: any) => (
-                        <button
-                          key={doc.id}
-                          onClick={() => setSelectedDoc(doc)}
-                          className={`w-full text-left p-3 rounded-lg flex items-center gap-3 transition-colors ${
-                            selectedDoc?.id === doc.id
-                              ? 'bg-primary/20 border-primary/30 border'
-                              : 'hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="relative">
-                            <div
-                              className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center ${
-                                selectedDoc?.id === doc.id ? 'bg-card' : 'bg-muted'
-                              }`}
+                    {sortedDocuments.map((doc: any) => (
+                      <button
+                        key={doc.id}
+                        onClick={() => setSelectedDoc(doc)}
+                        className={`w-full text-left p-3 rounded-lg flex items-center gap-3 transition-colors ${
+                          selectedDoc?.id === doc.id
+                            ? 'bg-primary/20 border-primary/30 border'
+                            : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <div className="relative">
+                          <div
+                            className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center ${
+                              selectedDoc?.id === doc.id ? 'bg-card' : 'bg-muted'
+                            }`}
+                          >
+                            {doc.type === 'DAMAGE_PHOTO' ? (
+                              <ImageIcon className="h-4 w-4" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </div>
+                          {/* Document State Icon in top-right of file icon */}
+                          <div className="absolute -top-1 -right-1 bg-background rounded-full p-0.5 shadow-sm border border-border/50">
+                            {doc.status === 'QUEUED' || doc.status === 'PROCESSING' ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
+                            ) : doc.status === 'COMPLETED' ? (
+                              <Check className="h-2.5 w-2.5 text-green-500" />
+                            ) : doc.status === 'FAILED' ? (
+                              <X className="h-2.5 w-2.5 text-red-500" />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`text-sm font-medium truncate ${selectedDoc?.id === doc.id ? 'text-primary' : 'text-foreground'}`}
                             >
-                              {doc.type === 'DAMAGE_PHOTO' ? (
-                                <ImageIcon className="h-4 w-4" />
-                              ) : (
-                                <FileText className="h-4 w-4" />
-                              )}
-                            </div>
-                            {/* Document State Icon in top-right of file icon */}
-                            <div className="absolute -top-1 -right-1 bg-background rounded-full p-0.5 shadow-sm border border-border/50">
-                              {doc.status === 'QUEUED' || doc.status === 'PROCESSING' ? (
-                                <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
-                              ) : doc.status === 'COMPLETED' ? (
-                                <Check className="h-2.5 w-2.5 text-green-500" />
-                              ) : doc.status === 'FAILED' ? (
-                                <X className="h-2.5 w-2.5 text-red-500" />
-                              ) : null}
-                            </div>
+                              {doc.filename || doc.name}
+                            </p>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p
-                                className={`text-sm font-medium truncate ${selectedDoc?.id === doc.id ? 'text-primary' : 'text-foreground'}`}
-                              >
-                                {doc.filename || doc.name}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-muted-foreground">
-                                {doc.type.replace(/_/gi, ' ')}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">•</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(0)} KB` : '0 KB'}
-                              </span>
-                            </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              {doc.type.replace(/_/gi, ' ')}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">•</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(0)} KB` : '0 KB'}
+                            </span>
                           </div>
-                        </button>
-                      ))
-                    )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 ) : (
                   <div className="p-2 grid grid-cols-2 gap-2">
-                    {sortedDocuments.length === 0 ? (
-                      <div className="col-span-2 p-4 text-center text-muted-foreground text-sm">
-                        No documents found
-                      </div>
-                    ) : (
-                      sortedDocuments.map((doc: any) => (
-                        <button
-                          key={doc.id}
-                          onClick={() => setSelectedDoc(doc)}
-                          className={`text-left p-3 rounded-lg flex flex-col gap-2 transition-colors ${
-                            selectedDoc?.id === doc.id
-                              ? 'bg-primary/20 border-primary/30 border'
-                              : 'hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="relative w-full">
-                            <div
-                              className={`w-full h-16 rounded-md flex items-center justify-center ${
-                                selectedDoc?.id === doc.id ? 'bg-card' : 'bg-muted'
-                              }`}
+                    {sortedDocuments.map((doc: any) => (
+                      <button
+                        key={doc.id}
+                        onClick={() => setSelectedDoc(doc)}
+                        className={`text-left p-3 rounded-lg flex flex-col gap-2 transition-colors ${
+                          selectedDoc?.id === doc.id
+                            ? 'bg-primary/20 border-primary/30 border'
+                            : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <div className="relative w-full">
+                          <div
+                            className={`w-full h-16 rounded-md flex items-center justify-center ${
+                              selectedDoc?.id === doc.id ? 'bg-card' : 'bg-muted'
+                            }`}
+                          >
+                            {doc.type === 'DAMAGE_PHOTO' ? (
+                              <ImageIcon className="h-6 w-6" />
+                            ) : (
+                              <FileText className="h-6 w-6" />
+                            )}
+                          </div>
+                          {/* Document State Icon in top-right of file icon */}
+                          <div className="absolute -top-1 -right-1 bg-background rounded-full p-0.5 shadow-sm border border-border/50">
+                            {doc.status === 'PROCESSING' || doc.status === 'QUEUED' ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                            ) : doc.status === 'COMPLETED' ? (
+                              <Check className="h-3 w-3 text-green-500" />
+                            ) : doc.status === 'FAILED' ? (
+                              <X className="h-3 w-3 text-red-500" />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`text-xs font-medium truncate ${selectedDoc?.id === doc.id ? 'text-primary' : 'text-foreground'}`}
                             >
-                              {doc.type === 'DAMAGE_PHOTO' ? (
-                                <ImageIcon className="h-6 w-6" />
-                              ) : (
-                                <FileText className="h-6 w-6" />
-                              )}
-                            </div>
-                            {/* Document State Icon in top-right of file icon */}
-                            <div className="absolute -top-1 -right-1 bg-background rounded-full p-0.5 shadow-sm border border-border/50">
-                              {doc.status === 'PROCESSING' || doc.status === 'QUEUED' ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                              ) : doc.status === 'COMPLETED' ? (
-                                <Check className="h-3 w-3 text-green-500" />
-                              ) : doc.status === 'FAILED' ? (
-                                <X className="h-3 w-3 text-red-500" />
-                              ) : null}
-                            </div>
+                              {doc.filename || doc.name}
+                            </p>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p
-                                className={`text-xs font-medium truncate ${selectedDoc?.id === doc.id ? 'text-primary' : 'text-foreground'}`}
-                              >
-                                {doc.filename || doc.name}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-1">
-                              <span className="text-[10px] text-muted-foreground">
-                                {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(0)} KB` : '0 KB'}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground truncate">
-                                {doc.type.replace(/_/gi, ' ')}
-                              </span>
-                            </div>
+                          <div className="flex flex-col gap-0.5 mt-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(0)} KB` : '0 KB'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {doc.type.replace(/_/gi, ' ')}
+                            </span>
                           </div>
-                        </button>
-                      ))
-                    )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -448,14 +445,14 @@ export function DocumentDetailPage() {
                   <div className="h-full">
                     <Skeleton className="h-full min-h-[400px] w-full" />
                   </div>
-                ) : selectedDoc?.status === 'QUEUED' || selectedDoc?.status === 'PROCESSING' ? (
+                ) : currentDoc?.status === 'QUEUED' || currentDoc?.status === 'PROCESSING' ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-4">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                       <Loader2 className="h-6 w-6 text-primary animate-spin" />
                     </div>
                     <p className="text-sm font-medium text-foreground">Analysis in Progress</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      AI is currently extracting data from this document.
+                      Extracting data from this document.
                     </p>
                   </div>
                 ) : extractedData ? (
@@ -703,10 +700,63 @@ export function DocumentDetailPage() {
 
           {/* 3. True Claim Intelligence Section */}
           <div className="bg-card rounded-xl border shadow-sm flex flex-col">
-            <div className="p-4 border-b bg-muted/50">
+            <div className="p-4 border-b bg-muted/50 flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 True Claim Intelligence
               </h4>
+              {trinityData?.reportUrl &&
+                !loadingTrinity &&
+                !isAnyDocProcessing &&
+                !isTrinityProcessingLocally && (
+                  <div className="flex gap-2">
+                    <InfoTooltip
+                      content="View"
+                      direction="top"
+                      fontSize="text-[11px]"
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-md bg-background shadow-sm"
+                          onClick={() => window.open(trinityData.reportUrl, '_blank')}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                    <InfoTooltip
+                      content="Download"
+                      direction="top"
+                      fontSize="text-[11px]"
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-md bg-background shadow-sm"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(trinityData.reportUrl);
+                              const blob = await response.blob();
+                              const url = window.URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = `TCI_Report_${claim?.claimNumber || id}.pdf`;
+                              document.body.appendChild(link);
+                              link.click();
+                              link.remove();
+                              window.URL.revokeObjectURL(url);
+                            } catch (error) {
+                              console.error('Download failed:', error);
+                              window.open(trinityData.reportUrl, '_blank');
+                            }
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                  </div>
+                )}
             </div>
 
             <div className="flex-1 overflow-auto p-4 md:p-6">
@@ -773,7 +823,9 @@ export function DocumentDetailPage() {
                           )}
                         </div>
                         <div className="flex-1 overflow-auto prose prose-sm max-w-none text-foreground leading-relaxed text-xs md:text-sm">
-                          <p className="whitespace-pre-wrap opacity-90">{trinityData.reasoning}</p>
+                          <p className="text-justify whitespace-pre-wrap opacity-90">
+                            {trinityData.reasoning}
+                          </p>
                         </div>
                       </div>
                     </div>

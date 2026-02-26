@@ -399,17 +399,33 @@ export class TrinityCheckEngine {
       riskFactors.push(...criticalFails.map(f => f.details));
     } else if (warnings.length > 0) {
       status = 'FLAGGED';
-      summary = ` flagged for review: ${warnings.map(f => f.check_id).join(', ')}`;
+      summary = `Anomalies flagged for review: ${warnings.map(f => f.check_id).join(', ')}`;
       riskFactors.push(...warnings.map(f => f.details));
     } else if (results.every(r => r.status === 'SKIPPED')) {
       status = 'INCOMPLETE';
       summary = 'No valid cross-checks possible due to missing documents.';
     }
 
-    // Simple Scoring Logic
-    const totalRunnable = results.filter(r => r.status !== 'SKIPPED').length;
-    const totalPassed = passed.length;
-    const score = totalRunnable > 0 ? (totalPassed / totalRunnable) * 100 : 0;
+    // Weighted Scoring Logic
+    const PRIORITY_WEIGHTS: Record<string, number> = {
+      CRITICAL: 10,
+      HIGH: 5,
+      MEDIUM: 2,
+      LOW: 1,
+    };
+
+    let totalWeight = 0;
+    let passedWeight = 0;
+
+    results.forEach(r => {
+      const weight = PRIORITY_WEIGHTS[r.priority] || 1;
+      totalWeight += weight;
+      if (r.is_pass !== false) {
+        passedWeight += weight;
+      }
+    });
+
+    const score = totalWeight > 0 ? (passedWeight / totalWeight) * 100 : 0;
 
     return {
       status,
@@ -417,7 +433,10 @@ export class TrinityCheckEngine {
       checks,
       summary,
       risk_factors: riskFactors,
-      verification_coverage: totalRunnable / results.length,
+      verification_coverage:
+        results.length > 0
+          ? results.filter(r => r.status !== 'SKIPPED').length / results.length
+          : 0,
     };
   }
 
@@ -433,7 +452,7 @@ export class TrinityCheckEngine {
   }
 
   private cleanPlate(plate: string): string {
-    return plate ? plate.toUpperCase().replace(/\s+/g, '') : '';
+    return plate ? plate.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
   }
 
   private extractPlateFromText(text: string): string {
@@ -443,7 +462,6 @@ export class TrinityCheckEngine {
     const match = text.match(regex);
     return match ? this.cleanPlate(match[0]) : '';
   }
-
   // --- Check Logic ---
 
   private checkIdentityMatch(

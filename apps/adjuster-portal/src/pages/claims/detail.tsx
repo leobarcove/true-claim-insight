@@ -113,7 +113,7 @@ const SessionChart = ({
 
   if (isDeceptionLoading && !deception) {
     return (
-      <div className="h-40 flex items-center justify-center text-xs text-slate-500">
+      <div className="h-40 flex items-center justify-center text-xs text-muted-foreground animate-pulse">
         Loading metrics...
       </div>
     );
@@ -121,7 +121,7 @@ const SessionChart = ({
 
   if (!deceptionData || deceptionData.length === 0) {
     return (
-      <div className="h-40 flex flex-col items-center justify-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed">
+      <div className="h-40 flex flex-col items-center justify-center text-xs text-muted-foreground bg-muted/40 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
         <Activity className="h-5 w-5 mb-2 opacity-20" />
         No risk data captured for this session.
       </div>
@@ -809,7 +809,7 @@ export function ClaimDetailPage() {
                               </Badge>
                             </div>
                           )}
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-justify text-xs text-muted-foreground p-2">
                             {(claim.trinityChecks[0] as any)?.reasoning ||
                               'No detailed reasoning available.'}
                           </p>
@@ -1118,7 +1118,7 @@ export function ClaimDetailPage() {
                                   variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
                                   className="text-[10px]"
                                 >
-                                  {session.status}
+                                  {convertToTitleCase(session.status)}
                                 </Badge>
                                 {expandedSessions.has(session.id) ? (
                                   <ChevronUp className="h-4 w-4 text-slate-400" />
