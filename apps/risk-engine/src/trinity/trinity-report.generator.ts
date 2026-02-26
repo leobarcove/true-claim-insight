@@ -263,7 +263,7 @@ export class TrinityReportGenerator {
     const centerY = y + h - 25;
     const radius = 45;
 
-    // Draw Arc 背景
+    // Draw Arc
     doc.lineWidth(10);
     doc.lineCap('butt');
     doc
@@ -284,17 +284,19 @@ export class TrinityReportGenerator {
       )
       .stroke();
 
-    // Needle - slightly shorter to avoid overlap with center text
+    // Needle
     const needlePadding = 12;
-    doc.lineWidth(2).stroke('#4A5568');
+    doc.lineWidth(2).strokeOpacity(0.5);
     doc
       .moveTo(centerX, centerY)
       .lineTo(
         centerX - (radius - needlePadding) * Math.cos(angle),
         centerY - (radius - needlePadding) * Math.sin(angle)
       )
-      .stroke();
-    doc.circle(centerX, centerY, 3).fill('#4A5568');
+      .stroke('#4A5568');
+    doc.circle(centerX, centerY, 3);
+    doc.fillOpacity(1).fill('#4A5568');
+    doc.strokeOpacity(1).fillOpacity(1);
 
     // Value percentage text (slightly below the needle pivot)
     doc
@@ -315,7 +317,7 @@ export class TrinityReportGenerator {
         .fillColor(statusColor)
         .fontSize(10)
         .font('Helvetica-Bold')
-        .text(statusWording.toUpperCase(), x, centerY + 8, { width: w, align: 'center' });
+        .text(statusWording.toUpperCase(), x, centerY + 12, { width: w, align: 'center' });
     }
   }
 
@@ -523,9 +525,8 @@ export class TrinityReportGenerator {
     if (!data.documents || data.documents.length === 0) return;
 
     // Always start extracted data on a fresh page
-    doc.addPage();
+    // doc.addPage();
     this.drawSectionHeader(doc, 'C', 'Extracted Document Data', '3');
-    doc.moveDown(1);
 
     data.documents.forEach((docItem, index) => {
       // Need at least enough room for a document title + one data row
@@ -549,18 +550,24 @@ export class TrinityReportGenerator {
 
   private drawNestedData(doc: PDFKit.PDFDocument, data: any, level = 0, rootData?: ReportData) {
     const contData = rootData ?? ({ claim: { claimNumber: 'CONT' } } as any);
-    const startX = 40 + level * 20;
-    const availableWidth = 515 - level * 20;
+    const startX = 40;
+    const availableWidth = 515;
+    const col1Width = 180;
+    const col2Width = availableWidth - col1Width;
+    const textIndent = level * 15;
 
     if (typeof data !== 'object' || data === null) {
       this.ensureSpace(doc, contData, 14);
-      doc.fontSize(8).font('Helvetica').fillColor('#000000').text(String(data), startX);
+      const val = data === null || data === undefined || data === '' ? '-' : String(data);
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('#000000')
+        .text(val, startX + textIndent);
       return;
     }
 
     const entries = Object.entries(data);
-    const col1Width = Math.min(140, availableWidth * 0.32);
-    const col2Width = availableWidth - col1Width;
 
     entries.forEach(([key, value]) => {
       const formattedKey = this.sanitizeString(this.formatTitleCase(key));
@@ -580,19 +587,21 @@ export class TrinityReportGenerator {
           .fillColor(this.secondaryColor)
           .fontSize(8)
           .font('Helvetica-Bold')
-          .text(formattedKey, startX + 5, parentY + 5, { width: availableWidth - 10 });
+          .text(formattedKey, startX + 5 + textIndent, parentY + 5, {
+            width: availableWidth - 10 - textIndent,
+          });
         doc.y = parentY + 18;
 
         value.forEach((item, idx) => {
           this.ensureSpace(doc, contData, 18);
           const itemY = doc.y;
-          doc.rect(startX + 10, itemY, availableWidth - 10, 18).fill('#E2E8F0');
-          doc.rect(startX + 10, itemY, availableWidth - 10, 18).stroke(this.borderColor);
+          doc.rect(startX, itemY, availableWidth, 18).fill('#E2E8F0');
+          doc.rect(startX, itemY, availableWidth, 18).stroke(this.borderColor);
           doc
             .fillColor(this.secondaryColor)
             .fontSize(7)
             .font('Helvetica-Bold')
-            .text(`Item ${idx + 1}`, startX + 15, itemY + 5);
+            .text(`Item ${idx + 1}`, startX + 5 + textIndent + 10, itemY + 5);
           doc.y = itemY + 18;
           this.drawNestedData(doc, item, level + 1, rootData);
         });
@@ -606,8 +615,8 @@ export class TrinityReportGenerator {
           .fillColor(this.secondaryColor)
           .fontSize(8)
           .font('Helvetica-Bold')
-          .text(formattedKey, startX + 5, rowStartY + 5, {
-            width: availableWidth - 10,
+          .text(formattedKey, startX + 5 + textIndent, rowStartY + 5, {
+            width: availableWidth - 10 - textIndent,
             lineBreak: false,
           });
         doc.y = rowStartY + 18;
@@ -615,8 +624,12 @@ export class TrinityReportGenerator {
       } else {
         // ── Leaf value: two-column key / value row ──────────────────────
         const rawValStr = Array.isArray(value)
-          ? value.map(v => (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(', ')
-          : String(value ?? '');
+          ? value.length === 0
+            ? '-'
+            : value.map(v => (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(', ')
+          : value === null || value === undefined || value === ''
+            ? '-'
+            : String(value);
         const valStr = this.sanitizeString(rawValStr);
 
         const rowHeight = Math.max(18, doc.heightOfString(valStr, { width: col2Width - 10 }) + 10);
@@ -642,8 +655,8 @@ export class TrinityReportGenerator {
           .fillColor(this.secondaryColor)
           .fontSize(8)
           .font('Helvetica-Bold')
-          .text(formattedKey, startX + 5, rowStartY + 5, {
-            width: col1Width - 10,
+          .text(formattedKey, startX + 5 + textIndent, rowStartY + 5, {
+            width: col1Width - 10 - textIndent,
             lineBreak: false,
           });
 
