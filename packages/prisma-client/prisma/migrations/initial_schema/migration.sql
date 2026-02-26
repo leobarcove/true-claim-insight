@@ -332,6 +332,7 @@ CREATE TABLE "trinity_checks" (
     "riskFactors" JSONB NOT NULL,
     "reasoning" TEXT,
     "reasoningInsights" JSONB,
+    "reportUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "tenantId" TEXT,
