@@ -11,8 +11,8 @@ export class MasterDataService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAllMakes(tenant: TenantContext) {
-    const isSuperAdmin = tenant.tenantId === 'SUPER_ADMIN' || tenant.userRole === 'SUPER_ADMIN';
-    const tenantFilter = isSuperAdmin
+    const isGlobalView = tenant.tenantId === 'SUPER_ADMIN';
+    const tenantFilter = isGlobalView
       ? {}
       : { OR: [{ tenantId: null }, { tenantId: tenant.tenantId }] };
 
@@ -38,8 +38,8 @@ export class MasterDataService {
   }
 
   async findModelsByMake(makeId: string, tenant: TenantContext) {
-    const isSuperAdmin = tenant.tenantId === 'SUPER_ADMIN' || tenant.userRole === 'SUPER_ADMIN';
-    const tenantFilter = isSuperAdmin
+    const isGlobalView = tenant.tenantId === 'SUPER_ADMIN';
+    const tenantFilter = isGlobalView
       ? {}
       : { OR: [{ tenantId: null }, { tenantId: tenant.tenantId }] };
 

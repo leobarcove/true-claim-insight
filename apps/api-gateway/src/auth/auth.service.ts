@@ -222,13 +222,20 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<AuthResponse> {
-    // Verify user has access to this tenant
-    const userTenant = await this.usersService.getUserTenant(userId, tenantId);
-    if (!userTenant || userTenant.status !== 'ACTIVE') {
-      throw new UnauthorizedException('You do not have access to this tenant');
+    const userRecord = await this.usersService.findById(userId);
+    if (!userRecord) {
+      throw new UnauthorizedException('User not found');
     }
 
-    const previousTenantId = (await this.usersService.findById(userId))?.currentTenantId;
+    // Verify user has access to this tenant, unless they are a SUPER_ADMIN
+    if (userRecord.role !== 'SUPER_ADMIN') {
+      const userTenant = await this.usersService.getUserTenant(userId, tenantId);
+      if (!userTenant || userTenant.status !== 'ACTIVE') {
+        throw new UnauthorizedException('You do not have access to this tenant');
+      }
+    }
+
+    const previousTenantId = userRecord.currentTenantId;
     const user = await this.usersService.updateCurrentTenant(userId, tenantId);
     await this.usersService.logTenantAccess(
       userId,

@@ -46,7 +46,10 @@ export class TenantGuard implements CanActivate {
     request.tenantContext = {
       tenantId: currentTenantId || user.role,
       userId: user.id || user.sub,
-      userRole: user.role,
+      userRole:
+        user.role === 'SUPER_ADMIN' && currentTenantId && currentTenantId !== 'SUPER_ADMIN'
+          ? 'INSURER_ADMIN'
+          : user.role,
     };
 
     return true;

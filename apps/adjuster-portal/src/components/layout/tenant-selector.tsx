@@ -15,11 +15,24 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChevronsUpDown, Check, Building2 } from 'lucide-react';
 
-export function TenantSelector() {
+interface TenantSelectorProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+}
+
+export function TenantSelector({
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+  showTrigger = true,
+}: TenantSelectorProps) {
   const { user, userTenants } = useAuthStore();
   const switchTenantMutation = useSwitchTenant();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = setControlledOpen !== undefined ? setControlledOpen : setInternalOpen;
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const { data: allTenants } = useTenants();
@@ -69,27 +82,48 @@ export function TenantSelector() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="flex w-full items-center gap-3 p-2 rounded-xl border border-border/50 bg-muted/30 hover:bg-muted/50 hover:border-primary/30 hover:shadow-sm transition-all duration-300 text-left group active:scale-[0.98]">
-          <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 shadow-sm group-hover:bg-primary/20 transition-colors">
-            <Building2 className="h-3 w-3 text-primary" />
-          </div>
-          <div className="min-w-0 flex flex-col justify-center leading-[14px]">
-            <p className="text-[10px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-              {currentTenant?.tenantName || 'Select Tenant'}
-            </p>
-            <p className="text-[9px] text-muted-foreground truncate opacity-70">Click to switch</p>
-          </div>
-        </button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl rounded-[2rem]">
+      {showTrigger && (
+        <DialogTrigger asChild>
+          <button className="flex w-full items-center gap-3 p-2 rounded-xl border border-border/50 bg-muted/30 hover:bg-muted/50 hover:border-primary/30 hover:shadow-sm transition-all duration-300 text-left group active:scale-[0.98]">
+            <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 shadow-sm group-hover:bg-primary/20 transition-colors">
+              <Building2 className="h-3 w-3 text-primary" />
+            </div>
+            <div className="min-w-0 flex flex-col justify-center leading-[14px]">
+              <p className="text-[10px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                {currentTenant?.tenantName || 'Select Tenant'}
+              </p>
+              <p className="text-[9px] text-muted-foreground truncate opacity-70">
+                Click to switch
+              </p>
+            </div>
+          </button>
+        </DialogTrigger>
+      )}
+      <DialogContent
+        className="sm:max-w-[400px] p-0 overflow-hidden border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl rounded-[2rem]"
+        onPointerDownOutside={e => {
+          // Prevent closing if selection is required
+          const isSelectionRequired = isSuperAdmin && !user.currentTenantId;
+          if (isSelectionRequired) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={e => {
+          // Prevent closing if selection is required
+          const isSelectionRequired = isSuperAdmin && !user.currentTenantId;
+          if (isSelectionRequired) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="text-xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Switch Tenant
+            {isSuperAdmin && !user.currentTenantId ? 'Select Tenant' : 'Switch Tenant'}
           </DialogTitle>
           <DialogDescription className="text-[13px] text-muted-foreground/80 leading-relaxed">
-            Select the organization context you would like to switch to. Your current session data
-            will be updated accordingly.
+            {isSuperAdmin && !user.currentTenantId
+              ? 'Please select a tenant to begin viewing data. You can switch tenants anytime later.'
+              : 'Select the organization context you would like to switch to. Your current session data will be updated accordingly.'}
           </DialogDescription>
         </DialogHeader>
         <div className="p-3 space-y-2 max-h-[60vh] overflow-y-auto scrollbar-sidebar">
@@ -146,7 +180,7 @@ export function TenantSelector() {
         </div>
         <div className="p-4 bg-muted/30 border-t border-border/50">
           <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest">
-            {displayTenants.length} Tenants Available {isSuperAdmin ? '(Super Admin View)' : ''}
+            {displayTenants.length} Tenants Available {isSuperAdmin ? '(Super Admin)' : ''}
           </p>
         </div>
       </DialogContent>
