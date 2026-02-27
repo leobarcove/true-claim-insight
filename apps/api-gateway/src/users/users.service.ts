@@ -307,6 +307,39 @@ export class UsersService {
     });
   }
 
+  async createTenant(data: { name: string; type: string; subscriptionTier?: string }) {
+    return this.prisma.tenant.create({
+      data: {
+        name: data.name,
+        type: data.type as any,
+        subscriptionTier: (data.subscriptionTier as any) || 'BASIC',
+      },
+    });
+  }
+
+  async updateTenant(
+    id: string,
+    data: { name?: string; type?: string; subscriptionTier?: string }
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return this.prisma.tenant.update({
+      where: { id },
+      data: {
+        name: data.name,
+        type: data.type as any,
+        subscriptionTier: data.subscriptionTier as any,
+      },
+    });
+  }
+
+  async deleteTenant(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    await this.prisma.tenant.delete({ where: { id } });
+    return { deleted: true };
+  }
+
   async findAllUserTenants() {
     return this.prisma.userTenant.findMany({
       include: {
@@ -315,5 +348,43 @@ export class UsersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async createUserTenant(data: {
+    userId: string;
+    tenantId: string;
+    role: string;
+    isDefault?: boolean;
+  }) {
+    return this.prisma.userTenant.create({
+      data: {
+        userId: data.userId,
+        tenantId: data.tenantId,
+        role: data.role as any,
+        isDefault: data.isDefault ?? false,
+        status: 'ACTIVE',
+      },
+      include: { user: true, tenant: true },
+    });
+  }
+
+  async updateUserTenant(id: string, data: { role?: string; isDefault?: boolean }) {
+    const ut = await this.prisma.userTenant.findUnique({ where: { id } });
+    if (!ut) throw new NotFoundException('Association not found');
+    return this.prisma.userTenant.update({
+      where: { id },
+      data: {
+        role: data.role as any,
+        isDefault: data.isDefault,
+      },
+      include: { user: true, tenant: true },
+    });
+  }
+
+  async deleteUserTenant(id: string) {
+    const ut = await this.prisma.userTenant.findUnique({ where: { id } });
+    if (!ut) throw new NotFoundException('Association not found');
+    await this.prisma.userTenant.delete({ where: { id } });
+    return { deleted: true };
   }
 }

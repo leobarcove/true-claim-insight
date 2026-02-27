@@ -16,3 +16,11 @@ export const CurrentTenant = createParamDecorator(
     );
   }
 );
+
+/**
+ * Decorator to extract full tenant context object from request
+ */
+export const CurrentTenantContext = createParamDecorator((data: unknown, ctx: ExecutionContext) => {
+  const request = ctx.switchToHttp().getRequest();
+  return request.tenantContext;
+});

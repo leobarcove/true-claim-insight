@@ -297,7 +297,7 @@ function TenantsTable({
                         <div className="flex justify-center">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             onClick={() => {
                               setEditingTenant(tenant);
                               setIsDialogOpen(true);
@@ -307,7 +307,7 @@ function TenantsTable({
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             onClick={() => {
                               setDeletingId(tenant.id);
                               setIsDeleteDialogOpen(true);
@@ -353,6 +353,7 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
     type: 'INSURER',
     subscriptionTier: 'BASIC',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (tenant) {
@@ -364,7 +365,23 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
     } else {
       setFormData({ name: '', type: 'INSURER', subscriptionTier: 'BASIC' });
     }
+    setErrors({});
   }, [tenant, open]);
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!formData.name.trim()) errs.name = 'Tenant name is required.';
+    return errs;
+  };
+
+  const handleSubmit = () => {
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+    onSave(formData);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -374,11 +391,18 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Tenant Name</Label>
+            <Label>
+              Tenant Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              onChange={e => {
+                setFormData({ ...formData, name: e.target.value });
+                setErrors(p => ({ ...p, name: '' }));
+              }}
+              className={errors.name ? 'border-destructive' : ''}
             />
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
           <div className="space-y-2">
             <Label>Type</Label>
@@ -413,7 +437,7 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={() => onSave(formData)} disabled={isLoading}>
+          <Button onClick={handleSubmit} disabled={isLoading}>
             Save
           </Button>
         </DialogFooter>
@@ -596,7 +620,7 @@ function UsersTable({
                         <div className="flex justify-center">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             onClick={() => {
                               setEditingUser(user);
                               setIsDialogOpen(true);
@@ -606,7 +630,7 @@ function UsersTable({
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             onClick={() => {
                               setDeletingId(user.id);
                               setIsDeleteDialogOpen(true);
@@ -652,8 +676,8 @@ function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
     email: '',
     phoneNumber: '',
     password: '',
-    licenseNumber: '',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (user) {
@@ -662,12 +686,37 @@ function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
         email: user.email,
         phoneNumber: user.phoneNumber,
         password: '',
-        licenseNumber: user.licenseNumber || '',
       });
     } else {
-      setFormData({ fullName: '', email: '', phoneNumber: '', password: '', licenseNumber: '' });
+      setFormData({ fullName: '', email: '', phoneNumber: '', password: '' });
     }
+    setErrors({});
   }, [user, open]);
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!formData.fullName.trim()) errs.fullName = 'Full name is required.';
+    if (!formData.email.trim()) errs.email = 'Email is required.';
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email))
+      errs.email = 'Enter a valid email address.';
+    if (!formData.phoneNumber.trim()) errs.phoneNumber = 'Phone number is required.';
+    if (!user && !formData.password) errs.password = 'Password is required.';
+    return errs;
+  };
+
+  const handleSubmit = () => {
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+    onSave(formData);
+  };
+
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(p => ({ ...p, [field]: e.target.value }));
+    setErrors(p => ({ ...p, [field]: '' }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -677,49 +726,55 @@ function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Full Name</Label>
+            <Label>
+              Full Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={formData.fullName}
-              onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+              onChange={set('fullName')}
+              className={errors.fullName ? 'border-destructive' : ''}
             />
+            {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
+            <Label>Email {!user && <span className="text-destructive">*</span>}</Label>
             <Input
+              type="email"
               value={formData.email}
-              onChange={e => setFormData({ ...formData, email: e.target.value })}
+              onChange={set('email')}
+              readOnly={!!user}
+              className={`${errors.email ? 'border-destructive' : ''} ${user ? 'bg-muted/50 cursor-not-allowed' : ''}`}
             />
+            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
           <div className="space-y-2">
-            <Label>Phone Number</Label>
+            <Label>
+              Phone Number <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={formData.phoneNumber}
-              onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
+              onChange={set('phoneNumber')}
+              className={errors.phoneNumber ? 'border-destructive' : ''}
             />
+            {errors.phoneNumber && <p className="text-xs text-destructive">{errors.phoneNumber}</p>}
           </div>
           {!user && (
             <div className="space-y-2">
-              <Label>Password</Label>
+              <Label>
+                Password <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="password"
                 value={formData.password}
-                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                onChange={set('password')}
+                className={errors.password ? 'border-destructive' : ''}
               />
-            </div>
-          )}
-          {user && (
-            <div className="space-y-2">
-              <Label>License Number</Label>
-              <Input
-                value={formData.licenseNumber}
-                onChange={e => setFormData({ ...formData, licenseNumber: e.target.value })}
-                placeholder="e.g. LIC-12345"
-              />
+              {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button onClick={() => onSave(formData)} disabled={isLoading}>
+          <Button onClick={handleSubmit} disabled={isLoading}>
             Save
           </Button>
         </DialogFooter>
@@ -869,7 +924,7 @@ function UserTenantsTable({
                       <TableCell className="text-center">
                         <Badge variant="secondary">{convertToTitleCase(assoc.role)}</Badge>
                       </TableCell>
-                      <TableCell className="flex justify-center">
+                      <TableCell className="flex justify-center m-2">
                         {assoc.isDefault ? (
                           <Check className="h-4 w-4 text-success" />
                         ) : (
@@ -908,7 +963,7 @@ function UserTenantsTable({
                         <div className="flex justify-center">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             className="h-8 w-8"
                             onClick={() => {
                               setEditingAssoc(assoc);
@@ -919,7 +974,7 @@ function UserTenantsTable({
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="xs"
                             className="h-8 w-8"
                             onClick={() => {
                               setDeletingId(assoc.id);
@@ -977,6 +1032,7 @@ function AssociationFormDialog({
     role: 'ADJUSTER',
     isDefault: false,
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (association) {
@@ -989,7 +1045,24 @@ function AssociationFormDialog({
     } else {
       setFormData({ userId: '', tenantId: '', role: 'ADJUSTER', isDefault: false });
     }
+    setErrors({});
   }, [association, open]);
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!formData.userId) errs.userId = 'Please select a user.';
+    if (!formData.tenantId) errs.tenantId = 'Please select a tenant.';
+    return errs;
+  };
+
+  const handleSubmit = () => {
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+    onSave(formData);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -999,12 +1072,18 @@ function AssociationFormDialog({
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>User</Label>
+            <Label>
+              User <span className="text-destructive">*</span>
+            </Label>
             <Select
+              disabled={!!association}
               value={formData.userId}
-              onValueChange={v => setFormData({ ...formData, userId: v })}
+              onValueChange={v => {
+                setFormData({ ...formData, userId: v });
+                setErrors(p => ({ ...p, userId: '' }));
+              }}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errors.userId ? 'border-destructive' : ''}>
                 <SelectValue placeholder="Select User" />
               </SelectTrigger>
               <SelectContent>
@@ -1015,14 +1094,21 @@ function AssociationFormDialog({
                 ))}
               </SelectContent>
             </Select>
+            {errors.userId && <p className="text-xs text-destructive">{errors.userId}</p>}
           </div>
           <div className="space-y-2">
-            <Label>Tenant</Label>
+            <Label>
+              Tenant <span className="text-destructive">*</span>
+            </Label>
             <Select
+              disabled={!!association}
               value={formData.tenantId}
-              onValueChange={v => setFormData({ ...formData, tenantId: v })}
+              onValueChange={v => {
+                setFormData({ ...formData, tenantId: v });
+                setErrors(p => ({ ...p, tenantId: '' }));
+              }}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errors.tenantId ? 'border-destructive' : ''}>
                 <SelectValue placeholder="Select Tenant" />
               </SelectTrigger>
               <SelectContent>
@@ -1033,6 +1119,7 @@ function AssociationFormDialog({
                 ))}
               </SelectContent>
             </Select>
+            {errors.tenantId && <p className="text-xs text-destructive">{errors.tenantId}</p>}
           </div>
           <div className="space-y-2">
             <Label>Role</Label>
@@ -1067,7 +1154,7 @@ function AssociationFormDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={() => onSave(formData)} disabled={isLoading}>
+          <Button onClick={handleSubmit} disabled={isLoading}>
             Save
           </Button>
         </DialogFooter>

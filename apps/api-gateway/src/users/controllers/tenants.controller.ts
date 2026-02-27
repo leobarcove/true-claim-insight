@@ -1,4 +1,15 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { UsersService } from '../users.service';
@@ -11,15 +22,41 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 @Controller('tenants')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @ApiBearerAuth('access-token')
+@Roles('SUPER_ADMIN')
 export class TenantsController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: 'Get all tenants' })
   @ApiResponse({ status: 200, description: 'List of tenants' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
   async findAll() {
     return this.usersService.findAllTenants();
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new tenant' })
+  @ApiResponse({ status: 201, description: 'Tenant created' })
+  async create(@Body() body: { name: string; type: string; subscriptionTier?: string }) {
+    return this.usersService.createTenant(body);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a tenant' })
+  @ApiResponse({ status: 200, description: 'Tenant updated' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async update(
+    @Param('id') id: string,
+    @Body() body: { name?: string; type?: string; subscriptionTier?: string }
+  ) {
+    return this.usersService.updateTenant(id, body);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a tenant' })
+  @ApiResponse({ status: 200, description: 'Tenant deleted' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async remove(@Param('id') id: string) {
+    return this.usersService.deleteTenant(id);
   }
 }
