@@ -601,7 +601,7 @@ enum VideoUploadStatus {
 
 model VehicleMake {
   id        String         @id @default(uuid())
-  name      String         @unique
+  name      String
   models    VehicleModel[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -610,6 +610,7 @@ model VehicleMake {
   tenant    Tenant?        @relation(fields: [tenantId], references: [id])
   user      User?          @relation(fields: [userId], references: [id])
 
+  @@unique([tenantId, name])
   @@index([tenantId])
   @@index([userId])
   @@map("vehicle_makes")
@@ -627,7 +628,7 @@ model VehicleModel {
   tenant    Tenant?     @relation(fields: [tenantId], references: [id])
   user      User?       @relation(fields: [userId], references: [id])
 
-  @@unique([makeId, name])
+  @@unique([tenantId, makeId, name])
   @@index([makeId])
   @@index([tenantId])
   @@index([userId])

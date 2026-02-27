@@ -93,23 +93,28 @@ export class UsersService {
       return [];
     }
 
-    return this.prisma.user.findMany({
-      where: {
-        OR: [
-          // User's primary/current tenant is this tenant
-          { currentTenantId: tenantId },
-          { tenantId: tenantId },
-          // OR user has a membership in this tenant
-          {
-            userTenants: {
-              some: {
-                tenantId: tenantId,
-                status: 'ACTIVE',
+    const where: any =
+      tenantId === 'SUPER_ADMIN'
+        ? {}
+        : {
+            OR: [
+              // User's primary/current tenant is this tenant
+              { currentTenantId: tenantId },
+              { tenantId: tenantId },
+              // OR user has a membership in this tenant
+              {
+                userTenants: {
+                  some: {
+                    tenantId: tenantId,
+                    status: 'ACTIVE',
+                  },
+                },
               },
-            },
-          },
-        ],
-      },
+            ],
+          };
+
+    return this.prisma.user.findMany({
+      where,
       select: {
         id: true,
         email: true,
@@ -120,6 +125,7 @@ export class UsersService {
         tenantId: true,
         currentTenantId: true,
         createdAt: true,
+        updatedAt: true,
         lastLoginAt: true,
         tenant: {
           select: {
@@ -127,14 +133,23 @@ export class UsersService {
             name: true,
           },
         },
-        userTenants: {
-          where: { tenantId }, // Only return membership for requested tenant
-          select: {
-            role: true,
-            status: true,
-            isDefault: true,
-          },
-        },
+        userTenants:
+          tenantId === 'SUPER_ADMIN'
+            ? {
+                select: {
+                  role: true,
+                  status: true,
+                  isDefault: true,
+                },
+              }
+            : {
+                where: { tenantId }, // Only return membership for requested tenant
+                select: {
+                  role: true,
+                  status: true,
+                  isDefault: true,
+                },
+              },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -283,6 +298,22 @@ export class UsersService {
         ipAddress,
         userAgent,
       },
+    });
+  }
+
+  async findAllTenants() {
+    return this.prisma.tenant.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findAllUserTenants() {
+    return this.prisma.userTenant.findMany({
+      include: {
+        user: true,
+        tenant: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

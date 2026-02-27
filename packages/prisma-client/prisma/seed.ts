@@ -313,23 +313,33 @@ async function main() {
 
   for (const [makeName, models] of Object.entries(MALAYSIA_CARS)) {
     const make = await prisma.vehicleMake.upsert({
-      where: { name: makeName },
-      update: {},
-      create: { name: makeName },
+      where: {
+        tenantId_name: {
+          tenantId: PACIFIC_ID,
+          name: makeName,
+        },
+      } as any,
+      update: { tenantId: PACIFIC_ID },
+      create: {
+        name: makeName,
+        tenantId: PACIFIC_ID,
+      },
     });
 
     for (const modelName of models) {
       await prisma.vehicleModel.upsert({
         where: {
-          makeId_name: {
+          tenantId_makeId_name: {
+            tenantId: PACIFIC_ID,
             makeId: make.id,
             name: modelName,
           },
-        },
-        update: {},
+        } as any,
+        update: { tenantId: PACIFIC_ID },
         create: {
           name: modelName,
           makeId: make.id,
+          tenantId: PACIFIC_ID,
         },
       });
     }

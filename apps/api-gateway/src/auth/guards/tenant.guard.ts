@@ -27,13 +27,14 @@ export class TenantGuard implements CanActivate {
     const headerTenantId = request.headers['x-tenant-id'];
     const currentTenantId = headerTenantId || user.currentTenantId || user.tenantId;
 
-    if (!currentTenantId) {
+    if (!currentTenantId && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('No tenant context available. Please select a tenant.');
     }
 
     // Validate user has access to this tenant
     // Check main tenantId or the list of accessible tenantIds from JWT
     const hasAccess =
+      user.role === 'SUPER_ADMIN' ||
       user.tenantId === currentTenantId ||
       (user.tenantIds && user.tenantIds.includes(currentTenantId));
 
@@ -43,7 +44,7 @@ export class TenantGuard implements CanActivate {
 
     // Add validated tenant context to request for easy access in controllers
     request.tenantContext = {
-      tenantId: currentTenantId,
+      tenantId: currentTenantId || user.role,
       userId: user.id || user.sub,
       userRole: user.role,
     };

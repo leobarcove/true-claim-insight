@@ -85,7 +85,11 @@ export class MasterDataService {
     try {
       // Validate ownership first
       const make = await this.prisma.vehicleMake.findUnique({ where: { id } });
-      if (!make || (make as any).tenantId !== tenant.tenantId || (make as any).userId !== tenant.userId) {
+      if (
+        !make ||
+        (make as any).tenantId !== tenant.tenantId ||
+        (make as any).userId !== tenant.userId
+      ) {
         throw new ConflictException('Make not found or no permission to update');
       }
 
@@ -106,7 +110,11 @@ export class MasterDataService {
 
   async deleteMake(id: string, tenant: TenantContext) {
     const make = await this.prisma.vehicleMake.findUnique({ where: { id } });
-    if (!make || (make as any).tenantId !== tenant.tenantId || (make as any).userId !== tenant.userId) {
+    if (
+      !make ||
+      (make as any).tenantId !== tenant.tenantId ||
+      (make as any).userId !== tenant.userId
+    ) {
       throw new ConflictException('Make not found or no permission to delete');
     }
 
@@ -119,7 +127,11 @@ export class MasterDataService {
     try {
       // Validate ownership
       const model = await this.prisma.vehicleModel.findUnique({ where: { id } });
-      if (!model || (model as any).tenantId !== tenant.tenantId || (model as any).userId !== tenant.userId) {
+      if (
+        !model ||
+        (model as any).tenantId !== tenant.tenantId ||
+        (model as any).userId !== tenant.userId
+      ) {
         throw new ConflictException('Model not found or no permission to update');
       }
 
@@ -143,7 +155,11 @@ export class MasterDataService {
 
   async deleteModel(id: string, tenant: TenantContext) {
     const model = await this.prisma.vehicleModel.findUnique({ where: { id } });
-    if (!model || (model as any).tenantId !== tenant.tenantId || (model as any).userId !== tenant.userId) {
+    if (
+      !model ||
+      (model as any).tenantId !== tenant.tenantId ||
+      (model as any).userId !== tenant.userId
+    ) {
       throw new ConflictException('Model not found or no permission to delete');
     }
 
@@ -153,11 +169,16 @@ export class MasterDataService {
   }
 
   // Helper for seeding/checking
-  async upsertMake(name: string) {
+  async upsertMake(name: string, tenantId: string | null = null) {
     return this.prisma.vehicleMake.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+      where: {
+        tenantId_name: {
+          name,
+          tenantId,
+        },
+      } as any,
+      update: { tenantId },
+      create: { name, tenantId },
     });
   }
 }

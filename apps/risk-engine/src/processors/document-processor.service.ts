@@ -340,7 +340,7 @@ export class DocumentProcessorService {
       
       Response Format (JSON Only):
       {
-        "reasoning": "Extensive, step-by-step analytical narrative explaining validation checks, findings, contradictions, and logical conclusions.",
+        "reasoning": "Extensive, step-by-step, paragraph-style analytical narrative explaining validation checks, findings, contradictions, and logical conclusions.",
         "red_flags": ["Specific issue 1", "Specific issue 2"],
         "insights": ["Actionable insight 1", "Actionable insight 2"],
         "recommendation": "APPROVE" | "INVESTIGATE" | "REJECT",

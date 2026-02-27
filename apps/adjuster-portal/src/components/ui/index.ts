@@ -15,3 +15,4 @@ export * from './switch';
 export * from './confirmation-dialog';
 export * from './popover';
 export * from './progress';
+export * from './tabs';

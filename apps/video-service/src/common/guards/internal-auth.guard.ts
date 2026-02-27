@@ -12,10 +12,10 @@ export class InternalAuthGuard implements CanActivate {
     const userRole = request.headers['x-user-role'];
     const authorization = request.headers['authorization'];
 
-    if (userId && tenantId) {
+    if (userId && (tenantId || userRole === 'SUPER_ADMIN')) {
       request.user = {
         sub: userId,
-        tenantId: tenantId,
+        tenantId: tenantId || userRole,
         role: userRole || 'ADJUSTER',
         internal: true,
       };
