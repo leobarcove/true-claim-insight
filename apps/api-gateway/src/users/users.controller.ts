@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Param,
@@ -35,6 +36,29 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async findAll(@CurrentTenant() tenantId: string) {
     return this.usersService.findAll(tenantId);
+  }
+
+  @Post()
+  @Roles('FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({ summary: 'Create a new user' })
+  @ApiResponse({ status: 201, description: 'User created' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async create(@Body() body: any, @CurrentTenant() tenantId: string) {
+    const { password, ...rest } = body;
+    const resolvedTenantId =
+      rest.tenantId && rest.tenantId !== 'SUPER_ADMIN'
+        ? rest.tenantId
+        : tenantId !== 'SUPER_ADMIN'
+          ? tenantId
+          : undefined;
+    const bcrypt = await import('bcrypt');
+    const hashedPassword = await bcrypt.hash(password || Math.random().toString(36), 10);
+    return this.usersService.create({
+      ...rest,
+      password: hashedPassword,
+      tenantId: resolvedTenantId,
+      role: rest.role || 'ADJUSTER',
+    });
   }
 
   @Get(':id')
@@ -81,7 +105,7 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async update(
     @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto,
+    @Body() body: any,
     @CurrentUser() currentUser: Express.User,
     @CurrentTenant() tenantId: string
   ) {
@@ -90,19 +114,23 @@ export class UsersController {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
 
-    // Security check: must be self OR same tenant admin
+    const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
     const isSelf = currentUser.id === id;
     const isSameTenant = user.tenantId === tenantId || (user as any).currentTenantId === tenantId;
     const isAdmin = ['FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role);
 
-    if (!isSelf && !(isSameTenant && isAdmin)) {
+    if (!isSuperAdmin && !isSelf && !(isSameTenant && isAdmin)) {
       throw new HttpException(
         'You do not have permission to update this user',
         HttpStatus.FORBIDDEN
       );
     }
 
-    const updatedUser = await this.usersService.update(id, updateUserDto);
+    const { fullName, phoneNumber } = body;
+    const updatedUser = await this.usersService.update(id, {
+      fullName,
+      phoneNumber,
+    });
 
     return {
       id: updatedUser.id,
@@ -113,7 +141,6 @@ export class UsersController {
       tenantId: updatedUser.tenantId,
       currentTenantId: (updatedUser as any).currentTenantId,
       tenantName: updatedUser.tenant?.name || (updatedUser as any).currentTenant?.name,
-      licenseNumber: updatedUser.licenseNumber || (updatedUser as any).adjuster?.licenseNumber,
     };
   }
 

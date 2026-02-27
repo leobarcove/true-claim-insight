@@ -11,16 +11,17 @@ export class MasterDataService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAllMakes(tenant: TenantContext) {
+    const isSuperAdmin = tenant.tenantId === 'SUPER_ADMIN' || tenant.userRole === 'SUPER_ADMIN';
+    const tenantFilter = isSuperAdmin
+      ? {}
+      : { OR: [{ tenantId: null }, { tenantId: tenant.tenantId }] };
+
     return this.prisma.vehicleMake.findMany({
-      where: {
-        OR: [{ tenantId: null }, { tenantId: tenant.tenantId }],
-      } as any,
+      where: tenantFilter as any,
       orderBy: { name: 'asc' },
       include: {
         models: {
-          where: {
-            OR: [{ tenantId: null }, { tenantId: tenant.tenantId }],
-          } as any,
+          where: tenantFilter as any,
           orderBy: { name: 'asc' },
         },
       },
@@ -37,10 +38,15 @@ export class MasterDataService {
   }
 
   async findModelsByMake(makeId: string, tenant: TenantContext) {
+    const isSuperAdmin = tenant.tenantId === 'SUPER_ADMIN' || tenant.userRole === 'SUPER_ADMIN';
+    const tenantFilter = isSuperAdmin
+      ? {}
+      : { OR: [{ tenantId: null }, { tenantId: tenant.tenantId }] };
+
     return this.prisma.vehicleModel.findMany({
       where: {
         makeId,
-        OR: [{ tenantId: null }, { tenantId: tenant.tenantId }],
+        ...tenantFilter,
       } as any,
       orderBy: { name: 'asc' },
     });
@@ -85,11 +91,7 @@ export class MasterDataService {
     try {
       // Validate ownership first
       const make = await this.prisma.vehicleMake.findUnique({ where: { id } });
-      if (
-        !make ||
-        (make as any).tenantId !== tenant.tenantId ||
-        (make as any).userId !== tenant.userId
-      ) {
+      if (!make || (make.tenantId !== tenant.tenantId && tenant.tenantId !== 'SUPER_ADMIN')) {
         throw new ConflictException('Make not found or no permission to update');
       }
 
@@ -110,11 +112,7 @@ export class MasterDataService {
 
   async deleteMake(id: string, tenant: TenantContext) {
     const make = await this.prisma.vehicleMake.findUnique({ where: { id } });
-    if (
-      !make ||
-      (make as any).tenantId !== tenant.tenantId ||
-      (make as any).userId !== tenant.userId
-    ) {
+    if (!make || (make.tenantId !== tenant.tenantId && tenant.tenantId !== 'SUPER_ADMIN')) {
       throw new ConflictException('Make not found or no permission to delete');
     }
 
@@ -127,11 +125,7 @@ export class MasterDataService {
     try {
       // Validate ownership
       const model = await this.prisma.vehicleModel.findUnique({ where: { id } });
-      if (
-        !model ||
-        (model as any).tenantId !== tenant.tenantId ||
-        (model as any).userId !== tenant.userId
-      ) {
+      if (!model || (model.tenantId !== tenant.tenantId && tenant.tenantId !== 'SUPER_ADMIN')) {
         throw new ConflictException('Model not found or no permission to update');
       }
 
@@ -155,11 +149,7 @@ export class MasterDataService {
 
   async deleteModel(id: string, tenant: TenantContext) {
     const model = await this.prisma.vehicleModel.findUnique({ where: { id } });
-    if (
-      !model ||
-      (model as any).tenantId !== tenant.tenantId ||
-      (model as any).userId !== tenant.userId
-    ) {
+    if (!model || (model.tenantId !== tenant.tenantId && tenant.tenantId !== 'SUPER_ADMIN')) {
       throw new ConflictException('Model not found or no permission to delete');
     }
 
