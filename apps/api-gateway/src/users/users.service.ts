@@ -258,18 +258,25 @@ export class UsersService {
   }
 
   async updateCurrentTenant(userId: string, tenantId: string) {
-    // Update last accessed time for the tenant
-    await this.prisma.userTenant.update({
-      where: {
-        userId_tenantId: {
-          userId,
-          tenantId,
+    // Update last accessed time for the tenant if record exists
+    try {
+      await this.prisma.userTenant.update({
+        where: {
+          userId_tenantId: {
+            userId,
+            tenantId,
+          },
         },
-      },
-      data: {
-        lastAccessedAt: new Date(),
-      },
-    });
+        data: {
+          lastAccessedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      // If the record doesn't exist (e.g. for SUPER_ADMIN), we skip this update
+      this.logger.debug(
+        `Could not update lastAccessedAt for user ${userId} and tenant ${tenantId}. Record might not exist.`
+      );
+    }
 
     // Update user's current tenant
     return this.prisma.user.update({

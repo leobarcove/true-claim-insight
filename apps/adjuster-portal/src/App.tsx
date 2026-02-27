@@ -29,6 +29,7 @@ import { TenantsPage } from '@/pages/tenants';
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
+import { useTheme } from '@/hooks/use-theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useTheme();
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

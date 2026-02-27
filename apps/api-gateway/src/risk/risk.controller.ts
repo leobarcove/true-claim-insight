@@ -16,7 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
+import { CurrentTenant, CurrentTenantRole } from '../auth/decorators/current-tenant.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 import { RiskService } from './risk.service';
@@ -33,10 +33,16 @@ export class RiskController {
   async getAssessments(
     @Param('sessionId') sessionId: string,
     @CurrentTenant() tenantId: string,
+    @CurrentTenantRole() userRole: string,
     @CurrentUser() user: any
   ) {
     try {
-      return await this.riskService.getAssessments(sessionId, tenantId, user?.id || user?.sub, user?.role);
+      return await this.riskService.getAssessments(
+        sessionId,
+        tenantId,
+        user?.id || user?.sub,
+        userRole
+      );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -47,10 +53,16 @@ export class RiskController {
   async getDeceptionScore(
     @Param('sessionId') sessionId: string,
     @CurrentTenant() tenantId: string,
+    @CurrentTenantRole() userRole: string,
     @CurrentUser() user: any
   ) {
     try {
-      return await this.riskService.getDeceptionScore(sessionId, tenantId, user?.id || user?.sub, user?.role);
+      return await this.riskService.getDeceptionScore(
+        sessionId,
+        tenantId,
+        user?.id || user?.sub,
+        userRole
+      );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -62,6 +74,7 @@ export class RiskController {
     @Body('sessionId') sessionId: string,
     @Body('assessmentType') assessmentType: string,
     @CurrentTenant() tenantId: string,
+    @CurrentTenantRole() userRole: string,
     @CurrentUser() user: any
   ) {
     try {
@@ -70,7 +83,7 @@ export class RiskController {
         assessmentType,
         tenantId,
         user?.id || user?.sub,
-        user?.role
+        userRole
       );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
@@ -123,7 +136,13 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.uploadAudio(audioBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
+      return await this.riskService.uploadAudio(
+        audioBuffer,
+        sessionId as string,
+        'system',
+        'system',
+        'SYSTEM'
+      );
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -174,7 +193,13 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.uploadScreenshot(buf, sessionId as string, 'system', 'system', 'SYSTEM');
+      return await this.riskService.uploadScreenshot(
+        buf,
+        sessionId as string,
+        'system',
+        'system',
+        'SYSTEM'
+      );
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -225,7 +250,13 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.analyzeExpression(videoBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
+      return await this.riskService.analyzeExpression(
+        videoBuffer,
+        sessionId as string,
+        'system',
+        'system',
+        'SYSTEM'
+      );
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -276,7 +307,13 @@ export class RiskController {
         sessionId = query.sessionId || 'unknown';
       }
 
-      return await this.riskService.analyzeVideo(videoBuffer, sessionId as string, 'system', 'system', 'SYSTEM');
+      return await this.riskService.analyzeVideo(
+        videoBuffer,
+        sessionId as string,
+        'system',
+        'system',
+        'SYSTEM'
+      );
     } catch (error: any) {
       throw new HttpException(error.message || 'Upload failed', HttpStatus.BAD_GATEWAY);
     }
@@ -287,10 +324,16 @@ export class RiskController {
   async getTrinityCheck(
     @Param('claimId') claimId: string,
     @CurrentTenant() tenantId: string,
+    @CurrentTenantRole() userRole: string,
     @CurrentUser() user: any
   ) {
     try {
-      return await this.riskService.getTrinityCheck(claimId, tenantId, user?.id || user?.sub, user?.role);
+      return await this.riskService.getTrinityCheck(
+        claimId,
+        tenantId,
+        user?.id || user?.sub,
+        userRole
+      );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }
@@ -301,10 +344,16 @@ export class RiskController {
   async getDocumentAnalysis(
     @Param('documentId') documentId: string,
     @CurrentTenant() tenantId: string,
+    @CurrentTenantRole() userRole: string,
     @CurrentUser() user: any
   ) {
     try {
-      return await this.riskService.getDocumentAnalysis(documentId, tenantId, user?.id || user?.sub, user?.role);
+      return await this.riskService.getDocumentAnalysis(
+        documentId,
+        tenantId,
+        user?.id || user?.sub,
+        userRole
+      );
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_GATEWAY);
     }

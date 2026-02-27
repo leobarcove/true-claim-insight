@@ -42,7 +42,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     let claimantId = createClaimDto.claimantId;
@@ -83,7 +83,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     const adjusterId = req.user?.adjuster?.id;
@@ -124,7 +124,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     const params = { ...req.query };
@@ -165,7 +165,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService.get(`${this.caseServiceUrl}/api/v1/claims/${id}`, { headers }).pipe(
@@ -186,7 +186,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -209,7 +209,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -232,7 +232,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -255,7 +255,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -278,7 +278,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -302,7 +302,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -325,7 +325,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
       'Content-Type': req.headers['content-type'],
     };
 
@@ -354,7 +354,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -377,7 +377,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService
@@ -400,7 +400,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
       'Content-Type': req.headers['content-type'],
     };
 
@@ -427,7 +427,7 @@ export class ClaimsController {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
-      'X-User-Role': req.user?.role,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
 
     return this.httpService

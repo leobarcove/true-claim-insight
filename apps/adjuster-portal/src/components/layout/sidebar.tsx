@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { InfoTooltip } from '@/components/ui/tooltip';
 import { TenantSwitcher } from './tenant-switcher';
 import { TenantSelector } from './tenant-selector';
+import { useSuperAdminNoTenant } from '@/hooks/use-super-admin-no-tenant';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -53,6 +54,7 @@ export function Sidebar() {
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const { isSelectionRequired } = useSuperAdminNoTenant();
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -243,7 +245,7 @@ export function Sidebar() {
                     'absolute inset-y-1 transition-all duration-300 ease-out bg-primary/80 rounded-2xl z-0 shadow-sm',
                     theme === 'light' && 'left-1 w-[calc(33.33%-4px)]',
                     theme === 'dark' && 'left-[calc(33.33%+2px)] w-[calc(33.33%-4px)]',
-                    theme === 'system' && 'left-[calc(66.66%+3px)] w-[calc(33.33%-4px)]'
+                    theme === 'system' && 'left-[calc(66.66%)] w-[calc(33.33%-4px)]'
                   )}
                 />
                 {[
@@ -274,21 +276,20 @@ export function Sidebar() {
                 ))}
               </div>
 
-              {/* Switch Tenant Section – only shown when user belongs to multiple tenants */}
-              {userTenants.length > 1 && (
+              {/* Switch Tenant Section – shown when multiple tenants OR super admin */}
+              {(userTenants.length > 1 || user?.role === 'SUPER_ADMIN') && (
                 <>
                   <div className="space-y-1.5 pt-1 border-t border-border/50">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] px-1">
                       Switch Tenant
                     </p>
-                    {/* <TenantSwitcher /> */}
                     <TenantSelector />
                   </div>
                   <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
                 </>
               )}
 
-              {userTenants.length <= 1 && (
+              {userTenants.length <= 1 && user?.role !== 'SUPER_ADMIN' && (
                 <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
               )}
             </div>
@@ -317,6 +318,9 @@ export function Sidebar() {
         variant="destructive"
         isLoading={logoutMutation.isPending}
       />
+
+      {/* Hidden TenantSelector that is forced open for SuperAdmins with no tenant */}
+      <TenantSelector open={isSelectionRequired} showTrigger={false} />
     </div>
   );
 }
