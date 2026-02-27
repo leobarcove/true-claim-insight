@@ -18,18 +18,24 @@ export class TenantService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Build a where clause with tenant filtering applied
+   * Build a where clause with tenant and user filtering applied
    *
    * @param tenantContext - The tenant context from the request
    * @param existingWhere - Any existing where conditions
-   * @param tenantField - The field name for tenant ID (default: 'tenantId')
-   * @returns Combined where clause with tenant filter
+   * @param options - Configuration for fields to filter on
+   * @returns Combined where clause with tenant/user filters
    */
   buildTenantFilter<T extends Record<string, any>>(
     tenantContext: TenantContext | null,
     existingWhere: T = {} as T,
-    tenantField: string = 'tenantId'
+    options: {
+      tenantField?: string;
+      userIdField?: string;
+      enforceUser?: boolean;
+    } = {}
   ): T {
+    const { tenantField = 'tenantId', userIdField = 'userId', enforceUser = false } = options;
+
     if (!tenantContext || tenantContext.scope === TenantScope.NONE) {
       return existingWhere;
     }
@@ -40,13 +46,42 @@ export class TenantService {
       tenantContext.scope === TenantScope.STRICT ||
       (tenantContext.scope === TenantScope.FLEXIBLE && !this.canAccessCrossTenant(tenantContext))
     ) {
+      const filter: any = {
+        [tenantField]: tenantContext.tenantId,
+      };
+
+      // Apply userId filter if enforced or if user is a claimant
+      if (enforceUser || (tenantContext.userRole === 'CLAIMANT' && userIdField)) {
+        filter[userIdField] = tenantContext.userId;
+      }
+
       return {
         ...existingWhere,
-        [tenantField]: tenantContext.tenantId,
+        ...filter,
       };
     }
 
     return existingWhere;
+  }
+
+  /**
+   * Validate that a resource belongs to the current user (and their tenant)
+   */
+  validateOwnership(
+    resourceTenantId: string | null,
+    resourceUserId: string | null,
+    tenantContext: TenantContext,
+    resourceName: string = 'Resource'
+  ): void {
+    // First validate tenant access
+    this.validateTenantAccess(resourceTenantId, tenantContext, resourceName);
+
+    // If not a cross-tenant admin, and we are in strict mode, validate user ownership if required
+    if (!this.canAccessCrossTenant(tenantContext)) {
+      if (resourceUserId !== tenantContext.userId && tenantContext.userRole === 'CLAIMANT') {
+        throw new ForbiddenException(`Access denied: This ${resourceName} does not belong to you`);
+      }
+    }
   }
 
   /**
@@ -64,13 +99,16 @@ export class TenantService {
       tenantContext.scope === TenantScope.STRICT ||
       (tenantContext.scope === TenantScope.FLEXIBLE && !this.canAccessCrossTenant(tenantContext))
     ) {
-      // Claims can be accessed if:
-      // 1. The adjuster belongs to the same tenant, OR
-      // 2. The insurer tenant matches
-      const tenantConditions = [
-        { adjuster: { tenantId: tenantContext.tenantId } },
-        { insurerTenantId: tenantContext.tenantId },
-      ];
+      // For CLAIMANT, only show their own claims
+      if (tenantContext.userRole === 'CLAIMANT') {
+        return {
+          ...existingWhere,
+          claimantId: tenantContext.userId,
+        };
+      }
+
+      // Strict Tenant Isolation: Only show records where tenantId matches
+      const tenantConditions = [{ tenantId: tenantContext.tenantId }];
 
       if (existingWhere.OR) {
         const { OR: existingOR, ...rest } = existingWhere;
@@ -140,9 +178,21 @@ export class TenantService {
       throw new NotFoundException(`Claim with ID ${claimId} not found`);
     }
 
+    // Claimant isolation check
+    if (tenantContext.userRole === 'CLAIMANT') {
+      if (claim.claimantId !== tenantContext.userId) {
+        this.logger.warn(
+          `Claim access violation: Claimant ${tenantContext.userId} attempted to access claim ${claimId} belonging to another claimant`
+        );
+        throw new NotFoundException(`Claim with ID ${claimId} not found`); // Obfuscate existence
+      }
+      return;
+    }
+
     const hasAccess =
       claim.adjuster?.tenantId === tenantContext.tenantId ||
-      claim.insurerTenantId === tenantContext.tenantId;
+      claim.insurerTenantId === tenantContext.tenantId ||
+      (claim as any).tenantId === tenantContext.tenantId;
 
     if (!hasAccess) {
       this.logger.warn(

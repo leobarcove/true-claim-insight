@@ -134,6 +134,17 @@ export class PolicyDocumentNormalizer extends BaseNormalizer<any> {
             email: this.toString(raw.policyholder.email),
           }
         : undefined,
+      vehicle: raw.vehicle
+        ? {
+            make: this.toString(raw.vehicle.make),
+            model: this.toString(raw.vehicle.model),
+            year: this.toString(raw.vehicle.year),
+            color: this.toString(raw.vehicle.color),
+            registration_number: this.toString(raw.vehicle.registration_number),
+            chassis_number: this.toString(raw.vehicle.chassis_number),
+            engine_number: this.toString(raw.vehicle.engine_number),
+          }
+        : undefined,
       insured_person: raw.insured_person
         ? {
             name: this.toString(raw.insured_person.name),

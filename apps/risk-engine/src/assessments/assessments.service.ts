@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
-import { RiskAssessment, AssessmentType, RiskScore, DocumentType } from '@prisma/client';
+import { AssessmentType, RiskScore, DocumentType, RiskAssessment } from '@prisma/client';
 import { RiskAnalyzerClient } from '../providers/risk-analyzer.client';
+import { TenantContext } from '../common/guards/tenant.guard';
+import { TenantService } from '../tenant/tenant.service';
 import * as fs from 'fs';
 
 import * as path from 'path';
@@ -19,50 +21,36 @@ export class AssessmentsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService,
     private readonly riskAnalyzerClient: RiskAnalyzerClient
   ) {
-    // Robust path resolution for sample audio.
-    // We check multiple potential locations because the execution context (CWD)
-    // varies depending on how the service is started (root vs package dir).
     const potentialPaths = [
-      // If CWD is pkg root (apps/risk-engine)
       path.join(process.cwd(), 'samples/sample_voice.wav'),
-      // If CWD is monorepo root
       path.join(process.cwd(), 'apps/risk-engine/samples/sample_voice.wav'),
-      // Relative to dist/assessments/assessments.service.js -> ../../samples
       path.join(__dirname, '../../samples/sample_voice.wav'),
     ];
 
     const existingPath = potentialPaths.find(p => fs.existsSync(p));
     this.sampleAudioPath = existingPath || potentialPaths[0];
-
-    // Log the resolved path for debugging
-    const logger = new Logger('AssessmentsServiceInit');
-    logger.log(
-      `Sample audio path resolved to: ${this.sampleAudioPath} (Exists: ${!!existingPath})`
-    );
   }
 
-  async getAssessmentsBySession(sessionId: string): Promise<RiskAssessment[]> {
+  async getAssessmentsBySession(sessionId: string, tenantContext: TenantContext): Promise<any[]> {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     return this.prisma.riskAssessment.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  /**
-   * Calculate Deception Score based on latest assessments
-   * DS = w*VoiceStress + w*VisualBehavior + w*ExpressionMeasurement
-   */
-  async calculateDeceptionScore(sessionId: string): Promise<any> {
+  async calculateDeceptionScore(sessionId: string, tenantContext: TenantContext): Promise<any> {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+
     const assessments = await this.prisma.riskAssessment.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Get latest assessment of each type
     const latestVoice = assessments.find(a => a.assessmentType === AssessmentType.VOICE_ANALYSIS);
-    // Visual Behavior: using ATTENTION_TRACKING or generic Visual metrics (excluding Expression)
     const latestVisual = assessments.find(
       a =>
         a.assessmentType === AssessmentType.ATTENTION_TRACKING ||
@@ -72,7 +60,7 @@ export class AssessmentsService {
       a => a.assessmentType === AssessmentType.VISUAL_MODERATION && a.provider.startsWith('HumeAI')
     );
 
-    const w = 0.33; // Equal weights among 3 metrics
+    const w = 0.33;
     const wvs = latestVoice ? this.normalizeVoiceStress(latestVoice.rawResponse) : 0;
     const wvb = latestVisual ? this.normalizeVisualBehavior(latestVisual.rawResponse) : 0;
     const wem = latestExpression ? this.calculateExpressionScore(latestExpression.rawResponse) : 0;
@@ -80,22 +68,22 @@ export class AssessmentsService {
     const deceptionScore = w * wvs + w * wvb + w * wem;
     const isHighRisk = deceptionScore > 0.7;
 
-    // Find the latest processed time across all assessments to provide precise temporal progress
     let processedUntil = 0;
     assessments.forEach(a => {
       const endTime = (a.rawResponse as any)?.endTime || 0;
       if (endTime > processedUntil) processedUntil = endTime;
     });
 
-    // Persist deception calculation with NaN safeguards
-    await (this.prisma as any).deceptionScore.create({
+    await this.prisma.deceptionScore.create({
       data: {
         sessionId,
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
         deceptionScore: isNaN(deceptionScore) ? 0 : deceptionScore,
         voiceStress: isNaN(wvs) ? 0 : wvs,
         visualBehavior: isNaN(wvb) ? 0 : wvb,
         expressionMeasurement: isNaN(wem) ? 0 : wem,
-      },
+      } as any,
     });
 
     return {
@@ -111,7 +99,9 @@ export class AssessmentsService {
     };
   }
 
-  async generateConsentForm(sessionId: string) {
+  async generateConsentForm(sessionId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: {
@@ -125,7 +115,6 @@ export class AssessmentsService {
                   select: {
                     fullName: true,
                     phoneNumber: true,
-                    // role filtering can be added
                   },
                 },
               },
@@ -141,7 +130,7 @@ export class AssessmentsService {
       throw new Error('Session or Claim Data missing');
     }
 
-    const scores = await this.calculateDeceptionScore(sessionId);
+    const scores = await this.calculateDeceptionScore(sessionId, tenantContext);
     const payload = {
       sessionId,
       claimId: session.claimId,
@@ -199,6 +188,8 @@ export class AssessmentsService {
       await this.prisma.document.create({
         data: {
           claimId: session.claimId,
+          tenantId: tenantContext.tenantId,
+          userId: tenantContext.userId,
           type: DocumentType.SIGNED_STATEMENT,
           filename: `consent_${sessionId}.pdf`,
           storageUrl: result.signed_url,
@@ -319,26 +310,21 @@ export class AssessmentsService {
    * Trigger a real assessment using the Python analyzer
    * Uses sample audio file for voice analysis (simulates live feed)
    */
-  async triggerMockAssessment(sessionId: string, type: string) {
+  async triggerMockAssessment(sessionId: string, type: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     const assessmentType = this.mapType(type);
 
-    this.logger.log(`Triggering assessment: type=${type} -> mapped=${assessmentType}`);
-
-    // For VOICE_ANALYSIS, use real Python analyzer with sample audio
-    // Check both Enum and String literal to be robust against import/type issues
     if (
       (assessmentType as any) === 'VOICE_ANALYSIS' ||
       assessmentType === AssessmentType.VOICE_ANALYSIS
     ) {
-      return this.triggerRealVoiceAnalysis(sessionId);
+      return this.triggerRealVoiceAnalysis(sessionId, tenantContext);
     }
-
-    // For other types, still use mock data for now
-    this.logger.log(`Creating mock ${assessmentType} assessment for session ${sessionId}...`);
 
     return this.prisma.riskAssessment.create({
       data: {
         sessionId,
+        tenantId: tenantContext.tenantId,
         assessmentType,
         provider: 'MediaPipe (Mock)',
         riskScore: this.getRandomRiskScore(),
@@ -351,87 +337,64 @@ export class AssessmentsService {
   /**
    * Process uploaded audio file buffer for real analysis
    */
-  async processUploadedAudio(fileBuffer: Buffer, sessionId: string) {
+  async processUploadedAudio(fileBuffer: Buffer, sessionId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
+
+    const tmpDir = os.tmpdir();
+    const inputPath = path.join(tmpDir, `input-${sessionId}-${Date.now()}.webm`);
+    const outputPath = path.join(tmpDir, `output-${sessionId}-${Date.now()}.wav`);
+
+    await fs.promises.writeFile(inputPath, fileBuffer);
+
     try {
-      this.logger.log(
-        `Processing uploaded audio for session ${sessionId}, size: ${fileBuffer.length} bytes`
-      );
-
-      const tmpDir = os.tmpdir();
-      const inputPath = path.join(tmpDir, `input-${sessionId}-${Date.now()}.webm`);
-      const outputPath = path.join(tmpDir, `output-${sessionId}-${Date.now()}.wav`);
-
-      await fs.promises.writeFile(inputPath, fileBuffer);
-
-      try {
-        this.logger.log(
-          `Converting audio using ffmpeg at ${ffmpegPath}: ${inputPath} -> ${outputPath}`
-        );
-        await execAsync(`"${ffmpegPath}" -y -i "${inputPath}" "${outputPath}"`);
-
-        const wavBuffer = await fs.promises.readFile(outputPath);
-        this.logger.log(`Conversion complete. WAV size: ${wavBuffer.length}`);
-
-        const result = await this.riskAnalyzerClient.analyzeAudio(wavBuffer, 'claimant-upload.wav');
-
-        // Cleanup
-        setTimeout(() => {
-          fs.unlink(inputPath, () => {});
-          fs.unlink(outputPath, () => {});
-        }, 1000);
-
-        // Save result to DB
-        const assessment = await this.prisma.riskAssessment.create({
-          data: {
-            sessionId,
-            assessmentType: AssessmentType.VOICE_ANALYSIS,
-            provider: 'Parselmouth (Real - Upload)',
-            riskScore: result.risk_score as RiskScore,
-            confidence: result.confidence,
-            rawResponse: {
-              ...result.metrics,
-              details: result.details,
-              timestamp: new Date().toISOString(),
-              analysisMethod: 'live_upload',
-            },
+      await execAsync(`"${ffmpegPath}" -y -i "${inputPath}" "${outputPath}"`);
+      const wavBuffer = await fs.promises.readFile(outputPath);
+      const result = await this.riskAnalyzerClient.analyzeAudio(wavBuffer, 'claimant-upload.wav');
+      const assessment = await this.prisma.riskAssessment.create({
+        data: {
+          sessionId,
+          tenantId: await this.resolveTenantId(sessionId, tenantContext),
+          assessmentType: AssessmentType.VOICE_ANALYSIS,
+          provider: 'Parselmouth (Real - Upload)',
+          riskScore: result.risk_score as RiskScore,
+          confidence: result.confidence,
+          rawResponse: {
+            ...result.metrics,
+            details: result.details,
+            timestamp: new Date().toISOString(),
+            analysisMethod: 'live_upload',
           },
-        });
+        },
+      });
 
-        return assessment;
-      } catch (err: any) {
-        this.logger.error(`Conversion or Analysis failed: ${err.message}`);
-        throw err;
-      }
-    } catch (error: any) {
-      this.logger.error(`Failed to process uploaded audio: ${error.message}`);
-      throw error;
+      return assessment;
+    } finally {
+      fs.unlink(inputPath, () => {});
+      fs.unlink(outputPath, () => {});
     }
   }
 
-  async processUploadedExpression(fileBuffer: Buffer, sessionId: string) {
+  async processUploadedExpression(
+    fileBuffer: Buffer,
+    sessionId: string,
+    tenantContext: TenantContext
+  ) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     const tempInputPath = path.join(os.tmpdir(), `input-expr-${sessionId}-${Date.now()}.webm`);
     const tempOutputPath = path.join(os.tmpdir(), `output-expr-${sessionId}-${Date.now()}.webm`);
 
     try {
-      this.logger.log(
-        `Processing expression analysis for session ${sessionId}, size: ${fileBuffer.length} bytes`
-      );
-
       await fs.promises.writeFile(tempInputPath, fileBuffer);
-      this.logger.log(`Repairing video container: ${tempInputPath} -> ${tempOutputPath}`);
-
-      // Remux to fix truncated container
       await execAsync(`"${ffmpegPath}" -y -i "${tempInputPath}" -c copy "${tempOutputPath}"`);
-
-      this.logger.log(`Video container repaired successfully`);
 
       const result = await this.riskAnalyzerClient.analyzeExpression(
         tempOutputPath,
         'expression.webm'
       );
-      const assessment = await this.prisma.riskAssessment.create({
+      return this.prisma.riskAssessment.create({
         data: {
           sessionId,
+          tenantId: await this.resolveTenantId(sessionId, tenantContext),
           assessmentType: AssessmentType.VISUAL_MODERATION,
           provider: result.metrics?.provider || 'HumeAI-Expression-Measurement',
           riskScore: this.mapRiskScore(result.risk_score),
@@ -439,47 +402,27 @@ export class AssessmentsService {
           rawResponse: {
             ...result.metrics,
             details: result.details,
-            analysisMethod: 'expression_measurement',
             timestamp: new Date().toISOString(),
+            analysisMethod: 'expression_measurement',
           },
         },
       });
-
-      this.logger.log(`Expression analysis complete for session ${sessionId}`);
-      return assessment;
-    } catch (error: any) {
-      this.logger.error(`Expression analysis failed: ${error.message}`);
-      throw error;
     } finally {
-      // Cleanup temp files
-      try {
-        if (fs.existsSync(tempInputPath)) await fs.promises.unlink(tempInputPath);
-        if (fs.existsSync(tempOutputPath)) await fs.promises.unlink(tempOutputPath);
-        this.logger.log(`Temporary repair files removed for session ${sessionId}`);
-      } catch (cleanupError: any) {
-        this.logger.warn(`Failed to cleanup temp files: ${cleanupError.message}`);
-      }
+      if (fs.existsSync(tempInputPath)) await fs.promises.unlink(tempInputPath).catch(() => {});
+      if (fs.existsSync(tempOutputPath)) await fs.promises.unlink(tempOutputPath).catch(() => {});
     }
   }
 
-  async processUploadedVideo(fileBuffer: Buffer, sessionId: string) {
+  async processUploadedVideo(fileBuffer: Buffer, sessionId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateSessionAccess(sessionId, tenantContext);
     const tempInputPath = path.join(os.tmpdir(), `input-video-${sessionId}-${Date.now()}.webm`);
     const tempOutputPath = path.join(os.tmpdir(), `output-video-${sessionId}-${Date.now()}.webm`);
 
     try {
-      this.logger.log(
-        `Processing uploaded video for session ${sessionId}, size: ${fileBuffer.length} bytes`
-      );
-
       await fs.promises.writeFile(tempInputPath, fileBuffer);
-      this.logger.log(`Repairing video container: ${tempInputPath} -> ${tempOutputPath}`);
-
-      // Remux to fix truncated container
       await execAsync(`"${ffmpegPath}" -y -i "${tempInputPath}" -c copy "${tempOutputPath}"`);
 
       const fixedBuffer = await fs.promises.readFile(tempOutputPath);
-      this.logger.log(`Video container repaired. Final size: ${fixedBuffer.length}`);
-
       const result = await this.riskAnalyzerClient.analyzeVideo(
         fixedBuffer,
         'visual-behavior.webm'
@@ -491,9 +434,10 @@ export class AssessmentsService {
           ? 'MediaPipe (Error: Unavailable)'
           : 'MediaPipe (Real - Upload)';
 
-      const assessment = await this.prisma.riskAssessment.create({
+      return this.prisma.riskAssessment.create({
         data: {
           sessionId,
+          tenantId: await this.resolveTenantId(sessionId, tenantContext),
           assessmentType: AssessmentType.VISUAL_MODERATION,
           provider,
           riskScore: this.mapRiskScore(result.risk_score),
@@ -506,57 +450,24 @@ export class AssessmentsService {
           },
         },
       });
-
-      // Cleanup temp files
-      setTimeout(() => {
-        if (fs.existsSync(tempInputPath)) fs.unlink(tempInputPath, () => {});
-        if (fs.existsSync(tempOutputPath)) fs.unlink(tempOutputPath, () => {});
-      }, 1000);
-
-      return assessment;
-    } catch (error: any) {
-      this.logger.error(`Failed to process uploaded video: ${error.message}`);
-      throw error;
+    } finally {
+      if (fs.existsSync(tempInputPath)) fs.unlink(tempInputPath, () => {});
+      if (fs.existsSync(tempOutputPath)) fs.unlink(tempOutputPath, () => {});
     }
   }
 
-  // Helper mapping method
-  private mapType(type: string): AssessmentType {
-    const map: Record<string, AssessmentType> = {
-      VOICE: AssessmentType.VOICE_ANALYSIS,
-      VISUAL: AssessmentType.ATTENTION_TRACKING,
-      ATTENTION: AssessmentType.ATTENTION_TRACKING,
-      DEEPFAKE: AssessmentType.DEEPFAKE_CHECK,
-    };
-
-    // Return mapped type or fallback to VOICE_ANALYSIS for simplicity/demos
-    // (In production, strict validation would be better)
-    return map[type.toUpperCase()] || (type as AssessmentType);
-  }
-
-  // ... existing code ...
-
-  /**
-   * Trigger real voice analysis using the Python analyzer with sample audio
-   */
-  private async triggerRealVoiceAnalysis(sessionId: string): Promise<RiskAssessment> {
-    this.logger.log(`Triggering REAL voice analysis for session ${sessionId}...`);
-
+  private async triggerRealVoiceAnalysis(
+    sessionId: string,
+    tenantContext: TenantContext
+  ): Promise<any> {
     try {
-      // Read sample audio file
       const audioBuffer = fs.readFileSync(this.sampleAudioPath);
-      this.logger.log(`Loaded sample audio: ${audioBuffer.length} bytes`);
-
-      // Call Python analyzer
       const result = await this.riskAnalyzerClient.analyzeAudio(audioBuffer, 'sample_voice.wav');
-      this.logger.log(
-        `Python analyzer returned: risk_score=${result.risk_score}, confidence=${result.confidence}`
-      );
 
-      // Upsert assessment with real results
       return this.prisma.riskAssessment.create({
         data: {
           sessionId,
+          tenantId: tenantContext.tenantId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
           provider: 'Parselmouth (Real)',
           riskScore: this.mapRiskScore(result.risk_score),
@@ -564,20 +475,18 @@ export class AssessmentsService {
           rawResponse: {
             ...result.metrics,
             details: result.details,
-            analysisMethod: 'sample_audio',
             timestamp: new Date().toISOString(),
+            analysisMethod: 'sample_audio',
           },
         },
       });
     } catch (error: any) {
-      this.logger.error(`Real voice analysis failed: ${error.message}`);
-
-      // Fallback to mock on error
       return this.prisma.riskAssessment.create({
         data: {
           sessionId,
+          tenantId: tenantContext.tenantId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
-          provider: 'Parselmouth (Error - Mock Fallback)',
+          provider: 'Parselmouth (Error - Fallback)',
           riskScore: RiskScore.MEDIUM,
           confidence: 0.5,
           rawResponse: {
@@ -623,6 +532,17 @@ export class AssessmentsService {
     }
   }
 
+  private async resolveTenantId(sessionId: string, tenantContext: TenantContext): Promise<string> {
+    if (tenantContext.userRole !== 'SYSTEM' && tenantContext.tenantId !== 'system') {
+      return tenantContext.tenantId;
+    }
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { tenantId: true },
+    });
+    return session?.tenantId || tenantContext.tenantId;
+  }
+
   /**
    * Analyze video using the Python service
    */
@@ -656,11 +576,14 @@ export class AssessmentsService {
     }
   }
 
-  /**
-   * Check if Python analyzer service is available
-   */
-  async isAnalyzerHealthy(): Promise<boolean> {
-    return this.riskAnalyzerClient.healthCheck();
+  private mapType(type: string): AssessmentType {
+    const map: Record<string, AssessmentType> = {
+      VOICE: AssessmentType.VOICE_ANALYSIS,
+      VISUAL: AssessmentType.ATTENTION_TRACKING,
+      ATTENTION: AssessmentType.ATTENTION_TRACKING,
+      DEEPFAKE: AssessmentType.DEEPFAKE_CHECK,
+    };
+    return map[type.toUpperCase()] || (type as AssessmentType);
   }
 
   private mapRiskScore(score: string): RiskScore {
@@ -706,5 +629,9 @@ export class AssessmentsService {
         frames_analyzed: Math.floor(100 + Math.random() * 500),
       };
     }
+  }
+
+  async isAnalyzerHealthy(): Promise<boolean> {
+    return this.riskAnalyzerClient.healthCheck();
   }
 }

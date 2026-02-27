@@ -11,21 +11,27 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor - add auth token
+// Request interceptor - add auth token and tenant ID
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const { accessToken, user } = useAuthStore.getState();
+
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
+
+    if (user?.currentTenantId) {
+      config.headers['X-Tenant-Id'] = user.currentTenantId;
+    }
+
     return config;
   },
-  (error) => Promise.reject(error)
+  error => Promise.reject(error)
 );
 
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
-  (response) => response,
+  response => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;

@@ -9,16 +9,16 @@ export class WebhooksService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService
   ) {
     this.riskEngineUrl = this.configService.get<string>('RISK_ENGINE_URL', 'http://localhost:3004');
   }
 
   async handleRecordingReady(payload: any) {
     const { room_name, download_link, duration } = payload;
-    
+
     this.logger.log(`Recording ready: room=${room_name}, duration=${duration}s`);
-    
+
     // Find the session by room name or ID
     const session = await this.findSessionByRoom(room_name);
     if (!session) {
@@ -41,15 +41,24 @@ export class WebhooksService {
 
   async handleMeetingEnded(payload: any) {
     const { room_name } = payload;
-    
+
     this.logger.log(`Meeting ended: room=${room_name}`);
-    
+
     // Session status update is handled elsewhere
     // This is just for logging/future use
   }
 
   async triggerAnalysisForSession(sessionId: string) {
     this.logger.log(`Triggering analysis for session: ${sessionId}`);
+
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      this.logger.error(`Session ${sessionId} not found when triggering analysis`);
+      return;
+    }
 
     // Update status to PROCESSING
     await this.prisma.session.update({
@@ -58,11 +67,13 @@ export class WebhooksService {
     });
 
     try {
-      // For now, trigger mock analysis via risk-engine
-      // In production, this would download the recording and send it for analysis
       const response = await fetch(`${this.riskEngineUrl}/api/v1/assessments/analyze-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-id': session.tenantId || 'system',
+          'x-user-id': 'system',
+        },
         body: JSON.stringify({ sessionId }),
       });
 
@@ -79,7 +90,7 @@ export class WebhooksService {
       this.logger.log(`Analysis completed for session: ${sessionId}`);
     } catch (error) {
       this.logger.error(`Analysis failed for session ${sessionId}: ${error}`);
-      
+
       // Update status to FAILED
       await this.prisma.session.update({
         where: { id: sessionId },
@@ -96,9 +107,7 @@ export class WebhooksService {
         OR: [
           { roomUrl: { contains: roomName } },
           // If roomName is numeric, try matching roomId
-          ...(roomName && !isNaN(Number(roomName)) 
-            ? [{ roomId: BigInt(roomName) }] 
-            : []),
+          ...(roomName && !isNaN(Number(roomName)) ? [{ roomId: BigInt(roomName) }] : []),
         ],
       },
       orderBy: { createdAt: 'desc' },

@@ -8,37 +8,115 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password      String
-  fullName      String
-  phoneNumber   String
-  role          UserRole
-  licenseNumber String?
-  tenantId      String?
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  adjuster      Adjuster?
-  siuClaims     Claim[]   @relation("SIUInvestigator")
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  id               String             @id @default(uuid())
+  email            String             @unique
+  password         String
+  fullName         String
+  phoneNumber      String
+  role             UserRole
+  licenseNumber    String?
+  tenantId         String? // Deprecated: kept for backward compatibility
+  currentTenantId  String? // Active tenant context for current session
+  lastLoginAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  adjuster         Adjuster?
+  siuClaims        Claim[]            @relation("SIUInvestigator")
+  tenant           Tenant?            @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
+  currentTenant    Tenant?            @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
+  userTenants      UserTenant[]       // Many-to-many relationship with tenants
+  tenantAccessLogs TenantAccessLog[]
+  sessions         Session[]
+  documents        Document[]
+  documentAnalyses DocumentAnalysis[]
+  trinityChecks    TrinityCheck[]
+  deceptionScores  DeceptionScore[]
+  riskAssessments  RiskAssessment[]
+  videoUploads     VideoUpload[]
+  claimants        Claimant[]
+  otpCodes         OtpCode[]
+  vehicleMakes     VehicleMake[]
+  vehicleModels    VehicleModel[]
+  claimNotes       ClaimNote[]
+  sessionClientInfos SessionClientInfo[]
+  auditTrails      AuditTrail[]
+  claims           Claim[]
+
 
   @@index([tenantId])
+  @@index([currentTenantId])
   @@index([email])
   @@map("users")
 }
 
+model UserTenant {
+  id             String    @id @default(uuid())
+  userId         String
+  tenantId       String
+  role           UserRole // Role specific to this tenant
+  isDefault      Boolean   @default(false) // Default tenant for this user
+  status         UserTenantStatus @default(ACTIVE)
+  joinedAt       DateTime  @default(now())
+  lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([userId, tenantId])
+  @@map("user_tenants")
+}
+
+model TenantAccessLog {
+  id            String   @id @default(uuid())
+  userId        String
+  fromTenantId  String?
+  toTenantId    String
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromTenant    Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
+  toTenant      Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@map("tenant_access_logs")
+}
+
 model Tenant {
-  id               String           @id @default(uuid())
-  name             String
-  type             TenantType
-  subscriptionTier SubscriptionTier @default(BASIC)
-  settings         Json             @default("{}")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  adjusters        Adjuster[]
-  claims           Claim[]          @relation("InsurerClaims")
-  users            User[]
+  id                  String            @id @default(uuid())
+  name                String
+  type                TenantType
+  subscriptionTier    SubscriptionTier  @default(BASIC)
+  settings            Json              @default("{}")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  adjusters           Adjuster[]
+  claims              Claim[]           @relation("InsurerClaims")
+  users               User[]            @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
+  currentUsers        User[]            @relation("UserCurrentTenant") // Users currently in this tenant context
+  userTenants         UserTenant[]      // Many-to-many relationship with users
+  tenantAccessLogsFrom TenantAccessLog[] @relation("TenantAccessFrom")
+  tenantAccessLogsTo   TenantAccessLog[] @relation("TenantAccessTo")
+  sessions            Session[]
+  claimNotes          ClaimNote[]
+  deceptionScores     DeceptionScore[]
+  riskAssessments     RiskAssessment[]
+  documents           Document[]
+  documentAnalyses    DocumentAnalysis[]
+  trinityChecks       TrinityCheck[]
+  auditLogs           AuditTrail[]
+  videoUploads        VideoUpload[]
+  sessionClientInfos  SessionClientInfo[]
+  claimants           Claimant[]
+  otpCodes            OtpCode[]
+  vehicleMakes        VehicleMake[]
+  vehicleModels       VehicleModel[]
+  ownedClaims         Claim[]
 
   @@map("tenants")
 }
@@ -76,10 +154,16 @@ model Claimant {
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  tenantId      String?   // Organization ownership
+  userId        String?   // Creator/Link to User record
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  user          User?     @relation(fields: [userId], references: [id])
   claims        Claim[]
 
   @@index([phoneNumber])
   @@index([nric])
+  @@index([tenantId])
+  @@index([userId])
   @@map("claimants")
 }
 
@@ -91,9 +175,15 @@ model OtpCode {
   verified    Boolean  @default(false)
   attempts    Int      @default(0)
   createdAt   DateTime @default(now())
+  tenantId    String?  // Associated tenant if known
+  userId      String?  // Associated user if known
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
 
   @@index([phoneNumber, code])
   @@index([expiresAt])
+  @@index([tenantId])
+  @@index([userId])
   @@map("otp_codes")
 }
 
@@ -130,16 +220,22 @@ model Claim {
   complianceNotes         Json?       @default("{}")
   priority                Priority    @default(NORMAL)
   scheduledAssessmentTime DateTime?
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
   siuInvestigatorId       String?
   approvedAmount          Decimal?
   excessAmount            Decimal?
   vehicleEngineNumber     String?
   vehicleYear             Int?
+  tenantId                String?     // Standardized tenant ownership
+  userId                  String?     // Standardized creator/owner
+  createdById             String?     // Keeping for backward compatibility
+  updatedById             String?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
   notes                   ClaimNote[]
   adjuster                Adjuster?   @relation(fields: [adjusterId], references: [id])
   claimant                Claimant    @relation(fields: [claimantId], references: [id])
+  tenant                  Tenant?     @relation(fields: [tenantId], references: [id])
+  user                    User?       @relation(fields: [userId], references: [id])
   insurerTenant           Tenant?     @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
   siuInvestigator         User?       @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
   documents               Document[]
@@ -151,6 +247,8 @@ model Claim {
   @@index([nric])
   @@index([adjusterId])
   @@index([status])
+  @@index([tenantId])
+  @@index([userId])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
 }
@@ -158,20 +256,27 @@ model Claim {
 model ClaimNote {
   id         String    @id @default(uuid())
   claimId    String
-  authorId   String
-  authorType ActorType
   content    String
   isPrivate  Boolean   @default(false)
   createdAt  DateTime  @default(now())
+  tenantId   String?   // Organization ownership
+  userId     String?   // Creator (linked to User)
+  authorId   String    // Generic author ID (can be user or claimant)
+  authorType ActorType
   claim      Claim     @relation(fields: [claimId], references: [id])
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
 
   @@index([claimId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("claim_notes")
 }
 
 model Session {
   id              String           @id @default(uuid())
   claimId         String
+  tenantId        String? // Tenant context for this session
   roomId          BigInt
   status          SessionStatus    @default(SCHEDULED)
   scheduledTime   DateTime?
@@ -187,8 +292,12 @@ model Session {
   deceptionScores DeceptionScore[]
   clientInfos     SessionClientInfo[]
   claim           Claim            @relation(fields: [claimId], references: [id])
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  userId          String?          // User who scheduled/initiated
+  user            User?            @relation(fields: [userId], references: [id])
 
   @@index([claimId])
+  @@index([tenantId])
   @@map("sessions")
 }
 
@@ -200,7 +309,11 @@ model DeceptionScore {
   visualBehavior        Decimal  @db.Decimal(5, 4)
   expressionMeasurement Decimal  @db.Decimal(5, 4)
   createdAt             DateTime @default(now())
+  tenantId              String?  // Denormalized for reporting
+  userId                String?  // Who triggered analysis
   session               Session  @relation(fields: [sessionId], references: [id])
+  tenant                Tenant?  @relation(fields: [tenantId], references: [id])
+  user                  User?    @relation(fields: [userId], references: [id])
 
   @@index([sessionId])
   @@map("deception_scores")
@@ -218,7 +331,11 @@ model RiskAssessment {
   rawResponse    Json?
   contextData    Json?
   createdAt      DateTime       @default(now())
+  tenantId       String?        // Denormalized for reporting
+  userId         String?        // Who triggered analysis
   session        Session        @relation(fields: [sessionId], references: [id])
+  tenant         Tenant?        @relation(fields: [tenantId], references: [id])
+  user           User?          @relation(fields: [userId], references: [id])
 
   @@index([sessionId, assessmentType])
   @@index([sessionId])
@@ -238,7 +355,11 @@ model Document {
   signedAt     DateTime?
   documentHash String?
   createdAt    DateTime     @default(now())
+  tenantId     String?      // Organization ownership
+  userId       String?      // Uploader ID
   claim        Claim             @relation(fields: [claimId], references: [id])
+  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
+  user         User?             @relation(fields: [userId], references: [id])
   analysis     DocumentAnalysis?
 
   @@index([claimId])
@@ -256,7 +377,11 @@ model DocumentAnalysis {
   processingTime Int?    // in ms
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  tenantId      String?  // Organization ownership
+  userId        String?  // Who triggered analysis
   document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  user          User?    @relation(fields: [userId], references: [id])
 
   @@map("document_analyses")
 }
@@ -272,8 +397,13 @@ model TrinityCheck {
   riskFactors       Json     // Identified risks
   reasoning         String?  @db.Text
   reasoningInsights Json?
+  reportUrl         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  tenantId          String?  // Organization ownership
+  userId            String?  // Triggered by
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id])
+  user              User?    @relation(fields: [userId], references: [id])
 
   @@index([claimId])
   @@map("trinity_checks")
@@ -292,9 +422,15 @@ model AuditTrail {
   newValues  Json?
   metadata   Json?
   createdAt  DateTime   @default(now())
+  tenantId   String?    // Tenant context for this audit event
+  userId     String?    // User context
+  tenant     Tenant?    @relation(fields: [tenantId], references: [id])
+  user       User?      @relation(fields: [userId], references: [id])
 
   @@index([entityType, entityId])
   @@index([createdAt(sort: Desc)])
+  @@index([tenantId])
+  @@index([userId])
   @@map("audit_trail")
 }
 
@@ -334,6 +470,14 @@ enum KycStatus {
   FAILED
   EXPIRED
 }
+
+enum UserTenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_APPROVAL
+}
+
 
 enum ClaimType {
   OWN_DAMAGE
@@ -433,10 +577,14 @@ model VideoUpload {
   duration       Float?            // in seconds
   processedUntil Float             @default(0) // seconds processed so far
   status         VideoUploadStatus @default(PENDING)
-  uploadedBy     String?           // user ID
+  uploadedBy     String?           // user ID (deprecated, use userId)
+  userId         String?           // Who uploaded
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
+  tenantId       String?           // Organization ownership
   claim          Claim             @relation(fields: [claimId], references: [id])
+  tenant         Tenant?           @relation(fields: [tenantId], references: [id])
+  user           User?             @relation(fields: [userId], references: [id])
 
   @@index([claimId])
   @@index([status])
@@ -453,11 +601,18 @@ enum VideoUploadStatus {
 
 model VehicleMake {
   id        String         @id @default(uuid())
-  name      String         @unique
+  name      String
   models    VehicleModel[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  tenantId  String?        // Organization ownership
+  userId    String?        // Creator
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id])
+  user      User?          @relation(fields: [userId], references: [id])
 
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([userId])
   @@map("vehicle_makes")
 }
 
@@ -468,9 +623,15 @@ model VehicleModel {
   make      VehicleMake @relation(fields: [makeId], references: [id], onDelete: Cascade)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+  tenantId  String?     // Organization ownership
+  userId    String?     // Creator
+  tenant    Tenant?     @relation(fields: [tenantId], references: [id])
+  user      User?       @relation(fields: [userId], references: [id])
 
-  @@unique([makeId, name])
+  @@unique([tenantId, makeId, name])
   @@index([makeId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("vehicle_models")
 }
 
@@ -500,7 +661,13 @@ model SessionClientInfo {
   
   metadata         Json?    @default("{}")
   createdAt        DateTime @default(now())
+  tenantId         String?  // Organization info
+  userId           String?  // Associated user session
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
+  user             User?    @relation(fields: [userId], references: [id])
 
   @@index([sessionId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("session_client_info")
 }

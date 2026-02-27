@@ -16,12 +16,15 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { TenantGuard } from '../common/guards/tenant.guard';
+import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
+import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 import { DocumentType } from '@prisma/client';
 
 @ApiTags('documents')
 @ApiBearerAuth()
+@ApiBearerAuth()
 @UseGuards(InternalAuthGuard, TenantGuard)
+@TenantIsolation(TenantScope.STRICT)
 @Controller('claims/:claimId/documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
@@ -35,15 +38,20 @@ export class DocumentsController {
   })
   async create(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Body() createDocumentDto: CreateDocumentDto
+    @Body() createDocumentDto: CreateDocumentDto,
+    @Tenant() tenantContext: TenantContext
   ) {
-    return this.documentsService.create(claimId, createDocumentDto);
+    return this.documentsService.create(claimId, createDocumentDto, tenantContext);
   }
 
   @Post('upload')
   @ApiOperation({ summary: 'Upload a document file' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
-  async upload(@Param('claimId', ParseUUIDPipe) claimId: string, @Req() req: any) {
+  async upload(
+    @Param('claimId', ParseUUIDPipe) claimId: string,
+    @Req() req: any,
+    @Tenant() tenantContext: TenantContext
+  ) {
     const file = await req.file();
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -52,7 +60,7 @@ export class DocumentsController {
     // Extract additional fields from form data if needed
     const type = file.fields?.type?.value || DocumentType.OTHER_DOCUMENT;
 
-    return this.documentsService.upload(claimId, file, type);
+    return this.documentsService.upload(claimId, file, type, tenantContext);
   }
 
   @Post(':id/replace')
@@ -62,13 +70,14 @@ export class DocumentsController {
   async replace(
     @Param('claimId', ParseUUIDPipe) claimId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: any
+    @Req() req: any,
+    @Tenant() tenantContext: TenantContext
   ) {
     const file = await req.file();
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    return this.documentsService.replace(claimId, id, file);
+    return this.documentsService.replace(claimId, id, file, tenantContext);
   }
 
   @Get()
@@ -78,8 +87,11 @@ export class DocumentsController {
     status: HttpStatus.OK,
     description: 'Returns list of documents',
   })
-  async findAll(@Param('claimId', ParseUUIDPipe) claimId: string) {
-    return this.documentsService.findAll(claimId);
+  async findAll(
+    @Param('claimId', ParseUUIDPipe) claimId: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.documentsService.findAll(claimId, tenantContext);
   }
 
   @Get(':id')
@@ -92,9 +104,10 @@ export class DocumentsController {
   })
   async findOne(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
   ) {
-    return this.documentsService.findOne(claimId, id);
+    return this.documentsService.findOne(claimId, id, tenantContext);
   }
 
   @Get(':id/download-url')
@@ -107,16 +120,20 @@ export class DocumentsController {
   })
   async getDownloadUrl(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
   ) {
-    return this.documentsService.getDownloadUrl(claimId, id);
+    return this.documentsService.getDownloadUrl(claimId, id, tenantContext);
   }
 
   @Post('trinity-check')
   @ApiOperation({ summary: 'Trigger Trinity AI checks for all documents in a claim' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
-  async triggerTrinityCheck(@Param('claimId', ParseUUIDPipe) claimId: string) {
-    return this.documentsService.triggerTrinityCheck(claimId);
+  async triggerTrinityCheck(
+    @Param('claimId', ParseUUIDPipe) claimId: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.documentsService.triggerTrinityCheck(claimId, tenantContext);
   }
 
   @Delete(':id')
@@ -130,8 +147,9 @@ export class DocumentsController {
   })
   async remove(
     @Param('claimId', ParseUUIDPipe) claimId: string,
-    @Param('id', ParseUUIDPipe) id: string
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
   ) {
-    return this.documentsService.remove(claimId, id);
+    return this.documentsService.remove(claimId, id, tenantContext);
   }
 }

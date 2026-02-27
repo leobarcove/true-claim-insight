@@ -24,6 +24,7 @@ export interface ClaimFilters {
   sortOrder?: 'asc' | 'desc';
   adjusterId?: string;
   scope?: 'tenant' | 'personal';
+  createdById?: string;
   scheduledFrom?: string;
   hasAnalysis?: boolean;
 }
@@ -94,6 +95,7 @@ export function useClaims(filters: ClaimFilters = {}) {
       if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
       if (filters.adjusterId) params.append('adjusterId', filters.adjusterId);
       if (filters.scope) params.append('scope', filters.scope);
+      if (filters.createdById) params.append('createdById', filters.createdById);
       if (filters.scheduledFrom) params.append('scheduledFrom', filters.scheduledFrom);
       if (filters.hasAnalysis) params.append('hasAnalysis', 'true');
 
@@ -130,11 +132,14 @@ export function useClaimQueue() {
 }
 
 // Fetch claim statistics
-export function useClaimStats(scope?: 'tenant' | 'personal') {
+export function useClaimStats(filters: { createdById?: string } = {}) {
   return useQuery({
-    queryKey: [...claimKeys.stats(), scope || 'default'],
+    queryKey: [...claimKeys.stats(), filters],
     queryFn: async () => {
-      const url = scope ? `/claims/stats?scope=${scope}` : '/claims/stats';
+      const params = new URLSearchParams();
+      if (filters.createdById) params.append('createdById', filters.createdById);
+
+      const url = `/claims/stats${params.toString() ? `?${params.toString()}` : ''}`;
       const { data } = await apiClient.get<ApiResponse<ClaimStats>>(url);
       return data.data;
     },

@@ -28,6 +28,7 @@ export interface TrinityCheck {
     confidence: number;
     model?: string;
   };
+  reportUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

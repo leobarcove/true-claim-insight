@@ -7,6 +7,7 @@ import {
   Logger,
   Req,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,12 +15,19 @@ import {
   ApiResponse as SwaggerResponse,
   ApiConsumes,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AssessmentsService } from './assessments.service';
 import { FastifyRequest } from 'fastify';
+import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
 
 @ApiTags('Assessments')
+@ApiBearerAuth()
 @Controller('assessments')
+@UseGuards(InternalAuthGuard, TenantGuard)
+@TenantIsolation(TenantScope.STRICT)
 export class AssessmentsController {
   private readonly logger = new Logger(AssessmentsController.name);
 
@@ -28,15 +36,15 @@ export class AssessmentsController {
   @Get('session/:sessionId')
   @ApiOperation({ summary: 'Get risk assessments for a video session' })
   @SwaggerResponse({ status: 200, description: 'List of risk assessments' })
-  async getAssessments(@Param('sessionId') sessionId: string) {
-    return this.assessmentsService.getAssessmentsBySession(sessionId);
+  async getAssessments(@Param('sessionId') sessionId: string, @Tenant() tenantContext: TenantContext) {
+    return this.assessmentsService.getAssessmentsBySession(sessionId, tenantContext);
   }
 
   @Get('session/:sessionId/deception-score')
   @ApiOperation({ summary: 'Get deception score for a session' })
   @SwaggerResponse({ status: 200, description: 'Deception score analysis' })
-  async getDeceptionScore(@Param('sessionId') sessionId: string) {
-    return this.assessmentsService.calculateDeceptionScore(sessionId);
+  async getDeceptionScore(@Param('sessionId') sessionId: string, @Tenant() tenantContext: TenantContext) {
+    return this.assessmentsService.calculateDeceptionScore(sessionId, tenantContext);
   }
 
   @Post('trigger')
@@ -44,18 +52,19 @@ export class AssessmentsController {
   @SwaggerResponse({ status: 201, description: 'Assessment triggered' })
   async triggerAssessment(
     @Body('sessionId') sessionId: string,
-    @Body('assessmentType') assessmentType: string
+    @Body('assessmentType') assessmentType: string,
+    @Tenant() tenantContext: TenantContext
   ) {
     this.logger.log(`Triggering ${assessmentType} assessment for session ${sessionId}`);
-    return this.assessmentsService.triggerMockAssessment(sessionId, assessmentType);
+    return this.assessmentsService.triggerMockAssessment(sessionId, assessmentType, tenantContext);
   }
 
   @Post('session/:sessionId/consent-form')
   @ApiOperation({ summary: 'Generate PIAM Consent Form' })
   @SwaggerResponse({ status: 201, description: 'Consent form generated' })
-  async generateConsent(@Param('sessionId') sessionId: string) {
+  async generateConsent(@Param('sessionId') sessionId: string, @Tenant() tenantContext: TenantContext) {
     this.logger.log(`Generating consent form for session ${sessionId}`);
-    return this.assessmentsService.generateConsentForm(sessionId);
+    return this.assessmentsService.generateConsentForm(sessionId, tenantContext);
   }
 
   @Post('upload-audio')
@@ -70,7 +79,7 @@ export class AssessmentsController {
     },
   })
   @ApiOperation({ summary: 'Upload and analyze claimant audio' })
-  async uploadAudio(@Req() req: FastifyRequest) {
+  async uploadAudio(@Req() req: FastifyRequest, @Tenant() tenantContext: TenantContext) {
     if (!req.isMultipart()) {
       throw new BadRequestException('Request is not multipart');
     }
@@ -79,20 +88,13 @@ export class AssessmentsController {
     let sessionId: string | null = null;
 
     for await (const part of req.parts()) {
-      this.logger.log(
-        `Parsing part: type=${part.type}, fieldname=${part.fieldname}, encoding=${part.encoding}, mimetype=${part.mimetype}`
-      );
       if (part.type === 'file') {
         if (part.fieldname === 'file') {
-          this.logger.log('Found file part, buffering...');
           audioBuffer = await part.toBuffer();
-          this.logger.log(`Buffered file: ${audioBuffer.length} bytes`);
         } else {
-          // Consume unused file parts
           await part.toBuffer();
         }
       } else {
-        // Field
         if (part.fieldname === 'sessionId') {
           sessionId = part.value as string;
         }
@@ -103,21 +105,19 @@ export class AssessmentsController {
       throw new BadRequestException('No audio file uploaded');
     }
 
-    // Fallback: If sessionId missing from body, try query param (e.g. ?sessionId=...)
-    // But since req is FastifyRequest, we can check req.query?
-    // For now assuming body is correct. If sessionId is missing, check if service requires it?
-    // Yes, service needs it.
     if (!sessionId) {
-      // Workaround: client might not send sessionId field if relying on current param logic?
-      // Let's assume passed in query if not in body
       const query = req.query as any;
-      sessionId = query.sessionId || 'unknown-session';
+      sessionId = query.sessionId;
+    }
+
+    if (!sessionId) {
+        throw new BadRequestException('Session ID is required');
     }
 
     this.logger.log(
       `Received audio upload for session ${sessionId}, size: ${audioBuffer.length} bytes`
     );
-    return this.assessmentsService.processUploadedAudio(audioBuffer, sessionId as string);
+    return this.assessmentsService.processUploadedAudio(audioBuffer, sessionId, tenantContext);
   }
 
   @Post('analyze-expression')
@@ -132,7 +132,7 @@ export class AssessmentsController {
     },
   })
   @ApiOperation({ summary: 'Analyze expression from video buffer' })
-  async analyzeExpression(@Req() req: FastifyRequest) {
+  async analyzeExpression(@Req() req: FastifyRequest, @Tenant() tenantContext: TenantContext) {
     if (!req.isMultipart()) {
       throw new BadRequestException('Request is not multipart');
     }
@@ -160,10 +160,14 @@ export class AssessmentsController {
 
     if (!sessionId) {
       const query = req.query as any;
-      sessionId = query.sessionId || 'unknown';
+      sessionId = query.sessionId;
     }
 
-    return this.assessmentsService.processUploadedExpression(videoBuffer, sessionId as string);
+    if (!sessionId) {
+        throw new BadRequestException('Session ID is required');
+    }
+
+    return this.assessmentsService.processUploadedExpression(videoBuffer, sessionId, tenantContext);
   }
 
   @Post('analyze-video')
@@ -178,7 +182,7 @@ export class AssessmentsController {
     },
   })
   @ApiOperation({ summary: 'Analyze visual behavior from video buffer' })
-  async analyzeVideo(@Req() req: FastifyRequest) {
+  async analyzeVideo(@Req() req: FastifyRequest, @Tenant() tenantContext: TenantContext) {
     if (!req.isMultipart()) {
       throw new BadRequestException('Request is not multipart');
     }
@@ -206,14 +210,18 @@ export class AssessmentsController {
 
     if (!sessionId) {
       const query = req.query as any;
-      sessionId = query.sessionId || 'unknown';
+      sessionId = query.sessionId;
     }
 
-    return this.assessmentsService.processUploadedVideo(videoBuffer, sessionId as string);
+    if (!sessionId) {
+        throw new BadRequestException('Session ID is required');
+    }
+
+    return this.assessmentsService.processUploadedVideo(videoBuffer, sessionId, tenantContext);
   }
 
   @Get('analyzer-health')
-  // ...
+  @TenantIsolation(TenantScope.NONE)
   @ApiOperation({ summary: 'Check if Python analyzer service is healthy' })
   @SwaggerResponse({ status: 200, description: 'Analyzer health status' })
   async getAnalyzerHealth() {
@@ -228,13 +236,13 @@ export class AssessmentsController {
   @Post('analyze-session')
   @ApiOperation({ summary: 'Analyse a full session recording (post-session)' })
   @SwaggerResponse({ status: 201, description: 'Session analysis triggered' })
-  async analyzeSession(@Body('sessionId') sessionId: string) {
+  async analyzeSession(@Body('sessionId') sessionId: string, @Tenant() tenantContext: TenantContext) {
     this.logger.log(`Analysing full session: ${sessionId}`);
 
     // Trigger both voice and visual analysis for the session
     const [voiceResult, visualResult] = await Promise.all([
-      this.assessmentsService.triggerMockAssessment(sessionId, 'VOICE'),
-      this.assessmentsService.triggerMockAssessment(sessionId, 'VISUAL'),
+      this.assessmentsService.triggerMockAssessment(sessionId, 'VOICE', tenantContext),
+      this.assessmentsService.triggerMockAssessment(sessionId, 'VISUAL', tenantContext),
     ]);
 
     return {

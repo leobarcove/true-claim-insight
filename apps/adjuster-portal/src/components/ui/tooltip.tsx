@@ -94,7 +94,7 @@ export function InfoTooltip({
 
   const variantClasses = 'text-popover-foreground bg-popover border-border shadow-xl';
   const titleClasses = 'text-foreground';
-  const contentClasses = 'text-muted-foreground';
+  const contentClasses = 'text-foreground';
 
   return (
     <div
@@ -104,9 +104,7 @@ export function InfoTooltip({
       onMouseLeave={() => setIsVisible(false)}
     >
       {trigger || (
-        <HelpCircle
-          className={cn('text-muted-foreground cursor-help', `h-${iconSize} w-${iconSize}`)}
-        />
+        <HelpCircle className={cn('text-foreground cursor-help', `h-${iconSize} w-${iconSize}`)} />
       )}
 
       {isVisible &&

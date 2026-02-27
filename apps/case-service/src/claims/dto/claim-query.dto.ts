@@ -92,6 +92,11 @@ export class ClaimQueryDto {
   @IsString()
   scheduledFrom?: string;
 
+  @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440003' })
+  @IsOptional()
+  @IsUUID()
+  createdById?: string;
+
   @ApiPropertyOptional({ example: true })
   @IsOptional()
   @Type(() => Boolean)
