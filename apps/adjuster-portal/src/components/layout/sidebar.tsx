@@ -14,7 +14,7 @@ import {
   ChevronsUpDown,
   Factory,
   Car,
-  Plus,
+  Building2,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -26,6 +26,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InfoTooltip } from '@/components/ui/tooltip';
 import { TenantSwitcher } from './tenant-switcher';
+import { TenantSelector } from './tenant-selector';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -41,13 +42,14 @@ const masterDataNavigation = [
 ];
 
 const secondaryNavigation = [
+  { name: 'Tenants', href: '/tenants', icon: Building2, roles: ['SUPER_ADMIN'] },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];
 
 export function Sidebar() {
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, userTenants } = useAuthStore();
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
@@ -148,36 +150,38 @@ export function Sidebar() {
         <div>
           <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">Support</h3>
           <div className="space-y-1">
-            {secondaryNavigation.map(item => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <item.icon
+            {secondaryNavigation
+              .filter(item => !item.roles || (user && item.roles.includes(user.role)))
+              .map(item => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
                     className={cn(
-                      'h-4 w-4 transition-colors',
+                      'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'text-primary-foreground'
-                        : 'text-muted-foreground group-hover:text-current'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     )}
-                  />
-                  {item.name}
-                  {item.name === 'Help' && (
-                    <span className="ml-auto rounded-full bg-emerald-100 text-emerald-600 px-2 py-0.5 text-[10px] font-bold">
-                      24/7
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                  >
+                    <item.icon
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        isActive
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground group-hover:text-current'
+                      )}
+                    />
+                    {item.name}
+                    {item.name === 'Help' && (
+                      <span className="ml-auto rounded-full bg-emerald-100 text-emerald-600 px-2 py-0.5 text-[10px] font-bold">
+                        24/7
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
           </div>
         </div>
       </div>
@@ -198,8 +202,8 @@ export function Sidebar() {
                 <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {user?.fullName || 'Guest User'}
                 </p>
-                <p className="text-[10px] text-muted-foreground truncate opacity-80 font-medium">
-                  {user?.email || 'guest@example.com'}
+                <p className="text-[9px] text-muted-foreground truncate opacity-80">
+                  {user?.tenantName || 'No Tenant'}
                 </p>
               </div>
               <ChevronsUpDown className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-all duration-300" />
@@ -221,11 +225,11 @@ export function Sidebar() {
                     </AvatarFallback>
                   </Avatar>
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex flex-col justify-center leading-[14px]">
                   <p className="text-[11px] font-bold text-foreground truncate">
                     {user?.fullName || 'Guest User'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground truncate opacity-80">
+                  <p className="text-[9px] text-muted-foreground truncate opacity-80">
                     {user?.email || 'guest@example.com'}
                   </p>
                 </div>
@@ -270,27 +274,23 @@ export function Sidebar() {
                 ))}
               </div>
 
-              {/* Switch Account Section */}
-              {/* <div className="space-y-1 pt-2 border-t border-border/50">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] px-4">
-                  Switch Account
-                </p>
-                <div className="px-1 space-y-1">
-                  <TenantSwitcher />
-                  <button className="flex w-full items-center gap-3 p-1 px-1.5 rounded-xl border border-transparent hover:bg-accent hover:border-border transition-all duration-200 text-left group">
-                    <div className="h-10 w-10 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center flex-shrink-0 group-hover:border-primary/50 group-hover:bg-primary/5 transition-all">
-                      <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-muted-foreground group-hover:text-primary transition-colors">
-                        Add account
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div> */}
+              {/* Switch Tenant Section – only shown when user belongs to multiple tenants */}
+              {userTenants.length > 1 && (
+                <>
+                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] px-1">
+                      Switch Tenant
+                    </p>
+                    {/* <TenantSwitcher /> */}
+                    <TenantSelector />
+                  </div>
+                  <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+                </>
+              )}
 
-              <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+              {userTenants.length <= 1 && (
+                <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+              )}
             </div>
 
             {/* Logout Button */}

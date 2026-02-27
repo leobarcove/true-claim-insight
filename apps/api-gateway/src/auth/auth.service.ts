@@ -156,7 +156,10 @@ export class AuthService {
       }
 
       // Generate new token pair
-      return this.generateTokens(user);
+      return this.generateTokens({
+        ...user,
+        currentTenantId: payload.currentTenantId,
+      });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -225,29 +228,35 @@ export class AuthService {
       throw new UnauthorizedException('You do not have access to this tenant');
     }
 
+    const previousTenantId = (await this.usersService.findById(userId))?.currentTenantId;
     const user = await this.usersService.updateCurrentTenant(userId, tenantId);
     await this.usersService.logTenantAccess(
       userId,
-      (user as any).currentTenantId,
+      previousTenantId,
       tenantId,
       ipAddress,
       userAgent
     );
 
-    const tokens = await this.generateTokens(user);
+    const updatedUser = {
+      ...user,
+      currentTenantId: tenantId,
+    };
+
+    const tokens = await this.generateTokens(updatedUser);
     const userTenants = await this.getUserTenants(user.id);
     this.logger.log(`User ${user.email} switched to tenant ${tenantId}`);
 
     return {
       user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        phoneNumber: user.phoneNumber,
-        licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
-        tenantId: user.tenantId,
-        currentTenantId: (user as any).currentTenantId,
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        role: updatedUser.role,
+        phoneNumber: updatedUser.phoneNumber,
+        licenseNumber: updatedUser.licenseNumber || (updatedUser as any).adjuster?.licenseNumber,
+        tenantId: updatedUser.tenantId,
+        currentTenantId: tenantId,
         tenantName: (user as any).currentTenant?.name || '',
       },
       userTenants,

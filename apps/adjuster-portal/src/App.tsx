@@ -24,6 +24,8 @@ import { VehicleMakePage } from '@/pages/master-data/vehicle-make';
 import { VehicleModelPage } from '@/pages/master-data/vehicle-model';
 import { DocumentsListPage } from '@/pages/documents';
 import { DocumentDetailPage } from '@/pages/documents/detail';
+import { TenantsPage } from '@/pages/tenants';
+
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
 import { env } from '@/lib/env';
@@ -156,6 +158,14 @@ export default function App() {
                     allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN']}
                   >
                     <VehicleModelPage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/tenants"
+                element={
+                  <RoleRoute allowedRoles={['SUPER_ADMIN']}>
+                    <TenantsPage />
                   </RoleRoute>
                 }
               />

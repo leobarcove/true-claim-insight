@@ -1,5 +1,3 @@
-import { Building2, Check, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
 import { useAuthStore, UserTenant } from '@/stores/auth-store';
 import { useSwitchTenant } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
@@ -44,10 +42,10 @@ export function TenantSwitcher() {
             onClick={() => handleSwitchTenant(tenant)}
             disabled={switchTenantMutation.isPending}
             className={cn(
-              'flex w-full items-center gap-3 p-1 px-1.5 rounded-xl border transition-all duration-200 text-left group',
+              'flex w-full items-center gap-3 p-1 px-1.5 rounded-xl border transition-all duration-200 text-left group disabled:opacity-60 disabled:cursor-not-allowed',
               isActive
-                ? 'bg-primary/5 border-primary/20 shadow-sm'
-                : 'hover:bg-accent border-transparent hover:border-border text-foreground'
+                ? 'bg-primary/10 border-primary/20 shadow-sm text-foreground'
+                : 'hover:bg-muted border-transparent hover:border-border/60 text-muted-foreground hover:text-foreground'
             )}
           >
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-background shadow-sm overflow-hidden ring-1 ring-primary/5">
@@ -56,7 +54,12 @@ export function TenantSwitcher() {
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold truncate group-hover:text-primary transition-colors">
+              <p
+                className={cn(
+                  'text-[11px] font-semibold truncate transition-colors',
+                  isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'
+                )}
+              >
                 {tenant.tenantName}
               </p>
               <p className="text-[10px] text-muted-foreground truncate opacity-80 capitalize">
@@ -65,9 +68,9 @@ export function TenantSwitcher() {
             </div>
             <div
               className={cn(
-                'h-3 w-3 rounded-full border-2 flex items-center justify-center transition-all duration-300',
+                'h-3 w-3 rounded-full border-2 flex items-center justify-center transition-all duration-300 flex-shrink-0',
                 isActive
-                  ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]'
+                  ? 'border-primary bg-primary shadow-sm shadow-primary/30'
                   : 'border-muted-foreground/30 group-hover:border-primary/50'
               )}
             >

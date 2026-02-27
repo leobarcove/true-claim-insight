@@ -194,7 +194,8 @@ export function ClaimsListPage() {
                 }
               />
               <InfoTooltip
-                content="Show only claims created by you"
+                content="Show only your claims"
+                contentClassName="w-[8.5rem]"
                 direction="top"
                 fontSize="text-[11px]"
                 trigger={
@@ -278,22 +279,22 @@ export function ClaimsListPage() {
                           <Skeleton className="h-4 w-32" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-24 mx-auto" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-6 w-20 rounded-full" />
+                          <Skeleton className="h-6 w-20 rounded-full mx-auto" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-24 mx-auto" />
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="space-y-1">
+                          <div className="space-y-1 flex flex-col items-center">
                             <Skeleton className="h-3 w-24" />
                             <Skeleton className="h-3 w-16" />
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Skeleton className="h-8 w-8 ml-auto" />
+                          <Skeleton className="h-8 w-8 mx-auto" />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -301,7 +302,7 @@ export function ClaimsListPage() {
                 </Table>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 animate-in fade-in duration-300">
                 {[...Array(3)].map((_, i) => (
                   <Card key={i}>
                     <CardContent className="p-6 space-y-4">
@@ -324,10 +325,14 @@ export function ClaimsListPage() {
               </div>
             )
           ) : claims.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No claims found</p>
-              <p className="text-sm">Try adjusting your search or filters</p>
+            <div className="bg-card rounded-xl border shadow-sm p-12 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No claims found</h3>
+              <p className="text-muted-foreground">
+                {searchQuery || statusFilter
+                  ? 'Try adjusting your search or filters'
+                  : 'No claims available yet.'}
+              </p>
             </div>
           ) : viewMode === 'table' ? (
             /* Table View */

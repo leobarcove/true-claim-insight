@@ -29,7 +29,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @Roles('FIRM_ADMIN', 'INSURER_STAFF', 'ADMIN')
+  @Roles('FIRM_ADMIN', 'INSURER_ADMIN', 'INSURER_STAFF', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Get all users in the current tenant' })
   @ApiResponse({ status: 200, description: 'List of users' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -54,7 +54,9 @@ export class UsersController {
     // Security check: must be self OR same tenant admin/staff
     const isSelf = currentUser.id === id;
     const isSameTenant = user.tenantId === tenantId || (user as any).currentTenantId === tenantId;
-    const isAdmin = ['FIRM_ADMIN', 'INSURER_STAFF', 'ADMIN'].includes(currentUser.role);
+    const isAdmin = ['FIRM_ADMIN', 'INSURER_ADMIN', 'INSURER_STAFF', 'SUPER_ADMIN'].includes(
+      currentUser.role
+    );
 
     if (!isSelf && !(isSameTenant && isAdmin)) {
       throw new HttpException('You do not have access to this user profile', HttpStatus.FORBIDDEN);
@@ -91,7 +93,7 @@ export class UsersController {
     // Security check: must be self OR same tenant admin
     const isSelf = currentUser.id === id;
     const isSameTenant = user.tenantId === tenantId || (user as any).currentTenantId === tenantId;
-    const isAdmin = ['FIRM_ADMIN', 'ADMIN'].includes(currentUser.role);
+    const isAdmin = ['FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role);
 
     if (!isSelf && !(isSameTenant && isAdmin)) {
       throw new HttpException(
@@ -116,7 +118,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles('FIRM_ADMIN', 'ADMIN')
+  @Roles('FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Delete user' })
   @ApiResponse({ status: 200, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -133,7 +135,7 @@ export class UsersController {
 
     // Security check: must be same tenant admin
     const isSameTenant = user.tenantId === tenantId || (user as any).currentTenantId === tenantId;
-    if (!isSameTenant && currentUser.role !== 'ADMIN') {
+    if (!isSameTenant && currentUser.role !== 'SUPER_ADMIN') {
       throw new HttpException(
         'You do not have permission to delete this user',
         HttpStatus.FORBIDDEN

@@ -23,13 +23,15 @@ export class TenantGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const isolation = this.reflector.get<{ scope: TenantScope; allowCrossTenant?: boolean }>(
-      TENANT_KEY,
-      context.getHandler(),
-    ) || this.reflector.get<{ scope: TenantScope; allowCrossTenant?: boolean }>(
-      TENANT_KEY,
-      context.getClass(),
-    );
+    const isolation =
+      this.reflector.get<{ scope: TenantScope; allowCrossTenant?: boolean }>(
+        TENANT_KEY,
+        context.getHandler()
+      ) ||
+      this.reflector.get<{ scope: TenantScope; allowCrossTenant?: boolean }>(
+        TENANT_KEY,
+        context.getClass()
+      );
 
     if (isolation?.scope === TenantScope.NONE) {
       return true;
@@ -40,9 +42,9 @@ export class TenantGuard implements CanActivate {
     const userId = request.headers['x-user-id'];
     const userRole = request.headers['x-user-role'];
 
-    if (tenantId && userId) {
+    if ((tenantId || userRole === 'SUPER_ADMIN') && userId) {
       request.tenantContext = {
-        tenantId,
+        tenantId: tenantId || userRole,
         userId,
         userRole,
         isInternal: true,
@@ -56,14 +58,17 @@ export class TenantGuard implements CanActivate {
       try {
         const token = authHeader.split(' ')[1];
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-        
+
         request.tenantContext = {
-          tenantId: payload.tenantId || payload.orgId,
+          tenantId:
+            payload.tenantId ||
+            payload.orgId ||
+            (payload.role === 'SUPER_ADMIN' ? payload.role : undefined),
           userId: payload.sub || payload.userId,
           userRole: payload.role,
           isInternal: false,
         } as TenantContext;
-        
+
         return true;
       } catch (e) {
         this.logger.error('Failed to decode JWT for tenant context');

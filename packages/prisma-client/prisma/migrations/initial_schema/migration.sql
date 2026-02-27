@@ -583,13 +583,13 @@ CREATE INDEX "video_uploads_claimId_idx" ON "video_uploads"("claimId");
 CREATE INDEX "video_uploads_status_idx" ON "video_uploads"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "vehicle_makes_name_key" ON "vehicle_makes"("name");
-
--- CreateIndex
 CREATE INDEX "vehicle_makes_tenantId_idx" ON "vehicle_makes"("tenantId");
 
 -- CreateIndex
 CREATE INDEX "vehicle_makes_userId_idx" ON "vehicle_makes"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vehicle_makes_tenantId_name_key" ON "vehicle_makes"("tenantId", "name");
 
 -- CreateIndex
 CREATE INDEX "vehicle_models_makeId_idx" ON "vehicle_models"("makeId");
@@ -601,7 +601,7 @@ CREATE INDEX "vehicle_models_tenantId_idx" ON "vehicle_models"("tenantId");
 CREATE INDEX "vehicle_models_userId_idx" ON "vehicle_models"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "vehicle_models_makeId_name_key" ON "vehicle_models"("makeId", "name");
+CREATE UNIQUE INDEX "vehicle_models_tenantId_makeId_name_key" ON "vehicle_models"("tenantId", "makeId", "name");
 
 -- CreateIndex
 CREATE INDEX "session_client_info_sessionId_idx" ON "session_client_info"("sessionId");

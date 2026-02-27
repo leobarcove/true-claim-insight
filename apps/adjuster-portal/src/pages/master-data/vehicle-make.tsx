@@ -202,10 +202,12 @@ export function VehicleMakePage() {
               </Table>
             </div>
           ) : paginatedMakes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No makes found</p>
-              <p className="text-sm">Try adjusting your search</p>
+            <div className="bg-card rounded-xl border shadow-sm p-12 text-center">
+              <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No vehicle makes found</h3>
+              <p className="text-muted-foreground">
+                {searchQuery ? 'Try adjusting your search' : 'No vehicle makes available yet.'}
+              </p>
             </div>
           ) : (
             <div className="rounded-md border animate-in fade-in duration-300">

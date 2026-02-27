@@ -134,7 +134,7 @@ export function useCurrentUser() {
  * Calls POST /auth/switch-tenant and updates auth state
  */
 export function useSwitchTenant() {
-  const { setAuth, switchTenant } = useAuthStore();
+  const { setAuth } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -142,11 +142,9 @@ export function useSwitchTenant() {
       const { data } = await apiClient.post<ApiResponse<any>>('/auth/switch-tenant', { tenantId });
       return data.data;
     },
-    onSuccess: data => {
-      // Update user with new tenant context
+    onSuccess: async data => {
       setAuth(data.user, data.tokens.accessToken, data.userTenants);
-      switchTenant(data.user.currentTenantId);
-      queryClient.invalidateQueries(); // Invalidate all queries to refetch with new tenant context
+      await queryClient.invalidateQueries();
     },
   });
 }
