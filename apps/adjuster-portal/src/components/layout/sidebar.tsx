@@ -8,20 +8,26 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  ChevronLeft,
-  ChevronUp,
+  Sun,
+  Moon,
+  Monitor,
+  ChevronsUpDown,
   Factory,
   Car,
+  Building2,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLogout } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { useTheme } from '@/hooks/use-theme';
+import { Button } from '@/components/ui/button';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { InfoTooltip } from '@/components/ui/tooltip';
+import { TenantSwitcher } from './tenant-switcher';
+import { TenantSelector } from './tenant-selector';
+import { useSuperAdminNoTenant } from '@/hooks/use-super-admin-no-tenant';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -37,16 +43,18 @@ const masterDataNavigation = [
 ];
 
 const secondaryNavigation = [
+  { name: 'Tenants', href: '/tenants', icon: Building2, roles: ['SUPER_ADMIN'] },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];
 
 export function Sidebar() {
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, userTenants } = useAuthStore();
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const { isSelectionRequired } = useSuperAdminNoTenant();
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -144,36 +152,38 @@ export function Sidebar() {
         <div>
           <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">Support</h3>
           <div className="space-y-1">
-            {secondaryNavigation.map(item => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <item.icon
+            {secondaryNavigation
+              .filter(item => !item.roles || (user && item.roles.includes(user.role)))
+              .map(item => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
                     className={cn(
-                      'h-4 w-4 transition-colors',
+                      'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'text-primary-foreground'
-                        : 'text-muted-foreground group-hover:text-current'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     )}
-                  />
-                  {item.name}
-                  {item.name === 'Help' && (
-                    <span className="ml-auto rounded-full bg-emerald-100 text-emerald-600 px-2 py-0.5 text-[10px] font-bold">
-                      24/7
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                  >
+                    <item.icon
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        isActive
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground group-hover:text-current'
+                      )}
+                    />
+                    {item.name}
+                    {item.name === 'Help' && (
+                      <span className="ml-auto rounded-full bg-emerald-100 text-emerald-600 px-2 py-0.5 text-[10px] font-bold">
+                        24/7
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
           </div>
         </div>
       </div>
@@ -183,52 +193,116 @@ export function Sidebar() {
         <Popover>
           <PopoverTrigger asChild>
             <button className="flex w-full items-center gap-3 p-3 rounded-xl border border-border/50 bg-card transition-all duration-300 shadow-sm hover:shadow-xl group text-left outline-none">
-              <Avatar className="h-10 w-10 border-2 border-background shadow-md bg-muted ring-2 ring-primary/5 group-hover:ring-primary/20 transition-all duration-300">
-                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                  {user ? getInitials(user.fullName) : 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-10 w-10 border-2 border-background shadow-md bg-muted ring-2 ring-primary/5 group-hover:ring-primary/20 transition-all duration-300">
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
+                    {user ? getInitials(user.fullName) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {user?.fullName || 'Guest User'}
                 </p>
-                <p className="text-[10px] text-muted-foreground truncate opacity-80">
-                  {user?.email || 'guest@example.com'}
+                <p className="text-[9px] text-muted-foreground truncate opacity-80">
+                  {user?.tenantName || 'No Tenant'}
                 </p>
               </div>
-              <ChevronUp className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-all duration-300" />
+              <ChevronsUpDown className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-all duration-300" />
             </button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-[var(--radix-popover-trigger-width)] p-2 mb-1"
+            className="w-[var(--radix-popover-trigger-width)] p-0 mb-1 overflow-hidden rounded-3xl border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl"
             align="start"
             side="top"
-            sideOffset={8}
+            sideOffset={12}
           >
-            <div className="space-y-1">
-              <div className="px-1">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between h-10 px-3 text-muted-foreground hover:text-accent-foreground/80 hover:bg-accent/50 rounded-lg group"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                >
-                  <span className="text-sm font-medium">Dark Mode</span>
-                  <Switch
-                    checked={theme === 'dark'}
-                    onCheckedChange={checked => setTheme(checked ? 'dark' : 'light')}
-                    className="data-[state=checked]:bg-primary scale-90 pointer-events-none"
-                  />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between h-10 px-3 text-muted-foreground hover:text-accent-foreground/80 hover:bg-accent/50 rounded-lg group"
-                  onClick={handleLogoutClick}
-                >
-                  <span className="text-sm font-medium">Logout</span>
-                  <LogOut className="h-4 w-4 transition-colors" />
-                </Button>
+            <div className="p-3 space-y-3">
+              {/* Profile Header */}
+              <div className="flex items-center gap-3 px-1">
+                <div className="relative">
+                  <Avatar className="h-10 w-10 border-2 border-background shadow-sm bg-muted ring-1 ring-primary/10">
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                      {user ? getInitials(user.fullName) : 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="min-w-0 flex flex-col justify-center leading-[14px]">
+                  <p className="text-[11px] font-bold text-foreground truncate">
+                    {user?.fullName || 'Guest User'}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground truncate opacity-80">
+                    {user?.email || 'guest@example.com'}
+                  </p>
+                </div>
               </div>
+
+              {/* Theme Switcher Row */}
+              <div className="relative flex items-center justify-between bg-muted/40 border border-border/40 rounded-3xl overflow-hidden p-1">
+                {/* Sliding Indicator */}
+                <div
+                  className={cn(
+                    'absolute inset-y-1 transition-all duration-300 ease-out bg-primary/80 rounded-2xl z-0 shadow-sm',
+                    theme === 'light' && 'left-1 w-[calc(33.33%-4px)]',
+                    theme === 'dark' && 'left-[calc(33.33%+2px)] w-[calc(33.33%-4px)]',
+                    theme === 'system' && 'left-[calc(66.66%)] w-[calc(33.33%-4px)]'
+                  )}
+                />
+                {[
+                  { id: 'light', icon: Sun, label: 'Light' },
+                  { id: 'dark', icon: Moon, label: 'Dark' },
+                  { id: 'system', icon: Monitor, label: 'System' },
+                ].map(item => (
+                  <InfoTooltip
+                    key={item.id}
+                    content={item.label}
+                    direction="top"
+                    fontSize="text-[11px]"
+                    className="flex-1"
+                    trigger={
+                      <button
+                        onClick={() => setTheme(item.id as any)}
+                        className={cn(
+                          'relative z-10 flex w-full items-center justify-center gap-1.5 p-1 rounded-2xl transition-colors duration-300',
+                          theme === item.id
+                            ? 'text-primary-foreground'
+                            : 'text-muted-foreground hover:text-primary'
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                      </button>
+                    }
+                  />
+                ))}
+              </div>
+
+              {/* Switch Tenant Section – shown when multiple tenants OR super admin */}
+              {(userTenants.length > 1 || user?.role === 'SUPER_ADMIN') && (
+                <>
+                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em] px-1">
+                      Switch Tenant
+                    </p>
+                    <TenantSelector />
+                  </div>
+                  <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+                </>
+              )}
+
+              {userTenants.length <= 1 && user?.role !== 'SUPER_ADMIN' && (
+                <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+              )}
+            </div>
+
+            {/* Logout Button */}
+            <div className="p-3 pt-0">
+              <Button
+                variant="destructive"
+                onClick={handleLogoutClick}
+                className="w-full h-9 rounded-xl shadow-lg shadow-destructive/20 text-sm font-bold transition-all duration-300 active:scale-[0.98] gap-2.5"
+              >
+                Logout
+              </Button>
             </div>
           </PopoverContent>
         </Popover>
@@ -244,6 +318,9 @@ export function Sidebar() {
         variant="destructive"
         isLoading={logoutMutation.isPending}
       />
+
+      {/* Hidden TenantSelector that is forced open for SuperAdmins with no tenant */}
+      <TenantSelector open={isSelectionRequired} showTrigger={false} />
     </div>
   );
 }

@@ -48,22 +48,22 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Authentication required for tenant-scoped operations');
     }
 
-    if (!user.tenantId) {
+    if (!user.tenantId && user.role !== 'SUPER_ADMIN') {
       this.logger.warn(`TenantGuard: User ${user.sub} has no tenantId`);
       throw new ForbiddenException('User is not associated with any tenant');
     }
 
     // Inject tenant context into request for downstream use
     request.tenantContext = {
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || user.role,
       userId: user.sub,
       userRole: user.role,
-      scope: tenantConfig.scope,
-      allowCrossTenant: tenantConfig.allowCrossTenant || false,
+      scope: user.role === 'SUPER_ADMIN' ? TenantScope.NONE : tenantConfig.scope,
+      allowCrossTenant: user.role === 'SUPER_ADMIN' ? true : tenantConfig.allowCrossTenant || false,
     };
 
     this.logger.debug(
-      `TenantGuard: User ${user.sub} accessing with tenant ${user.tenantId} (scope: ${tenantConfig.scope})`,
+      `TenantGuard: User ${user.sub} accessing with tenant ${user.tenantId} (scope: ${tenantConfig.scope})`
     );
 
     return true;

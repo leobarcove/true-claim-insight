@@ -20,7 +20,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { getInitials } from '@/lib/utils';
+import { convertToTitleCase, getInitials } from '@/lib/utils';
 import { useUpdateProfile, useUpdatePassword, useDeleteAccount } from '@/hooks/use-user';
 import { useCurrentUser } from '@/hooks/use-auth';
 import { useForm } from 'react-hook-form';
@@ -161,9 +161,9 @@ export function SettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Lock },
     { id: 'preferences', label: 'Preferences', icon: Globe },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
 
   return (
@@ -209,7 +209,7 @@ export function SettingsPage() {
                       </div>
                       <div className="flex-1">
                         <p className="font-semibold text-sm capitalize">
-                          {user?.role.toLowerCase()}
+                          {convertToTitleCase(user?.role || '')}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Full access to assigned claims and assessment tools.
@@ -301,52 +301,6 @@ export function SettingsPage() {
                         </Button>
                       </div>
                     </form>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {activeTab === 'notifications' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <Card className="border-border/60 shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Notification Preferences</CardTitle>
-                    <CardDescription>
-                      Choose how you want to be notified about activity.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="space-y-4">
-                      {[
-                        {
-                          title: 'New Claim Assigned',
-                          desc: 'Get notified when a new claim is assigned to you.',
-                        },
-                        {
-                          title: 'Session Reminders',
-                          desc: 'Receive reminders before scheduled video assessments.',
-                        },
-                        {
-                          title: 'Analysis Complete',
-                          desc: 'Notifications when AI analysis of uploaded videos is ready.',
-                        },
-                        {
-                          title: 'Security Alerts',
-                          desc: 'Important notifications about your account security.',
-                        },
-                      ].map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-4 rounded-xl border border-border/50"
-                        >
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">{item.title}</p>
-                            <p className="text-xs text-muted-foreground">{item.desc}</p>
-                          </div>
-                          <Switch defaultChecked />
-                        </div>
-                      ))}
-                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -471,6 +425,52 @@ export function SettingsPage() {
                           <SelectItem value="pst">PST (Pacific Standard Time)</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <Card className="border-border/60 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Notification Preferences</CardTitle>
+                    <CardDescription>
+                      Choose how you want to be notified about activity.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      {[
+                        {
+                          title: 'New Claim Assigned',
+                          desc: 'Get notified when a new claim is assigned to you.',
+                        },
+                        {
+                          title: 'Session Reminders',
+                          desc: 'Receive reminders before scheduled video assessments.',
+                        },
+                        {
+                          title: 'Analysis Complete',
+                          desc: 'Notifications when AI analysis of uploaded videos is ready.',
+                        },
+                        {
+                          title: 'Security Alerts',
+                          desc: 'Important notifications about your account security.',
+                        },
+                      ].map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-4 rounded-xl border border-border/50"
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">{item.desc}</p>
+                          </div>
+                          <Switch defaultChecked />
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>

@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { PrismaClient, AssessmentType, RiskScore } from '@prisma/client';
+import { AssessmentType, RiskScore, SessionStatus } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as fs_sync from 'fs';
 import * as path from 'path';
@@ -16,8 +16,11 @@ import { pipeline } from 'stream/promises';
 import ffmpegPath = require('ffmpeg-static');
 import ffprobeStatic = require('ffprobe-static');
 
+import { PrismaService } from '../config/prisma.service';
+import { TenantService } from '../tenant/tenant.service';
+import { TenantContext } from '../common/guards/tenant.guard';
+
 const execAsync = promisify(exec);
-const prisma = new PrismaClient();
 
 // Ensure upload and temp directories exist using absolute paths
 const uploadDir = path.resolve(process.cwd(), 'uploads/videos');
@@ -37,7 +40,11 @@ export class UploadsService {
   private segmentProcessingMap = new Map<string, Promise<any>>();
   private signedUrlCache = new Map<string, { url: string; expires: number }>();
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly tenantService: TenantService
+  ) {
     this.analyzerUrl = this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005');
     this.logger.log(`Local Storage initialized: ${uploadDir}`);
     this.logger.log(`Temp Storage initialized: ${tempDir}`);
@@ -51,9 +58,11 @@ export class UploadsService {
     fileSize: number,
     mimeType: string,
     videoPath: string,
-    uploadedBy?: string
+    tenantContext: TenantContext
   ) {
-    const claim = await prisma.claim.findUnique({
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+
+    const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
     });
 
@@ -61,27 +70,27 @@ export class UploadsService {
       throw new NotFoundException('Claim not found');
     }
 
-    // 1. Create the database record first to get an ID
-    const upload = await prisma.videoUpload.create({
+    // 1. Create the database record
+    const upload = await this.prisma.videoUpload.create({
       data: {
         claimId,
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
         filename,
         fileSize,
         mimeType,
-        videoUrl: 'PENDING', // Will update after upload
-        uploadedBy,
+        videoUrl: 'PENDING',
+        uploadedBy: tenantContext.userId,
         status: 'PENDING',
         duration: 0,
       },
     });
 
     const uploadId = upload.id;
-    // The final local path used by review page
     const localReviewPath = path.join(tempDir, `full-${uploadId}.mp4`);
     let transcodedPath = '';
 
     try {
-      // 2. Transcode to MP4 and save directly to the local review path
       this.logger.log(`Transcoding video ${uploadId} to MP4...`);
       transcodedPath = await this.transcodeToMp4Internal(videoPath, localReviewPath);
       this.logger.log(`Transcoding complete for ${uploadId}`);
@@ -115,7 +124,7 @@ export class UploadsService {
       const publicUrl = `${apiUrl}/storage/v1/object/public/${bucketName}/${storagePath}`;
 
       // 4. Update the record
-      await prisma.videoUpload.update({
+      await this.prisma.videoUpload.update({
         where: { id: uploadId },
         data: {
           videoUrl: publicUrl,
@@ -123,21 +132,19 @@ export class UploadsService {
         },
       });
 
-      // 5. Cleanup the original (non-transcoded) temp file
+      // 5. Cleanup temp file
       await fs.unlink(videoPath).catch(() => {});
 
-      return this.getUpload(uploadId);
+      return this.getUpload(uploadId, tenantContext);
     } catch (error: any) {
       this.logger.error(`Failed to handle video upload ${uploadId}: ${error.message}`);
-      // Mark as failed in DB
-      await prisma.videoUpload
+      await this.prisma.videoUpload
         .update({
           where: { id: uploadId },
           data: { status: 'FAILED' },
         })
         .catch(() => {});
 
-      // Try to cleanup
       await fs.unlink(videoPath).catch(() => {});
       if (transcodedPath) await fs.unlink(transcodedPath).catch(() => {});
 
@@ -145,9 +152,6 @@ export class UploadsService {
     }
   }
 
-  /**
-   * Internal transcode helper that accepts an output path
-   */
   private async transcodeToMp4Internal(inputPath: string, outputPath: string): Promise<string> {
     await execAsync(
       `"${ffmpegPath}" -y -i "${inputPath}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${outputPath}"`
@@ -155,11 +159,8 @@ export class UploadsService {
     return outputPath;
   }
 
-  /**
-   * Get video upload details
-   */
-  async getUpload(uploadId: string) {
-    const upload = await prisma.videoUpload.findUnique({
+  async getUpload(uploadId: string, tenantContext: TenantContext) {
+    const upload = await this.prisma.videoUpload.findUnique({
       where: { id: uploadId },
       include: {
         claim: {
@@ -173,7 +174,6 @@ export class UploadsService {
                     fullName: true,
                     email: true,
                     phoneNumber: true,
-                    // role filtering can be added
                   },
                 },
               },
@@ -188,24 +188,20 @@ export class UploadsService {
       throw new NotFoundException('Video upload not found');
     }
 
-    // Capture raw URL for session matching before signing
-    const rawVideoUrl = upload.videoUrl;
+    await this.tenantService.validateClaimAccess(upload.claimId, tenantContext);
 
-    // Sign the URL if it's a Supabase URL
+    const rawVideoUrl = upload.videoUrl;
     upload.videoUrl = await this.signUrlIfNeeded(upload.videoUrl);
 
-    // Find the associated session for risk assessments
-    // Prioritize matching by recordingUrl to ensure we get the session specifically for this upload
-    let session = await prisma.session.findFirst({
+    let session = await this.prisma.session.findFirst({
       where: {
         claimId: upload.claimId,
         recordingUrl: rawVideoUrl,
       },
     });
 
-    // Fallback to latest session (backward compatibility or pre-processing state)
     if (!session) {
-      session = await prisma.session.findFirst({
+      session = await this.prisma.session.findFirst({
         where: { claimId: upload.claimId },
         orderBy: { createdAt: 'desc' },
       });
@@ -218,35 +214,24 @@ export class UploadsService {
     };
   }
 
-  /**
-   * Pre-download video from Supabase to local storage for faster segment processing
-   */
-  async prepareVideo(uploadId: string, shouldWait = false) {
+  async prepareVideo(uploadId: string, shouldWait = false, tenantContext: TenantContext) {
     const localPath = path.join(tempDir, `full-${uploadId}.mp4`);
 
-    // 1. If already exists, return instantly
     if (fs_sync.existsSync(localPath)) {
-      this.logger.log(`Video ${uploadId} already exists locally at ${localPath}`);
       return { success: true, path: localPath, alreadyExists: true, status: 'completed' };
     }
 
-    // 2. If already in progress, return instantly with 'processing'
     if (this.preparationPromises.has(uploadId)) {
-      this.logger.log(`Preparation already in progress for ${uploadId}, returning status`);
       return { success: true, status: 'processing' };
     }
 
-    // 3. Start preparation in the background to avoid Gateway timeouts (502)
     const preparePromise = (async () => {
       const partialPath = `${localPath}.downloading`;
       try {
-        const upload = await this.getUpload(uploadId);
-        this.logger.log(`Downloading video ${uploadId} from Supabase in background...`);
-
+        const upload = await this.getUpload(uploadId, tenantContext);
         const { apiUrl, key } = this.getSupabaseConfig();
         const bucketName = 'tci-uploads';
 
-        // More robust storage path extraction
         let storagePath = '';
         const bucketSearch = `/${bucketName}/`;
         const bucketIndex = upload.videoUrl.indexOf(bucketSearch);
@@ -264,7 +249,7 @@ export class UploadsService {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+        const timeoutId = setTimeout(() => controller.abort(), 600000);
 
         const response = await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
           headers: { Authorization: `Bearer ${key}` },
@@ -274,41 +259,30 @@ export class UploadsService {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          throw new Error(
-            `Failed to download video from Supabase: ${response.status} ${response.statusText}`
-          );
+          throw new Error(`Failed to download video: ${response.statusText}`);
         }
 
         if (!response.body) {
           throw new Error('Response body is empty');
         }
 
-        // Stream to partial path first
         const fileStream = fs_sync.createWriteStream(partialPath);
         await pipeline(Readable.fromWeb(response.body as any), fileStream);
-
-        // Rename to final path only when complete
         await fs.rename(partialPath, localPath);
 
-        this.logger.log(`Successfully downloaded video to ${localPath} (Background)`);
         return { success: true, path: localPath };
       } catch (err: any) {
-        this.logger.error(`Background preparation failed for ${uploadId}: ${err.message}`);
-        // Cleanup partial file if it exists
         if (fs_sync.existsSync(partialPath)) {
           await fs.unlink(partialPath).catch(() => {});
         }
         throw err;
       } finally {
-        // Clear the promise from the map when done
         this.preparationPromises.delete(uploadId);
       }
     })();
 
-    // Store the promise so multiple calls can wait
     this.preparationPromises.set(uploadId, preparePromise);
 
-    // If we were told to wait, await the full download
     if (shouldWait) {
       return await preparePromise;
     }
@@ -320,7 +294,7 @@ export class UploadsService {
     const localPath = path.join(tempDir, `full-${uploadId}.mp4`);
 
     if (!fs_sync.existsSync(localPath)) {
-      throw new NotFoundException(`Video not prepared locally. Call /prepare first.`);
+      throw new NotFoundException(`Video not prepared locally.`);
     }
 
     const { size } = fs_sync.statSync(localPath);
@@ -357,23 +331,20 @@ export class UploadsService {
     };
   }
 
-  /**
-   * Process a video segment and generate deception metrics
-   */
-  async processSegment(uploadId: string, startTime: number, endTime: number) {
-    // Priority: use provided endTime, fallback to 5s window
+  async processSegment(
+    uploadId: string,
+    startTime: number,
+    endTime: number,
+    tenantContext: TenantContext
+  ) {
     const defaultDuration = 5;
     const targetStart = startTime;
     const targetEnd = endTime && endTime > startTime ? endTime : startTime + defaultDuration;
     const cacheKey = `${uploadId}-${targetStart}-${targetEnd}`;
 
-    // Deduplication: If already processing this segment, return the existing promise
     if (this.segmentProcessingMap.has(cacheKey)) {
-      this.logger.log(`Segment ${cacheKey} is already processing, attaching to existing job`);
       return this.segmentProcessingMap.get(cacheKey);
     }
-
-    this.logger.log(`Processing segment ${targetStart}s to ${targetEnd}s for upload ${uploadId}`);
 
     const processPromise = (async () => {
       try {
@@ -381,46 +352,31 @@ export class UploadsService {
         let inputPath = localPath;
 
         if (!fs_sync.existsSync(localPath)) {
-          // Check if a download is already in progress and wait for it
           const preparationPromise = this.preparationPromises.get(uploadId);
           if (preparationPromise) {
-            this.logger.log(
-              `Waiting for local video preparation before processing segment for ${uploadId}...`
-            );
             await preparationPromise.catch(() => {});
           }
 
-          // Re-check existence after waiting
           if (fs_sync.existsSync(localPath)) {
-            this.logger.log(`Local file found after waiting for preparation for ${uploadId}`);
             inputPath = localPath;
           } else {
-            this.logger.warn(
-              `Local file still not found for ${uploadId} after waiting, using remote URL for segment extraction`
-            );
-            const upload = await this.getUpload(uploadId);
+            const upload = await this.getUpload(uploadId, tenantContext);
             inputPath = upload.videoUrl;
           }
         }
         const duration = await this.getVideoDuration(inputPath);
         const actualEnd = duration ? Math.min(targetEnd, duration) : targetEnd;
 
-        // Skip if segment is effectively empty or starts at/after duration
         if (duration && (targetStart >= duration || actualEnd - targetStart < 0.1)) {
-          this.logger.log(
-            `Skipping tiny or out-of-bounds segment: ${targetStart}-${actualEnd} (duration: ${duration})`
-          );
-          return {
-            processedUntil: duration || actualEnd,
-            metrics: null,
-          };
+          return { processedUntil: duration || actualEnd, metrics: null };
         }
 
         const metrics = await this.extractAndAnalyzeSegment(
           uploadId,
           inputPath,
           targetStart,
-          actualEnd
+          actualEnd,
+          tenantContext
         );
 
         return {
@@ -437,27 +393,19 @@ export class UploadsService {
     return processPromise;
   }
 
-  /**
-   * Process the entire video by downloading it locally and looping through 5s segments
-   */
-  async processVideo(uploadId: string) {
-    const upload = await this.getUpload(uploadId);
+  async processVideo(uploadId: string, tenantContext: TenantContext) {
+    const upload = await this.getUpload(uploadId, tenantContext);
 
-    // Prevent multiple concurrent processing jobs
     if (upload.status === 'PROCESSING') {
-      this.logger.log(`Video ${uploadId} is already being processed. Skipping redundant request.`);
       return { status: 'PROCESSING', alreadyInProgress: true };
     }
 
-    // Ensure we have a local copy - Wait for it here since this is a full batch process
-    const result = await this.prepareVideo(uploadId, true);
+    const result = await this.prepareVideo(uploadId, true, tenantContext);
     const localInputPath = result.path || upload.videoUrl;
 
-    await prisma.videoUpload.update({
+    await this.prisma.videoUpload.update({
       where: { id: uploadId },
-      data: {
-        status: 'PROCESSING',
-      },
+      data: { status: 'PROCESSING' },
     });
 
     try {
@@ -469,11 +417,6 @@ export class UploadsService {
         segments.push({ start, end });
       }
 
-      this.logger.log(
-        `Starting batch processing for ${uploadId}: ${segments.length} segments, duration ${duration}s`
-      );
-
-      // Processing with Sliding Window Concurrency (Pool Size = 5)
       const CONCURRENCY_LIMIT = 5;
       const executing = new Set<Promise<void>>();
       let lastProcessedTime = 0;
@@ -483,30 +426,26 @@ export class UploadsService {
           uploadId,
           localInputPath,
           segment.start,
-          segment.end
+          segment.end,
+          tenantContext
         )
           .then(() => {
             if (segment.end > lastProcessedTime) lastProcessedTime = segment.end;
-            return;
           })
-          .catch((segmentError: any) => {
-            this.logger.error(
-              `Failed to process segment ${segment.start}-${segment.end}: ${segmentError.message}`
-            );
+          .catch(err => {
+            this.logger.error(`Segment failed: ${err.message}`);
           })
           .finally(() => {
             executing.delete(p);
           });
 
         executing.add(p);
-
         if (executing.size >= CONCURRENCY_LIMIT) {
           await Promise.race(executing);
         }
 
-        // Periodically update DB progress (every ~5 segments or when pool drains)
         if (executing.size === 0 || segments.indexOf(segment) % 5 === 0) {
-          await prisma.videoUpload.update({
+          await this.prisma.videoUpload.update({
             where: { id: uploadId },
             data: { processedUntil: lastProcessedTime },
           });
@@ -514,37 +453,29 @@ export class UploadsService {
       }
 
       await Promise.all(executing);
-      await prisma.videoUpload.update({
+      await this.prisma.videoUpload.update({
         where: { id: uploadId },
         data: { processedUntil: lastProcessedTime },
       });
 
-      // Generate consent form when processing is finished
       try {
-        this.logger.log(`Processing complete for ${uploadId}. Generating assessment report...`);
-        await this.generateConsent(uploadId);
-      } catch (consentError: any) {
-        this.logger.error(`Failed to auto-generate consent: ${consentError.message}`);
+        await this.generateConsent(uploadId, tenantContext);
+      } catch (e: any) {
+        this.logger.error(`Failed to generate consent: ${e.message}`);
       }
 
-      return {
-        processedUntil: lastProcessedTime,
-        status: 'COMPLETED',
-      };
+      return { processedUntil: lastProcessedTime, status: 'COMPLETED' };
     } catch (error: any) {
-      this.logger.error(`Failed to process video: ${error.message}`);
-      throw new InternalServerErrorException(`Video processing failed: ${error.message}`);
+      throw new InternalServerErrorException(`Processing failed: ${error.message}`);
     }
   }
 
-  /**
-   * High-level helper to extract a segment from a local file and analyze it
-   */
   private async extractAndAnalyzeSegment(
     uploadId: string,
     localInputPath: string,
     start: number,
-    end: number
+    end: number,
+    tenantContext: TenantContext
   ) {
     const tempId = `${uploadId}-${start}-${end}-${Date.now()}`;
     const segmentVideoPath = path.join(tempDir, `seg-v-${tempId}.mp4`);
@@ -558,28 +489,14 @@ export class UploadsService {
       const roundedEnd = Number(end.toFixed(2));
       const segmentDuration = Number((roundedEnd - roundedStart).toFixed(2));
 
-      // Guard: Skip extraction if duration is too small (< 0.1s)
-      if (segmentDuration < 0.1) {
-        this.logger.log(
-          `Skipping segment extraction: ${roundedStart}-${roundedEnd} (duration ${segmentDuration}s is too small)`
-        );
-        return null;
-      }
+      if (segmentDuration < 0.1) return null;
 
-      // Simplified input options for better stability with remote URLs
       const inputOptions = isUrl
         ? '-reconnect 1 -reconnect_at_eof 1 -reconnect_delay_max 2 -timeout 10000000'
         : '';
-
       const commonOutput = `-t ${segmentDuration} -c:v libx264 -preset ultrafast -vf "scale=480:-2,fps=15" -crf 28 -movflags +faststart`;
-      this.logger.log(
-        `Extracting segment ${roundedStart}-${roundedEnd} (dur: ${segmentDuration}s) from ${
-          isUrl ? 'URL' : 'Local File'
-        }`
-      );
 
       if (isUrl) {
-        // Move -ss BEFORE -i for input seeking (much faster and stable for URLs)
         await execAsync(
           `"${ffmpegPath}" -y ${inputOptions} -ss ${roundedStart} -i "${localInputPath}" ${commonOutput} -map 0:v:0? -an "${segmentVideoPath}"`
         );
@@ -625,90 +542,64 @@ export class UploadsService {
         segmentAudioPath,
         start,
         end,
-        !hasAudio
+        !hasAudio,
+        tenantContext
       );
     } finally {
-      // Cleanup segment files
-      await Promise.all([
-        fs.unlink(segmentVideoPath).catch(() => {}),
-        fs.unlink(segmentAudioPath).catch(() => {}),
-      ]);
+      await fs.unlink(segmentVideoPath).catch(() => {});
+      await fs.unlink(segmentAudioPath).catch(() => {});
     }
   }
 
-  /**
-   * Internal helper to analyze a segment file and store results
-   */
   private async analyzeAndStoreSegment(
     uploadId: string,
     segmentVideoPath: string,
     segmentAudioPath: string,
     startTime: number,
     endTime: number,
-    noAudio = false
+    noAudio: boolean,
+    tenantContext: TenantContext
   ) {
-    try {
-      const audioBuffer = !noAudio ? await fs.readFile(segmentAudioPath) : Buffer.alloc(0);
-      const videoBuffer = await fs.readFile(segmentVideoPath);
-      const [audioResult, videoResult, expressionResult] = await Promise.all([
-        !noAudio
-          ? this.callAnalyzer('/analyze-audio', audioBuffer, 'segment.wav')
-          : Promise.resolve({ metrics: null, status: 'NO_AUDIO' }),
-        this.callAnalyzer('/analyze-video', videoBuffer, 'segment.mp4'),
-        this.callAnalyzer(`/analyze-expression?noAudio=${noAudio}`, videoBuffer, 'segment.mp4'),
-      ]);
+    const audioBuffer = !noAudio ? await fs.readFile(segmentAudioPath) : Buffer.alloc(0);
+    const videoBuffer = await fs.readFile(segmentVideoPath);
 
-      // Debug logging
-      this.logger.log(
-        `[Segment Analysis] ${uploadId} - ${segmentVideoPath} (Duration: ${startTime}-${endTime})`
-      );
-      console.log('Voice Stress:', JSON.stringify(audioResult || {}, null, 2));
-      console.log('Visual Behavior:', JSON.stringify(videoResult || {}, null, 2));
-      console.log('Expression Measurement:', JSON.stringify(expressionResult || {}, null, 2));
+    const [audioResult, videoResult, expressionResult] = await Promise.all([
+      !noAudio
+        ? this.callAnalyzer('/analyze-audio', audioBuffer, 'segment.wav')
+        : Promise.resolve({ metrics: null }),
+      this.callAnalyzer('/analyze-video', videoBuffer, 'segment.mp4'),
+      this.callAnalyzer(`/analyze-expression?noAudio=${noAudio}`, videoBuffer, 'segment.mp4'),
+    ]);
 
-      // Normalize metrics
-      const wvs = this.normalizeVoiceStress(audioResult.metrics);
-      const wvb = this.normalizeVisualBehavior(videoResult.metrics);
-      const wem = this.calculateExpressionScore(expressionResult);
-      this.logger.log(
-        `[Segment Analysis] Scores - Voice: ${wvs.toFixed(3)}, Visual: ${wvb.toFixed(3)}, Expression: ${wem.toFixed(3)}`
-      );
+    const wvs = this.normalizeVoiceStress(audioResult.metrics);
+    const wvb = this.normalizeVisualBehavior(videoResult.metrics);
+    const wem = this.calculateExpressionScore(expressionResult);
+    const w = 0.33; // Equal weights
+    const deceptionScore = w * wvs + w * wvb + w * wem;
 
-      const w = 0.33; // Equal weights
-      const deceptionScore = w * wvs + w * wvb + w * wem;
+    const metrics = {
+      deceptionScore: parseFloat(deceptionScore.toFixed(4)),
+      breakdown: {
+        voiceStress: parseFloat(wvs.toFixed(4)),
+        visualBehavior: parseFloat(wvb.toFixed(4)),
+        expressionMeasurement: parseFloat(wem.toFixed(4)),
+      },
+      details: {
+        voice: { ...audioResult, ...audioResult.metrics },
+        visual: { ...videoResult, ...videoResult.metrics },
+        expression: { ...expressionResult, ...expressionResult.metrics },
+      },
+    };
 
-      const metrics = {
-        deceptionScore: parseFloat(deceptionScore.toFixed(4)),
-        breakdown: {
-          voiceStress: parseFloat(wvs.toFixed(4)),
-          visualBehavior: parseFloat(wvb.toFixed(4)),
-          expressionMeasurement: parseFloat(wem.toFixed(4)),
-        },
-        details: {
-          voice: { ...audioResult, ...audioResult.metrics },
-          visual: { ...videoResult, ...videoResult.metrics },
-          expression: { ...expressionResult, ...expressionResult.metrics },
-        },
-      };
-
-      this.storeSegmentAnalysis(uploadId, startTime, endTime, metrics);
-      return metrics;
-    } catch (error: any) {
-      this.logger.error(`Analysis failed: ${error.message}`);
-      throw error;
-    }
+    await this.storeSegmentAnalysis(uploadId, startTime, endTime, metrics, tenantContext);
+    return metrics;
   }
 
-  /**
-   * Generate consent form after video processing is complete
-   */
-  async generateConsent(uploadId: string) {
-    const uploadResult = await this.getUpload(uploadId);
-    const upload = uploadResult as any;
+  async generateConsent(uploadId: string, tenantContext: TenantContext) {
+    const upload = await this.getUpload(uploadId, tenantContext);
     const sessionId = upload.sessionId;
 
-    // Fetch the latest deception score for this session
-    const latestScore = await prisma.deceptionScore.findFirst({
+    const latestScore = await this.prisma.deceptionScore.findFirst({
       where: { sessionId },
       orderBy: { createdAt: 'desc' },
     });
@@ -721,8 +612,6 @@ export class UploadsService {
         expressionMeasurement: latestScore ? Number(latestScore.expressionMeasurement) : 0,
       },
     };
-
-    // Prepare payload for Python PDF generator
     const payload = {
       sessionId: sessionId || `upload-${upload.id}`,
       claimId: upload.claimId,
@@ -782,27 +671,15 @@ export class UploadsService {
       body: JSON.stringify(payload),
     });
 
-    if (!pdfResult.ok) {
-      throw new InternalServerErrorException('Failed to generate PDF consent form');
-    }
+    if (!pdfResult.ok) throw new Error('PDF generation failed');
 
-    const result = (await pdfResult.json()) as {
-      success: boolean;
-      storage_path: string;
-      bucket: string;
-      signed_url: string;
-      file_size: number;
-    };
+    const result = (await pdfResult.json()) as any;
     const pdfPath = path.join(path.dirname(upload.videoUrl), `consent-${upload.id}.pdf`);
-
-    await prisma.videoUpload.update({
-      where: { id: uploadId },
-      data: { status: 'COMPLETED' },
-    });
-
-    const document = await prisma.document.create({
+    const document = await this.prisma.document.create({
       data: {
         claimId: upload.claimId,
+        tenantId: tenantContext.tenantId,
+        userId: tenantContext.userId,
         type: 'SIGNED_STATEMENT',
         filename: `assessment-consent-${upload.id}.pdf`,
         storageUrl: result.signed_url || pdfPath,
@@ -816,6 +693,11 @@ export class UploadsService {
       },
     });
 
+    await this.prisma.videoUpload.update({
+      where: { id: uploadId },
+      data: { status: 'COMPLETED' },
+    });
+
     // Final cleanup: delete local video file after document is created
     const localVideoPath = path.join(tempDir, `full-${uploadId}.mp4`);
     if (fs_sync.existsSync(localVideoPath)) {
@@ -826,29 +708,24 @@ export class UploadsService {
     return { documentId: document.id, success: true };
   }
 
-  async getClaimUploads(claimId: string) {
-    const uploads = await prisma.videoUpload.findMany({
+  async getClaimUploads(claimId: string, tenantContext: TenantContext) {
+    await this.tenantService.validateClaimAccess(claimId, tenantContext);
+    const uploads = await this.prisma.videoUpload.findMany({
       where: { claimId },
       orderBy: { createdAt: 'desc' },
     });
-
     return Promise.all(
-      uploads.map(async upload => {
-        const signedUrl = await this.signUrlIfNeeded(upload.videoUrl);
-        return {
-          ...upload,
-          videoUrl: signedUrl,
-          recordingUrl: signedUrl,
-        };
-      })
+      uploads.map(async u => ({ ...u, videoUrl: await this.signUrlIfNeeded(u.videoUrl) }))
     );
   }
 
-  async getAllUploads(page = 1, limit = 10) {
+  async getAllUploads(page = 1, limit = 10, tenantContext?: TenantContext) {
     const skip = (page - 1) * limit;
+    const where = this.tenantService.buildTenantFilter(tenantContext || null);
 
     const [uploads, total] = await Promise.all([
-      prisma.videoUpload.findMany({
+      this.prisma.videoUpload.findMany({
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -866,59 +743,34 @@ export class UploadsService {
           },
         },
       }),
-      prisma.videoUpload.count(),
+      this.prisma.videoUpload.count({ where }),
     ]);
 
     const data = await Promise.all(
-      uploads.map(async upload => {
-        const signedUrl = await this.signUrlIfNeeded(upload.videoUrl);
-        return {
-          ...upload,
-          videoUrl: signedUrl,
-          recordingUrl: signedUrl,
-        };
-      })
+      uploads.map(async u => ({ ...u, videoUrl: await this.signUrlIfNeeded(u.videoUrl) }))
     );
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async getUploadSegments(uploadId: string) {
-    const upload = await prisma.videoUpload.findUnique({
-      where: { id: uploadId },
-    });
-
-    if (!upload) {
-      throw new NotFoundException('Video upload not found');
-    }
-
-    // Get the session associated with this upload
-    const session = await prisma.session.findFirst({
+  async getUploadSegments(uploadId: string, tenantContext: TenantContext) {
+    const upload = await this.getUpload(uploadId, tenantContext);
+    const session = await this.prisma.session.findFirst({
       where: { claimId: upload.claimId },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!session) {
-      return [];
-    }
+    if (!session) return [];
 
-    // Get deception scores for this session as segments
-    const scores = await prisma.deceptionScore.findMany({
+    const scores = await this.prisma.deceptionScore.findMany({
       where: { sessionId: session.id },
       orderBy: { createdAt: 'asc' },
     });
 
-    // Convert deception scores to segment format
     return scores.map((score, index) => ({
       id: score.id,
       uploadId: uploadId,
-      startTime: index * 5, // Assuming 5-second segments
+      startTime: index * 5,
       endTime: (index + 1) * 5,
       deceptionScore: score.deceptionScore,
       voiceStress: score.voiceStress,
@@ -928,37 +780,21 @@ export class UploadsService {
     }));
   }
 
-  async deleteUpload(uploadId: string) {
-    const upload = await prisma.videoUpload.findUnique({
-      where: { id: uploadId },
-    });
+  async deleteUpload(uploadId: string, tenantContext: TenantContext) {
+    const upload = await this.getUpload(uploadId, tenantContext);
 
-    if (!upload) {
-      throw new NotFoundException('Video upload not found');
-    }
-
-    // Check if videoUrl is a Supabase URL
+    // Cleanup
     const { apiUrl, key } = this.getSupabaseConfig();
     const bucketName = 'tci-uploads';
     const publicPathPart = `/storage/v1/object/public/${bucketName}/`;
 
     if (upload.videoUrl.includes(publicPathPart)) {
-      try {
-        const storagePath = upload.videoUrl.split(publicPathPart).pop();
-        if (storagePath) {
-          const response = await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${key}`,
-            },
-          });
-
-          if (!response.ok) {
-            this.logger.warn(`Failed to delete Supabase file: ${response.statusText}`);
-          }
-        }
-      } catch (error: any) {
-        this.logger.error(`Error deleting from Supabase: ${error.message}`);
+      const storagePath = upload.videoUrl.split(publicPathPart).pop();
+      if (storagePath) {
+        await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${key}` },
+        });
       }
     } else {
       // Local file
@@ -969,58 +805,18 @@ export class UploadsService {
       }
     }
 
-    await prisma.videoUpload.delete({
-      where: { id: uploadId },
-    });
-
+    await this.prisma.videoUpload.delete({ where: { id: uploadId } });
     return { success: true };
   }
 
-  // ==================== Private Helpers ====================
-
-  private async callAnalyzer(
-    path: string,
-    buffer: Buffer,
-    filename: string,
-    retries = 3
-  ): Promise<any> {
+  private async callAnalyzer(path: string, buffer: Buffer, filename: string): Promise<any> {
     const formData = new FormData();
     const mimeType = filename.endsWith('.wav') ? 'audio/wav' : 'video/mp4';
     formData.append('file', new Blob([buffer], { type: mimeType }), filename);
 
-    let lastError: Error | null = null;
-
-    for (let i = 0; i < retries; i++) {
-      try {
-        const response = await fetch(`${this.analyzerUrl}${path}`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (response.ok) {
-          return await response.json();
-        }
-
-        const errorText = await response.text();
-        lastError = new Error(`Analyzer error [${response.status}]: ${errorText}`);
-
-        // Only retry on 5xx errors
-        if (response.status < 500) {
-          throw lastError;
-        }
-
-        this.logger.warn(`Analyzer attempt ${i + 1} failed, retrying... (${lastError.message})`);
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-      } catch (error: any) {
-        lastError = error;
-        if (i === retries - 1) throw error;
-        this.logger.warn(`Analyzer attempt ${i + 1} crashed, retrying... (${error.message})`);
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-      }
-    }
-
-    throw lastError || new Error('Analyzer failed after retries');
+    const response = await fetch(`${this.analyzerUrl}${path}`, { method: 'POST', body: formData });
+    if (!response.ok) throw new Error(`Analyzer failed: ${response.statusText}`);
+    return response.json();
   }
 
   private normalizeVoiceStress(metrics: any): number {
@@ -1050,10 +846,7 @@ export class UploadsService {
   private normalizeVisualBehavior(input: any): number {
     if (!input) return 0;
 
-    // Support both { metrics: { ... } } and { ... } formats
     const metrics = input.metrics || input;
-
-    // components: Blink Rate dev + Lip Compression + Blink Duration
     const blinkRate = metrics.blink_rate_per_min || metrics.blink_rate || 18;
     const blinkDev = Math.min(0.4, Math.abs(blinkRate - 18) / 20);
 
@@ -1068,8 +861,6 @@ export class UploadsService {
 
   private calculateExpressionScore(input: any): number {
     if (!input) return 0;
-
-    // Support nested { metrics: { ... } } or { top_emotions: ... } or direct array
     const data = input.metrics || input;
     let emotionsArray = data;
 
@@ -1106,7 +897,6 @@ export class UploadsService {
       }
     }
 
-    // Return the fraud score, slightly adjusted
     return Math.min(1, maxFraud > 0.1 ? maxFraud : 0);
   }
 
@@ -1123,22 +913,26 @@ export class UploadsService {
         `"${ffprobeStatic.path}" -v error -select_streams a -show_entries stream=index -of csv=p=0 "${videoPath}"`
       );
       return stdout.trim().length > 0;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
 
-  private async storeSegmentAnalysis(uploadId: string, _start: number, _end: number, metrics: any) {
-    // Fetch raw upload directly to ensure we have the correct videoUrl for matching
-    const upload = await prisma.videoUpload.findUnique({
+  private async storeSegmentAnalysis(
+    uploadId: string,
+    _start: number,
+    _end: number,
+    metrics: any,
+    tenantContext: TenantContext
+  ) {
+    const upload = await this.prisma.videoUpload.findUnique({
       where: { id: uploadId },
       include: { claim: true },
     });
 
-    if (!upload) throw new NotFoundException('Video upload not found');
+    if (!upload) throw new NotFoundException('Upload not found');
 
-    // Find session specifically for this upload
-    let session = await prisma.session.findFirst({
+    let session = await this.prisma.session.findFirst({
       where: {
         claimId: upload.claimId,
         recordingUrl: upload.videoUrl,
@@ -1146,13 +940,15 @@ export class UploadsService {
     });
 
     if (!session) {
-      session = await prisma.session.create({
+      session = await this.prisma.session.create({
         data: {
           claimId: upload.claimId,
+          tenantId: tenantContext.tenantId,
+          userId: tenantContext.userId,
           roomId: BigInt(Date.now()),
-          status: 'COMPLETED',
+          status: SessionStatus.COMPLETED,
           analysisStatus: 'PROCESSING',
-          recordingUrl: upload.videoUrl, // Link session to this specific upload
+          recordingUrl: upload.videoUrl,
         },
       });
     }
@@ -1160,21 +956,24 @@ export class UploadsService {
     const getRiskScore = (score: number): RiskScore =>
       score > 0.7 ? RiskScore.HIGH : score > 0.4 ? RiskScore.MEDIUM : RiskScore.LOW;
 
-    await prisma.$transaction([
-      prisma.deceptionScore.create({
+    await this.prisma.$transaction([
+      this.prisma.deceptionScore.create({
         data: {
           sessionId: session.id,
+          tenantId: tenantContext.tenantId,
+          userId: tenantContext.userId,
           deceptionScore: metrics.deceptionScore,
           voiceStress: metrics.breakdown.voiceStress,
           visualBehavior: metrics.breakdown.visualBehavior,
           expressionMeasurement: metrics.breakdown.expressionMeasurement,
         },
       }),
-      prisma.riskAssessment.create({
+      this.prisma.riskAssessment.create({
         data: {
           sessionId: session.id,
+          tenantId: tenantContext.tenantId,
           assessmentType: AssessmentType.VOICE_ANALYSIS,
-          provider: 'Parselmouth (Video Segment)',
+          provider: 'Parselmouth',
           riskScore: getRiskScore(metrics.breakdown.voiceStress),
           confidence: metrics.details.voice?.confidence || 0.85,
           rawResponse: {
@@ -1186,11 +985,12 @@ export class UploadsService {
           },
         },
       }),
-      prisma.riskAssessment.create({
+      this.prisma.riskAssessment.create({
         data: {
           sessionId: session.id,
+          tenantId: tenantContext.tenantId,
           assessmentType: AssessmentType.ATTENTION_TRACKING,
-          provider: 'MediaPipe (Video Segment)',
+          provider: 'MediaPipe',
           riskScore: getRiskScore(metrics.breakdown.visualBehavior),
           confidence: metrics.details.visual?.confidence || 0.8,
           rawResponse: {
@@ -1202,11 +1002,12 @@ export class UploadsService {
           },
         },
       }),
-      prisma.riskAssessment.create({
+      this.prisma.riskAssessment.create({
         data: {
           sessionId: session.id,
+          tenantId: tenantContext.tenantId,
           assessmentType: AssessmentType.VISUAL_MODERATION,
-          provider: 'HumeAI (Video Segment)',
+          provider: 'HumeAI',
           riskScore: getRiskScore(metrics.breakdown.expressionMeasurement),
           confidence: metrics.details.expression?.confidence || 0.9,
           rawResponse: {
@@ -1220,28 +1021,16 @@ export class UploadsService {
       }),
     ]);
 
-    // Mark down the duration location so system knows progress
-    await prisma.videoUpload.update({
+    await this.prisma.videoUpload.update({
       where: { id: uploadId },
-      data: {
-        processedUntil: _end,
-        status: 'PROCESSING',
-      },
+      data: { processedUntil: _end, status: 'PROCESSING' },
     });
   }
-
-  // ==================== Supabase Helpers ====================
 
   private getSupabaseConfig() {
     const url = this.configService.get<string>('SUPABASE_URL');
     const key = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!url || !key) {
-      this.logger.error(
-        'Supabase credentials (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY) are missing.'
-      );
-      throw new InternalServerErrorException('Supabase configuration error');
-    }
+    if (!url || !key) throw new Error('Supabase config missing');
 
     // Normalize URL: ensure it's the API gateway, not the storage-specific domain
     let apiUrl = url.replace(/\/$/, '');

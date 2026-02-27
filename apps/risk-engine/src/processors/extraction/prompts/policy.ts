@@ -23,6 +23,15 @@ Policyholder Details:
 - policyholder_phone: Contact phone number if available
 - policyholder_email: Email address if available
 
+Vehicle Details:
+- vehicle_make: Make of vehicle
+- vehicle_model: Model of vehicle
+- vehicle_year: Year of manufacture
+- vehicle_color: Color of vehicle
+- vehicle_registration_number: Registration number
+- vehicle_chassis_number: Chassis number
+- vehicle_engine_number: Engine number
+
 Insured / Covered Person Details:
 - insured_name: Name of insured person (if different from policyholder)
 - insured_ic_number: NRIC / Passport number if available
@@ -81,6 +90,15 @@ Response Format:
     "address": "...",
     "phone": null,
     "email": null
+  },
+  "vehicle": {
+    "make": null,
+    "model": null,
+    "year": null,
+    "color": null,
+    "registration_number": null,
+    "chassis_number": null,
+    "engine_number": null
   },
   "insured_person": {
     "name": null,

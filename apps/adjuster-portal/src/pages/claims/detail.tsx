@@ -21,6 +21,9 @@ import {
   Brain,
   RefreshCw,
   X,
+  Globe,
+  Monitor,
+  MapPin,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -43,6 +46,7 @@ import {
 import { useClaim, useUpdateClaimStatus, useReplaceDocument } from '@/hooks/use-claims';
 import { useTriggerTrinityCheck } from '@/hooks/use-trinity';
 import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video';
+import { useReverseGeocode } from '@/hooks/use-location';
 import { useToast } from '@/hooks/use-toast';
 import { InfoTooltip } from '@/components/ui/tooltip';
 import {
@@ -109,7 +113,7 @@ const SessionChart = ({
 
   if (isDeceptionLoading && !deception) {
     return (
-      <div className="h-40 flex items-center justify-center text-xs text-slate-500">
+      <div className="h-40 flex items-center justify-center text-xs text-muted-foreground animate-pulse">
         Loading metrics...
       </div>
     );
@@ -117,7 +121,7 @@ const SessionChart = ({
 
   if (!deceptionData || deceptionData.length === 0) {
     return (
-      <div className="h-40 flex flex-col items-center justify-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed">
+      <div className="h-40 flex flex-col items-center justify-center text-xs text-muted-foreground bg-muted/40 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
         <Activity className="h-5 w-5 mb-2 opacity-20" />
         No risk data captured for this session.
       </div>
@@ -257,6 +261,26 @@ export function ClaimDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+
+  const latestClaimantClientInfo = useMemo(() => {
+    if (!claim?.sessions) return null;
+
+    const allClientInfos = (claim.sessions as any[]).flatMap((s: any) => s.clientInfos || []);
+    const claimantInfos = allClientInfos.filter(
+      (info: any) => info.metadata?.claimantId === claim.claimant?.id
+    );
+
+    if (claimantInfos.length === 0) return null;
+
+    return claimantInfos.sort(
+      (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
+  }, [claim]);
+
+  const { data: locationData, isLoading: isLocationLoading } = useReverseGeocode(
+    latestClaimantClientInfo?.latitude || null,
+    latestClaimantClientInfo?.longitude || null
+  );
 
   // Pagination states
   const [docPage, setDocPage] = useState(1);
@@ -757,7 +781,7 @@ export function ClaimDetailPage() {
                     <InfoTooltip
                       content={
                         <div className="space-y-2 max-w-[450px]">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-base">True Claim Intelligence</span>
                             <Badge
                               variant={
@@ -785,7 +809,7 @@ export function ClaimDetailPage() {
                               </Badge>
                             </div>
                           )}
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-justify text-xs text-muted-foreground p-2">
                             {(claim.trinityChecks[0] as any)?.reasoning ||
                               'No detailed reasoning available.'}
                           </p>
@@ -1094,7 +1118,7 @@ export function ClaimDetailPage() {
                                   variant={session.status === 'COMPLETED' ? 'default' : 'secondary'}
                                   className="text-[10px]"
                                 >
-                                  {session.status}
+                                  {convertToTitleCase(session.status)}
                                 </Badge>
                                 {expandedSessions.has(session.id) ? (
                                   <ChevronUp className="h-4 w-4 text-slate-400" />
@@ -1281,6 +1305,75 @@ export function ClaimDetailPage() {
                   <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertTriangle className="h-4 w-4 text-amber-600" />
                     <span className="text-xs font-medium text-amber-700">Escalated to SIU</span>
+                  </div>
+                )}
+
+                {latestClaimantClientInfo && (
+                  <div className="pt-2 space-y-4">
+                    {latestClaimantClientInfo.latitude && latestClaimantClientInfo.longitude && (
+                      <div className="h-52 w-full rounded-lg overflow-hidden border bg-muted/20">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          frameBorder="0"
+                          style={{ border: 0 }}
+                          src={`https://maps.google.com/maps?q=${latestClaimantClientInfo.latitude},${latestClaimantClientInfo.longitude}&z=14&output=embed`}
+                          allowFullScreen
+                          title="Claimant Location"
+                        ></iframe>
+                      </div>
+                    )}
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Location:</span>
+                        <InfoTooltip
+                          content={locationData?.displayName || 'Unknown'}
+                          direction="top"
+                          className="max-w-[75%]"
+                          trigger={
+                            <span className="font-medium text-right truncate">
+                              {isLocationLoading ? (
+                                <span className="flex items-center gap-1 justify-end">
+                                  <Loader2 className="h-2 w-2 animate-spin" />
+                                  Resolving...
+                                </span>
+                              ) : (
+                                locationData?.displayName || 'Unknown'
+                              )}
+                            </span>
+                          }
+                        />
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">ISP:</span>
+                        <span className="font-medium text-right">
+                          {(() => {
+                            const ispParts = [
+                              latestClaimantClientInfo.isp,
+                              latestClaimantClientInfo.organisation,
+                              latestClaimantClientInfo.region,
+                              latestClaimantClientInfo.postalCode,
+                              latestClaimantClientInfo.city,
+                              latestClaimantClientInfo.country,
+                            ].filter(Boolean);
+                            return ispParts.length > 0 ? ispParts.join(', ') : 'N/A';
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">IP Address:</span>
+                        <span className="font-medium text-right">
+                          {latestClaimantClientInfo.ipv4 || latestClaimantClientInfo.ipv6 || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Device:</span>
+                        <span className="font-medium text-right truncate max-w-[140px]">
+                          {latestClaimantClientInfo.browser} on {latestClaimantClientInfo.platform}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>

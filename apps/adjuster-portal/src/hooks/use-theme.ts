@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
-export function useTheme(defaultTheme: Theme = 'light', storageKey: string = 'tci-ui-theme') {
+export function useTheme(defaultTheme: Theme = 'system', storageKey: string = 'tci-ui-theme') {
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
   });
@@ -10,18 +10,28 @@ export function useTheme(defaultTheme: Theme = 'light', storageKey: string = 'tc
   useEffect(() => {
     const root = window.document.documentElement;
 
-    root.classList.remove('light', 'dark');
+    const applyTheme = () => {
+      root.classList.remove('light', 'dark');
+
+      if (theme === 'system') {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+        root.classList.add(systemTheme);
+      } else {
+        root.classList.add(theme);
+      }
+    };
+
+    applyTheme();
 
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => applyTheme();
 
-      root.classList.add(systemTheme);
-      return;
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
     }
-
-    root.classList.add(theme);
   }, [theme]);
 
   const value = {
