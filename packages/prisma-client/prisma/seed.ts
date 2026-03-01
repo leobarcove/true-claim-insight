@@ -192,13 +192,7 @@ async function main() {
     UserRole.SUPER_ADMIN,
     '+60100000000'
   );
-  const insurerAdmin = await upsertUser(
-    'admin@allianz.com',
-    'Allianz Admin',
-    UserRole.INSURER_ADMIN,
-    '+60100000001',
-    insurerTenant.id
-  );
+
   const firmAdmin = await upsertUser(
     'admin@pacific.com',
     'Pacific Admin',
@@ -213,13 +207,7 @@ async function main() {
     '+60100000003',
     adjusterTenant.id
   );
-  const insurerStaff = await upsertUser(
-    'staff@allianz.com',
-    'Siti Staff',
-    UserRole.INSURER_STAFF,
-    '+60100000004',
-    insurerTenant.id
-  );
+
   const siuInvestigator = await upsertUser(
     'siu@allianz.com',
     'Zul SIU',
@@ -283,7 +271,7 @@ async function main() {
     where: { claimNumber: 'TC-2025-001' },
     update: {
       tenantId: insurerTenant.id,
-      userId: insurerStaff.id,
+      userId: firmAdmin.id,
     } as any,
     create: {
       claimNumber: 'TC-2025-001',
@@ -291,7 +279,7 @@ async function main() {
       adjusterId: adjusterProfile.id,
       insurerTenantId: insurerTenant.id,
       tenantId: insurerTenant.id,
-      userId: insurerStaff.id,
+      userId: firmAdmin.id,
       policyNumber: 'POL-667788',
       claimType: ClaimType.OWN_DAMAGE,
       status: ClaimStatus.ASSIGNED,

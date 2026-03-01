@@ -184,9 +184,6 @@ export class TenantService {
    * Check if user can access resources across tenants
    */
   private canAccessCrossTenant(tenantContext: TenantContext): boolean {
-    return (
-      tenantContext.allowCrossTenant &&
-      ['SUPER_ADMIN', 'INSURER_ADMIN'].includes(tenantContext.userRole)
-    );
+    return tenantContext.allowCrossTenant && ['SUPER_ADMIN'].includes(tenantContext.userRole);
   }
 }

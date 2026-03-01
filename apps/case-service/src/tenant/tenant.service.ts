@@ -210,10 +210,7 @@ export class TenantService {
    * Only SUPER_ADMIN and users with explicit allowCrossTenant flag
    */
   private canAccessCrossTenant(tenantContext: TenantContext): boolean {
-    return (
-      tenantContext.allowCrossTenant &&
-      ['SUPER_ADMIN', 'INSURER_ADMIN'].includes(tenantContext.userRole)
-    );
+    return tenantContext.allowCrossTenant && ['SUPER_ADMIN'].includes(tenantContext.userRole);
   }
 
   /**

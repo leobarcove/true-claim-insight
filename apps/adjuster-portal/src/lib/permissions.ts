@@ -35,7 +35,7 @@ export const PERMISSIONS = {
   SYSTEM_ADMIN: 'system:admin',
 } as const;
 
-export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
+export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 /**
  * Role to permissions mapping
@@ -60,24 +60,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.AUDIT_VIEW,
     PERMISSIONS.SIU_ESCALATE,
   ],
-  INSURER_ADMIN: [
-    PERMISSIONS.CLAIMS_VIEW_ALL,
-    PERMISSIONS.CLAIMS_CREATE,
-    PERMISSIONS.CLAIMS_EDIT,
-    PERMISSIONS.CLAIMS_ASSIGN,
-    PERMISSIONS.CLAIMS_APPROVE,
-    PERMISSIONS.CLAIMS_EXPORT,
-    PERMISSIONS.VIDEO_VIEW_RECORDINGS,
-    PERMISSIONS.USERS_MANAGE,
-    PERMISSIONS.AUDIT_VIEW,
-    PERMISSIONS.SIU_ESCALATE,
-  ],
-  INSURER_STAFF: [
-    PERMISSIONS.CLAIMS_VIEW_OWN,
-    PERMISSIONS.CLAIMS_CREATE,
-    PERMISSIONS.CLAIMS_APPROVE,
-    PERMISSIONS.VIDEO_VIEW_RECORDINGS,
-  ],
+  CLAIMANT: [],
   SIU_INVESTIGATOR: [
     PERMISSIONS.CLAIMS_VIEW_ALL,
     PERMISSIONS.CLAIMS_EXPORT,
@@ -92,13 +75,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.AUDIT_VIEW,
     PERMISSIONS.COMPLIANCE_FLAG,
   ],
-  SUPPORT_DESK: [
-    PERMISSIONS.CLAIMS_VIEW_OWN,
-  ],
-  SHARIAH_REVIEWER: [
-    PERMISSIONS.CLAIMS_VIEW_OWN,
-    PERMISSIONS.SHARIAH_REVIEW,
-  ],
+  SUPPORT_DESK: [PERMISSIONS.CLAIMS_VIEW_OWN],
+  SHARIAH_REVIEWER: [PERMISSIONS.CLAIMS_VIEW_OWN, PERMISSIONS.SHARIAH_REVIEW],
   SUPER_ADMIN: [
     PERMISSIONS.CLAIMS_VIEW_ALL,
     PERMISSIONS.CLAIMS_CREATE,
@@ -122,7 +100,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
  * Hook to check if the current user has a specific permission
  */
 export function useHasPermission(permission: Permission): boolean {
-  const user = useAuthStore((state) => state.user);
+  const user = useAuthStore(state => state.user);
   if (!user) return false;
   return ROLE_PERMISSIONS[user.role]?.includes(permission) ?? false;
 }
@@ -131,17 +109,17 @@ export function useHasPermission(permission: Permission): boolean {
  * Hook to check if the current user has any of the specified permissions
  */
 export function useHasAnyPermission(permissions: Permission[]): boolean {
-  const user = useAuthStore((state) => state.user);
+  const user = useAuthStore(state => state.user);
   if (!user) return false;
   const userPerms = ROLE_PERMISSIONS[user.role] ?? [];
-  return permissions.some((p) => userPerms.includes(p));
+  return permissions.some(p => userPerms.includes(p));
 }
 
 /**
  * Hook to get all permissions for the current user
  */
 export function useUserPermissions(): Permission[] {
-  const user = useAuthStore((state) => state.user);
+  const user = useAuthStore(state => state.user);
   if (!user) return [];
   return ROLE_PERMISSIONS[user.role] ?? [];
 }

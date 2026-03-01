@@ -4,8 +4,7 @@ import { persist } from 'zustand/middleware';
 export type UserRole =
   | 'ADJUSTER'
   | 'FIRM_ADMIN'
-  | 'INSURER_ADMIN'
-  | 'INSURER_STAFF'
+  | 'CLAIMANT'
   | 'SIU_INVESTIGATOR'
   | 'COMPLIANCE_OFFICER'
   | 'SUPPORT_DESK'
