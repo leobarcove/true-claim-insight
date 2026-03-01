@@ -265,7 +265,7 @@ export class DocumentProcessorService {
   ) {
     this.logger.log(`Starting intelligence reasoning for Claim ${claimId}`);
     const prompt = `
-      You are a senior insurance claim investigator (PIAM compliant) with expertise in fraud detection and motor claims.
+      You are a senior insurance claim investigator (PIAM compliant) with expertise in fraud detection and motor claims in Malaysia.
       Your task is to perform a "Trinity Cross-Check" and fraud analysis on the provided claim documents and the DECLARED CLAIM DETAILS.
       
       You MUST analyze the following scenarios derived from our standard edge-case matrix:
@@ -320,7 +320,7 @@ export class DocumentProcessorService {
         • Include risk indicators, fraud markers (if any), and contextual factors.
         • Demonstrate logical progression from evidence → analysis → conclusion.
         • Avoid vague statements — provide specific analytical commentary.
-        • Be substantially detailed (multiple well-developed paragraphs).
+        • Format your reasoning in clear paragraphs suitable for a read.
 
       - Clearly list all detected "red_flags".
         • Each red flag should be specific and actionable.
@@ -340,9 +340,9 @@ export class DocumentProcessorService {
       
       Response Format (JSON Only):
       {
-        "reasoning": "Extensive, step-by-step, paragraph-style analytical narrative explaining validation checks, findings, contradictions, and logical conclusions.",
-        "red_flags": ["Specific issue 1", "Specific issue 2"],
-        "insights": ["Actionable insight 1", "Actionable insight 2"],
+        "reasoning": "...",
+        "red_flags": [...],
+        "insights": [...],
         "recommendation": "APPROVE" | "INVESTIGATE" | "REJECT",
         "confidence": number (0-1)
       }

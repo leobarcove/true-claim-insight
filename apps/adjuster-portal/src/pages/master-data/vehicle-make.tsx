@@ -222,7 +222,7 @@ export function VehicleMakePage() {
                 </TableHeader>
                 <TableBody className="bg-card">
                   {paginatedMakes.map(make => (
-                    <TableRow key={make.id} className="hover:bg-accent/50">
+                    <TableRow key={make.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{make.name}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex flex-col text-xs">

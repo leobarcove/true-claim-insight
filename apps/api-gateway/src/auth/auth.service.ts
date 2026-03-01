@@ -73,8 +73,18 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    const tokens = await this.generateTokens(user);
     const userTenants = await this.getUserTenants(user.id);
+
+    // Prioritize isDefault tenant
+    const defaultTenant = userTenants.find(ut => ut.isDefault);
+    const activeTenantId = defaultTenant?.tenantId || user.currentTenantId || user.tenantId;
+
+    const tokens = await this.generateTokens({ ...user, currentTenantId: activeTenantId });
+
+    const activeTenantName =
+      userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
+      (user as any).tenant?.name ||
+      '';
 
     this.logger.log(`User registered: ${user.email}`);
 
@@ -87,8 +97,8 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         tenantId: user.tenantId,
-        currentTenantId: (user as any).currentTenantId || user.tenantId,
-        tenantName: (user as any).tenant?.name || (user as any).currentTenant?.name || '',
+        currentTenantId: activeTenantId,
+        tenantName: activeTenantName,
       },
       userTenants,
       tokens,
@@ -105,8 +115,20 @@ export class AuthService {
     // Update last login
     await this.usersService.updateLastLogin(user.id);
 
-    const tokens = await this.generateTokens(user);
     const userTenants = await this.getUserTenants(user.id);
+
+    // Prioritize isDefault tenant
+    const defaultTenant = userTenants.find(ut => ut.isDefault);
+    const activeTenantId =
+      defaultTenant?.tenantId || (user as any).currentTenantId || user.tenantId;
+
+    const tokens = await this.generateTokens({ ...user, currentTenantId: activeTenantId });
+
+    const activeTenantName =
+      userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
+      (user as any).tenant?.name ||
+      (user as any).currentTenant?.name ||
+      '';
 
     this.logger.log(`User logged in: ${user.email}`);
 
@@ -119,8 +141,8 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         tenantId: user.tenantId,
-        currentTenantId: (user as any).currentTenantId || user.tenantId,
-        tenantName: (user as any).tenant?.name || (user as any).currentTenant?.name || '',
+        currentTenantId: activeTenantId,
+        tenantName: activeTenantName,
       },
       userTenants,
       tokens,
