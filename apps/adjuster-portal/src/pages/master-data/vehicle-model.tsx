@@ -271,7 +271,7 @@ export function VehicleModelPage() {
                 </TableHeader>
                 <TableBody className="bg-card">
                   {paginatedModels.map(model => (
-                    <TableRow key={model.id} className="hover:bg-accent/50">
+                    <TableRow key={model.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{model.name}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">{selectedMakeName}</Badge>

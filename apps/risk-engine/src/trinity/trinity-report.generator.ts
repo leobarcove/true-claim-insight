@@ -528,18 +528,20 @@ export class TrinityReportGenerator {
     // doc.addPage();
     this.drawSectionHeader(doc, 'C', 'Extracted Document Data', '3');
 
-    data.documents.forEach((docItem, index) => {
-      // Need at least enough room for a document title + one data row
-      this.ensureSpace(doc, data, 46);
-
+    let displayedCount = 0;
+    data.documents.forEach(docItem => {
       const analysis = docItem.analysis;
       if (!analysis || !analysis.extractedData) return;
+
+      displayedCount++;
+      // Need at least enough room for a document title + one data row
+      this.ensureSpace(doc, data, 46);
 
       doc
         .fillColor(this.primaryColor)
         .fontSize(10)
         .font('Helvetica-Bold')
-        .text(`${index + 1}. ${this.formatTitleCase(docItem.type)} - ${docItem.filename}`, 40);
+        .text(`${displayedCount}. ${this.formatTitleCase(docItem.type)}`, 40);
       doc.moveDown(0.5);
 
       const extracted = analysis.extractedData as Record<string, any>;
@@ -581,13 +583,15 @@ export class TrinityReportGenerator {
         // Array of objects: draw header, then iterate with indices
         this.ensureSpace(doc, contData, 18);
         const parentY = doc.y;
-        doc.rect(startX, parentY, availableWidth, 18).fill(this.lightBg);
-        doc.rect(startX, parentY, availableWidth, 18).stroke(this.borderColor);
         doc
+          .rect(startX, parentY, availableWidth, 18)
+          .fill('#E2E8F0')
+          .rect(startX, parentY, availableWidth, 18)
+          .stroke(this.borderColor)
           .fillColor(this.secondaryColor)
           .fontSize(8)
           .font('Helvetica-Bold')
-          .text(formattedKey, startX + 5 + textIndent, parentY + 5, {
+          .text(formattedKey.toUpperCase(), startX + 5 + textIndent, parentY + 5, {
             width: availableWidth - 10 - textIndent,
           });
         doc.y = parentY + 18;
@@ -595,13 +599,15 @@ export class TrinityReportGenerator {
         value.forEach((item, idx) => {
           this.ensureSpace(doc, contData, 18);
           const itemY = doc.y;
-          doc.rect(startX, itemY, availableWidth, 18).fill('#E2E8F0');
-          doc.rect(startX, itemY, availableWidth, 18).stroke(this.borderColor);
           doc
+            .rect(startX, itemY, availableWidth, 18)
+            .fill('#E2E8F0')
+            .rect(startX, itemY, availableWidth, 18)
+            .stroke(this.borderColor)
             .fillColor(this.secondaryColor)
-            .fontSize(7)
+            .fontSize(8)
             .font('Helvetica-Bold')
-            .text(`Item ${idx + 1}`, startX + 5 + textIndent + 10, itemY + 5);
+            .text(`ITEM ${idx + 1}`, startX + 5 + textIndent, itemY + 5);
           doc.y = itemY + 18;
           this.drawNestedData(doc, item, level + 1, rootData);
         });
@@ -610,12 +616,15 @@ export class TrinityReportGenerator {
         this.ensureSpace(doc, contData, 36);
         const rowStartY = doc.y;
 
-        doc.rect(startX, rowStartY, availableWidth, 18).fill(this.lightBg).stroke(this.borderColor);
         doc
+          .rect(startX, rowStartY, availableWidth, 18)
+          .fill('#E2E8F0')
+          .rect(startX, rowStartY, availableWidth, 18)
+          .stroke(this.borderColor)
           .fillColor(this.secondaryColor)
           .fontSize(8)
           .font('Helvetica-Bold')
-          .text(formattedKey, startX + 5 + textIndent, rowStartY + 5, {
+          .text(formattedKey.toUpperCase(), startX + 5 + textIndent, rowStartY + 5, {
             width: availableWidth - 10 - textIndent,
             lineBreak: false,
           });
@@ -632,7 +641,12 @@ export class TrinityReportGenerator {
             : String(value);
         const valStr = this.sanitizeString(rawValStr);
 
-        const rowHeight = Math.max(18, doc.heightOfString(valStr, { width: col2Width - 10 }) + 10);
+        const isJustified = ['description'].includes(key.toLowerCase());
+        const alignment = isJustified ? 'justify' : 'left';
+        const rowHeight = Math.max(
+          18,
+          doc.heightOfString(valStr, { width: col2Width - 10, align: alignment }) + 10
+        );
 
         // Guard: the entire row must fit; if not, new page
         this.ensureSpace(doc, contData, rowHeight);
@@ -665,7 +679,10 @@ export class TrinityReportGenerator {
           .fillColor('#000000')
           .fontSize(8)
           .font('Helvetica')
-          .text(valStr, startX + col1Width + 5, rowStartY + 5, { width: col2Width - 10 });
+          .text(valStr, startX + col1Width + 5, rowStartY + 5, {
+            width: col2Width - 10,
+            align: alignment,
+          });
 
         // Advance cursor past this row
         doc.y = rowStartY + rowHeight;
@@ -683,16 +700,7 @@ export class TrinityReportGenerator {
 
     if (data.trinityCheck.reasoning) {
       this.ensureSpace(doc, data, 30);
-      doc.rect(40, doc.y, 515, 12).fill(this.lightBg);
-      doc
-        .fillColor(this.secondaryColor)
-        .fontSize(8)
-        .font('Helvetica-Bold')
-        .text('AI LOGIC & INVESTIGATIVE REASONING', 45, doc.y + 2);
-      doc.moveDown(1);
 
-      // Reasoning text may be long – PDFKit will auto-wrap across pages
-      // and respect the bottom margin (footerReserve) we set globally.
       doc
         .fillColor('#2D3748')
         .fontSize(9)
@@ -717,9 +725,9 @@ export class TrinityReportGenerator {
         this.ensureSpace(doc, data, lineH);
         doc
           .fillColor('#4A5568')
-          .fontSize(8)
+          .fontSize(9)
           .font('Helvetica')
-          .text(`- ${insight}`, 55, doc.y, { width: 485 });
+          .text(`• ${insight}`, 45, doc.y, { width: 485 });
         doc.moveDown(0.3);
       });
     }

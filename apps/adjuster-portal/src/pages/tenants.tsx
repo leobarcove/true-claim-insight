@@ -1,6 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { format } from 'date-fns';
-import { Building2, Users, Plus, Pencil, Trash2, Check, X, Shield, Network } from 'lucide-react';
+import {
+  Building2,
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  Shield,
+  Network,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,27 +65,105 @@ import {
 } from '@/hooks/use-admin';
 import { convertToTitleCase } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { SearchInput } from '@/components/ui/search-input';
+import { useDebounce } from '@/hooks/use-debounce';
+import { InfoTooltip } from '@/components/ui';
 
 export function TenantsPage() {
   const [activeTab, setActiveTab] = useState('tenants');
+  const [tenantsPage, setTenantsPage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
+  const [userTenantsPage, setUserTenantsPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 400);
+  const limit = 10;
   const { toast } = useToast();
 
-  const { data: tenants, isLoading: isLoadingTenants } = useTenants();
-  const { data: users, isLoading: isLoadingUsers } = useUsers();
-  const { data: userTenants, isLoading: isLoadingUserTenants } = useUserTenants();
+  const tenantsTableRef = useRef<any>(null);
+  const usersTableRef = useRef<any>(null);
+  const associationsTableRef = useRef<any>(null);
+
+  const { data: tenantsData, isLoading: isLoadingTenants } = useTenants({
+    page: tenantsPage,
+    limit,
+    search: debouncedSearch,
+  });
+  const { data: usersData, isLoading: isLoadingUsers } = useUsers({
+    page: usersPage,
+    limit,
+    search: debouncedSearch,
+  });
+  const { data: userTenantsData, isLoading: isLoadingUserTenants } = useUserTenants({
+    page: userTenantsPage,
+    limit,
+    search: debouncedSearch,
+  });
+
+  // Reset pages and search when tab changes
+  useEffect(() => {
+    setTenantsPage(1);
+    setUsersPage(1);
+    setUserTenantsPage(1);
+    // setSearchQuery('');
+  }, [activeTab]);
+
+  // Reset pages when search query changes
+  useEffect(() => {
+    setTenantsPage(1);
+    setUsersPage(1);
+    setUserTenantsPage(1);
+  }, [debouncedSearch]);
+
+  const tenants = tenantsData?.tenants || [];
+  const tenantsPagination = tenantsData?.pagination;
+  const users = usersData?.users || [];
+  const usersPagination = usersData?.pagination;
+  const userTenants = userTenantsData?.userTenants || [];
+  const userTenantsPagination = userTenantsData?.pagination;
+
+  // Selection data for dropdowns
+  const { data: selectionTenantsData } = useTenants({ limit: 10 });
+  const { data: selectionUsersData } = useUsers({ limit: 10 });
+  const selectionTenants = selectionTenantsData?.tenants || [];
+  const selectionUsers = selectionUsersData?.users || [];
 
   const tabs = [
-    { id: 'tenants', label: 'Tenants', icon: Building2 },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'associations', label: 'Associations', icon: Network },
+    { id: 'tenants', label: 'Tenants', icon: Building2, count: tenantsPagination?.total || 0 },
+    { id: 'users', label: 'Users', icon: Users, count: usersPagination?.total || 0 },
+    {
+      id: 'associations',
+      label: 'Associations',
+      icon: Network,
+      count: userTenantsPagination?.total || 0,
+    },
   ];
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/50">
-      <Header title="Tenants" description="Manage tenants, users and their associations" />
+      <Header title="Tenants" description="Manage tenants, users and their associations">
+        <Button
+          className="shadow-primary/20 shadow-lg -mr-3 scale-75"
+          onClick={() => {
+            if (activeTab === 'tenants') tenantsTableRef.current?.handleCreate();
+            if (activeTab === 'users') usersTableRef.current?.handleCreate();
+            if (activeTab === 'associations') associationsTableRef.current?.handleCreate();
+          }}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New
+        </Button>
+        <div className="flex items-center gap-2">
+          <SearchInput
+            placeholder={`Search ${activeTab}...`}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-[280px]"
+          />
+        </div>
+      </Header>
 
       <div className="flex-1 overflow-auto p-6">
-        <div className="mx-auto space-y-8">
+        <div className="mx-auto space-y-6">
           {/* Horizontal Tabs */}
           <div className="flex items-center border-b border-border">
             <div className="flex gap-4">
@@ -87,8 +177,8 @@ export function TenantsPage() {
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <tab.icon className="h-4 w-4" />
-                  {tab.label}
+                  {/* <tab.icon className="h-4 w-4" /> */}
+                  {tab.label} ({tab?.count || 0})
                 </button>
               ))}
             </div>
@@ -98,8 +188,13 @@ export function TenantsPage() {
             {activeTab === 'tenants' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <TenantsTable
-                  tenants={tenants || []}
+                  ref={tenantsTableRef}
+                  tenants={tenants}
+                  allTenants={selectionTenants}
                   isLoading={isLoadingTenants}
+                  pagination={tenantsPagination}
+                  page={tenantsPage}
+                  onPageChange={setTenantsPage}
                   onRefresh={() => {}}
                 />
               </div>
@@ -107,17 +202,30 @@ export function TenantsPage() {
 
             {activeTab === 'users' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <UsersTable users={users || []} isLoading={isLoadingUsers} onRefresh={() => {}} />
+                <UsersTable
+                  ref={usersTableRef}
+                  users={users}
+                  allUsers={selectionUsers}
+                  isLoading={isLoadingUsers}
+                  pagination={usersPagination}
+                  page={usersPage}
+                  onPageChange={setUsersPage}
+                  onRefresh={() => {}}
+                />
               </div>
             )}
 
             {activeTab === 'associations' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <UserTenantsTable
-                  associations={userTenants || []}
-                  tenants={tenants || []}
-                  users={users || []}
+                  ref={associationsTableRef}
+                  associations={userTenants}
+                  tenants={selectionTenants}
+                  users={selectionUsers}
                   isLoading={isLoadingUserTenants}
+                  pagination={userTenantsPagination}
+                  page={userTenantsPage}
+                  onPageChange={setUserTenantsPage}
                 />
               </div>
             )}
@@ -128,69 +236,81 @@ export function TenantsPage() {
   );
 }
 
-function TenantsTable({
-  tenants,
-  isLoading,
-}: {
-  tenants: Tenant[];
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+const TenantsTable = forwardRef(
+  (
+    {
+      tenants,
+      allTenants,
+      isLoading,
+      pagination,
+      page,
+      onPageChange,
+    }: {
+      tenants: Tenant[];
+      allTenants: Tenant[];
+      isLoading: boolean;
+      pagination?: any;
+      page: number;
+      onPageChange: (page: number) => void;
+      onRefresh: () => void;
+    },
+    ref
+  ) => {
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const createMutation = useCreateTenant();
-  const updateMutation = useUpdateTenant();
-  const deleteMutation = useDeleteTenant();
-  const { toast } = useToast();
+    const createMutation = useCreateTenant();
+    const updateMutation = useUpdateTenant();
+    const deleteMutation = useDeleteTenant();
+    const { toast } = useToast();
 
-  const handleSave = async (data: Partial<Tenant>) => {
-    try {
-      if (editingTenant) {
-        await updateMutation.mutateAsync({ id: editingTenant.id, ...data });
-        toast({ title: 'Success', description: 'Tenant updated successfully' });
-      } else {
-        await createMutation.mutateAsync(data);
-        toast({ title: 'Success', description: 'Tenant created successfully' });
+    useImperativeHandle(ref, () => ({
+      handleCreate: () => {
+        setEditingTenant(null);
+        setIsDialogOpen(true);
+      },
+    }));
+
+    const handleSave = async (data: Partial<Tenant>) => {
+      try {
+        if (editingTenant) {
+          await updateMutation.mutateAsync({ id: editingTenant.id, ...data });
+          toast({ title: 'Success', description: 'Tenant updated successfully' });
+        } else {
+          await createMutation.mutateAsync(data);
+          toast({ title: 'Success', description: 'Tenant created successfully' });
+        }
+        setIsDialogOpen(false);
+        setEditingTenant(null);
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to save tenant', variant: 'destructive' });
       }
-      setIsDialogOpen(false);
-      setEditingTenant(null);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save tenant', variant: 'destructive' });
-    }
-  };
+    };
 
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await deleteMutation.mutateAsync(deletingId);
-      toast({ title: 'Success', description: 'Tenant deleted successfully' });
-      setIsDeleteDialogOpen(false);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to delete tenant', variant: 'destructive' });
-    }
-  };
+    const handleDelete = async () => {
+      if (!deletingId) return;
+      try {
+        await deleteMutation.mutateAsync(deletingId);
+        toast({ title: 'Success', description: 'Tenant deleted successfully' });
+        setIsDeleteDialogOpen(false);
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete tenant', variant: 'destructive' });
+      }
+    };
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div>
-          <CardTitle>Organization Tenants</CardTitle>
-          <CardDescription>View and manage all active tenants in the system.</CardDescription>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingTenant(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add
-        </Button>
-      </CardHeader>
-      <CardContent>
+    return (
+      <>
+        {/* <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle>Organization Tenants</CardTitle>
+              <CardDescription>View and manage all active tenants in the system.</CardDescription>
+            </div>
+          </CardHeader>
+        </Card> */}
+
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">
@@ -295,26 +415,40 @@ function TenantsTable({
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center">
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setEditingTenant(tenant);
-                              setIsDialogOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => {
-                              setDeletingId(tenant.id);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <InfoTooltip
+                            content="Edit"
+                            direction="top"
+                            fontSize="text-[11px]"
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => {
+                                  setEditingTenant(tenant);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                          <InfoTooltip
+                            content="Delete"
+                            direction="top"
+                            fontSize="text-[11px]"
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => {
+                                  setDeletingId(tenant.id);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -324,30 +458,56 @@ function TenantsTable({
             </div>
           )}
         </div>
-      </CardContent>
 
-      <TenantFormDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        tenant={editingTenant}
-        onSave={handleSave}
-        isLoading={createMutation.isPending || updateMutation.isPending}
-      />
+        {/* Pagination */}
+        {!isLoading && pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground font-medium">
+              Page {page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
+              disabled={page >= pagination.totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
-      <ConfirmationDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="Delete Tenant"
-        description="Are you sure you want to delete this tenant? This action cannot be undone."
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-        variant="destructive"
-      />
-    </Card>
-  );
-}
+        <TenantFormDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          tenant={editingTenant}
+          tenants={allTenants}
+          onSave={handleSave}
+          isLoading={createMutation.isPending || updateMutation.isPending}
+        />
 
-function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any) {
+        <ConfirmationDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          title="Delete Tenant"
+          description="Are you sure you want to delete this tenant? This action cannot be undone."
+          onConfirm={handleDelete}
+          isLoading={deleteMutation.isPending}
+          variant="destructive"
+        />
+      </>
+    );
+  }
+);
+
+function TenantFormDialog({ open, onOpenChange, tenant, tenants, onSave, isLoading }: any) {
   const [formData, setFormData] = useState({
     name: '',
     type: 'INSURER',
@@ -370,7 +530,16 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!formData.name.trim()) errs.name = 'Tenant name is required.';
+    if (!formData.name.trim()) {
+      errs.name = 'Tenant name is required.';
+    } else if (
+      tenants.some(
+        (t: any) =>
+          t.name.toLowerCase() === formData.name.trim().toLowerCase() && t.id !== tenant?.id
+      )
+    ) {
+      errs.name = 'A tenant with this name already exists.';
+    }
     return errs;
   };
 
@@ -446,69 +615,81 @@ function TenantFormDialog({ open, onOpenChange, tenant, onSave, isLoading }: any
   );
 }
 
-function UsersTable({
-  users,
-  isLoading,
-}: {
-  users: User[];
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+const UsersTable = forwardRef(
+  (
+    {
+      users,
+      allUsers,
+      isLoading,
+      pagination,
+      page,
+      onPageChange,
+    }: {
+      users: User[];
+      allUsers: User[];
+      isLoading: boolean;
+      pagination?: any;
+      page: number;
+      onPageChange: (page: number) => void;
+      onRefresh: () => void;
+    },
+    ref
+  ) => {
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const createMutation = useCreateUser();
-  const updateMutation = useUpdateUser();
-  const deleteMutation = useDeleteUser();
-  const { toast } = useToast();
+    const createMutation = useCreateUser();
+    const updateMutation = useUpdateUser();
+    const deleteMutation = useDeleteUser();
+    const { toast } = useToast();
 
-  const handleSave = async (data: any) => {
-    try {
-      if (editingUser) {
-        await updateMutation.mutateAsync({ id: editingUser.id, ...data });
-        toast({ title: 'Success', description: 'User updated successfully' });
-      } else {
-        await createMutation.mutateAsync(data);
-        toast({ title: 'Success', description: 'User created successfully' });
+    useImperativeHandle(ref, () => ({
+      handleCreate: () => {
+        setEditingUser(null);
+        setIsDialogOpen(true);
+      },
+    }));
+
+    const handleSave = async (data: any) => {
+      try {
+        if (editingUser) {
+          await updateMutation.mutateAsync({ id: editingUser.id, ...data });
+          toast({ title: 'Success', description: 'User updated successfully' });
+        } else {
+          await createMutation.mutateAsync(data);
+          toast({ title: 'Success', description: 'User created successfully' });
+        }
+        setIsDialogOpen(false);
+        setEditingUser(null);
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to save user', variant: 'destructive' });
       }
-      setIsDialogOpen(false);
-      setEditingUser(null);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save user', variant: 'destructive' });
-    }
-  };
+    };
 
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await deleteMutation.mutateAsync(deletingId);
-      toast({ title: 'Success', description: 'User deleted successfully' });
-      setIsDeleteDialogOpen(false);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to delete user', variant: 'destructive' });
-    }
-  };
+    const handleDelete = async () => {
+      if (!deletingId) return;
+      try {
+        await deleteMutation.mutateAsync(deletingId);
+        toast({ title: 'Success', description: 'User deleted successfully' });
+        setIsDeleteDialogOpen(false);
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete user', variant: 'destructive' });
+      }
+    };
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div>
-          <CardTitle>System Users</CardTitle>
-          <CardDescription>View and manage all registered users in the system.</CardDescription>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingUser(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add
-        </Button>
-      </CardHeader>
-      <CardContent>
+    return (
+      <>
+        {/* <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle>System Users</CardTitle>
+              <CardDescription>View and manage all registered users in the system.</CardDescription>
+            </div>
+          </CardHeader>
+        </Card> */}
+
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">
@@ -647,30 +828,56 @@ function UsersTable({
             </div>
           )}
         </div>
-      </CardContent>
 
-      <UserFormDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        user={editingUser}
-        onSave={handleSave}
-        isLoading={createMutation.isPending || updateMutation.isPending}
-      />
+        {/* Pagination */}
+        {!isLoading && pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground font-medium">
+              Page {page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
+              disabled={page >= pagination.totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
-      <ConfirmationDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="Delete User"
-        description="Are you sure you want to delete this user? This action cannot be undone."
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-        variant="destructive"
-      />
-    </Card>
-  );
-}
+        <UserFormDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          user={editingUser}
+          users={allUsers}
+          onSave={handleSave}
+          isLoading={createMutation.isPending || updateMutation.isPending}
+        />
 
-function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
+        <ConfirmationDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          title="Delete User"
+          description="Are you sure you want to delete this user? This action cannot be undone."
+          onConfirm={handleDelete}
+          isLoading={deleteMutation.isPending}
+          variant="destructive"
+        />
+      </>
+    );
+  }
+);
+
+function UserFormDialog({ open, onOpenChange, user, users, onSave, isLoading }: any) {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -696,9 +903,18 @@ function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!formData.fullName.trim()) errs.fullName = 'Full name is required.';
-    if (!formData.email.trim()) errs.email = 'Email is required.';
-    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email))
+    if (!formData.email.trim()) {
+      errs.email = 'Email is required.';
+    } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
       errs.email = 'Enter a valid email address.';
+    } else if (
+      users.some(
+        (u: any) =>
+          u.email.toLowerCase() === formData.email.trim().toLowerCase() && u.id !== user?.id
+      )
+    ) {
+      errs.email = 'A user with this email already exists.';
+    }
     if (!formData.phoneNumber.trim()) errs.phoneNumber = 'Phone number is required.';
     if (!user && !formData.password) errs.password = 'Password is required.';
     return errs;
@@ -783,76 +999,90 @@ function UserFormDialog({ open, onOpenChange, user, onSave, isLoading }: any) {
   );
 }
 
-function UserTenantsTable({
-  associations,
-  tenants,
-  users,
-  isLoading,
-}: {
-  associations: UserTenant[];
-  tenants: Tenant[];
-  users: User[];
-  isLoading: boolean;
-}) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAssoc, setEditingAssoc] = useState<UserTenant | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+const UserTenantsTable = forwardRef(
+  (
+    {
+      associations,
+      tenants,
+      users,
+      isLoading,
+      pagination,
+      page,
+      onPageChange,
+    }: {
+      associations: UserTenant[];
+      tenants: Tenant[];
+      users: User[];
+      isLoading: boolean;
+      pagination?: any;
+      page: number;
+      onPageChange: (page: number) => void;
+    },
+    ref
+  ) => {
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingAssoc, setEditingAssoc] = useState<UserTenant | null>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const createMutation = useCreateUserTenant();
-  const updateMutation = useUpdateUserTenant();
-  const deleteMutation = useDeleteUserTenant();
-  const { toast } = useToast();
+    const createMutation = useCreateUserTenant();
+    const updateMutation = useUpdateUserTenant();
+    const deleteMutation = useDeleteUserTenant();
+    const { toast } = useToast();
 
-  const handleSave = async (data: any) => {
-    try {
-      if (editingAssoc) {
-        await updateMutation.mutateAsync({ id: editingAssoc.id, ...data });
-        toast({ title: 'Success', description: 'Association updated successfully' });
-      } else {
-        await createMutation.mutateAsync(data);
-        toast({ title: 'Success', description: 'Association created successfully' });
+    useImperativeHandle(ref, () => ({
+      handleCreate: () => {
+        setEditingAssoc(null);
+        setIsDialogOpen(true);
+      },
+    }));
+
+    const handleSave = async (data: any) => {
+      try {
+        if (editingAssoc) {
+          await updateMutation.mutateAsync({ id: editingAssoc.id, ...data });
+          toast({ title: 'Success', description: 'Association updated successfully' });
+        } else {
+          await createMutation.mutateAsync(data);
+          toast({ title: 'Success', description: 'Association created successfully' });
+        }
+        setIsDialogOpen(false);
+        setEditingAssoc(null);
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to save association',
+          variant: 'destructive',
+        });
       }
-      setIsDialogOpen(false);
-      setEditingAssoc(null);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save association', variant: 'destructive' });
-    }
-  };
+    };
 
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await deleteMutation.mutateAsync(deletingId);
-      toast({ title: 'Success', description: 'Association deleted successfully' });
-      setIsDeleteDialogOpen(false);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete association',
-        variant: 'destructive',
-      });
-    }
-  };
+    const handleDelete = async () => {
+      if (!deletingId) return;
+      try {
+        await deleteMutation.mutateAsync(deletingId);
+        toast({ title: 'Success', description: 'Association deleted successfully' });
+        setIsDeleteDialogOpen(false);
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to delete association',
+          variant: 'destructive',
+        });
+      }
+    };
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div>
-          <CardTitle>User-Tenant Associations</CardTitle>
-          <CardDescription>Manage which users belong to which tenants.</CardDescription>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingAssoc(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          New
-        </Button>
-      </CardHeader>
-      <CardContent>
+    return (
+      <>
+        {/* <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle>User-Tenant Associations</CardTitle>
+              <CardDescription>Manage which users belong to which tenants.</CardDescription>
+            </div>
+          </CardHeader>
+        </Card> */}
+
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">
@@ -992,35 +1222,62 @@ function UserTenantsTable({
             </div>
           )}
         </div>
-      </CardContent>
 
-      <AssociationFormDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        association={editingAssoc}
-        tenants={tenants}
-        users={users}
-        onSave={handleSave}
-        isLoading={createMutation.isPending || updateMutation.isPending}
-      />
+        {/* Pagination */}
+        {!isLoading && pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground font-medium">
+              Page {page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
+              disabled={page >= pagination.totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
-      <ConfirmationDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="Delete Association"
-        description="Are you sure you want to remove this user from the tenant?"
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-        variant="destructive"
-      />
-    </Card>
-  );
-}
+        <AssociationFormDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          association={editingAssoc}
+          associations={associations}
+          tenants={tenants}
+          users={users}
+          onSave={handleSave}
+          isLoading={createMutation.isPending || updateMutation.isPending}
+        />
+
+        <ConfirmationDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          title="Delete Association"
+          description="Are you sure you want to remove this user from the tenant?"
+          onConfirm={handleDelete}
+          isLoading={deleteMutation.isPending}
+          variant="destructive"
+        />
+      </>
+    );
+  }
+);
 
 function AssociationFormDialog({
   open,
   onOpenChange,
   association,
+  associations,
   tenants,
   users,
   onSave,
@@ -1052,6 +1309,27 @@ function AssociationFormDialog({
     const errs: Record<string, string> = {};
     if (!formData.userId) errs.userId = 'Please select a user.';
     if (!formData.tenantId) errs.tenantId = 'Please select a tenant.';
+
+    if (formData.userId && formData.tenantId) {
+      const exists = associations.some(
+        (a: any) =>
+          a.userId === formData.userId &&
+          a.tenantId === formData.tenantId &&
+          a.id !== association?.id
+      );
+      if (exists) {
+        errs.tenantId = 'This user is already associated with this tenant.';
+      }
+    }
+
+    if (formData.isDefault && formData.userId) {
+      const otherDefault = associations.find(
+        (a: any) => a.userId === formData.userId && a.isDefault && a.id !== association?.id
+      );
+      if (otherDefault) {
+        errs.isDefault = `This user already has a default tenant assigned (${otherDefault.tenant.name}).`;
+      }
+    }
     return errs;
   };
 
@@ -1144,13 +1422,19 @@ function AssociationFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center justify-between pt-2">
-            <Label htmlFor="isDefault">Set as Default Tenant</Label>
-            <Switch
-              id="isDefault"
-              checked={formData.isDefault}
-              onCheckedChange={v => setFormData({ ...formData, isDefault: v })}
-            />
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="isDefault">Set as Default Tenant</Label>
+              <Switch
+                id="isDefault"
+                checked={formData.isDefault}
+                onCheckedChange={v => {
+                  setFormData({ ...formData, isDefault: v });
+                  setErrors(p => ({ ...p, isDefault: '' }));
+                }}
+              />
+            </div>
+            {errors.isDefault && <p className="text-xs text-destructive">{errors.isDefault}</p>}
           </div>
         </div>
         <DialogFooter>
