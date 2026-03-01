@@ -13,8 +13,6 @@ export enum UserRole {
   ADJUSTER = 'ADJUSTER',
   FIRM_ADMIN = 'FIRM_ADMIN',
   CLAIMANT = 'CLAIMANT',
-  INSURER_STAFF = 'INSURER_STAFF',
-  INSURER_ADMIN = 'INSURER_ADMIN',
   SUPER_ADMIN = 'SUPER_ADMIN',
   SIU_INVESTIGATOR = 'SIU_INVESTIGATOR',
   COMPLIANCE_OFFICER = 'COMPLIANCE_OFFICER',
@@ -37,10 +35,9 @@ export class RegisterDto {
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(100)
-  @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
-    { message: 'Password must contain uppercase, lowercase, and number' },
-  )
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/, {
+    message: 'Password must contain uppercase, lowercase, and number',
+  })
   password!: string;
 
   @ApiProperty({

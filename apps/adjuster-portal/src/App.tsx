@@ -99,15 +99,7 @@ export default function App() {
               <Route
                 path="/claims/new"
                 element={
-                  <RoleRoute
-                    allowedRoles={[
-                      'ADJUSTER',
-                      'FIRM_ADMIN',
-                      'INSURER_ADMIN',
-                      'INSURER_STAFF',
-                      'SUPER_ADMIN',
-                    ]}
-                  >
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <NewClaimPage />
                   </RoleRoute>
                 }
@@ -147,9 +139,7 @@ export default function App() {
               <Route
                 path="/master-data/vehicle-make"
                 element={
-                  <RoleRoute
-                    allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN']}
-                  >
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <VehicleMakePage />
                   </RoleRoute>
                 }
@@ -157,9 +147,7 @@ export default function App() {
               <Route
                 path="/master-data/vehicle-model"
                 element={
-                  <RoleRoute
-                    allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN']}
-                  >
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <VehicleModelPage />
                   </RoleRoute>
                 }
