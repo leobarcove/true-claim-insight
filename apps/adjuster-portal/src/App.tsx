@@ -155,7 +155,7 @@ export default function App() {
               <Route
                 path="/tenants"
                 element={
-                  <RoleRoute allowedRoles={['SUPER_ADMIN']}>
+                  <RoleRoute allowedRoles={['SUPER_ADMIN', 'SUPPORT_DESK']}>
                     <TenantsPage />
                   </RoleRoute>
                 }

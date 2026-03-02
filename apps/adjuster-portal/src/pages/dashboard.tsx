@@ -26,9 +26,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuthStore } from '@/stores/auth-store';
+import { PERMISSIONS, useHasAnyPermission } from '@/lib/permissions';
 
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
-import { convertToTitleCase } from '@/lib/utils';
+import { convertToTitleCase, cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 
 const getStatusBadge = (status: string) => {
@@ -59,6 +60,16 @@ export function DashboardPage() {
   const [recentClaimsPage, setRecentClaimsPage] = useState(1);
   const [sessionsView, setSessionsView] = useState<'table' | 'card'>('card');
   const [sessionsPage, setSessionsPage] = useState(1);
+
+  const canViewClaims = useHasAnyPermission([
+    PERMISSIONS.CLAIMS_VIEW_OWN,
+    PERMISSIONS.CLAIMS_VIEW_BASIC,
+    PERMISSIONS.CLAIMS_VIEW_ALL,
+  ]);
+  const canViewSessions = useHasAnyPermission([
+    PERMISSIONS.VIDEO_CONDUCT,
+    PERMISSIONS.VIDEO_VIEW_RECORDINGS,
+  ]);
 
   const createdById = userFilter === 'my' ? user?.id : undefined;
 
@@ -258,13 +269,15 @@ export function DashboardPage() {
                     <Grid className="h-4 w-4" />
                   </Button>
                 </div> */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => (window.location.href = '/claims')}
-                >
-                  View All
-                </Button>
+                {canViewClaims && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => (window.location.href = '/claims')}
+                  >
+                    View All
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="flex-1">
@@ -321,8 +334,13 @@ export function DashboardPage() {
                         recentClaims.map(claim => (
                           <TableRow
                             key={claim.id}
-                            className="hover:bg-muted/50 transition-colors cursor-pointer border-border/50"
-                            onClick={() => (window.location.href = `/claims/${claim.id}`)}
+                            className={cn(
+                              'border-border/50 transition-colors',
+                              canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
+                            )}
+                            onClick={() =>
+                              canViewClaims && (window.location.href = `/claims/${claim.id}`)
+                            }
                           >
                             <TableCell className="font-medium text-foreground">
                               {claim.claimNumber}
@@ -370,8 +388,13 @@ export function DashboardPage() {
                     recentClaims.map(claim => (
                       <div
                         key={claim.id}
-                        onClick={() => (window.location.href = `/claims/${claim.id}`)}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() =>
+                          canViewClaims && (window.location.href = `/claims/${claim.id}`)
+                        }
+                        className={cn(
+                          'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                          canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
+                        )}
                       >
                         <div className="space-y-1">
                           <p className="text-sm font-medium">{claim.claimNumber}</p>
@@ -414,13 +437,15 @@ export function DashboardPage() {
                     <Grid className="h-4 w-4" />
                   </Button>
                 </div> */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => (window.location.href = '/schedule')}
-                >
-                  View All
-                </Button>
+                {canViewSessions && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => (window.location.href = '/schedule')}
+                  >
+                    View All
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="flex-1">
@@ -478,8 +503,13 @@ export function DashboardPage() {
                         upcomingSessions.map(claim => (
                           <TableRow
                             key={claim.id}
-                            className="hover:bg-muted/50 transition-colors cursor-pointer border-border/50"
-                            onClick={() => (window.location.href = `/claims/${claim.id}`)}
+                            className={cn(
+                              'border-border/50 transition-colors',
+                              canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
+                            )}
+                            onClick={() =>
+                              canViewClaims && (window.location.href = `/claims/${claim.id}`)
+                            }
                           >
                             <TableCell className="px-0">
                               <div className="flex items-center gap-3">
@@ -577,8 +607,13 @@ export function DashboardPage() {
                     upcomingSessions.map(claim => (
                       <div
                         key={claim.id}
-                        onClick={() => (window.location.href = `/claims/${claim.id}`)}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() =>
+                          canViewClaims && (window.location.href = `/claims/${claim.id}`)
+                        }
+                        className={cn(
+                          'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                          canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
+                        )}
                       >
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">

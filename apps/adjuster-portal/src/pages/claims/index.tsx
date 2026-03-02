@@ -31,6 +31,7 @@ import { convertToTitleCase, formatDate, cn } from '@/lib/utils';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAuthStore } from '@/stores/auth-store';
+import { PERMISSIONS, useHasPermission } from '@/lib/permissions';
 
 const statusConfig: Record<
   string,
@@ -74,6 +75,7 @@ export function ClaimsListPage() {
   const limit = 10;
 
   const { user } = useAuthStore();
+  const canCreateClaim = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
 
   // Sync searchQuery with URL
   useEffect(() => {
@@ -121,12 +123,14 @@ export function ClaimsListPage() {
   return (
     <div className="flex flex-col h-full">
       <Header title="Claims" description="Manage and process your assigned claims">
-        <Link to="/claims/new">
-          <Button className="shadow-primary/20 shadow-lg -mr-3 scale-75">
-            <Plus className="h-4 w-4 mr-2" />
-            New
-          </Button>
-        </Link>
+        {canCreateClaim && (
+          <Link to="/claims/new">
+            <Button className="shadow-primary/20 shadow-lg -mr-3 scale-75">
+              <Plus className="h-4 w-4 mr-2" />
+              New
+            </Button>
+          </Link>
+        )}
         <div className="flex items-center gap-2">
           <SearchInput
             placeholder="Search by ID or name..."
