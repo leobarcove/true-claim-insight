@@ -7,6 +7,7 @@ Remote claims assessment platform for insurance loss adjusters in Malaysia.
 True Claim Insight digitises face-to-face interactions between loss adjusters and claimants through real-time video, AI-powered fraud detection, and streamlined documentation.
 
 **Key Features:**
+
 - Remote video assessments (no travel required)
 - AI-assisted fraud detection (voice analysis, deepfake detection)
 - Digital identity verification (eKYC)
@@ -21,12 +22,12 @@ True Claim Insight digitises face-to-face interactions between loss adjusters an
 
 ## Prerequisites
 
-| Software | Version | Install Command (macOS) |
-|----------|---------|------------------------|
-| **Node.js** | 22.x LTS | `brew install node@22` |
-| **pnpm** | 9.x | `corepack enable && corepack prepare pnpm@9 --activate` |
-| **Docker Desktop** | 27.x+ | [Download](https://www.docker.com/products/docker-desktop/) |
-| **Git** | Latest | `brew install git` |
+| Software           | Version  | Install Command (macOS)                                     |
+| ------------------ | -------- | ----------------------------------------------------------- |
+| **Node.js**        | 22.x LTS | `brew install node@22`                                      |
+| **pnpm**           | 9.x      | `corepack enable && corepack prepare pnpm@9 --activate`     |
+| **Docker Desktop** | 27.x+    | [Download](https://www.docker.com/products/docker-desktop/) |
+| **Git**            | Latest   | `brew install git`                                          |
 
 ### Verify Installation
 
@@ -81,18 +82,18 @@ pnpm dev
 
 ## Access Points
 
-| Application | URL | Description |
-|-------------|-----|-------------|
-| **API Gateway** | http://localhost:3000 | Authentication, routing |
-| **API Gateway Docs** | http://localhost:3000/docs | Swagger for Auth/Users |
-| **Case Service** | http://localhost:3001 | Claims management |
-| **Case Service Docs** | http://localhost:3001/api/docs | Swagger for Claims |
-| **Video Service** | http://localhost:3002 | Video room management (TRTC) |
-| **Video Service Docs** | http://localhost:3002/docs | Swagger for Video |
-| **Adjuster Portal** | http://localhost:4000 | React web app for adjusters |
-| **Claimant PWA** | http://localhost:4001 | React PWA for claimants |
-| **MailHog** | http://localhost:8025 | Email testing UI |
-| **Prisma Studio** | Run `pnpm prisma:studio` | Database GUI |
+| Application            | URL                            | Description                  |
+| ---------------------- | ------------------------------ | ---------------------------- |
+| **API Gateway**        | http://localhost:3000          | Authentication, routing      |
+| **API Gateway Docs**   | http://localhost:3000/docs     | Swagger for Auth/Users       |
+| **Case Service**       | http://localhost:3001          | Claims management            |
+| **Case Service Docs**  | http://localhost:3001/api/docs | Swagger for Claims           |
+| **Video Service**      | http://localhost:3002          | Video room management (TRTC) |
+| **Video Service Docs** | http://localhost:3002/docs     | Swagger for Video            |
+| **Adjuster Portal**    | http://localhost:4000          | React web app for adjusters  |
+| **Claimant PWA**       | http://localhost:4001          | React PWA for claimants      |
+| **MailHog**            | http://localhost:8025          | Email testing UI             |
+| **Prisma Studio**      | Run `pnpm prisma:studio`       | Database GUI                 |
 
 ---
 
@@ -102,50 +103,47 @@ pnpm dev
 
 All users use the password: `DemoPass123!`
 
-| Role | Email | Tenant |
-|------|-------|--------|
-| **Super Admin** | `superadmin@tci.com` | System |
-| **Insurer Admin** | `admin@allianz.com` | Allianz |
-| **Firm Admin** | `admin@pacific.com` | Pacific Adjusters |
-| **Adjuster** | `adjuster@pacific.com` | Pacific Adjusters |
-| **Insurer Staff** | `staff@allianz.com` | Allianz |
-| **SIU Investigator** | `siu@allianz.com` | Allianz |
-| **Compliance Officer** | `compliance@allianz.com` | Allianz |
-| **Shariah Reviewer** | `shariah@allianz.com` | Allianz |
-| **Support Desk** | `support@tci.com` | System |
+| Role                   | Email                    | Tenant            |
+| ---------------------- | ------------------------ | ----------------- |
+| **Super Admin**        | `superadmin@tci.com`     | System            |
+| **Firm Admin**         | `admin@pacific.com`      | Pacific Adjusters |
+| **Adjuster**           | `adjuster@pacific.com`   | Pacific Adjusters |
+| **SIU Investigator**   | `siu@allianz.com`        | Allianz           |
+| **Compliance Officer** | `compliance@allianz.com` | Allianz           |
+| **Shariah Reviewer**   | `shariah@allianz.com`    | Allianz           |
+| **Support Desk**       | `support@tci.com`        | System            |
 
 ### Claimant PWA (Phone OTP)
 
 1. **Phone Number**: `+60123456789` (or any MAL phone)
 2. **OTP**: Check the terminal logs for the 6-digit code.
 
-
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Language | TypeScript 5.8.x |
-| Backend | NestJS 11.x + Fastify 5.x |
-| Frontend | React 18.3.x + Vite 6.x |
-| Database | PostgreSQL 16.x |
-| ORM | Prisma 6.x |
-| Cache | Redis 7.4.x |
-| Cloud | AWS Malaysia (ap-southeast-5) |
-| Container | Docker + Kubernetes |
-| Monorepo | Turborepo 2.3.x |
+| Layer     | Technology                    |
+| --------- | ----------------------------- |
+| Language  | TypeScript 5.8.x              |
+| Backend   | NestJS 11.x + Fastify 5.x     |
+| Frontend  | React 18.3.x + Vite 6.x       |
+| Database  | PostgreSQL 16.x               |
+| ORM       | Prisma 6.x                    |
+| Cache     | Redis 7.4.x                   |
+| Cloud     | AWS Malaysia (ap-southeast-5) |
+| Container | Docker + Kubernetes           |
+| Monorepo  | Turborepo 2.3.x               |
 
 ### Third-Party Integrations
 
-| Provider | Purpose |
-|----------|---------|
-| Tencent TRTC | Video calls |
+| Provider       | Purpose              |
+| -------------- | -------------------- |
+| Tencent TRTC   | Video calls          |
 | Innov8tif/CTOS | eKYC (OCR, Liveness) |
-| Clearspeed | Voice risk analysis |
-| Hive AI | Deepfake detection |
-| MediaPipe | Attention tracking |
-| SigningCloud | Digital signatures |
+| Clearspeed     | Voice risk analysis  |
+| Hive AI        | Deepfake detection   |
+| MediaPipe      | Attention tracking   |
+| SigningCloud   | Digital signatures   |
 
 ---
 

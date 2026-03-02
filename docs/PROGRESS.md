@@ -228,35 +228,35 @@
 
 ## Decision Log
 
-| Date       | Decision                         | Rationale                                                                             |
-| ---------- | -------------------------------- | ------------------------------------------------------------------------------------- |
-| 2025-12-18 | Adjuster-centric platform        | Primary users are adjusters                                                           |
-| 2025-12-18 | Motor Insurance MVP              | Largest volume, clearest use case                                                     |
-| 2025-12-18 | B2B SaaS model                   | Adjusters as paying customers                                                         |
-| 2025-12-18 | TypeScript everywhere            | Single language, type safety                                                          |
-| 2025-12-18 | NestJS for backend               | Enterprise-ready, microservices                                                       |
-| 2025-12-18 | PWA for claimant                 | Speed to market, web eKYC works                                                       |
-| 2025-12-18 | AWS Malaysia                     | Data sovereignty, BNM compliance                                                      |
-| 2025-12-18 | Turborepo monorepo               | Shared types, efficient builds                                                        |
-| 2025-12-18 | Prisma ORM                       | Type-safe, great migrations                                                           |
-| 2025-12-18 | NestJS + Fastify adapter         | 3x performance vs Express, keeps TypeScript                                           |
-| 2025-12-18 | Project name: True Claim Insight | Professional, clear purpose                                                           |
-| 2025-12-18 | Latest stable versions           | Node 22, NestJS 11, Prisma 6, Vite 6, PostgreSQL 16                                   |
-| 2025-12-18 | shadcn/ui for components         | Accessible, customisable, TailwindCSS-based                                           |
-| 2025-12-18 | TanStack Query for data fetching | Caching, stale-while-revalidate, devtools                                             |
-| 2025-12-18 | Zustand for client state         | Minimal, TypeScript-first, persistent storage                                         |
-| 2025-12-18 | User model for auth              | Generic User model supports all roles (Adjuster, Firm Admin, Claimant, Insurer Staff) |
-| 2025-12-18 | API Gateway first                | Central auth + routing before connecting frontends                                    |
-| 2025-12-18 | Daily.co for Video               | Better PWA support and Malaysian region availability                                  |
-| 2025-12-18 | Pivot to V-KYC                   | Perform eKYC during video session to align with MY agent market                       |
-| 2025-12-18 | Shared Submission UI             | Use `@tci/ui-components` for both PWA and Portal consistency                          |
-| 2025-12-18 | AI-Aided Submission              | Implement OCR pre-filling for agents to minimize data entry                           |
-| 2025-12-19 | Regulatory Role Expansion        | Added SIU, Compliance, Support, and Shariah roles for BNM compliance                  |
-| 2025-12-19 | Multi-Tenant Data Isolation      | Reinforced isolation between Insurers and Adjusting Firms                             |
-| 2025-12-19 | Identity Consolidation           | Linked Adjuster 1:1 with User; consolidated credentials and profiles                  |
-| 2025-12-19 | Admin Role completion            | Added FIRM_ADMIN and SUPER_ADMIN for full hierarchy                                   |
-| 2025-12-19 | Video Session Reliability        | Fixed 429 Join Loop and Strict Mode Duplicate Instance errors                         |
-| 2025-12-19 | Video UX Enhancement             | Removed blocking loading mask during Daily pre-join UI                                |
+| Date       | Decision                         | Rationale                                                              |
+| ---------- | -------------------------------- | ---------------------------------------------------------------------- |
+| 2025-12-18 | Adjuster-centric platform        | Primary users are adjusters                                            |
+| 2025-12-18 | Motor Insurance MVP              | Largest volume, clearest use case                                      |
+| 2025-12-18 | B2B SaaS model                   | Adjusters as paying customers                                          |
+| 2025-12-18 | TypeScript everywhere            | Single language, type safety                                           |
+| 2025-12-18 | NestJS for backend               | Enterprise-ready, microservices                                        |
+| 2025-12-18 | PWA for claimant                 | Speed to market, web eKYC works                                        |
+| 2025-12-18 | AWS Malaysia                     | Data sovereignty, BNM compliance                                       |
+| 2025-12-18 | Turborepo monorepo               | Shared types, efficient builds                                         |
+| 2025-12-18 | Prisma ORM                       | Type-safe, great migrations                                            |
+| 2025-12-18 | NestJS + Fastify adapter         | 3x performance vs Express, keeps TypeScript                            |
+| 2025-12-18 | Project name: True Claim Insight | Professional, clear purpose                                            |
+| 2025-12-18 | Latest stable versions           | Node 22, NestJS 11, Prisma 6, Vite 6, PostgreSQL 16                    |
+| 2025-12-18 | shadcn/ui for components         | Accessible, customisable, TailwindCSS-based                            |
+| 2025-12-18 | TanStack Query for data fetching | Caching, stale-while-revalidate, devtools                              |
+| 2025-12-18 | Zustand for client state         | Minimal, TypeScript-first, persistent storage                          |
+| 2025-12-18 | User model for auth              | Generic User model supports all roles (Adjuster, Firm Admin, Claimant) |
+| 2025-12-18 | API Gateway first                | Central auth + routing before connecting frontends                     |
+| 2025-12-18 | Daily.co for Video               | Better PWA support and Malaysian region availability                   |
+| 2025-12-18 | Pivot to V-KYC                   | Perform eKYC during video session to align with MY agent market        |
+| 2025-12-18 | Shared Submission UI             | Use `@tci/ui-components` for both PWA and Portal consistency           |
+| 2025-12-18 | AI-Aided Submission              | Implement OCR pre-filling for agents to minimize data entry            |
+| 2025-12-19 | Regulatory Role Expansion        | Added SIU, Compliance, Support, and Shariah roles for BNM compliance   |
+| 2025-12-19 | Multi-Tenant Data Isolation      | Reinforced isolation between Insurers and Adjusting Firms              |
+| 2025-12-19 | Identity Consolidation           | Linked Adjuster 1:1 with User; consolidated credentials and profiles   |
+| 2025-12-19 | Admin Role completion            | Added FIRM_ADMIN and SUPER_ADMIN for full hierarchy                    |
+| 2025-12-19 | Video Session Reliability        | Fixed 429 Join Loop and Strict Mode Duplicate Instance errors          |
+| 2025-12-19 | Video UX Enhancement             | Removed blocking loading mask during Daily pre-join UI                 |
 
 ---
 

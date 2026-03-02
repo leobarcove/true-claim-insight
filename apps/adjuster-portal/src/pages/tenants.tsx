@@ -1412,8 +1412,6 @@ function AssociationFormDialog({
                 <SelectItem value="ADJUSTER">Adjuster</SelectItem>
                 <SelectItem value="FIRM_ADMIN">Firm Admin</SelectItem>
                 <SelectItem value="CLAIMANT">Claimant</SelectItem>
-                <SelectItem value="INSURER_STAFF">Insurer Staff</SelectItem>
-                <SelectItem value="INSURER_ADMIN">Insurer Admin</SelectItem>
                 <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                 <SelectItem value="SIU_INVESTIGATOR">SIU Investigator</SelectItem>
                 <SelectItem value="COMPLIANCE_OFFICER">Compliance Officer</SelectItem>
