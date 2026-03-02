@@ -30,7 +30,7 @@ export class VideoController {
   constructor(private readonly videoService: VideoService) {}
 
   @Post('rooms')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Create a video room' })
   async createRoom(
     @Body() dto: CreateRoomDto,
@@ -46,14 +46,7 @@ export class VideoController {
   }
 
   @Get('rooms')
-  @Roles(
-    'ADJUSTER',
-    'FIRM_ADMIN',
-    'INSURER_ADMIN',
-    'INSURER_STAFF',
-    'SUPER_ADMIN',
-    'SIU_INVESTIGATOR'
-  )
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get all video sessions' })
   async getAllSessions(
     @Query('page') page?: number,
@@ -129,7 +122,7 @@ export class VideoController {
   }
 
   @Post('rooms/:id/end')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'End a video session (Adjuster only)' })
   async endRoom(
     @Param('id') id: string,
@@ -178,7 +171,7 @@ export class VideoController {
   // --- Video Upload & Assessment Routes ---
 
   @Post('uploads/upload-assessment')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Upload a video for assessment' })
   async uploadAssessment(
     @Req() req: any,
@@ -268,7 +261,7 @@ export class VideoController {
   }
 
   @Post('uploads/:uploadId/process-segment')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Process a video segment' })
   async processSegment(
     @Param('uploadId') uploadId: string,
@@ -291,7 +284,7 @@ export class VideoController {
   }
 
   @Post('uploads/:uploadId/prepare')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Prepare video locally for processing' })
   async prepareUpload(
     @Param('uploadId') uploadId: string,
@@ -332,7 +325,7 @@ export class VideoController {
   }
 
   @Post('uploads/:uploadId/generate-consent')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Generate consent form after processing' })
   async generateConsent(
     @Param('uploadId') uploadId: string,
@@ -374,7 +367,7 @@ export class VideoController {
   }
 
   @Delete('uploads/:uploadId')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Delete a video upload' })
   async deleteUpload(
     @Param('uploadId') uploadId: string,

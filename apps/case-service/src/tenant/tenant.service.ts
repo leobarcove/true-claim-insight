@@ -238,4 +238,44 @@ export class TenantService {
 
     return !!tenant;
   }
+  /**
+   * Redact sensitive claim data based on user role
+   */
+  redactClaim(claim: any, tenantContext: TenantContext): any {
+    if (!claim) return null;
+
+    const role = tenantContext.userRole;
+    const isHighPrivilege = ['FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'].includes(role);
+
+    const redacted = { ...claim };
+
+    // 1. PII Masking (NRIC)
+    if (redacted.nric && !isHighPrivilege) {
+      redacted.nric = redacted.nric.replace(/^(\d{6})-?\d{2}-?(\d{4})$/, '********$2');
+    }
+
+    // 2. Financial & Risk Redaction
+    if (['SUPPORT_DESK', 'CLAIMANT'].includes(role)) {
+      delete redacted.estimatedRepairCost;
+      delete redacted.approvedAmount;
+      delete redacted.excessAmount;
+      delete redacted.sumInsured;
+      delete redacted.trinityChecks;
+    }
+
+    // 3. SIU & Private Note Isolation
+    if (redacted.notes) {
+      redacted.notes = redacted.notes.filter((n: any) => {
+        if (n.isPrivate && !isHighPrivilege) return false;
+        if (role === 'ADJUSTER' && n.authorType === 'SIU_INVESTIGATOR') return false;
+        return true;
+      });
+    }
+
+    if (role === 'ADJUSTER' && redacted.status === 'ESCALATED_SIU') {
+      redacted.statusDisplay = 'UNDER_REVIEW'; // Obfuscate SIU status
+    }
+
+    return redacted;
+  }
 }

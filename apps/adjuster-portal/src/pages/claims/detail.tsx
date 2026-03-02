@@ -21,9 +21,7 @@ import {
   Brain,
   RefreshCw,
   X,
-  Globe,
-  Monitor,
-  MapPin,
+  Lock,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -49,6 +47,7 @@ import { useCreateVideoRoom, useSessionDeceptionScore } from '@/hooks/use-video'
 import { useReverseGeocode } from '@/hooks/use-location';
 import { useToast } from '@/hooks/use-toast';
 import { InfoTooltip } from '@/components/ui/tooltip';
+import { useHasPermission, PERMISSIONS } from '@/lib/permissions';
 import {
   LineChart,
   Line,
@@ -262,6 +261,16 @@ export function ClaimDetailPage() {
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
 
+  // Permission checks
+  const canApprove = useHasPermission(PERMISSIONS.CLAIMS_APPROVE);
+  const canManageUsers = useHasPermission(PERMISSIONS.USERS_MANAGE);
+  const canConductVideo = useHasPermission(PERMISSIONS.VIDEO_CONDUCT);
+  const canEscalateSIU = useHasPermission(PERMISSIONS.SIU_ESCALATE);
+  const canInvestigateSIU = useHasPermission(PERMISSIONS.SIU_INVESTIGATE);
+  const canViewUnmaskedPII = useHasPermission(PERMISSIONS.PII_VIEW_UNMASKED);
+  const canViewFinancials = !useHasPermission(PERMISSIONS.CLAIMS_VIEW_BASIC); // Support only has basic view
+  const canEdit = useHasPermission(PERMISSIONS.CLAIMS_EDIT);
+
   const latestClaimantClientInfo = useMemo(() => {
     if (!claim?.sessions) return null;
 
@@ -311,12 +320,12 @@ export function ClaimDetailPage() {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED') {
+          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
             handleUpdateStatus('APPROVED');
           }
         } else if (e.key === 'Backspace') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED') {
+          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
             handleUpdateStatus('REJECTED');
           }
         }
@@ -529,56 +538,64 @@ export function ClaimDetailPage() {
         description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
       >
         <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
-            onClick={() => handleUpdateStatus('APPROVED')}
-            disabled={
-              claim.status === 'APPROVED' || claim.status === 'REJECTED' || updateStatus.isPending
-            }
-          >
-            {updateStatus.isPending && updateStatus.variables === 'APPROVED' ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="font-bold">Approving...</span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">Approve</span>
-                </div>
-                <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-                  {modifier} + Enter
-                </span>
-              </>
-            )}
-          </Button>
+          {canApprove && (
+            <>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+                onClick={() => handleUpdateStatus('APPROVED')}
+                disabled={
+                  claim.status === 'APPROVED' ||
+                  claim.status === 'REJECTED' ||
+                  updateStatus.isPending
+                }
+              >
+                {updateStatus.isPending && updateStatus.variables === 'APPROVED' ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span className="font-bold">Approving...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">Approve</span>
+                    </div>
+                    <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                      {modifier} + Enter
+                    </span>
+                  </>
+                )}
+              </Button>
 
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-10 px-4 flex-col items-center justify-center min-w-[120px]"
-            onClick={() => handleUpdateStatus('REJECTED')}
-            disabled={
-              claim.status === 'APPROVED' || claim.status === 'REJECTED' || updateStatus.isPending
-            }
-          >
-            {updateStatus.isPending && updateStatus.variables === 'REJECTED' ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="font-bold">Rejecting...</span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">Reject</span>
-                </div>
-                <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-                  {modifier} + Backspace
-                </span>
-              </>
-            )}
-          </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+                onClick={() => handleUpdateStatus('REJECTED')}
+                disabled={
+                  claim.status === 'APPROVED' ||
+                  claim.status === 'REJECTED' ||
+                  updateStatus.isPending
+                }
+              >
+                {updateStatus.isPending && updateStatus.variables === 'REJECTED' ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span className="font-bold">Rejecting...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">Reject</span>
+                    </div>
+                    <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                      {modifier} + Backspace
+                    </span>
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </Header>
 
@@ -613,7 +630,13 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 </div>
-                <p className="text-sm">{claim.description}</p>
+
+                <div className="flex items-start gap-3 pt-2">
+                  <div className="flex-1">
+                    <p className="text-xs font-medium">Description</p>
+                    <p className="text-xs text-muted-foreground mt-1">{claim.description}</p>
+                  </div>
+                </div>
 
                 {/* Police Report */}
                 {claim.policeReportDate && (
@@ -676,56 +699,57 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Financials (New: Compliance) */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">Financials & Estimates</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Estimated Loss</p>
-                    <p className="text-xl font-bold">
-                      {claim.estimatedLossAmount
-                        ? `RM ${claim.estimatedLossAmount.toLocaleString()}`
-                        : 'Pending'}
-                    </p>
+            {canViewFinancials && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">Financials & Estimates</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Estimated Loss</p>
+                      <p className="text-xl font-bold">
+                        {claim.estimatedLossAmount
+                          ? `RM ${claim.estimatedLossAmount.toLocaleString()}`
+                          : 'Pending'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Repair Cost (Final)</p>
+                      <p className="text-xl font-bold text-muted-foreground">
+                        {claim.estimatedRepairCost
+                          ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
+                          : 'Pending'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Repair Cost (Final)</p>
-                    <p className="text-xl font-bold text-muted-foreground">
-                      {claim.estimatedRepairCost
-                        ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
-                        : 'Pending'}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">SST (Service Tax)</span>
-                    <span className="text-sm font-medium">
-                      {claim.sstAmount ? `RM ${claim.sstAmount.toLocaleString()}` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Excess/Deductible</span>
-                    <span className="text-sm font-medium">
-                      {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-                {claim.approvedAmount && (
-                  <div className="pt-4 border-t">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-green-700">Approved Payout</span>
-                      <span className="text-xl font-bold text-green-700">
-                        RM {claim.approvedAmount.toLocaleString()}
+                  <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">SST (Service Tax)</span>
+                      <span className="text-sm font-medium">
+                        {claim.sstAmount ? `RM ${claim.sstAmount.toLocaleString()}` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Excess/Deductible</span>
+                      <span className="text-sm font-medium">
+                        {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'N/A'}
                       </span>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {claim.approvedAmount && (
+                    <div className="pt-4 border-t">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-green-700">Approved Payout</span>
+                        <span className="text-xl font-bold text-green-700">
+                          RM {claim.approvedAmount.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Documents */}
             <Card>
@@ -1274,7 +1298,15 @@ export function ClaimDetailPage() {
                   <div>
                     <p className="font-medium text-sm">{claim.claimant?.fullName || 'Unknown'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {claim.claimant?.phoneNumber || 'No phone'}
+                      {claim.claimant?.phoneNumber || 'No phone'}{' '}
+                      {claim.nric && (
+                        <span>
+                          / {claim.nric}{' '}
+                          {!canViewUnmaskedPII && (
+                            <Lock className="h-2 w-2 inline ml-1 mb-1 text-muted-foreground/50" />
+                          )}
+                        </span>
+                      )}
                     </p>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {claim.claimant?.kycStatus === 'VERIFIED' ? (
@@ -1301,7 +1333,7 @@ export function ClaimDetailPage() {
                     </div>
                   </div>
                 </div>
-                {claim.siuInvestigatorId && (
+                {claim.siuInvestigatorId && canInvestigateSIU && (
                   <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertTriangle className="h-4 w-4 text-amber-600" />
                     <span className="text-xs font-medium text-amber-700">Escalated to SIU</span>

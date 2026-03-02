@@ -212,8 +212,12 @@ export class ClaimsService {
       this.prisma.claim.count({ where }),
     ]);
 
+    const redactedClaims = claims.map(c =>
+      this.tenantService.redactClaim(c, tenantContext as TenantContext)
+    );
+
     return {
-      claims,
+      claims: redactedClaims,
       pagination: {
         page,
         limit,
@@ -307,17 +311,30 @@ export class ClaimsService {
       };
     });
 
-    return {
+    const result = {
       ...claim,
       sessions,
     };
+
+    return tenantContext ? this.tenantService.redactClaim(result, tenantContext) : result;
   }
 
   /**
    * Update a claim with tenant validation
    */
   async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
-    await this.findOne(id, tenantContext); // Verify claim exists and tenant access
+    const existingClaim = await this.findOne(id, tenantContext);
+
+    // RESTRICTION: Non-admins cannot edit APPROVED or CLOSED claims
+    const isFinalStatus = ['APPROVED', 'REJECTED', 'CLOSED'].includes(existingClaim.status);
+    const hasAdminPrivilege =
+      tenantContext?.userRole === 'FIRM_ADMIN' || tenantContext?.userRole === 'SUPER_ADMIN';
+
+    if (isFinalStatus && !hasAdminPrivilege) {
+      throw new BadRequestException(
+        `Claims in status ${existingClaim.status} cannot be edited by the current user role`
+      );
+    }
 
     await this.prisma.claim.update({
       where: { id },
@@ -691,15 +708,7 @@ export class ClaimsService {
         actorType = 'CLAIMANT';
       } else if (role === 'ADJUSTER') {
         actorType = 'ADJUSTER';
-      } else if (
-        [
-          'FIRM_ADMIN',
-          'INSURER_ADMIN',
-          'SUPER_ADMIN',
-          'INSURER_STAFF',
-          'SIU_INVESTIGATOR',
-        ].includes(role)
-      ) {
+      } else if (['FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'].includes(role)) {
         actorType = 'ADMIN';
       }
     }

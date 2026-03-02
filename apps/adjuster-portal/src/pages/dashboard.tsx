@@ -321,7 +321,7 @@ export function DashboardPage() {
                         recentClaims.map(claim => (
                           <TableRow
                             key={claim.id}
-                            className="hover:bg-accent/50 cursor-pointer border-border/50"
+                            className="hover:bg-muted/50 transition-colors cursor-pointer border-border/50"
                             onClick={() => (window.location.href = `/claims/${claim.id}`)}
                           >
                             <TableCell className="font-medium text-foreground">
@@ -371,7 +371,7 @@ export function DashboardPage() {
                       <div
                         key={claim.id}
                         onClick={() => (window.location.href = `/claims/${claim.id}`)}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
                       >
                         <div className="space-y-1">
                           <p className="text-sm font-medium">{claim.claimNumber}</p>
@@ -478,7 +478,7 @@ export function DashboardPage() {
                         upcomingSessions.map(claim => (
                           <TableRow
                             key={claim.id}
-                            className="hover:bg-accent/50 cursor-pointer border-border/50"
+                            className="hover:bg-muted/50 transition-colors cursor-pointer border-border/50"
                             onClick={() => (window.location.href = `/claims/${claim.id}`)}
                           >
                             <TableCell className="px-0">
@@ -578,7 +578,7 @@ export function DashboardPage() {
                       <div
                         key={claim.id}
                         onClick={() => (window.location.href = `/claims/${claim.id}`)}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">

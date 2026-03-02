@@ -18,7 +18,14 @@ import {
 import { AdjustersService } from './adjusters.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { TenantIsolation, TenantScope, Tenant, TenantId } from '../common/decorators/tenant.decorator';
+import {
+  TenantIsolation,
+  TenantScope,
+  Tenant,
+  TenantId,
+} from '../common/decorators/tenant.decorator';
+import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 /**
  * AdjustersController with multi-tenant isolation
@@ -28,8 +35,9 @@ import { TenantIsolation, TenantScope, Tenant, TenantId } from '../common/decora
 @ApiTags('adjusters')
 @ApiBearerAuth()
 @Controller('adjusters')
-@UseGuards(InternalAuthGuard, TenantGuard)
+@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
+@Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.ADJUSTER)
 export class AdjustersController {
   constructor(private readonly adjustersService: AdjustersService) {}
 
@@ -48,7 +56,7 @@ export class AdjustersController {
   async getQueue(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('status') status?: string,
-    @Tenant() tenantContext?: TenantContext,
+    @Tenant() tenantContext?: TenantContext
   ) {
     return this.adjustersService.getQueue(id, status, tenantContext);
   }
@@ -64,10 +72,7 @@ export class AdjustersController {
     status: HttpStatus.FORBIDDEN,
     description: 'Adjuster does not belong to your organisation',
   })
-  async getStats(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Tenant() tenantContext?: TenantContext,
-  ) {
+  async getStats(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext?: TenantContext) {
     return this.adjustersService.getStats(id, tenantContext);
   }
 
@@ -84,7 +89,7 @@ export class AdjustersController {
   })
   async getWorkload(
     @Param('id', ParseUUIDPipe) id: string,
-    @Tenant() tenantContext?: TenantContext,
+    @Tenant() tenantContext?: TenantContext
   ) {
     return this.adjustersService.getWorkload(id, tenantContext);
   }

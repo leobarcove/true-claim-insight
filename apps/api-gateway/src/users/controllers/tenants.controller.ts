@@ -22,7 +22,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 @Controller('tenants')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @ApiBearerAuth('access-token')
-@Roles('SUPER_ADMIN')
+@Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
 export class TenantsController {
   constructor(private readonly usersService: UsersService) {}
 
