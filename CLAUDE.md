@@ -7,12 +7,14 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 **What we're building:** A B2B SaaS platform that enables loss adjusters to conduct remote video assessments with claimants, replacing physical site visits. The platform includes AI-powered fraud detection, eKYC verification, and digital signing.
 
 **Primary users:**
+
 - **Loss Adjusters** - Conduct remote video assessments via web portal
 - **Claimants** - Submit claims and join video calls via PWA (mobile web)
 - **Compliance/SIU** - Fraud detection and regulatory oversight
 
 **Secondary users:**
-- **Insurance Admins** - Manage insurer staff, vendors, and assignments
+
+- **Insurance Admins** - Manage vendors, and assignments
 - **Firm Admins** - Manage adjusting firm operations
 - **Support Desk** - Handle customer enquiries
 
@@ -21,11 +23,13 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 ## Tech Stack Rules
 
 ### Language & Runtime
+
 - **TypeScript 5.8.x** everywhere (frontend + backend)
 - **Node.js 22.x LTS** runtime
 - **pnpm 9.x** package manager
 
 ### Frontend
+
 - **React.js 18.3.x** with **Vite 6.x**
 - **shadcn/ui** + **Tailwind CSS** for styling
 - **Zustand** for state, **TanStack Query** for server state
@@ -33,34 +37,39 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 - Claimant app is **PWA** (not native mobile)
 
 ### Backend
+
 - **NestJS 11.x** with **Fastify 5.x** adapter (3x faster than Express)
 - **Prisma 6.x** ORM with **PostgreSQL 16.x**
 - **Redis 7.4.x** for caching
 - REST APIs with OpenAPI/Swagger docs
 
 ### Infrastructure
+
 - **AWS Malaysia** (ap-southeast-5) for data sovereignty
 - **Docker 27.x** + **Kubernetes (EKS) 1.31+** for deployment
 - **Turborepo 2.3.x** monorepo structure
 
 ### Third-Party Integrations
-| Provider | Purpose |
-|----------|---------|
-| Daily.co | Video calls |
+
+| Provider       | Purpose              |
+| -------------- | -------------------- |
+| Daily.co       | Video calls          |
 | Innov8tif/CTOS | eKYC (OCR, Liveness) |
-| Clearspeed | Voice risk analysis |
-| Hive AI | Deepfake detection |
-| MediaPipe | Attention tracking |
-| SigningCloud | Digital signatures |
+| Clearspeed     | Voice risk analysis  |
+| Hive AI        | Deepfake detection   |
+| MediaPipe      | Attention tracking   |
+| SigningCloud   | Digital signatures   |
 
 ## Coding Standards
 
 ### File Naming
+
 - Use **British English** for file names, folder names, function names
 - Use **kebab-case** for files: `case-service.ts`, `video-room.tsx`
 - Use **PascalCase** for components: `VideoPlayer.tsx`
 
 ### Project Structure
+
 ```
 true-claim-insight/
 ├── apps/
@@ -87,6 +96,7 @@ true-claim-insight/
 ```
 
 ### Code Guidelines
+
 - Use strict TypeScript (`strict: true`)
 - Prefer composition over inheritance
 - Keep functions small and focused
@@ -94,6 +104,7 @@ true-claim-insight/
 - Add JSDoc comments for public APIs
 
 ### NestJS Conventions
+
 - One module per domain (claims, adjusters, etc.)
 - DTOs with class-validator decorators
 - Services contain business logic
@@ -101,6 +112,7 @@ true-claim-insight/
 - **Use Fastify adapter** for all services (not Express)
 
 ### React Conventions
+
 - Functional components with hooks
 - Custom hooks in `/hooks` directory
 - Shared components in `packages/ui-components`
@@ -117,6 +129,7 @@ true-claim-insight/
 ## Multi-Tenant Architecture
 
 ### Tenant Model
+
 ```
 Tenant (Organisation)
 ├── type: ADJUSTING_FIRM | INSURER
@@ -137,19 +150,21 @@ Adjuster (Professional Profile)
 
 **Location:** `apps/case-service/src/tenant/`
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| TenantGuard | `common/guards/tenant.guard.ts` | Validates & injects tenant context |
-| TenantService | `tenant/tenant.service.ts` | Tenant filtering utilities |
-| @TenantIsolation | `common/decorators/tenant.decorator.ts` | Controller/route decoration |
-| @Tenant | `common/decorators/tenant.decorator.ts` | Extract tenant context in handlers |
+| Component        | File                                    | Purpose                            |
+| ---------------- | --------------------------------------- | ---------------------------------- |
+| TenantGuard      | `common/guards/tenant.guard.ts`         | Validates & injects tenant context |
+| TenantService    | `tenant/tenant.service.ts`              | Tenant filtering utilities         |
+| @TenantIsolation | `common/decorators/tenant.decorator.ts` | Controller/route decoration        |
+| @Tenant          | `common/decorators/tenant.decorator.ts` | Extract tenant context in handlers |
 
 ### Tenant Scopes
+
 - **STRICT**: All queries filtered by tenantId (default for data endpoints)
 - **FLEXIBLE**: Tenant filter can be overridden by admins
 - **NONE**: No tenant filtering (public/health endpoints)
 
 ### Usage Pattern
+
 ```typescript
 // Controller with tenant isolation
 @Controller('claims')
@@ -173,6 +188,7 @@ async findOne(id: string, tenantContext?: TenantContext) {
 ```
 
 ### Key Rules
+
 - **Never** access data without tenant context in protected routes
 - **Always** validate resource ownership before returning data
 - Adjusters can only see claims assigned to their organisation
@@ -209,23 +225,23 @@ pnpm build
 
 ## API Ports (Development)
 
-| Service | Port |
-|---------|------|
-| API Gateway | 3000 |
-| Case Service | 3001 |
-| Video Service | 3002 |
+| Service          | Port |
+| ---------------- | ---- |
+| API Gateway      | 3000 |
+| Case Service     | 3001 |
+| Video Service    | 3002 |
 | Identity Service | 3003 |
-| Risk Engine | 3004 |
+| Risk Engine      | 3004 |
 | Document Service | 3005 |
-| Adjuster Portal | 4000 |
-| Claimant Web | 4001 |
+| Adjuster Portal  | 4000 |
+| Claimant Web     | 4001 |
 
 ## Test Credentials (Local Development)
 
 After running migrations, register a test user or use:
 
-| Role | Email | Password |
-|------|-------|----------|
+| Role     | Email                   | Password      |
+| -------- | ----------------------- | ------------- |
 | Adjuster | ahmad@adjustingfirm.com | SecureP@ss123 |
 
 **Note:** You must first register the user via `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs

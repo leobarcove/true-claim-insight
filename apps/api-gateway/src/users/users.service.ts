@@ -356,6 +356,19 @@ export class UsersService {
     });
   }
 
+  async findAllUserTenantsByTenantId(tenantId: string) {
+    return this.prisma.userTenant.findMany({
+      include: {
+        user: true,
+        tenant: true,
+      },
+      where: {
+        tenantId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async createUserTenant(data: {
     userId: string;
     tenantId: string;

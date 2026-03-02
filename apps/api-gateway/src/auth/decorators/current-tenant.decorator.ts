@@ -19,7 +19,6 @@ export const CurrentTenant = createParamDecorator(
 
 /**
  * Decorator to extract the current role from the tenant context
- * For Super Admins, this might be a scoped role like INSURER_ADMIN
  */
 export const CurrentTenantRole = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): string | null => {

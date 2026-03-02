@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { TenantGuard } from '../../auth/guards/tenant.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { CurrentTenant } from '@/auth/decorators/current-tenant.decorator';
 
 @ApiTags('user-tenants')
 @Controller('user-tenants')
@@ -29,8 +30,8 @@ export class UserTenantsController {
   @Get()
   @ApiOperation({ summary: 'Get all user-tenant associations' })
   @ApiResponse({ status: 200, description: 'List of user-tenant associations' })
-  async findAll() {
-    return this.usersService.findAllUserTenants();
+  async findAll(@CurrentTenant() tenantId: string) {
+    return this.usersService.findAllUserTenantsByTenantId(tenantId);
   }
 
   @Post()

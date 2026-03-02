@@ -238,10 +238,11 @@ async function main() {
     insurerTenant.id
   );
   const support = await upsertUser(
-    'support@tci.com',
+    'support@allianz.com',
     'Support Team',
     UserRole.SUPPORT_DESK,
-    '+60100000006'
+    '+60100000006',
+    insurerTenant.id
   );
   const shariah = await upsertUser(
     'shariah@allianz.com',
