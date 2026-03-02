@@ -185,7 +185,7 @@ async function main() {
     return user;
   };
 
-  // 3. Create 10 Demo Users
+  // 3. Create 8 Demo Users
   const superAdmin = await upsertUser(
     'superadmin@tci.com',
     'System Super Admin',
@@ -197,42 +197,57 @@ async function main() {
     'admin@pacific.com',
     'Pacific Admin',
     UserRole.FIRM_ADMIN,
-    '+60100000002',
+    '+60100000001',
     adjusterTenant.id
   );
+
   const adjusterUser = await upsertUser(
     'adjuster@pacific.com',
     'Ahmad Adjuster',
     UserRole.ADJUSTER,
-    '+60100000003',
+    '+60100000002',
     adjusterTenant.id
   );
+  const adjusterUserAllianz = await upsertUser(
+    'adjuster@pacific.com',
+    'Ahmad Adjuster',
+    UserRole.ADJUSTER,
+    '+60100000002',
+    insurerTenant.id
+  );
 
+  const firmAdminAllianz = await upsertUser(
+    'admin@allianz.com',
+    'Allianz Admin',
+    UserRole.FIRM_ADMIN,
+    '+60100000003',
+    insurerTenant.id
+  );
   const siuInvestigator = await upsertUser(
     'siu@allianz.com',
     'Zul SIU',
     UserRole.SIU_INVESTIGATOR,
-    '+60100000005',
+    '+60100000004',
     insurerTenant.id
   );
   const compliance = await upsertUser(
     'compliance@allianz.com',
     'Mei Compliance',
     UserRole.COMPLIANCE_OFFICER,
-    '+60100000006',
+    '+60100000005',
     insurerTenant.id
   );
   const support = await upsertUser(
     'support@tci.com',
     'Support Team',
     UserRole.SUPPORT_DESK,
-    '+60100000007'
+    '+60100000006'
   );
   const shariah = await upsertUser(
     'shariah@allianz.com',
     'Ustaz Shariah',
     UserRole.SHARIAH_REVIEWER,
-    '+60100000008',
+    '+60100000007',
     insurerTenant.id
   );
 
@@ -268,13 +283,13 @@ async function main() {
 
   // 5. Create Sample Claim
   await prisma.claim.upsert({
-    where: { claimNumber: 'TC-2025-001' },
+    where: { claimNumber: 'CLM-2025-000001' },
     update: {
       tenantId: insurerTenant.id,
       userId: firmAdmin.id,
     } as any,
     create: {
-      claimNumber: 'TC-2025-001',
+      claimNumber: 'CLM-2025-000001',
       claimantId: claimant.id,
       adjusterId: adjusterProfile.id,
       insurerTenantId: insurerTenant.id,

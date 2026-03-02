@@ -158,6 +158,7 @@ export interface Adjuster {
 export interface Claimant {
   id: string;
   fullName: string;
+  nric?: string;
   phoneNumber: string;
   email?: string;
   kycStatus: KycStatus;
@@ -170,6 +171,7 @@ export interface Claim {
   id: string;
   claimNumber: string;
   claimantId: string;
+  nric?: string;
   adjusterId?: string;
   insurerTenantId?: string;
   policyNumber: string;

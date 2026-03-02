@@ -29,6 +29,7 @@ export class RiskController {
   constructor(private readonly riskService: RiskService) {}
 
   @Get('session/:sessionId')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get risk assessments for a session' })
   async getAssessments(
     @Param('sessionId') sessionId: string,
@@ -49,6 +50,7 @@ export class RiskController {
   }
 
   @Get('session/:sessionId/deception-score')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get deception score for a session' })
   async getDeceptionScore(
     @Param('sessionId') sessionId: string,
@@ -69,6 +71,7 @@ export class RiskController {
   }
 
   @Post('assessments/trigger')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Trigger a new assessment' })
   async triggerAssessment(
     @Body('sessionId') sessionId: string,
@@ -320,6 +323,7 @@ export class RiskController {
   }
 
   @Get('claims/:claimId/trinity')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get trinity check results for a claim' })
   async getTrinityCheck(
     @Param('claimId') claimId: string,
@@ -340,6 +344,7 @@ export class RiskController {
   }
 
   @Get('documents/:documentId/analysis')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get analysis for a document' })
   async getDocumentAnalysis(
     @Param('documentId') documentId: string,

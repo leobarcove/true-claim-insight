@@ -110,7 +110,7 @@ export default function App() {
               <Route
                 path="/claims/:id/upload-video"
                 element={
-                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <UploadVideoPage />
                   </RoleRoute>
                 }
@@ -118,7 +118,7 @@ export default function App() {
               <Route
                 path="/claims/:id/video-review/:uploadId"
                 element={
-                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <VideoReviewPage />
                   </RoleRoute>
                 }
@@ -126,7 +126,7 @@ export default function App() {
               <Route
                 path="/claims/:id/live-session/:sessionId"
                 element={
-                  <RoleRoute allowedRoles={['ADJUSTER', 'SUPER_ADMIN']}>
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
                     <VideoCallPage />
                   </RoleRoute>
                 }

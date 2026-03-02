@@ -7,7 +7,6 @@ import {
   Calendar,
   Settings,
   HelpCircle,
-  LogOut,
   Sun,
   Moon,
   Monitor,
@@ -25,26 +24,82 @@ import { Button } from '@/components/ui/button';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InfoTooltip } from '@/components/ui/tooltip';
-import { TenantSwitcher } from './tenant-switcher';
 import { TenantSelector } from './tenant-selector';
 import { useSuperAdminNoTenant } from '@/hooks/use-super-admin-no-tenant';
+import { PERMISSIONS, ROLE_PERMISSIONS, useHasAnyPermission } from '@/lib/permissions';
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  permissions?: string[];
+  roles?: string[];
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Claims', href: '/claims', icon: FileText },
-  { name: 'Sessions', href: '/sessions', icon: Video },
-  { name: 'Schedule', href: '/schedule', icon: Calendar },
-  { name: 'Documents', href: '/documents', icon: FileText },
+  {
+    name: 'Claims',
+    href: '/claims',
+    icon: FileText,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
+    name: 'Sessions',
+    href: '/sessions',
+    icon: Video,
+    permissions: [PERMISSIONS.VIDEO_CONDUCT, PERMISSIONS.VIDEO_VIEW_RECORDINGS],
+  },
+  {
+    name: 'Schedule',
+    href: '/schedule',
+    icon: Calendar,
+    roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'],
+  },
+  {
+    name: 'Documents',
+    href: '/documents',
+    icon: FileText,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
 ];
 
-const masterDataNavigation = [
-  { name: 'Vehicle Make', href: '/master-data/vehicle-make', icon: Factory },
-  { name: 'Vehicle Model', href: '/master-data/vehicle-model', icon: Car },
+const masterDataNavigation: NavItem[] = [
+  {
+    name: 'Vehicle Make',
+    href: '/master-data/vehicle-make',
+    icon: Factory,
+    roles: ['FIRM_ADMIN', 'SUPER_ADMIN'],
+  },
+  {
+    name: 'Vehicle Model',
+    href: '/master-data/vehicle-model',
+    icon: Car,
+    roles: ['FIRM_ADMIN', 'SUPER_ADMIN'],
+  },
 ];
 
-const secondaryNavigation = [
-  { name: 'Tenants', href: '/tenants', icon: Building2, roles: ['SUPER_ADMIN'] },
-  { name: 'Settings', href: '/settings', icon: Settings },
+const secondaryNavigation: NavItem[] = [
+  {
+    name: 'Tenants',
+    href: '/tenants',
+    icon: Building2,
+    roles: ['SUPER_ADMIN'],
+  },
+  {
+    name: 'Settings',
+    href: '/settings',
+    icon: Settings,
+    roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR', 'COMPLIANCE_OFFICER'],
+  },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];
 
@@ -65,6 +120,26 @@ export function Sidebar() {
     setIsLogoutDialogOpen(false);
   };
 
+  const filterNavItems = (items: NavItem[]) => {
+    return items.filter(item => {
+      // Role check
+      if (item.roles && (!user || !item.roles.includes(user.role))) {
+        return false;
+      }
+      // Permission check
+      if (item.permissions && item.permissions.length > 0) {
+        const userPerms = user ? (ROLE_PERMISSIONS as any)[user.role] : [];
+        const hasPermission = item.permissions.some(p => userPerms?.includes(p));
+        if (!hasPermission) return false;
+      }
+      return true;
+    });
+  };
+
+  const visibleGeneral = filterNavItems(navigation);
+  const visibleMasterData = filterNavItems(masterDataNavigation);
+  const visibleSecondary = filterNavItems(secondaryNavigation);
+
   return (
     <div
       className="flex h-full w-60 flex-col border-r border-border shadow-sm bg-card transition-all"
@@ -80,81 +155,84 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-sidebar">
         {/* General Section */}
-        <div>
-          <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">General</h3>
-          <div className="space-y-1">
-            {navigation.map(item => {
-              const isActive =
-                item.href === '/'
-                  ? location.pathname === '/'
-                  : location.pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <item.icon
+        {visibleGeneral.length > 0 && (
+          <div>
+            <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">General</h3>
+            <div className="space-y-1">
+              {visibleGeneral.map(item => {
+                const isActive =
+                  item.href === '/'
+                    ? location.pathname === '/'
+                    : location.pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
                     className={cn(
-                      'h-4 w-4 transition-colors',
+                      'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'text-primary-foreground'
-                        : 'text-muted-foreground group-hover:text-current'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     )}
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
+                  >
+                    <item.icon
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        isActive
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground group-hover:text-current'
+                      )}
+                    />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Master Data Section */}
-        <div>
-          <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">
-            Master Data
-          </h3>
-          <div className="space-y-1">
-            {masterDataNavigation.map(item => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <item.icon
+        {visibleMasterData.length > 0 && (
+          <div>
+            <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">
+              Master Data
+            </h3>
+            <div className="space-y-1">
+              {visibleMasterData.map(item => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
                     className={cn(
-                      'h-4 w-4 transition-colors',
+                      'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'text-primary-foreground'
-                        : 'text-muted-foreground group-hover:text-current'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     )}
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
+                  >
+                    <item.icon
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        isActive
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground group-hover:text-current'
+                      )}
+                    />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Support Section */}
-        <div>
-          <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">Support</h3>
-          <div className="space-y-1">
-            {secondaryNavigation
-              .filter(item => !item.roles || (user && item.roles.includes(user.role)))
-              .map(item => {
+        {visibleSecondary.length > 0 && (
+          <div>
+            <h3 className="mb-2 px-2 text-xs font-bold text-muted-foreground uppercase">Support</h3>
+            <div className="space-y-1">
+              {visibleSecondary.map(item => {
                 const isActive = location.pathname === item.href;
                 return (
                   <Link
@@ -184,8 +262,9 @@ export function Sidebar() {
                   </Link>
                 );
               })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Bottom Section */}

@@ -16,14 +16,17 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/guards/roles.guard';
 import { DocumentType } from '@prisma/client';
 
 @ApiTags('documents')
 @ApiBearerAuth()
 @ApiBearerAuth()
-@UseGuards(InternalAuthGuard, TenantGuard)
+@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Controller('claims/:claimId/documents')
 export class DocumentsController {
@@ -137,6 +140,7 @@ export class DocumentsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a document' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })

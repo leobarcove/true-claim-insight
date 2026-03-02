@@ -27,7 +27,10 @@ import { ClaimQueryDto } from './dto/claim-query.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
+import { UserRole } from '../common/guards/roles.guard';
 
 /**
  * ClaimsController with multi-tenant isolation
@@ -40,12 +43,13 @@ import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenan
 @ApiTags('claims')
 @ApiBearerAuth()
 @Controller('claims')
-@UseGuards(InternalAuthGuard, TenantGuard)
+@UseGuards(InternalAuthGuard, TenantGuard, RolesGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimsController {
   constructor(private readonly claimsService: ClaimsService) {}
 
   @Post()
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a new claim' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -94,6 +98,7 @@ export class ClaimsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update a claim (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -117,6 +122,7 @@ export class ClaimsController {
   }
 
   @Patch(':id/status')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update claim status (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -136,6 +142,7 @@ export class ClaimsController {
   }
 
   @Post(':id/assign')
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assign an adjuster to a claim (same tenant only)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -155,6 +162,7 @@ export class ClaimsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a claim (soft delete, tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
@@ -208,6 +216,7 @@ export class ClaimsController {
     return this.claimsService.addNote(id, content, authorId, tenantContext);
   }
   @Get('stats')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get tenant-wide claim statistics' })
   @ApiResponse({
     status: HttpStatus.OK,

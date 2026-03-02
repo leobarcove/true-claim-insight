@@ -7,7 +7,7 @@ import { TenantContext } from '../common/guards/tenant.guard';
 export class AdjustersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService,
+    private readonly tenantService: TenantService
   ) {}
 
   /**
@@ -40,10 +40,7 @@ export class AdjustersService {
 
     const claims = await this.prisma.claim.findMany({
       where,
-      orderBy: [
-        { status: 'asc' },
-        { createdAt: 'asc' },
-      ],
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
       include: {
         claimant: {
           select: {
@@ -98,53 +95,48 @@ export class AdjustersService {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
 
-    const [
-      totalClaims,
-      activeClaims,
-      completedThisMonth,
-      completedThisWeek,
-      statusBreakdown,
-    ] = await Promise.all([
-      // Total claims ever assigned
-      this.prisma.claim.count({
-        where: { adjusterId },
-      }),
+    const [totalClaims, activeClaims, completedThisMonth, completedThisWeek, statusBreakdown] =
+      await Promise.all([
+        // Total claims ever assigned
+        this.prisma.claim.count({
+          where: { adjusterId },
+        }),
 
-      // Active claims
-      this.prisma.claim.count({
-        where: {
-          adjusterId,
-          status: {
-            in: ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'],
+        // Active claims
+        this.prisma.claim.count({
+          where: {
+            adjusterId,
+            status: {
+              in: ['ASSIGNED', 'SCHEDULED', 'IN_ASSESSMENT', 'REPORT_PENDING'],
+            },
           },
-        },
-      }),
+        }),
 
-      // Completed this month
-      this.prisma.claim.count({
-        where: {
-          adjusterId,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfMonth },
-        },
-      }),
+        // Completed this month
+        this.prisma.claim.count({
+          where: {
+            adjusterId,
+            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+            updatedAt: { gte: startOfMonth },
+          },
+        }),
 
-      // Completed this week
-      this.prisma.claim.count({
-        where: {
-          adjusterId,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfWeek },
-        },
-      }),
+        // Completed this week
+        this.prisma.claim.count({
+          where: {
+            adjusterId,
+            status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
+            updatedAt: { gte: startOfWeek },
+          },
+        }),
 
-      // Status breakdown
-      this.prisma.claim.groupBy({
-        by: ['status'],
-        where: { adjusterId },
-        _count: { status: true },
-      }),
-    ]);
+        // Status breakdown
+        this.prisma.claim.groupBy({
+          by: ['status'],
+          where: { adjusterId },
+          _count: { status: true },
+        }),
+      ]);
 
     return {
       adjusterId,
@@ -161,7 +153,7 @@ export class AdjustersService {
           acc[item.status] = item._count.status;
           return acc;
         },
-        {} as Record<string, number>,
+        {} as Record<string, number>
       ),
     };
   }
@@ -241,7 +233,7 @@ export class AdjustersService {
     });
 
     // Calculate workload and sort by availability
-    const adjustersWithWorkload = adjusters.map((adjuster) => {
+    const adjustersWithWorkload = adjusters.map(adjuster => {
       const activeClaims = adjuster._count.claims;
       const maxCases = 10;
       const workloadScore = Math.min((activeClaims / maxCases) * 100, 100);
@@ -264,7 +256,7 @@ export class AdjustersService {
     return {
       tenantId,
       totalAdjusters: adjusters.length,
-      availableAdjusters: adjustersWithWorkload.filter((a) => a.isAvailable).length,
+      availableAdjusters: adjustersWithWorkload.filter(a => a.isAvailable).length,
       adjusters: adjustersWithWorkload,
     };
   }
@@ -278,9 +270,13 @@ export class AdjustersService {
 
     // 2. Check user isolation: Adjuster role can only see their own data
     // Admin roles can see any adjuster in their tenant
-    const isAdmin = ['FIRM_ADMIN', 'INSURER_ADMIN', 'SUPER_ADMIN'].includes(tenantContext.userRole);
+    const isAdmin = ['FIRM_ADMIN', 'SUPER_ADMIN'].includes(tenantContext.userRole);
 
-    if (tenantContext.userRole === 'ADJUSTER' && adjuster.userId !== tenantContext.userId && !isAdmin) {
+    if (
+      tenantContext.userRole === 'ADJUSTER' &&
+      adjuster.userId !== tenantContext.userId &&
+      !isAdmin
+    ) {
       throw new ForbiddenException('Access denied: You can only access your own data');
     }
   }
