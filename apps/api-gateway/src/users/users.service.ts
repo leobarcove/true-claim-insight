@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../config/prisma.service';
 import { RegisterDto } from '../auth/dto/register.dto';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -89,19 +90,16 @@ export class UsersService {
 
   async findAll(tenantId?: string) {
     if (!tenantId) {
-      // If no tenant context, return empty (security default)
       return [];
     }
 
     const where: any =
       tenantId === 'SUPER_ADMIN'
-        ? {}
+        ? { role: { not: UserRole.SUPER_ADMIN } }
         : {
             OR: [
-              // User's primary/current tenant is this tenant
               { currentTenantId: tenantId },
               { tenantId: tenantId },
-              // OR user has a membership in this tenant
               {
                 userTenants: {
                   some: {
@@ -111,6 +109,7 @@ export class UsersService {
                 },
               },
             ],
+            role: { not: UserRole.SUPER_ADMIN },
           };
 
     return this.prisma.user.findMany({
