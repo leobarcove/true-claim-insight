@@ -83,12 +83,4 @@ Maintaining the core system configurations.
 
 ---
 
-## 📚 Related Documentation
-
-- [Claims Workflow Deep Dive](CLAIMS_WORKFLOW.md)
-- [Technical Architecture](ARCHITECTURE.md)
-- [Trinity Engine Specs](TRINITY_EDGE_CASES.md)
-
----
-
 _Last Updated: 2026-03-03 | True Claim Insight_
