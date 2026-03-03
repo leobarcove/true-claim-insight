@@ -204,7 +204,7 @@ export function HelpPage() {
                     </div>
                     <div className="text-sm">
                       <p className="font-medium">Email Support</p>
-                      <p className="text-xs text-muted-foreground">support@trueclaim.com</p>
+                      <p className="text-xs text-muted-foreground">support@tci.com</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">

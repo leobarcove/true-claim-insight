@@ -19,6 +19,7 @@ export interface User {
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+  isVerified: boolean;
 }
 
 export interface UserTenant {

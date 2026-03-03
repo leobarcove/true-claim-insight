@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import crypto from 'crypto';
 
 interface ErrorResponse {
   success: false;
@@ -29,12 +30,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();
 
-    const requestId =
-      (request.headers['x-request-id'] as string) || crypto.randomUUID();
+    const requestId = (request.headers['x-request-id'] as string) || crypto.randomUUID();
 
     let statusCode: number;
     let message: string | string[];
     let error: string;
+    const additionalData: Record<string, any> = {};
 
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
@@ -44,6 +45,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj.message as string | string[]) || exception.message;
         error = (responseObj.error as string) || exception.name;
+
+        // Collect other extra properties (like requiresVerification, userId, phoneNumber)
+        const { message: _, error: __, statusCode: ___, ...extras } = responseObj;
+        Object.assign(additionalData, extras);
       } else {
         message = exception.message;
         error = exception.name;
@@ -54,17 +59,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       error = 'InternalServerError';
 
       // Log the actual error for debugging
-      this.logger.error(
-        `Unhandled exception: ${exception.message}`,
-        exception.stack,
-      );
+      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
     } else {
       statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'An unexpected error occurred';
       error = 'UnknownError';
     }
 
-    const errorResponse: ErrorResponse = {
+    const errorResponse: any = {
       success: false,
       error: {
         statusCode,
@@ -73,6 +75,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         path: request.url,
         timestamp: new Date().toISOString(),
         requestId,
+        ...additionalData,
       },
     };
 

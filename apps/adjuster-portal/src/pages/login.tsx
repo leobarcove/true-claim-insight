@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,9 +22,13 @@ interface ApiErrorResponse {
   message: string | string[];
   error: string;
   statusCode: number;
+  requiresVerification?: boolean;
+  userId?: string;
+  phoneNumber?: string;
 }
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const loginMutation = useLogin();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +51,19 @@ export function LoginPage() {
       });
       // Navigation is handled by the mutation's onSuccess
     } catch (err) {
-      const axiosError = err as AxiosError<ApiErrorResponse>;
-      const message = axiosError.response?.data?.message;
+      const axiosError = err as AxiosError<{ success: false; error: ApiErrorResponse }>;
+      const errorData = axiosError.response?.data?.error;
+
+      if (errorData?.requiresVerification) {
+        navigate(
+          `/register?verify=true&userId=${errorData.userId}&phone=${encodeURIComponent(
+            errorData.phoneNumber || ''
+          )}`
+        );
+        return;
+      }
+
+      const message = errorData?.message;
 
       if (Array.isArray(message)) {
         setError(message[0]);
@@ -85,7 +100,7 @@ export function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="adjuster@example.com"
+                placeholder="user@example.com"
                 {...register('email')}
               />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}

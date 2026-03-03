@@ -8,7 +8,6 @@ import {
   Trash2,
   Check,
   X,
-  Shield,
   Network,
   ChevronLeft,
   ChevronRight,
@@ -16,7 +15,7 @@ import {
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -747,6 +746,7 @@ const UsersTable = forwardRef(
                     <TableHead>Full Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
+                    <TableHead className="text-center">Verified</TableHead>
                     <TableHead className="text-center">Last Login</TableHead>
                     <TableHead className="text-center">Created</TableHead>
                     <TableHead className="text-center">Updated</TableHead>
@@ -759,6 +759,13 @@ const UsersTable = forwardRef(
                       <TableCell className="font-medium">{user.fullName}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phoneNumber}</TableCell>
+                      <TableCell className="flex justify-center m-2">
+                        {user.isVerified ? (
+                          <Check className="h-4 w-4 text-success" />
+                        ) : (
+                          <X className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         {(user as any).lastLoginAt ? (
                           <div className="flex flex-col text-xs">

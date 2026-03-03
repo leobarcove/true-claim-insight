@@ -20,6 +20,7 @@ export class UsersService {
       licenseNumber: data.licenseNumber,
       tenantId: data.tenantId,
       currentTenantId: data.tenantId, // Set current tenant on registration
+      isVerified: (data as any).isVerified ?? false,
     };
 
     // If role is ADJUSTER, we need to create an Adjuster record too
@@ -39,7 +40,6 @@ export class UsersService {
         create: {
           tenantId: data.tenantId,
           role: data.role,
-          isDefault: true, // First tenant is always default
           status: 'ACTIVE',
         },
       };
@@ -95,8 +95,9 @@ export class UsersService {
 
     const where: any =
       tenantId === 'SUPER_ADMIN'
-        ? { role: { not: UserRole.SUPER_ADMIN } }
+        ? { role: { not: UserRole.SUPER_ADMIN }, OR: [{ tenantId: null, currentTenantId: null }] }
         : {
+            role: { not: UserRole.SUPER_ADMIN },
             OR: [
               { currentTenantId: tenantId },
               { tenantId: tenantId },
@@ -108,8 +109,8 @@ export class UsersService {
                   },
                 },
               },
+              { tenantId: null, currentTenantId: null },
             ],
-            role: { not: UserRole.SUPER_ADMIN },
           };
 
     return this.prisma.user.findMany({
@@ -126,6 +127,7 @@ export class UsersService {
         createdAt: true,
         updatedAt: true,
         lastLoginAt: true,
+        isVerified: true,
         tenant: {
           select: {
             id: true,
@@ -243,6 +245,13 @@ export class UsersService {
       status: ut.status,
       lastAccessedAt: ut.lastAccessedAt,
     }));
+  }
+
+  async setVerified(id: string, isVerified: boolean = true) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isVerified } as any,
+    });
   }
 
   async getUserTenant(userId: string, tenantId: string) {
@@ -375,7 +384,15 @@ export class UsersService {
     role: string;
     isDefault?: boolean;
   }) {
-    return this.prisma.userTenant.create({
+    // If setting as default, unset other defaults for this user
+    if (data.isDefault) {
+      await this.prisma.userTenant.updateMany({
+        where: { userId: data.userId },
+        data: { isDefault: false },
+      });
+    }
+
+    const association = await this.prisma.userTenant.create({
       data: {
         userId: data.userId,
         tenantId: data.tenantId,
@@ -385,11 +402,48 @@ export class UsersService {
       },
       include: { user: true, tenant: true },
     });
+
+    // Update user: set verified and also update tenant context if needed
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const updateData: any = {};
+    if (data.isDefault || !user.tenantId) {
+      updateData.tenantId = data.tenantId;
+    }
+    if (data.isDefault || !user.currentTenantId) {
+      updateData.currentTenantId = data.tenantId;
+    }
+
+    await this.prisma.user.update({
+      where: { id: data.userId },
+      data: updateData,
+    });
+
+    return association;
   }
 
   async updateUserTenant(id: string, data: { role?: string; isDefault?: boolean }) {
     const ut = await this.prisma.userTenant.findUnique({ where: { id } });
     if (!ut) throw new NotFoundException('Association not found');
+
+    if (data.isDefault) {
+      // Unset other defaults for this user
+      await this.prisma.userTenant.updateMany({
+        where: { userId: ut.userId, id: { not: id } },
+        data: { isDefault: false },
+      });
+
+      // Update user record to reflect new default
+      await this.prisma.user.update({
+        where: { id: ut.userId },
+        data: {
+          tenantId: ut.tenantId,
+          currentTenantId: ut.tenantId,
+        },
+      });
+    }
+
     return this.prisma.userTenant.update({
       where: { id },
       data: {
@@ -403,7 +457,44 @@ export class UsersService {
   async deleteUserTenant(id: string) {
     const ut = await this.prisma.userTenant.findUnique({ where: { id } });
     if (!ut) throw new NotFoundException('Association not found');
+
+    const userId = ut.userId;
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const wasPrimary = user?.tenantId === ut.tenantId || user?.currentTenantId === ut.tenantId;
+
     await this.prisma.userTenant.delete({ where: { id } });
+
+    // Check if user has any remaining associations
+    const remainingCount = await this.prisma.userTenant.count({
+      where: { userId },
+    });
+
+    if (remainingCount === 0) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          tenantId: null,
+          currentTenantId: null,
+        },
+      });
+    } else if (wasPrimary || ut.isDefault) {
+      // If we deleted the primary/default tenant, pick a new one
+      const nextRemaining = await this.prisma.userTenant.findFirst({
+        where: { userId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      if (nextRemaining) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            tenantId: nextRemaining.tenantId,
+            currentTenantId: nextRemaining.tenantId,
+          },
+        });
+      }
+    }
+
     return { deleted: true };
   }
 }

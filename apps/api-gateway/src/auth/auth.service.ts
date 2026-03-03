@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { OtpService } from './otp.service';
 
 export interface JwtPayload {
   sub: string;
@@ -44,7 +45,8 @@ export interface AuthResponse {
     isDefault: boolean;
     status: string;
   }>;
-  tokens: TokenPair;
+  tokens?: TokenPair;
+  requiresVerification?: boolean;
 }
 
 @Injectable()
@@ -55,13 +57,43 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly claimantsService: ClaimantsService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly otpService: OtpService
   ) {}
-
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
     // Check if user already exists
     const existingUser = await this.usersService.findByEmail(registerDto.email);
     if (existingUser) {
+      if (!(existingUser as any).isVerified) {
+        // Trigger OTP and return verification status
+        await this.otpService.sendOtp(existingUser.phoneNumber, undefined, existingUser.id);
+        const userTenants = await this.getUserTenants(existingUser.id);
+        const defaultTenant = userTenants.find(ut => ut.isDefault);
+        const activeTenantId =
+          defaultTenant?.tenantId || (existingUser as any).currentTenantId || existingUser.tenantId;
+
+        const activeTenantName =
+          userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
+          (existingUser as any).tenant?.name ||
+          '';
+
+        return {
+          user: {
+            id: existingUser.id,
+            email: existingUser.email,
+            fullName: existingUser.fullName,
+            role: existingUser.role,
+            phoneNumber: existingUser.phoneNumber,
+            licenseNumber:
+              existingUser.licenseNumber || (existingUser as any).adjuster?.licenseNumber,
+            tenantId: existingUser.tenantId,
+            currentTenantId: activeTenantId,
+            tenantName: activeTenantName,
+          },
+          userTenants,
+          requiresVerification: true,
+        };
+      }
       throw new ConflictException('User with this email already exists');
     }
 
@@ -71,22 +103,22 @@ export class AuthService {
     const user = await this.usersService.create({
       ...registerDto,
       password: hashedPassword,
-    });
+      isVerified: false,
+    } as any);
 
     const userTenants = await this.getUserTenants(user.id);
-
-    // Prioritize isDefault tenant
     const defaultTenant = userTenants.find(ut => ut.isDefault);
     const activeTenantId = defaultTenant?.tenantId || user.currentTenantId || user.tenantId;
-
-    const tokens = await this.generateTokens({ ...user, currentTenantId: activeTenantId });
 
     const activeTenantName =
       userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
       (user as any).tenant?.name ||
       '';
 
-    this.logger.log(`User registered: ${user.email}`);
+    // Send verification OTP
+    await this.otpService.sendOtp(user.phoneNumber, undefined, user.id);
+
+    this.logger.log(`User registered and OTP sent: ${user.email}`);
 
     return {
       user: {
@@ -101,7 +133,7 @@ export class AuthService {
         tenantName: activeTenantName,
       },
       userTenants,
-      tokens,
+      requiresVerification: true,
     };
   }
 
@@ -110,6 +142,17 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!(user as any).isVerified) {
+      // Send a new OTP if login is attempted for an unverified account
+      await this.otpService.sendOtp(user.phoneNumber, undefined, user.id);
+      throw new UnauthorizedException({
+        message: 'Account not verified. A new verification code has been sent to your phone.',
+        requiresVerification: true,
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+      });
     }
 
     // Update last login
@@ -131,6 +174,49 @@ export class AuthService {
       '';
 
     this.logger.log(`User logged in: ${user.email}`);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        phoneNumber: user.phoneNumber,
+        licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+        tenantId: user.tenantId,
+        currentTenantId: activeTenantId,
+        tenantName: activeTenantName,
+      },
+      userTenants,
+      tokens,
+    };
+  }
+
+  async verifyRegistration(userId: string, code: string): Promise<AuthResponse> {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Verify OTP
+    await this.otpService.verifyOtp(user.phoneNumber, code);
+    await this.usersService.setVerified(user.id, true);
+
+    // After verification, generate tokens
+    const userTenants = await this.getUserTenants(user.id);
+    const defaultTenant = userTenants.find(ut => ut.isDefault);
+    const activeTenantId =
+      defaultTenant?.tenantId || (user as any).currentTenantId || user.tenantId;
+
+    const tokens = await this.generateTokens({ ...user, currentTenantId: activeTenantId });
+
+    const activeTenantName =
+      userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
+      (user as any).tenant?.name ||
+      (user as any).currentTenant?.name ||
+      '';
+
+    this.logger.log(`User verification successful: ${user.email}`);
 
     return {
       user: {

@@ -216,7 +216,6 @@ export class ClaimsController {
     return this.claimsService.addNote(id, content, authorId, tenantContext);
   }
   @Get('stats')
-  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.SUPPORT_DESK)
   @ApiOperation({ summary: 'Get tenant-wide claim statistics' })
   @ApiResponse({
     status: HttpStatus.OK,

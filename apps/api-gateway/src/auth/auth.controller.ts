@@ -19,7 +19,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { ClaimantsService } from '../claimants/claimants.service';
-import { RegisterDto, LoginDto, ChangePasswordDto } from './dto';
+import { RegisterDto, LoginDto, ChangePasswordDto, RegisterVerifyDto } from './dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -49,7 +49,24 @@ export class AuthController {
     @Res({ passthrough: true }) response: FastifyReply
   ) {
     const result = await this.authService.register(registerDto);
-    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+    if (result.tokens) {
+      this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+    }
+    return result;
+  }
+
+  @Post('register/verify-otp')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify registration OTP' })
+  @ApiResponse({ status: 200, description: 'User verified and tokens returned' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
+  async verifyRegistration(
+    @Body() dto: RegisterVerifyDto,
+    @Res({ passthrough: true }) response: FastifyReply
+  ) {
+    const result = await this.authService.verifyRegistration(dto.userId, dto.code);
+    this.setRefreshTokenCookie(response, result.tokens!.refreshToken);
     return result;
   }
 
@@ -62,7 +79,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) response: FastifyReply) {
     const result = await this.authService.login(loginDto);
-    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+    this.setRefreshTokenCookie(response, result.tokens!.refreshToken);
     return result;
   }
 
@@ -147,7 +164,7 @@ export class AuthController {
     const userAgent = request.headers['user-agent'];
 
     const result = await this.authService.switchTenant(user.id, dto.tenantId, ipAddress, userAgent);
-    this.setRefreshTokenCookie(response, result.tokens.refreshToken);
+    this.setRefreshTokenCookie(response, result.tokens!.refreshToken);
 
     return result;
   }

@@ -17,6 +17,7 @@ model User {
   licenseNumber    String?
   tenantId         String? // Deprecated: kept for backward compatibility
   currentTenantId  String? // Active tenant context for current session
+  isVerified       Boolean            @default(false)
   lastLoginAt      DateTime?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
