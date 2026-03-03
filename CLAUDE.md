@@ -196,6 +196,7 @@ async findOne(id: string, tenantContext?: TenantContext) {
 
 ## Documentation References
 
+- **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
 - **Business requirements:** `docs/REQUIREMENTS.md`
 - **Technical architecture:** `docs/ARCHITECTURE.md`
 - **Task progress:** `docs/PROGRESS.md`

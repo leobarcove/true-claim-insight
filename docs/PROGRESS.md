@@ -219,8 +219,8 @@
 ### Launch
 
 | Task                              | Status |
-| --------------------------------- | ------ |
-| Documentation / user guides       | ⚪     |
+| --------------------------------- | ------ | ------------------------- |
+| Documentation / user guides       | ✅     | docs/SYSTEM_USER_GUIDE.md |
 | Monitoring setup                  | ⚪     |
 | Pilot onboarding (5-10 adjusters) | ⚪     |
 
