@@ -46,7 +46,7 @@ This workflow covers the daily operations of a Loss Adjuster.
     - **Session Metrics**: Data from previous assessments and risk summaries.
 3.  **Conducting Assessment**:
     - **Live Session**: Initiate a real-time video call via the portal.
-    - **Manual Upload**: Alternative flow for uploading evidence captured offline.
+    - **Manual Upload**: Alternative flow for uploading offline videos.
 4.  **In-Session Interaction (Live)**:
     - **Deception Metrics**: Toggle "Deception Metrics" to see real-time risk indicators from the **Trinity AI Engine** (voice stress, micro-expressions).
     - **Evidence Capture**: Capture a **Claimant Screenshot** or photo of damage during the live session.
@@ -57,6 +57,32 @@ This workflow covers the daily operations of a Loss Adjuster.
     - The system provides a **Final Analysis Reasoning** with a recommended action based on AI findings and risk scores.
     - The user reviews the summary and decides to **Approve** or **Reject** the claim.
 
+```mermaid
+graph TD
+    Start([Start]) --> Login[Login and Claim Entry]
+    Login --> Review[Review Details]
+    Review --> Mode{Assessment Mode}
+
+    Mode -->|Live Session| Live[Live Video Session]
+    Mode -->|Manual Upload| Manual[Upload Recorded Video]
+
+    Live --> MetricsLive[AI Metrics & Capture]
+    Manual --> MetricsManual[AI Metrics & Capture]
+
+    MetricsLive --> ConsentLive[Digital Consent Generation]
+    MetricsManual --> ConsentManual[Digital Consent Generation]
+
+    ConsentLive --> Trinity[Trinity AI Analysis]
+    ConsentManual --> Trinity
+
+    Trinity --> Decision{Final Decision}
+    Decision -->|Approve| Approved([Approved])
+    Decision -->|Reject| Rejected([Rejected])
+
+    style Approved fill:#00ff0022,stroke:#00aa00
+    style Rejected fill:#ff000022,stroke:#aa0000
+```
+
 ### b) New User Registration & Onboarding
 
 1.  **Register**: New users can register their account on the portal.
@@ -66,6 +92,16 @@ This workflow covers the daily operations of a Loss Adjuster.
     - **Pending Page**: If the user has not been assigned to a tenant organization yet, they see a "Account Activation Pending" page.
     - **Active Dashboard**: The portal becomes available once the tenant organization is setup and the user-tenant association is created.
 
+```mermaid
+graph TD
+    Reg[Register] --> OTP[Mobile OTP]
+    OTP --> Login[Dashboard Login]
+    Login --> Check{Assigned to Tenant?}
+    Check -->|No| Pending[Pending Activation]
+    Check -->|Yes| Active[Active Dashboard]
+    Pending -->|Admin Assigns| Active
+```
+
 ### c) Superadmin Management Flow
 
 Superadmins have full control over the platform's multi-tenant structure.
@@ -74,12 +110,26 @@ Superadmins have full control over the platform's multi-tenant structure.
 2.  **User Management**: Add or modify users across the entire system.
 3.  **Associations**: Setup and manage the **User-Tenant Associations**, linking users to their respective tenants.
 
+```mermaid
+graph LR
+    A[Manage Tenants] --- B[Multi-tenant Config]
+    C[Manage Users] --- D[Global Account Control]
+    B & D --> E[Create User-Tenant Association]
+```
+
 ### d) Master Data Setup (Admin/Superadmin)
 
 Maintaining the core system configurations.
 
 1.  **Vehicle Master Data**: Admins and Superadmins can setup and modify the list of **Vehicle Makes and Models**.
 2.  **System Constants**: Maintain standardized lookup values used throughout the claim assessment process.
+
+```mermaid
+graph TB
+    M[Master Data Admin] --> V[Vehicle Makes/Models]
+    M --> C[System Constants]
+    V & C --> S[System-wide Availability]
+```
 
 ### e) Claimant Assessment Workflow
 
@@ -95,6 +145,14 @@ This workflow describes the claimant's experience accessing the assessment.
 4.  **Permissions**:
     - Enable **Location Permissions** (GPS) on the device to proceed. This is mandatory for verification and compliance.
 5.  **Enter Assessment**: Join the **Video Room** for the live assessment with the adjuster.
+
+```mermaid
+graph TD
+    Link[SMS Link] --> Auth[Mobile OTP login]
+    Auth --> KYC[NRIC Verification]
+    KYC --> GPS[Location Permissions]
+    GPS --> Room[Enter Video Room]
+```
 
 ---
 
