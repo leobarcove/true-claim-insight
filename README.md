@@ -1,269 +1,153 @@
 # True Claim Insight
 
-Remote claims assessment platform for insurance loss adjusters in Malaysia.
+Remote claims assessment platform for insurance loss adjusters in Malaysia, powered by AI-driven fraud detection and secure multi-tenant architecture.
 
 ## Overview
 
-True Claim Insight digitises face-to-face interactions between loss adjusters and claimants through real-time video, AI-powered fraud detection, and streamlined documentation.
+True Claim Insight digitises the assessment workflow between loss adjusters and claimants. By combining real-time video interaction with multimodal AI risk scoring ("Trinity Engine"), the platform identifies fraud patterns that are invisible to the human eye while streamlining regulatory compliance for the Malaysian insurance market.
 
-**Key Features:**
+### Key Features
 
-- Remote video assessments (no travel required)
-- AI-assisted fraud detection (voice analysis, deepfake detection)
-- Digital identity verification (eKYC)
-- **BNM Regulatory Compliance**: 7-day SLA tracking, PDPA consent, and SIU escalation.
-- **B2B Multi-Tenancy**: Strict data isolation for multiple insurers and adjusting firms.
-- **Role-Based Access**: 10 granular roles (Adjusters, Admins, Compliance, SIU, etc.)
-- Automated report generation & digital document signing
-
-**MVP Scope:** Motor insurance claims (Own Damage, Third-Party Property) in Malaysia
+- **Trinity AI Engine**: Multimodal fraud detection analyzing voice stress, visual micro-expressions, and behavioral patterns.
+- **Remote Video Assessments**: Integrated high-definition video calls via **Daily.co** with real-time risk overlay.
+- **Digital Identity (eKYC)**: Secure verification using **Innov8tif/CTOS** and MyKad OCR.
+- **BNM Regulatory Compliance**: Automated 7-day SLA tracking, PDPA consent management, and SIU escalation workflows.
+- **Advanced RBAC**: 8+ granular roles with strict tenant-level data isolation.
+- **B2B Multi-Tenancy**: Support for multiple Insurers and Adjusting Firms with cross-tenant association capabilities.
+- **Automated Reporting**: Generation of digital assessment reports with integrated **SigningCloud** signatures.
 
 ---
 
-## Prerequisites
+## Technical Stack
 
-| Software           | Version  | Install Command (macOS)                                     |
-| ------------------ | -------- | ----------------------------------------------------------- |
-| **Node.js**        | 22.x LTS | `brew install node@22`                                      |
-| **pnpm**           | 9.x      | `corepack enable && corepack prepare pnpm@9 --activate`     |
-| **Docker Desktop** | 27.x+    | [Download](https://www.docker.com/products/docker-desktop/) |
-| **Git**            | Latest   | `brew install git`                                          |
+| Layer          | Technology                                   |
+| -------------- | -------------------------------------------- |
+| **Language**   | TypeScript 5.8 (Strict), Python 3.10         |
+| **Backend**    | NestJS 11 (Fastify), FastAPI (Risk Analyzer) |
+| **Frontend**   | React 18.3, Vite 6, Tailwind CSS, shadcn/ui  |
+| **Database**   | PostgreSQL 16 (via Prisma 6 ORM)             |
+| **Caching**    | Redis 7.4                                    |
+| **Video**      | Daily.co REST API & Web SDK                  |
+| **Monorepo**   | Turborepo 2.3 + pnpm 9.15                    |
+| **Storage**    | Supabase S3-Compatible Storage               |
+| **Deployment** | Docker, Kubernetes (EKS), AWS Malaysia       |
 
-### Verify Installation
+### Storage Buckets (Supabase S3)
 
-```bash
-node -v    # Should show v22.x.x
-pnpm -v    # Should show 9.x.x
-docker -v  # Should show Docker version 27.x
-```
+The system utilizes specialized storage buckets for different types of data:
 
----
-
-## Quick Start
-
-```bash
-# Clone repository
-git clone https://github.com/your-org/true-claim-insight.git
-cd true-claim-insight
-
-# One-liner setup (installs deps, starts Docker, runs migrations)
-pnpm setup
-
-# Start development servers
-pnpm dev
-```
-
-### Manual Setup
-
-```bash
-# 1. Install dependencies
-pnpm install
-
-# 2. Create environment file
-cp .env.example .env
-
-# 3. Start Docker containers (PostgreSQL, Redis, MailHog)
-docker compose up -d
-
-# 4. Wait for containers to be healthy
-docker compose ps
-
-# 5. Run database migrations
-pnpm prisma:migrate
-
-# 6. Generate Prisma client
-pnpm prisma:generate
-
-# 7. Start all services
-pnpm dev
-```
-
----
-
-## Access Points
-
-| Application            | URL                            | Description                  |
-| ---------------------- | ------------------------------ | ---------------------------- |
-| **API Gateway**        | http://localhost:3000          | Authentication, routing      |
-| **API Gateway Docs**   | http://localhost:3000/docs     | Swagger for Auth/Users       |
-| **Case Service**       | http://localhost:3001          | Claims management            |
-| **Case Service Docs**  | http://localhost:3001/api/docs | Swagger for Claims           |
-| **Video Service**      | http://localhost:3002          | Video room management (TRTC) |
-| **Video Service Docs** | http://localhost:3002/docs     | Swagger for Video            |
-| **Adjuster Portal**    | http://localhost:4000          | React web app for adjusters  |
-| **Claimant PWA**       | http://localhost:4001          | React PWA for claimants      |
-| **MailHog**            | http://localhost:8025          | Email testing UI             |
-| **Prisma Studio**      | Run `pnpm prisma:studio`       | Database GUI                 |
-
----
-
-## Login Credentials (Development)
-
-### Role-Based Demo Users
-
-All users use the password: `DemoPass123!`
-
-| Role                   | Email                    | Tenant            |
-| ---------------------- | ------------------------ | ----------------- |
-| **Super Admin**        | `superadmin@tci.com`     | System            |
-| **Firm Admin**         | `admin@pacific.com`      | Pacific Adjusters |
-| **Adjuster**           | `adjuster@pacific.com`   | Pacific Adjusters |
-| **SIU Investigator**   | `siu@allianz.com`        | Allianz           |
-| **Compliance Officer** | `compliance@allianz.com` | Allianz           |
-| **Shariah Reviewer**   | `shariah@allianz.com`    | Allianz           |
-| **Support Desk**       | `support@tci.com`        | System            |
-
-### Claimant PWA (Phone OTP)
-
-1. **Phone Number**: `+60123456789` (or any MAL phone)
-2. **OTP**: Check the terminal logs for the 6-digit code.
-
----
-
-## Tech Stack
-
-| Layer     | Technology                    |
-| --------- | ----------------------------- |
-| Language  | TypeScript 5.8.x              |
-| Backend   | NestJS 11.x + Fastify 5.x     |
-| Frontend  | React 18.3.x + Vite 6.x       |
-| Database  | PostgreSQL 16.x               |
-| ORM       | Prisma 6.x                    |
-| Cache     | Redis 7.4.x                   |
-| Cloud     | AWS Malaysia (ap-southeast-5) |
-| Container | Docker + Kubernetes           |
-| Monorepo  | Turborepo 2.3.x               |
+- `tci-uploads`: Primary bucket for video session uploads and raw recordings (hardcoded in `video-service`).
+- `tci-documents`: Secure storage for claimant documents, IDs, and case-related evidence (configured in `case-service`).
+- `tci-recordings`: Storage for final processed and signed session recordings.
+- `risk_analysis`: Default bucket for risk engines to store detailed analysis reports and findings.
+- `consent_form`: Default bucket for risk engines to store consent forms.
 
 ### Third-Party Integrations
 
-| Provider       | Purpose              |
-| -------------- | -------------------- |
-| Tencent TRTC   | Video calls          |
-| Innov8tif/CTOS | eKYC (OCR, Liveness) |
-| Clearspeed     | Voice risk analysis  |
-| Hive AI        | Deepfake detection   |
-| MediaPipe      | Attention tracking   |
-| SigningCloud   | Digital signatures   |
+- **Daily.co**: WebRTC video infrastructure.
+- **Innov8tif / CTOS**: Malaysia-specific eKYC and OCR.
+- **Clearspeed**: Voice-based risk analysis.
+- **Hume AI / MediaPipe**: Emotional and behavioral micro-expression tracking.
+- **SigningCloud**: BNM-compliant digital signatures.
 
 ---
 
 ## Project Structure
 
-```
+```bash
 true-claim-insight/
-├── apps/                    # Applications
-│   ├── api-gateway/         # API routing & auth
-│   ├── case-service/        # Claims management
-│   ├── video-service/       # Video calls (TRTC)
-│   ├── identity-service/    # eKYC verification
-│   ├── risk-engine/         # AI fraud detection
-│   ├── document-service/    # Reports & signing
-│   ├── adjuster-portal/     # Adjuster web app
-│   └── claimant-web/        # Claimant PWA
-├── packages/                # Shared code
-│   ├── shared-types/        # TypeScript interfaces
-│   ├── ui-components/       # React components
-│   └── prisma-client/       # Database client
-├── infrastructure/          # IaC configs
-└── docs/                    # Documentation
+├── apps/
+│   ├── api-gateway/       # NestJS - Central entry point, Auth & Proxy
+│   ├── case-service/      # NestJS - Claims lifecycle & BNM workflows
+│   ├── video-service/     # NestJS - Daily.co room orchestration
+│   ├── risk-engine/       # NestJS - Risk scoring & aggregation logic
+│   ├── risk-analyzer/     # Python - AI Multimodal Analysis (Mediapipe/Hume)
+│   ├── adjuster-portal/   # React  - Portal for Loss Adjusters & Admins
+│   └── claimant-web/      # React  - Mobile-first PWA for Claimants
+├── packages/
+│   ├── prisma-client/     # Shared database schema & client
+│   ├── shared-types/      # Shared TypeScript interfaces & DTOs
+│   └── ui-components/     # Shared React components (shadcn/ui)
+└── docs/                  # Detailed technical & business documentation
 ```
 
 ---
 
-## Scripts
+## Getting Started
 
-### Development
+### Prerequisites
+
+- **Node.js**: v22.0.0 or higher
+- **pnpm**: v9.0.0 or higher
+- **Docker Desktop**: v27.0.0 or higher
+- **Python**: v3.10 (for `risk-analyzer`)
+
+### One-Step Setup
 
 ```bash
-pnpm dev              # Start all services in watch mode
-pnpm build            # Build all packages
-pnpm test             # Run tests
-pnpm lint             # Lint code
-pnpm format           # Format code with Prettier
-pnpm typecheck        # TypeScript type checking
+pnpm setup
+pnpm dev
 ```
 
-### Database
+### Fresh Setup
 
 ```bash
-pnpm prisma:migrate   # Run database migrations
-pnpm prisma:generate  # Regenerate Prisma client
-pnpm prisma:studio    # Open Prisma Studio (DB GUI)
-pnpm prisma:seed      # Seed database (when available)
-```
-
-### Docker
-
-```bash
-pnpm docker:up        # Start Docker services
-pnpm docker:down      # Stop Docker services
-pnpm docker:logs      # View container logs
-pnpm docker:reset     # Reset Docker volumes
+pnpm setup:reset
+pnpm dev
 ```
 
 ---
 
-## Troubleshooting
+## Role-Based Access Control (RBAC)
 
-### Port Conflicts
+The system enforces strict access control through 8 predefined roles:
 
-If you have other projects using ports 5432, 6379, or 1025:
-
-```bash
-# List running containers
-docker ps
-
-# Stop conflicting container
-docker stop <container-name>
-
-# Start this project's containers
-docker compose up -d
-```
-
-### Docker Registry Issues
-
-If Docker fails to pull images, the project uses locally cached images where possible. Check your network/proxy settings if issues persist.
-
-### Database Connection Failed
-
-Ensure PostgreSQL container is healthy:
-
-```bash
-docker compose ps
-# Wait for "healthy" status, then retry migrations
-pnpm prisma:migrate
-```
-
-### Node Version Issues
-
-Ensure you're using Node.js 22.x:
-
-```bash
-node -v
-# If wrong version, use nvm:
-nvm install 22
-nvm use 22
-```
+| Role                   | Dashboard Access | Key Permissions                              |
+| ---------------------- | ---------------- | -------------------------------------------- |
+| **Super Admin**        | Full System      | Tenant management, system configuration      |
+| **Firm Admin**         | Adjusting Firm   | User management, internal assignments        |
+| **Adjuster**           | Field Operations | Video conduction, report drafting, eKYC      |
+| **SIU Investigator**   | Fraud/Risk       | Deep-dive analysis, investigation management |
+| **Compliance Officer** | Audit/Review     | BNM SLA monitoring, regulatory flags         |
+| **Shariah Reviewer**   | Takaful Review   | Shariah compliance auditing                  |
+| **Support Desk**       | Service/Help     | Ticket resolution, basic claim view          |
+| **Claimant**           | Mobile PWA       | Evidence submission, attending live sessions |
 
 ---
 
-## Documentation
+## Documentation & Wiki
 
-- [Business Requirements](docs/REQUIREMENTS.md)
-- [Technical Architecture](docs/ARCHITECTURE.md)
-- [Progress Tracker](docs/PROGRESS.md)
+Detailed guides and specifications are located in the `/docs` directory:
 
----
-
-## Contributing
-
-- Use **British English** for file names, folder names, and function names
-- Follow existing code patterns and conventions
-- Run `pnpm lint` and `pnpm typecheck` before committing
-- Do not commit `.env` files or secrets
+- [System User & Demo Guide](docs/SYSTEM_USER_GUIDE.md) - Demo accounts & walkthroughs.
+- [Technical Architecture](docs/ARCHITECTURE.md) - System design & data flow.
+- [Business Requirements](docs/REQUIREMENTS.md) - Functional and non-functional specs.
+- [Claims Workflow](docs/CLAIMS_WORKFLOW.md) - The 6-stage claim lifecycle.
+- [Trinity Engine Deep Dive](docs/TRINITY_EDGE_CASES.md) - How AI scoring works.
+- [Malaysia Compliance](docs/MALAYSIA_CLAIMS_COMPLIANCE_REPORT.md) - Regulatory alignment.
 
 ---
 
-## Licence
+## Local Access Points (Development)
 
-Proprietary - All rights reserved
+- **Adjuster Portal**: [http://localhost:4000](http://localhost:4000)
+- **Claimant PWA**: [http://localhost:4001](http://localhost:4001)
+- **API Swagger Docs**: [http://localhost:3000/docs](http://localhost:3000/docs)
+- **Prisma Studio**: `pnpm prisma:studio`
+
+---
+
+## Development Workflow
+
+- **Branching**: Use feature branches (`feat/`, `fix/`).
+- **Styles**: Use Tailwind CSS with **shadcn/ui**.
+- **Naming**: Use **British English** for all code-level naming (e.g., `colour`, `centre`).
+- **Scripts**:
+  - `pnpm dev`: Start development servers.
+  - `pnpm format`: Prettify entire codebase.
+  - `pnpm lint`: Run ESLint checks.
+  - `pnpm typecheck`: Run TypeScript compilation check.
+
+---
+
+**Proprietary - True Claim Insight 2026**

@@ -9,7 +9,7 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "turbo watch dev",
+    "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
@@ -27,7 +27,7 @@
     "docker:logs": "docker-compose logs -f",
     "docker:reset": "docker-compose down -v && docker-compose up -d",
     "setup": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
-    "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
+    "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:clean && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
     "prepare": "husky install"
   },
   "devDependencies": {
