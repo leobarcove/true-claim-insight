@@ -4,7 +4,21 @@ This guide provides step-by-step instructions for using the platform, including 
 
 ---
 
-## 🔐 Demo Credentials
+## Table of Contents
+
+1. [Demo Credentials](#demo-credentials)
+2. [Getting Started](#getting-started)
+   - [Access Points](#access-points)
+3. [Key User Workflows](#key-user-workflows)
+   - [a) Adjuster Assessment Workflow](#a-adjuster-assessment-workflow-end-to-end)
+   - [b) New User Registration & Onboarding](#b-new-user-registration--onboarding)
+   - [c) Superadmin Management Flow](#c-superadmin-management-flow)
+   - [d) Master Data Setup](#d-master-data-setup-adminsuperadmin)
+   - [e) Claimant Assessment Workflow](#e-claimant-assessment-workflow)
+
+---
+
+## Demo Credentials
 
 Use these credentials to explore the system in the development environment.
 
@@ -22,7 +36,7 @@ Use these credentials to explore the system in the development environment.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Access Points
 
@@ -31,7 +45,7 @@ Use these credentials to explore the system in the development environment.
 
 ---
 
-## 🛠️ Key User Workflows
+## Key User Workflows
 
 ### a) Adjuster Assessment Workflow (End-to-End)
 
