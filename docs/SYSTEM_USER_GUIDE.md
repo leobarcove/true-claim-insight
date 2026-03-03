@@ -81,6 +81,21 @@ Maintaining the core system configurations.
 1.  **Vehicle Master Data**: Admins and Superadmins can setup and modify the list of **Vehicle Makes and Models**.
 2.  **System Constants**: Maintain standardized lookup values used throughout the claim assessment process.
 
+### e) Claimant Assessment Workflow
+
+This workflow describes the claimant's experience accessing the assessment.
+
+1.  **Access Link**: Claimant opens the assessment link received via SMS.
+2.  **Login & Verify**:
+    - If not already logged in, enter the registered mobile number.
+    - Verify using the **One-Time Password (OTP)** sent to the mobile.
+3.  **Identity Confirmation**:
+    - Confirm that the logged-in mobile number is correct.
+    - Verify the registered **National Registration Identity Card (NRIC)** number.
+4.  **Permissions**:
+    - Enable **Location Permissions** (GPS) on the device to proceed. This is mandatory for verification and compliance.
+5.  **Enter Assessment**: Join the **Video Room** for the live assessment with the adjuster.
+
 ---
 
 _Last Updated: 2026-03-03 | True Claim Insight_
