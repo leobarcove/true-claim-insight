@@ -24,6 +24,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { useRef } from 'react';
+import { useAuthStore } from '@/stores/auth-store';
 
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -270,6 +271,10 @@ export function ClaimDetailPage() {
   const canViewUnmaskedPII = useHasPermission(PERMISSIONS.PII_VIEW_UNMASKED);
   const canViewFinancials = !useHasPermission(PERMISSIONS.CLAIMS_VIEW_BASIC); // Support only has basic view
   const canEdit = useHasPermission(PERMISSIONS.CLAIMS_EDIT);
+
+  const currentUser = useAuthStore(state => state.user);
+  const canManageSessions =
+    currentUser && ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN'].includes(currentUser.role);
 
   const latestClaimantClientInfo = useMemo(() => {
     if (!claim?.sessions) return null;
@@ -1216,44 +1221,50 @@ export function ClaimDetailPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Session button */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Session</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Button
-                    className="w-full"
-                    onClick={handleStartVideoAssessment}
-                    disabled={
-                      createVideoRoom.isPending ||
-                      isNotifying ||
-                      claim.status === 'APPROVED' ||
-                      claim.status === 'REJECTED'
-                    }
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    {createVideoRoom.isPending || isNotifying
-                      ? 'Starting...'
-                      : 'Start Live Session'}
-                  </Button>
+            {canManageSessions && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Session</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <Button
+                      className="w-full"
+                      onClick={handleStartVideoAssessment}
+                      disabled={
+                        !canManageSessions ||
+                        createVideoRoom.isPending ||
+                        isNotifying ||
+                        claim.status === 'APPROVED' ||
+                        claim.status === 'REJECTED'
+                      }
+                    >
+                      <Video className="h-4 w-4 mr-2" />
+                      {createVideoRoom.isPending || isNotifying
+                        ? 'Starting...'
+                        : 'Start Live Session'}
+                    </Button>
 
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => navigate(`/claims/${claimId}/upload-video`)}
-                    disabled={claim.status === 'APPROVED' || claim.status === 'REJECTED'}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Manual Upload
-                  </Button>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => navigate(`/claims/${claimId}/upload-video`)}
+                      disabled={
+                        !canManageSessions ||
+                        claim.status === 'APPROVED' ||
+                        claim.status === 'REJECTED'
+                      }
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Manual Upload
+                    </Button>
 
-                  <p className="text-xs text-muted-foreground text-center mt-5">
-                    Creates room and notifies claimant via SMS
-                  </p>
+                    <p className="text-xs text-muted-foreground text-center mt-5">
+                      Creates room and notifies claimant via SMS
+                    </p>
 
-                  {/* DEV ONLY: Show Magic Link */}
-                  {/* {magicLink && (
+                    {/* DEV ONLY: Show Magic Link */}
+                    {/* {magicLink && (
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">
                         [DEV ONLY] Magic Link
@@ -1276,9 +1287,10 @@ export function ClaimDetailPage() {
                       </div>
                     </div>
                   )} */}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Claimant Info */}
             <Card>
