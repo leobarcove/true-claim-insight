@@ -28,7 +28,8 @@ export interface TokenPair {
 export interface AuthResponse {
   user: User;
   userTenants: UserTenant[];
-  tokens: TokenPair;
+  tokens?: TokenPair;
+  requiresVerification?: boolean;
 }
 
 // Query keys factory
@@ -52,7 +53,7 @@ export function useLogin() {
       return data.data;
     },
     onSuccess: data => {
-      setAuth(data.user, data.tokens.accessToken, data.userTenants);
+      setAuth(data.user, data.tokens!.accessToken, data.userTenants);
       queryClient.invalidateQueries({ queryKey: authKeys.user() });
       navigate('/');
     },
@@ -65,7 +66,6 @@ export function useLogin() {
  */
 export function useRegister() {
   const { setAuth } = useAuthStore();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -74,9 +74,50 @@ export function useRegister() {
       return data.data;
     },
     onSuccess: data => {
-      setAuth(data.user, data.tokens.accessToken, data.userTenants);
-      queryClient.invalidateQueries({ queryKey: authKeys.user() });
-      navigate('/');
+      if (data.tokens) {
+        setAuth(data.user, data.tokens.accessToken, data.userTenants);
+        queryClient.invalidateQueries({ queryKey: authKeys.user() });
+      }
+    },
+  });
+}
+
+/**
+ * Verify registration OTP mutation hook
+ */
+export function useVerifyRegistration() {
+  const { setAuth } = useAuthStore();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { userId: string; code: string }) => {
+      const { data } = await apiClient.post<ApiResponse<AuthResponse>>(
+        '/auth/register/verify-otp',
+        input
+      );
+      return data.data;
+    },
+    onSuccess: data => {
+      if (data.tokens) {
+        setAuth(data.user, data.tokens.accessToken, data.userTenants);
+        queryClient.invalidateQueries({ queryKey: authKeys.user() });
+        navigate('/');
+      }
+    },
+  });
+}
+
+/**
+ * Resend verification OTP mutation hook
+ */
+export function useResendVerificationOtp() {
+  return useMutation({
+    mutationFn: async (phoneNumber: string) => {
+      const { data } = await apiClient.post<ApiResponse<any>>('/auth/claimant/send-otp', {
+        phoneNumber,
+      });
+      return data.data;
     },
   });
 }

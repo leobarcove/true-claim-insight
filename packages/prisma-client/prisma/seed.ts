@@ -157,6 +157,7 @@ async function main() {
         role,
         tenantId,
         currentTenantId: tenantId,
+        isVerified: true,
       },
     });
 

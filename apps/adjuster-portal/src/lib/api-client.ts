@@ -37,8 +37,12 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // Handle 401 - try refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Handle 401 - try refresh token, except for login
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login')
+    ) {
       originalRequest._retry = true;
 
       try {

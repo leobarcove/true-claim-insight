@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FileText,
   Video,
@@ -11,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
+  ShieldCheck,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Header } from '@/components/layout/header';
@@ -71,6 +73,10 @@ export function DashboardPage() {
     PERMISSIONS.VIDEO_VIEW_RECORDINGS,
   ]);
 
+  const { userTenants } = useAuthStore();
+  const isAwaitingActivation =
+    userTenants.length === 0 && user?.role !== 'SUPER_ADMIN' && user?.role !== 'SUPPORT_DESK';
+
   const createdById = userFilter === 'my' ? user?.id : undefined;
 
   const { data: statsData, isLoading: statsLoading } = useClaimStats({ createdById });
@@ -82,6 +88,35 @@ export function DashboardPage() {
     sortOrder: 'desc',
     createdById,
   });
+
+  if (isAwaitingActivation) {
+    return (
+      <div className="flex flex-col h-full bg-background/50">
+        <Header title="Welcome" description={`Hello, ${user?.fullName}`} />
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full scale-150" />
+            <div className="relative bg-card border border-border/50 p-8 rounded-3xl shadow-2xl">
+              <div className="h-20 w-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <ShieldCheck className="h-10 w-10 text-primary animate-bounce-slow" />
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">Account Activation Pending</h2>
+              <p className="text-muted-foreground text-sm max-w-2xl mx-auto text-lg leading-relaxed">
+                We’re currently verifying your account and setting up your organization’s
+                environment. Your dashboard will be available once activation is complete.
+              </p>
+              <div className="mt-8 pt-8 border-t border-border/50 space-y-4">
+                <div className="flex items-center justify-center gap-2 text-primary font-medium text-sm">
+                  <Clock className="h-4 w-4" />
+                  <span>Expected activation: 24-48 hours</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const sessionsFilters = useMemo(
     () => ({

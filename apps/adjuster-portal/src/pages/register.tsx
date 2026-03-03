@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowLeft, MessageSquareLock, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useRegister } from '@/hooks/use-auth';
+import { useRegister, useVerifyRegistration, useResendVerificationOtp } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 
 const registerSchema = z
   .object({
@@ -44,9 +45,38 @@ interface ApiErrorResponse {
 
 export function RegisterPage() {
   const registerMutation = useRegister();
+  const verifyMutation = useVerifyRegistration();
+  const resendOtpMutation = useResendVerificationOtp();
+  const { toast } = useToast();
+
+  const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(searchParams.get('verify') === 'true');
+  const [registeredUser, setRegisteredUser] = useState<{ id: string; phoneNumber: string } | null>(
+    searchParams.get('userId') && searchParams.get('phone')
+      ? { id: searchParams.get('userId')!, phoneNumber: searchParams.get('phone')! }
+      : null
+  );
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [resendCountdown, setResendCountdown] = useState(0);
+
+  // If initial load and isVerifying, start countdown
+  useEffect(() => {
+    if (isVerifying && resendCountdown === 0) {
+      setResendCountdown(60);
+    }
+  }, []);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Handle resend countdown
+  useEffect(() => {
+    if (resendCountdown > 0) {
+      const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCountdown]);
 
   const {
     register,
@@ -60,7 +90,7 @@ export function RegisterPage() {
     setError(null);
 
     try {
-      await registerMutation.mutateAsync({
+      const result = await registerMutation.mutateAsync({
         email: data.email,
         password: data.password,
         fullName: data.fullName,
@@ -68,10 +98,19 @@ export function RegisterPage() {
         role: 'ADJUSTER',
         licenseNumber: data.licenseNumber || undefined,
       });
-      // Navigation is handled by the mutation's onSuccess
+
+      if (result.requiresVerification) {
+        setRegisteredUser({
+          id: result.user.id,
+          phoneNumber: result.user.phoneNumber,
+        });
+        setIsVerifying(true);
+        setResendCountdown(60);
+      }
     } catch (err) {
-      const axiosError = err as AxiosError<ApiErrorResponse>;
-      const message = axiosError.response?.data?.message;
+      const axiosError = err as AxiosError<{ success: false; error: ApiErrorResponse }>;
+      const errorData = axiosError.response?.data?.error;
+      const message = errorData?.message;
 
       if (Array.isArray(message)) {
         setError(message[0]);
@@ -80,6 +119,73 @@ export function RegisterPage() {
       } else {
         setError('Registration failed. Please try again.');
       }
+    }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+    setError(null);
+
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      setOtp(pasted.split(''));
+    }
+  };
+
+  const onVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otp.join('');
+    if (code.length !== 6 || !registeredUser) return;
+
+    setError(null);
+    try {
+      await verifyMutation.mutateAsync({
+        userId: registeredUser.id,
+        code,
+      });
+    } catch (err) {
+      const axiosError = err as AxiosError<ApiErrorResponse>;
+      setError(axiosError.response?.data?.message?.toString() || 'Invalid OTP code');
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!registeredUser || resendCountdown > 0) return;
+
+    try {
+      await resendOtpMutation.mutateAsync(registeredUser.phoneNumber);
+      setResendCountdown(60);
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+      toast({
+        title: 'OTP Resent',
+        description: 'A new verification code has been sent to your phone.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to resend OTP. Please try again later.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -106,133 +212,215 @@ export function RegisterPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {error && (
-              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
-                {error}
+          {isVerifying ? (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="space-y-2 flex flex-col items-center text-center">
+                <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center shadow-inner">
+                  <MessageSquareLock className="h-8 w-8 text-primary" />
+                </div>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  We've sent a 6-digit code to
+                  <span className="font-semibold text-foreground block">
+                    {registeredUser?.phoneNumber}
+                  </span>
+                </p>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="Ahmad bin Abdullah"
-                {...register('fullName')}
-              />
-              {errors.fullName && (
-                <p className="text-sm text-destructive">{errors.fullName.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="adjuster@company.com"
-                {...register('email')}
-              />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Phone Number</Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                placeholder="+60123456789"
-                {...register('phoneNumber')}
-              />
-              {errors.phoneNumber && (
-                <p className="text-sm text-destructive">{errors.phoneNumber.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="licenseNumber">License Number (Optional)</Label>
-              <Input
-                id="licenseNumber"
-                type="text"
-                placeholder="LA-2025-001234"
-                {...register('licenseNumber')}
-              />
-              {errors.licenseNumber && (
-                <p className="text-sm text-destructive">{errors.licenseNumber.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a strong password"
-                  {...register('password')}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
+              <form onSubmit={onVerifyOtp} className="space-y-8">
+                <div className="space-y-2">
+                  <div className="flex justify-between gap-2 px-4" onPaste={handleOtpPaste}>
+                    {otp.map((digit, index) => (
+                      <Input
+                        key={index}
+                        ref={el => (inputRefs.current[index] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={e => handleOtpChange(index, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(index, e)}
+                        className="w-12 h-14 text-center text-2xl font-bold bg-muted/20 border-2 focus:border-primary transition-all p-0"
+                        disabled={verifyMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-center">
+                    {resendCountdown > 0 ? (
+                      <p className="text-xs font-medium text-muted-foreground flex items-center justify-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Resend in{' '}
+                        <span className="text-foreground font-bold">{resendCountdown}</span>
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={resendOtpMutation.isPending}
+                        className="text-xs font-bold text-primary hover:text-primary/80 tracking-wider flex items-center justify-center gap-1.5 mx-auto transition-colors disabled:opacity-50"
+                      >
+                        {resendOtpMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        Resend
+                      </button>
+                    )}
+                  </div>
+                  {error && (
+                    <p className="text-xs text-destructive text-center mt-2 animate-in fade-in slide-in-from-top-1">
+                      {error}
+                    </p>
                   )}
-                </Button>
-              </div>
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Must contain uppercase, lowercase, and number
-              </p>
-            </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <div className="relative">
+                <div className="space-y-4">
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={otp.some(d => !d) || verifyMutation.isPending}
+                  >
+                    {verifyMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      'Verify'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
                 <Input
-                  id="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Confirm your password"
-                  {...register('confirmPassword')}
+                  id="fullName"
+                  type="text"
+                  placeholder="Ahmad bin Abdullah"
+                  {...register('fullName')}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </Button>
+                {errors.fullName && (
+                  <p className="text-sm text-destructive">{errors.fullName.message}</p>
+                )}
               </div>
-              {errors.confirmPassword && (
-                <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
-              )}
-            </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                'Create Account'
-              )}
-            </Button>
-          </form>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="user@example.com"
+                  {...register('email')}
+                />
+                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number</Label>
+                <Input
+                  id="phoneNumber"
+                  type="tel"
+                  placeholder="+60123456789"
+                  {...register('phoneNumber')}
+                />
+                {errors.phoneNumber && (
+                  <p className="text-sm text-destructive">{errors.phoneNumber.message}</p>
+                )}
+              </div>
+
+              {/* <div className="space-y-2">
+                <Label htmlFor="licenseNumber">License Number (Optional)</Label>
+                <Input
+                  id="licenseNumber"
+                  type="text"
+                  placeholder="LA-2025-001234"
+                  {...register('licenseNumber')}
+                />
+                {errors.licenseNumber && (
+                  <p className="text-sm text-destructive">{errors.licenseNumber.message}</p>
+                )}
+              </div> */}
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a strong password"
+                    {...register('password')}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-destructive">{errors.password.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Must contain uppercase, lowercase, and number
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm your password"
+                    {...register('confirmPassword')}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
+              </Button>
+            </form>
+          )}
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{' '}

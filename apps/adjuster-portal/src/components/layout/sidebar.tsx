@@ -120,8 +120,18 @@ export function Sidebar() {
     setIsLogoutDialogOpen(false);
   };
 
-  const filterNavItems = (items: NavItem[]) => {
+  const isAwaitingActivation = userTenants.length === 0 && user?.role !== 'SUPER_ADMIN';
+
+  const filterNavItems = (
+    items: NavItem[],
+    section: 'general' | 'master' | 'support' = 'general'
+  ) => {
     return items.filter(item => {
+      if (isAwaitingActivation && (section === 'general' || section === 'master')) {
+        if (item.href === '/') return true;
+        return false;
+      }
+
       // Role check
       if (item.roles && (!user || !item.roles.includes(user.role))) {
         return false;
@@ -136,9 +146,9 @@ export function Sidebar() {
     });
   };
 
-  const visibleGeneral = filterNavItems(navigation);
-  const visibleMasterData = filterNavItems(masterDataNavigation);
-  const visibleSecondary = filterNavItems(secondaryNavigation);
+  const visibleGeneral = filterNavItems(navigation, 'general');
+  const visibleMasterData = filterNavItems(masterDataNavigation, 'master');
+  const visibleSecondary = filterNavItems(secondaryNavigation, 'support');
 
   return (
     <div

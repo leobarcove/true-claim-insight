@@ -63,6 +63,7 @@ CREATE TABLE "users" (
     "licenseNumber" TEXT,
     "tenantId" TEXT,
     "currentTenantId" TEXT,
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
     "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
