@@ -85,14 +85,14 @@ true-claim-insight/
 ### One-Step Setup
 
 ```bash
-pnpm setup
+pnpm run setup
 pnpm dev
 ```
 
 ### Fresh Setup
 
 ```bash
-pnpm setup:reset
+pnpm run setup:reset
 pnpm dev
 ```
 

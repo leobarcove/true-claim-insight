@@ -43,6 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { InfoTooltip } from '@/components/ui/tooltip';
+import { useLayout } from '@/components/layout';
 
 export function VehicleModelPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +61,7 @@ export function VehicleModelPage() {
   const limit = 10;
 
   const { toast } = useToast();
+  const { isMobile } = useLayout();
   const { data: makes, isLoading: isLoadingMakes } = useVehicleMakes();
   const { data: models, isLoading: isLoadingModels } = useVehicleModels(selectedMakeId);
   const createModelMutation = useCreateVehicleModel();
@@ -183,10 +185,10 @@ export function VehicleModelPage() {
         </Dialog>
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search models..."
+            placeholder={isMobile ? 'Search...' : 'Search models...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>

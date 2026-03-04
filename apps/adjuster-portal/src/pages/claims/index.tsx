@@ -32,6 +32,7 @@ import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAuthStore } from '@/stores/auth-store';
 import { PERMISSIONS, useHasPermission } from '@/lib/permissions';
+import { useLayout } from '@/components/layout';
 
 const statusConfig: Record<
   string,
@@ -74,6 +75,7 @@ export function ClaimsListPage() {
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  const { isMobile } = useLayout();
   const { user } = useAuthStore();
   const canCreateClaim = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
 
@@ -133,21 +135,24 @@ export function ClaimsListPage() {
         )}
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search by ID or name..."
+            placeholder={isMobile ? 'Search...' : 'Search by ID or name...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Status Tabs and View Toggle */}
-        <div className="flex items-center justify-between border-b border-border">
+        <div
+          data-horizontal="true"
+          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
+        >
           <div className="flex gap-2">
             <button
               onClick={() => setStatusFilter(null)}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
                 statusFilter === null
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -159,7 +164,7 @@ export function ClaimsListPage() {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
                   statusFilter === status
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -341,7 +346,10 @@ export function ClaimsListPage() {
           ) : viewMode === 'table' ? (
             /* Table View */
             <div className="rounded-md border animate-in fade-in duration-300">
-              <div className="bg-card rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-300">
+              <div
+                data-horizontal="true"
+                className="bg-card rounded-xl border shadow-sm overflow-x-auto animate-in fade-in duration-300 custom-scrollbar"
+              >
                 <table className="w-full text-sm text-left">
                   <thead className="bg-muted/50 border-b">
                     <tr className="hover:bg-transparent">

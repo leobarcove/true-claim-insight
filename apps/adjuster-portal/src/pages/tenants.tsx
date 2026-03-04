@@ -67,6 +67,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { SearchInput } from '@/components/ui/search-input';
 import { useDebounce } from '@/hooks/use-debounce';
 import { InfoTooltip } from '@/components/ui';
+import { useLayout } from '@/components/layout';
 
 export function TenantsPage() {
   const [activeTab, setActiveTab] = useState('tenants');
@@ -76,7 +77,9 @@ export function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 400);
   const limit = 10;
+
   const { toast } = useToast();
+  const { isMobile } = useLayout();
 
   const tenantsTableRef = useRef<any>(null);
   const usersTableRef = useRef<any>(null);
@@ -153,10 +156,10 @@ export function TenantsPage() {
         </Button>
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={`Search ${activeTab}...`}
+            placeholder={isMobile ? 'Search...' : `Search ${activeTab}...`}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>
@@ -164,13 +167,16 @@ export function TenantsPage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto space-y-6">
           {/* Horizontal Tabs */}
-          <div className="flex items-center border-b border-border">
+          <div
+            data-horizontal="true"
+            className="flex items-center border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
+          >
             <div className="flex gap-4">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 font-medium text-sm transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
+                  className={`px-4 py-2 mx-1 font-medium text-sm transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
                     activeTab === tab.id
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'

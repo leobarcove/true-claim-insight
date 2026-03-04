@@ -16,6 +16,7 @@ import { InfoTooltip } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { useClaims } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useLayout } from '@/components/layout';
 
 export function DocumentsListPage() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export function DocumentsListPage() {
   const [page, setPage] = useState(1);
   const limit = 10;
 
+  const { isMobile } = useLayout();
   const { data: response, isLoading } = useClaims({
     search: debouncedSearch,
     page,
@@ -40,19 +42,22 @@ export function DocumentsListPage() {
       <Header title="Documents" description="Review Trinity Cross-Checks and Document Validity.">
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search Claims or NRIC..."
+            placeholder={isMobile ? 'Search...' : 'Search Claims or NRIC...'}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Filter Tab */}
-        <div className="flex items-center justify-between border-b border-border">
+        <div
+          data-horizontal="true"
+          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
+        >
           <div className="flex gap-2">
-            <button className="px-4 py-2 font-medium text-sm transition-colors border-b-2 border-primary text-primary">
+            <button className="px-4 py- mx-1 font-medium text-sm transition-colors border-b-2 border-primary text-primary">
               All ({response?.pagination?.total || 0})
             </button>
           </div>
@@ -161,7 +166,10 @@ export function DocumentsListPage() {
             </div>
           ) : viewMode === 'table' ? (
             /* Table View */
-            <div className="bg-card rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-300">
+            <div
+              data-horizontal="true"
+              className="bg-card rounded-xl border shadow-sm overflow-x-auto animate-in fade-in duration-300 custom-scrollbar"
+            >
               <table className="w-full text-sm text-left">
                 <thead className="bg-muted/50 border-b">
                   <tr className="hover:bg-transparent">

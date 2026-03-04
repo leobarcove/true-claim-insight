@@ -172,13 +172,16 @@ export function SettingsPage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto space-y-8">
           {/* Horizontal Tabs */}
-          <div className="flex items-center border-b border-border">
+          <div
+            data-horizontal="true"
+            className="flex items-center border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
+          >
             <div className="flex gap-4">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 font-medium text-sm transition-all border-b-2 -mb-[1px] ${
+                  className={`px-4 py-2 mx-1 font-medium text-sm transition-all border-b-2 -mb-[1px] ${
                     activeTab === tab.id
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'

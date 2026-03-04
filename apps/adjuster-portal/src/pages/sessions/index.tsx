@@ -22,7 +22,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Header } from '@/components/layout';
+import { Header, useLayout } from '@/components/layout';
 import {
   Table,
   TableBody,
@@ -77,6 +77,7 @@ type VideoSessionItem = { type: 'live'; data: Session } | { type: 'upload'; data
 
 export function VideoSessionsPage() {
   const navigate = useNavigate();
+  const { isMobile } = useLayout();
   const [filter, setFilter] = useState<'all' | 'live' | 'upload'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [page, setPage] = useState(1);
@@ -182,21 +183,24 @@ export function VideoSessionsPage() {
       <Header title="Sessions" description="View and manage all live sessions and video uploads">
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search by ID or name..."
+            placeholder={isMobile ? 'Search...' : 'Search by ID or name...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Filter Tabs and View Toggle */}
-        <div className="flex items-center justify-between border-b border-border">
+        <div
+          data-horizontal="true"
+          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
+        >
           <div className="flex gap-2">
             <button
               onClick={() => handleFilterChange('all')}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
                 filter === 'all'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -206,7 +210,7 @@ export function VideoSessionsPage() {
             </button>
             <button
               onClick={() => handleFilterChange('live')}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
                 filter === 'live'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -216,7 +220,7 @@ export function VideoSessionsPage() {
             </button>
             <button
               onClick={() => handleFilterChange('upload')}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
                 filter === 'upload'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -332,7 +336,10 @@ export function VideoSessionsPage() {
           ) : viewMode === 'table' ? (
             /* Table View */
             <div className="rounded-md border animate-in fade-in duration-300">
-              <div className="bg-card rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-300">
+              <div
+                data-horizontal="true"
+                className="bg-card rounded-xl border shadow-sm overflow-x-auto animate-in fade-in duration-300 custom-scrollbar"
+              >
                 <table className="w-full text-sm text-left">
                   <thead className="bg-muted/50 border-b">
                     <tr className="hover:bg-transparent">

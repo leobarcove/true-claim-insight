@@ -26,8 +26,9 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "docker:reset": "docker-compose down -v && docker-compose up -d",
-    "setup": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
-    "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:clean && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm --filter @tci/shared-types build",
+    "setup:build": "pnpm --filter @tci/shared-types build && pnpm --filter @tci/ui-components build",
+    "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:clean && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm run setup:build",
+    "setup": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:migrate && pnpm prisma:seed && pnpm prisma:generate && pnpm run setup:build",
     "prepare": "husky install"
   },
   "devDependencies": {
