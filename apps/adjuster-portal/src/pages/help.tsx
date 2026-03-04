@@ -12,7 +12,7 @@ import {
   LifeBuoy,
   ChevronDown,
 } from 'lucide-react';
-import { Header } from '@/components/layout';
+import { Header, useLayout } from '@/components/layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
@@ -76,6 +76,8 @@ export function HelpPage() {
     { name: 'AI Insights', icon: LifeBuoy, count: 6 },
   ];
 
+  const { isMobile } = useLayout();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
@@ -91,10 +93,10 @@ export function HelpPage() {
       >
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search for help articles..."
+            placeholder={isMobile ? 'Search...' : 'Search for help articles...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>

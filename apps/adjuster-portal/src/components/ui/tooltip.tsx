@@ -9,12 +9,14 @@ interface InfoTooltipProps {
   title?: string;
   content: React.ReactNode;
   direction?: TooltipDirection;
+  display?: string;
   className?: string;
   contentClassName?: string;
   trigger?: React.ReactNode;
   variant?: 'light' | 'dark';
   iconSize?: number;
   fontSize?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -25,12 +27,14 @@ export function InfoTooltip({
   title,
   content,
   direction = 'left',
+  display = 'inline-flex',
   className,
   contentClassName,
   trigger,
   variant = 'dark',
   iconSize = 3,
   fontSize = 'text-[10px]',
+  disabled = false,
 }: InfoTooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -98,7 +102,7 @@ export function InfoTooltip({
 
   return (
     <div
-      className={cn('inline-flex items-center', className)}
+      className={cn(display, 'items-center', className)}
       ref={triggerRef}
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
@@ -108,6 +112,7 @@ export function InfoTooltip({
       )}
 
       {isVisible &&
+        !disabled &&
         createPortal(
           <div
             className={cn(

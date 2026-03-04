@@ -115,9 +115,18 @@ div.custom-scrollbar {
   /* scrollbar-gutter: stable both-edges; */
 }
 
+div.custom-scrollbar[data-horizontal='true'] {
+  overflow: hidden;
+  overflow-x: auto;
+}
+
 /* Track */
 div.custom-scrollbar::-webkit-scrollbar {
   width: 10px;
+}
+
+div.custom-scrollbar[data-horizontal='true']::-webkit-scrollbar {
+  height: 10px;
 }
 
 div.custom-scrollbar::-webkit-scrollbar-track {

@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { InfoTooltip } from '@/components/ui/tooltip';
+import { useLayout } from '@/components/layout';
 
 export function VehicleMakePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +51,7 @@ export function VehicleMakePage() {
   const limit = 10;
 
   const { toast } = useToast();
+  const { isMobile } = useLayout();
   const { data: makes, isLoading: isLoadingMakes } = useVehicleMakes();
   const createMakeMutation = useCreateVehicleMake();
   const updateMakeMutation = useUpdateVehicleMake();
@@ -159,10 +161,10 @@ export function VehicleMakePage() {
         </Dialog>
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder="Search makes..."
+            placeholder={isMobile ? 'Search...' : 'Search makes...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-[280px]"
+            className={isMobile ? 'w-[120px]' : 'w-[280px]'}
           />
         </div>
       </Header>

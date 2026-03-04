@@ -186,7 +186,7 @@ export function DashboardPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 blur-3xl" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full translate-y-32 -translate-x-32 blur-3xl" />
 
-          <CardContent className="p-8 relative z-10">
+          <CardContent className="p-6 relative z-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div className="space-y-2">
                 <p className="text-primary-foreground/80 font-medium text-sm">
@@ -213,7 +213,7 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              <div className="flex gap-4 md:gap-8">
+              <div className="flex gap-3 md:gap-8">
                 <div className="space-y-1">
                   <p className="text-xs text-primary-foreground/70 uppercase tracking-wider font-semibold">
                     Average Cases/Day
