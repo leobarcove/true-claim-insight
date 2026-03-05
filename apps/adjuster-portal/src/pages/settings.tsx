@@ -20,7 +20,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { convertToTitleCase, getInitials } from '@/lib/utils';
+import { convertToTitleCase, getInitials, cn } from '@/lib/utils';
 import { useUpdateProfile, useUpdatePassword, useDeleteAccount } from '@/hooks/use-user';
 import { useCurrentUser } from '@/hooks/use-auth';
 import { useForm } from 'react-hook-form';
@@ -251,6 +251,25 @@ export function SettingsPage() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
+                          <Label htmlFor="email">Email Address</Label>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input id="email" className="pl-10" value={user?.email} disabled />
+                          </div>
+                        </div>
+
+                        {user?.role === 'ADJUSTER' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="licenseNumber">License Number</Label>
+                            <Input
+                              id="licenseNumber"
+                              {...registerProfile('licenseNumber')}
+                              placeholder="LIC-12345678"
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
                           <Label htmlFor="fullName">Full Name</Label>
                           <Input
                             id="fullName"
@@ -258,13 +277,7 @@ export function SettingsPage() {
                             placeholder="Your full name"
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email Address</Label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input id="email" className="pl-10" value={user?.email} disabled />
-                          </div>
-                        </div>
+
                         <div className="space-y-2">
                           <Label htmlFor="phoneNumber">Phone Number</Label>
                           <div className="relative">
@@ -276,14 +289,6 @@ export function SettingsPage() {
                               placeholder="+1 (555) 000-0000"
                             />
                           </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="licenseNumber">License Number</Label>
-                          <Input
-                            id="licenseNumber"
-                            {...registerProfile('licenseNumber')}
-                            placeholder="LIC-12345678"
-                          />
                         </div>
                       </div>
 

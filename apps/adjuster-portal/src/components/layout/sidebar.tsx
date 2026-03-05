@@ -118,10 +118,15 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const { isSelectionRequired } = useSuperAdminNoTenant();
-
   const setIsCollapsed = (collapsed: boolean) => {
     onCollapseChange(collapsed);
   };
+
+  React.useEffect(() => {
+    if (isMobile && !isCollapsed) {
+      setIsCollapsed(true);
+    }
+  }, [location.pathname, isMobile]);
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -489,7 +494,7 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
         </div>
 
         {/* Sidebar Toggle Button */}
-        <div className="absolute -right-3.5 top-1/2 -translate-y-1/2 z-50">
+        <div className="absolute -right-2.5 top-1/2 -translate-y-1/2 z-50">
           <Button
             variant="outline"
             size="icon"
