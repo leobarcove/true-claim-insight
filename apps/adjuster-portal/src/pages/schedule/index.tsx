@@ -274,22 +274,24 @@ export function SchedulePage() {
         </Dialog>
       </Header>
 
-      <div className="flex-1 flex overflow-hidden p-6 gap-6">
+      <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden p-6 gap-6">
         {isLoading ? (
           <>
             {/* Calendar Skeleton */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 order-2 xl:order-1">
               <div className="flex items-center justify-between mb-4 rounded-xl">
                 <div className="flex items-center gap-2">
                   <Skeleton className="h-9 w-[200px] rounded-lg" />
                 </div>
                 <Skeleton className="h-9 w-20 rounded-md" />
               </div>
-              <Skeleton className="flex-1 rounded-2xl" />
+              <div className="flex-1 overflow-x-auto custom-scrollbar" data-horizontal="true">
+                <Skeleton className="min-w-[800px] xl:min-w-full h-full rounded-2xl" />
+              </div>
             </div>
 
             {/* Side Panel Skeleton */}
-            <div className="hidden xl:flex w-72 flex-col gap-6 overflow-hidden">
+            <div className="flex xl:w-72 flex-col gap-6 order-1 xl:order-2">
               <div className="space-y-6">
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-72 w-full" />
@@ -299,8 +301,11 @@ export function SchedulePage() {
         ) : (
           <>
             {/* Calendar */}
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex items-center justify-between mb-4 rounded-xl">
+            <div className="flex-1 flex flex-col min-w-0 order-2 xl:order-1">
+              <div
+                data-horizontal="true"
+                className="flex items-center justify-between mb-4 rounded-xl overflow-x-auto custom-scrollbar"
+              >
                 <div className="flex items-center gap-2">
                   <div className="flex items-center bg-card rounded-lg border shadow-sm h-9">
                     <Button
@@ -334,160 +339,151 @@ export function SchedulePage() {
                 </Button>
               </div>
 
-              <Card className="flex-1 flex flex-col border shadow-2xl bg-card/60 backdrop-blur-md overflow-hidden rounded-2xl border-primary/5">
-                {/* Calendar Header - Monday Start */}
-                <div className="grid grid-cols-7 border-b bg-muted/40 divide-x">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                    <div
-                      key={day}
-                      className="py-2 text-center text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]"
-                    >
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calendar Grid - Full Height */}
-                <div className="flex-1 grid grid-cols-7 auto-rows-fr divide-x divide-y border-t-0 min-h-0">
-                  {calendarDays.map((day, idx) => {
-                    const daySessions = getSessionsForDay(day);
-                    const isCurrentMonth = isSameMonth(day, monthStart);
-
-                    return (
+              <div className="flex-1 overflow-x-auto custom-scrollbar" data-horizontal="true">
+                <Card className="min-w-[800px] xl:min-w-full min-h-full flex flex-col border shadow-2xl bg-card/60 backdrop-blur-md overflow-hidden rounded-2xl border-primary/5">
+                  {/* Calendar Header - Monday Start */}
+                  <div className="grid grid-cols-7 border-b bg-muted/40 divide-x">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                       <div
-                        key={day.toString()}
-                        className={cn(
-                          'min-h-[100px] p-2 transition-all relative group overflow-hidden',
-                          !isCurrentMonth ? 'bg-muted/5 opacity-50' : 'bg-card hover:bg-accent/10'
-                        )}
+                        key={day}
+                        className="py-2 text-center text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]"
                       >
-                        <div className="flex justify-between items-center mb-3">
-                          <span
-                            className={cn(
-                              'text-xs font-bold flex items-center justify-center h-6 w-6 rounded-xl transition-all',
-                              isToday(day)
-                                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110'
-                                : isCurrentMonth
-                                  ? 'text-foreground group-hover:scale-110'
-                                  : 'text-muted-foreground'
-                            )}
-                          >
-                            {format(day, 'd')}
-                          </span>
-                          {daySessions.length > 0 && (
-                            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                          )}
-                        </div>
-
-                        <div className="relative">
-                          {/* Mobile dots */}
-                          <div className="md:hidden flex flex-wrap gap-0.5 mt-1">
-                            {daySessions.slice(0, 4).map((claim: any) => (
-                              <div
-                                key={claim.id}
-                                className={cn(
-                                  'h-1.5 w-1.5 rounded-full',
-                                  claim.status === 'SCHEDULED' ? 'bg-primary' : 'bg-emerald-500'
-                                )}
-                              />
-                            ))}
-                          </div>
-
-                          {/* Desktop stacked events */}
-                          <div className="hidden md:block relative group/events">
-                            {daySessions.length > 0 && (
-                              <div className="relative">
-                                {/* Stacked container - expands on hover */}
-                                <div
-                                  className={cn(
-                                    'transition-all duration-300 ease-out relative',
-                                    'group-hover/events:space-y-1.5',
-                                    daySessions.length > 1
-                                      ? 'overflow-hidden group-hover/events:overflow-y-auto'
-                                      : 'overflow-hidden',
-                                    'scrollbar-[width:2px] scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent',
-                                    'p-0.5 pb-1'
-                                  )}
-                                  style={{
-                                    height: 'auto',
-                                    maxHeight: daySessions.length >= 1 ? '50px' : '32px',
-                                  }}
-                                  onMouseEnter={e => {
-                                    e.currentTarget.style.maxHeight =
-                                      daySessions.length > 1 ? '85px' : '50px';
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.maxHeight =
-                                      daySessions.length >= 1 ? '50px' : '32px';
-                                  }}
-                                >
-                                  {daySessions.map((claim: any, index: number) => (
-                                    <div
-                                      key={claim.id}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        handleSessionClick(claim);
-                                      }}
-                                      style={{
-                                        transform: `translateY(${index * 3 + 3 * Number(index > 0)}px) scaleX(${1 - index * 0.06})`,
-                                        transformOrigin: 'top center',
-                                        zIndex: daySessions.length - index,
-                                        position: index === 0 ? 'relative' : 'absolute',
-                                        top: '2px',
-                                        left: '2px',
-                                        right: '2px',
-                                      }}
-                                      className={cn(
-                                        'p-1.5 text-[9px] rounded-lg cursor-pointer transition-all border shadow-sm',
-                                        'hover:shadow-md hover:scale-[1.02] active:scale-95',
-                                        'group-hover/events:!static group-hover/events:!transform-none group-hover/events:!scale-100',
-                                        isToday(day)
-                                          ? 'bg-card text-foreground border-primary/80 shadow-primary/30'
-                                          : 'bg-card text-card-foreground border-border shadow-sm'
-                                      )}
-                                    >
-                                      <div className="font-bold truncate tracking-tight flex justify-between items-center">
-                                        <span>{claim.claimNumber}</span>
-                                        <span className="opacity-70 font-medium">
-                                          {format(parseISO(claim.scheduledAssessmentTime), 'HH:mm')}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  <div className="h-3 invisible" />
-                                  {/* Bottom spacer for scroll visibility */}
-                                </div>
-
-                                {/* Event count indicator when stacked */}
-                                {daySessions.length > 1 && (
-                                  <div className="absolute bottom-0 -right-1 mb-2 h-4 w-4 rounded-full bg-card text-primary border border-primary/30 backdrop-blur-sm text-[8px] font-bold flex items-center justify-center shadow-sm group-hover/events:opacity-0 transition-opacity pointer-events-none z-[10]">
-                                    {daySessions.length}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Add button on hover for each day */}
-                        <button
-                          onClick={() => {
-                            setScheduledDate(format(day, 'yyyy-MM-dd'));
-                            setIsAddEventOpen(true);
-                          }}
-                          className="absolute bottom-0 mb-2 right-2 h-6 w-6 rounded-lg bg-primary text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
+                        {day}
                       </div>
-                    );
-                  })}
-                </div>
-              </Card>
+                    ))}
+                  </div>
+
+                  {/* Calendar Grid - Full Height */}
+                  <div className="flex-1 grid grid-cols-7 auto-rows-fr divide-x divide-y border-t-0 min-h-0">
+                    {calendarDays.map((day, idx) => {
+                      const daySessions = getSessionsForDay(day);
+                      const isCurrentMonth = isSameMonth(day, monthStart);
+
+                      return (
+                        <div
+                          key={day.toString()}
+                          className={cn(
+                            'min-h-[100px] p-2 transition-all relative group overflow-hidden',
+                            !isCurrentMonth ? 'bg-muted/5 opacity-50' : 'bg-card hover:bg-accent/10'
+                          )}
+                        >
+                          <div className="flex justify-between items-center mb-3">
+                            <span
+                              className={cn(
+                                'text-xs font-bold flex items-center justify-center h-6 w-6 rounded-xl transition-all',
+                                isToday(day)
+                                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110'
+                                  : isCurrentMonth
+                                    ? 'text-foreground group-hover:scale-110'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {format(day, 'd')}
+                            </span>
+                            {daySessions.length > 0 && (
+                              <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                            )}
+                          </div>
+
+                          <div className="relative">
+                            <div className="relative group/events">
+                              {daySessions.length > 0 && (
+                                <div className="relative">
+                                  {/* Stacked container - expands on hover */}
+                                  <div
+                                    className={cn(
+                                      'transition-all duration-300 ease-out relative',
+                                      'group-hover/events:space-y-1.5',
+                                      daySessions.length > 1
+                                        ? 'overflow-hidden group-hover/events:overflow-y-auto'
+                                        : 'overflow-hidden',
+                                      'scrollbar-[width:2px] scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent',
+                                      'p-0.5 pb-1'
+                                    )}
+                                    style={{
+                                      height: 'auto',
+                                      maxHeight: daySessions.length >= 1 ? '50px' : '32px',
+                                    }}
+                                    onMouseEnter={e => {
+                                      e.currentTarget.style.maxHeight =
+                                        daySessions.length > 1 ? '85px' : '50px';
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.maxHeight =
+                                        daySessions.length >= 1 ? '50px' : '32px';
+                                    }}
+                                  >
+                                    {daySessions.map((claim: any, index: number) => (
+                                      <div
+                                        key={claim.id}
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          handleSessionClick(claim);
+                                        }}
+                                        style={{
+                                          transform: `translateY(${index * 3 + 3 * Number(index > 0)}px) scaleX(${1 - index * 0.06})`,
+                                          transformOrigin: 'top center',
+                                          zIndex: daySessions.length - index,
+                                          position: index === 0 ? 'relative' : 'absolute',
+                                          top: '2px',
+                                          left: '2px',
+                                          right: '2px',
+                                        }}
+                                        className={cn(
+                                          'p-1.5 text-[9px] rounded-lg cursor-pointer transition-all border shadow-sm',
+                                          'hover:shadow-md hover:scale-[1.02] active:scale-95',
+                                          'group-hover/events:!static group-hover/events:!transform-none group-hover/events:!scale-100',
+                                          isToday(day)
+                                            ? 'bg-card text-foreground border-primary/80 shadow-primary/30'
+                                            : 'bg-card text-card-foreground border-border shadow-sm'
+                                        )}
+                                      >
+                                        <div className="font-bold truncate tracking-tight flex justify-between items-center">
+                                          <span>{claim.claimNumber}</span>
+                                          <span className="opacity-70 font-medium">
+                                            {format(
+                                              parseISO(claim.scheduledAssessmentTime),
+                                              'HH:mm'
+                                            )}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    <div className="h-3 invisible" />
+                                    {/* Bottom spacer for scroll visibility */}
+                                  </div>
+
+                                  {/* Event count indicator when stacked */}
+                                  {daySessions.length > 1 && (
+                                    <div className="absolute bottom-0 -right-1 mb-2 h-4 w-4 rounded-full bg-card text-primary border border-primary/30 backdrop-blur-sm text-[8px] font-bold flex items-center justify-center shadow-sm group-hover/events:opacity-0 transition-opacity pointer-events-none z-[10]">
+                                      {daySessions.length}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Add button on hover for each day */}
+                          <button
+                            onClick={() => {
+                              setScheduledDate(format(day, 'yyyy-MM-dd'));
+                              setIsAddEventOpen(true);
+                            }}
+                            className="absolute bottom-0 mb-2 right-2 h-6 w-6 rounded-lg bg-primary text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </div>
             </div>
 
             {/* Side Panel */}
-            <div className="hidden xl:flex w-72 flex-col gap-6 overflow-hidden">
+            <div className="flex xl:w-72 flex-col gap-6 order-1 xl:order-2">
               {/* Upcoming Sessions */}
               <Card className="shadow-sm border-border/60 hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

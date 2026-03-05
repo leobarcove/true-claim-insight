@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, isValidElement, useEffect } from 'react';
 import {
   Book,
   MessageSquare,
@@ -11,12 +11,14 @@ import {
   Mail,
   LifeBuoy,
   ChevronDown,
+  Search,
 } from 'lucide-react';
 import { Header, useLayout } from '@/components/layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { cn } from '@/lib/utils';
+import { InfoTooltip } from '@/components/ui/tooltip';
 
 export function HelpPage() {
   const faqs = [
@@ -79,11 +81,31 @@ export function HelpPage() {
   const { isMobile } = useLayout();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
 
-  const toggleFAQ = (index: number) => {
-    setExpandedIndex(expandedIndex === index ? null : index);
+  const toggleFAQ = (question: string) => {
+    setExpandedQuestion(expandedQuestion === question ? null : question);
   };
+
+  const extractText = (node: React.ReactNode): string => {
+    if (!node) return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    if (isValidElement(node)) return extractText(node.props.children);
+    return '';
+  };
+
+  const filteredFaqs = faqs.filter(faq => {
+    const query = searchQuery.toLowerCase();
+    const answerContent = extractText(faq.answer).toLowerCase();
+    return faq.question.toLowerCase().includes(query) || answerContent.includes(query);
+  });
+
+  useEffect(() => {
+    if (searchQuery.trim() !== '' && filteredFaqs.length > 0) {
+      setExpandedQuestion(filteredFaqs[0].question);
+    }
+  }, [searchQuery, filteredFaqs.length]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/50">
@@ -133,13 +155,16 @@ export function HelpPage() {
                   Frequently Asked Questions
                 </h2>
                 <div className="space-y-4">
-                  {faqs.map((faq, index) => {
-                    const isExpanded = expandedIndex === index;
+                  {filteredFaqs.map(faq => {
+                    const isExpanded = expandedQuestion === faq.question;
                     return (
-                      <Card key={index} className="border-border/60 shadow-sm overflow-hidden">
+                      <Card
+                        key={faq.question}
+                        className="border-border/60 shadow-sm overflow-hidden"
+                      >
                         <CardHeader
                           className="py-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
-                          onClick={() => toggleFAQ(index)}
+                          onClick={() => toggleFAQ(faq.question)}
                         >
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-base font-semibold">
@@ -170,6 +195,17 @@ export function HelpPage() {
                       </Card>
                     );
                   })}
+                  {filteredFaqs.length === 0 && (
+                    <div className="bg-card rounded-xl border shadow-sm p-12 text-center">
+                      <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        No help articles found
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Try searching with different keywords.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -191,7 +227,17 @@ export function HelpPage() {
                       Average wait time: <b>&lt; 2 minutes</b>
                     </span>
                   </div>
-                  <Button className="w-full shadow-lg shadow-primary/20">Start Chat</Button>
+                  <InfoTooltip
+                    content="Coming Soon"
+                    direction="top"
+                    fontSize="text-[11px]"
+                    className="w-full"
+                    trigger={
+                      <Button className="w-full shadow-lg shadow-primary/20" disabled>
+                        Start Chat
+                      </Button>
+                    }
+                  />
                 </CardContent>
               </Card>
 

@@ -514,8 +514,8 @@ export function ClaimDetailPage() {
             <Skeleton className="h-9 w-24" />
           </div>
         </div>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="flex flex-col-reverse lg:grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6 lg:order-1">
             <Skeleton className="h-64 w-full" />
             <Skeleton className="h-48 w-full" />
             <Skeleton className="h-48 w-full" />
@@ -605,7 +605,7 @@ export function ClaimDetailPage() {
       </Header>
 
       <div className="flex-1 overflow-auto p-6">
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="flex flex-col-reverse lg:grid gap-6 lg:grid-cols-3">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Incident Details */}

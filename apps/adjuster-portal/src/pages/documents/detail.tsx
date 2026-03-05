@@ -25,7 +25,8 @@ import { useClaim } from '@/hooks/use-claims';
 import { useTrinityCheck, useDocumentAnalysis } from '@/hooks/use-trinity';
 import { useQueryClient } from '@tanstack/react-query';
 import { trinityKeys } from '@/hooks/use-trinity';
-import { convertToTitleCase } from '@/lib/utils';
+import { convertToTitleCase, cn } from '@/lib/utils';
+import { useLayout } from '@/components/layout';
 
 export function DocumentDetailPage() {
   const { id } = useParams();
@@ -33,6 +34,7 @@ export function DocumentDetailPage() {
 
   const { data: claim, isLoading: loadingClaim } = useClaim(id!);
   const { data: trinityCheck, isLoading: loadingTrinity } = useTrinityCheck(id!);
+  const { isMobile } = useLayout();
   const queryClient = useQueryClient();
 
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
@@ -126,7 +128,7 @@ export function DocumentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full space-y-6 p-6">
+      <div className="flex flex-col h-full space-y-6 p-4 md:p-6">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <Skeleton className="h-8 w-64" />
@@ -137,12 +139,34 @@ export function DocumentDetailPage() {
           </div>
         </div>
         <div className="h-full flex flex-col gap-4">
-          <div className="h-[600px] flex-[2] grid grid-cols-12 gap-4">
-            <Skeleton className="col-span-3 h-full rounded-xl" />
-            <Skeleton className="col-span-6 h-full rounded-xl" />
-            <Skeleton className="col-span-3 h-full rounded-xl" />
+          <div
+            className={cn(
+              isMobile ? 'flex flex-col gap-4' : 'h-[600px] flex-[2] grid grid-cols-12 gap-4'
+            )}
+          >
+            {/* List Skeleton */}
+            <Skeleton
+              className={cn(
+                'rounded-xl transition-all duration-300',
+                isMobile ? 'order-2 h-[350px] w-full' : 'col-span-3 h-full'
+              )}
+            />
+            {/* Preview Skeleton */}
+            <Skeleton
+              className={cn(
+                'rounded-xl transition-all duration-300',
+                isMobile ? 'order-1 h-[350px] w-full' : 'col-span-6 h-full'
+              )}
+            />
+            {/* Data Skeleton */}
+            <Skeleton
+              className={cn(
+                'rounded-xl transition-all duration-300',
+                isMobile ? 'order-3 h-[350px] w-full' : 'col-span-3 h-full'
+              )}
+            />
           </div>
-          <Skeleton className="flex-1 w-full rounded-xl" />
+          <Skeleton className="flex-1 w-full rounded-xl min-h-[200px]" />
         </div>
       </div>
     );
@@ -164,11 +188,18 @@ export function DocumentDetailPage() {
         </Button>
       </Header>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex flex-col gap-6">
-          <div className="h-[550px] grid grid-cols-12 gap-4">
+          <div
+            className={cn(isMobile ? 'flex flex-col gap-4' : 'h-[550px] grid grid-cols-12 gap-4')}
+          >
             {/* Left Pane: Document List */}
-            <div className="col-span-3 bg-card rounded-xl border shadow-sm flex flex-col overflow-hidden">
+            <div
+              className={cn(
+                'bg-card rounded-xl border shadow-sm flex flex-col overflow-hidden transition-all duration-300',
+                isMobile ? 'order-2 h-[350px] w-full' : 'col-span-3'
+              )}
+            >
               <div className="py-2 px-4 border-b bg-muted/50 flex items-center justify-between">
                 <h3 className="font-semibold text-sm">Documents</h3>
                 <div className="flex items-center bg-muted/50 rounded-lg p-1">
@@ -328,7 +359,12 @@ export function DocumentDetailPage() {
             </div>
 
             {/* Middle Pane: Preview */}
-            <div className="col-span-6 bg-muted/30 rounded-xl overflow-hidden shadow-sm flex flex-col relative items-center justify-center border border-border">
+            <div
+              className={cn(
+                'bg-muted/30 rounded-xl overflow-hidden shadow-sm flex flex-col relative items-center justify-center border border-border transition-all duration-300',
+                isMobile ? 'order-1 h-[350px] w-full' : 'col-span-6'
+              )}
+            >
               <div className="absolute top-4 right-4 z-10 flex gap-2">
                 <InfoTooltip
                   content="View"
@@ -428,14 +464,19 @@ export function DocumentDetailPage() {
                     <div className="w-12 h-12">
                       <FileText className="h-12 w-12 text-muted-foreground/30" />
                     </div>
-                    <p className="text-sm">Select a file to preview</p>
+                    <p className="text-sm">Select a document to preview</p>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Right Pane: Extracted Data */}
-            <div className="col-span-3 bg-card rounded-xl border shadow-sm flex flex-col overflow-hidden">
+            <div
+              className={cn(
+                'bg-card rounded-xl border shadow-sm flex flex-col overflow-hidden transition-all duration-300',
+                isMobile ? 'order-3 h-[350px] w-full' : 'col-span-3'
+              )}
+            >
               <div className="p-4 border-b bg-muted/50 flex items-center justify-between">
                 <h3 className="font-semibold text-sm">Extracted Data</h3>
                 <Database className="h-4 w-4 text-primary" />
