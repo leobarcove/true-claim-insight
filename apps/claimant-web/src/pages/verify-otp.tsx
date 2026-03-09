@@ -178,7 +178,7 @@ export function VerifyOtpPage() {
                     value={digit}
                     onChange={e => handleChange(index, e.target.value)}
                     onKeyDown={e => handleKeyDown(index, e)}
-                    className="w-14 h-14 text-center text-2xl font-bold bg-muted/20 border-2 focus:border-primary transition-all p-0"
+                    className="w-8 h-10 sm:w-14 sm:h-14 text-lg sm:text-2xl text-center font-bold bg-muted/20 border-2 focus:border-primary transition-all p-0"
                     disabled={verifyOtp.isPending}
                   />
                 ))}

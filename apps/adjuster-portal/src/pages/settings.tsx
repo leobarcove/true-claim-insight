@@ -214,7 +214,7 @@ export function SettingsPage() {
                           {convertToTitleCase(user?.role || '')}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Full access to assigned claims and assessment tools.
+                          Full access to assessment tools.
                         </p>
                       </div>
                       <Badge variant="success" className="ml-auto">

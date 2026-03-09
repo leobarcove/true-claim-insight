@@ -115,7 +115,7 @@ export function HelpPage() {
       >
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={isMobile ? 'Search...' : 'Search for help articles...'}
+            placeholder={isMobile ? 'Search' : 'Search for help articles...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className={isMobile ? 'w-[120px]' : 'w-[280px]'}
@@ -125,7 +125,7 @@ export function HelpPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="flex flex-col-reverse lg:grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
               {/* Knowledge Base Categories */}
               {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -165,7 +165,7 @@ export function SessionDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Video Player */}
             <Card className="overflow-hidden">
-              <div className="bg-slate-900 aspect-video flex items-center justify-center">
+              <div className="w-full h-full min-h-[45vh] bg-slate-900 aspect-video flex items-center justify-center">
                 {session.recordingUrl ? (
                   <video controls className="w-full h-full" src={session.recordingUrl}>
                     Your browser does not support the video tag.
@@ -185,7 +185,9 @@ export function SessionDetailPage() {
 
             {/* Metrics Graph */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Deception Metrics Over Time</h3>
+              <h3 className="text-base sm:text-lg font-semibold mb-4">
+                Deception Metrics Over Time
+              </h3>
               {metricsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={metricsData}>
@@ -251,7 +253,7 @@ export function SessionDetailPage() {
           <div className="space-y-6">
             {/* Session Details */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Session Details</h3>
+              <h3 className="text-base sm:text-lg font-semibold mb-4">Session Details</h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -311,7 +313,7 @@ export function SessionDetailPage() {
             {/* Latest Deception Score */}
             {latestScore && (
               <Card className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Latest Analysis</h3>
+                <h3 className="text-base sm:text-lg font-semibold mb-4">Latest Analysis</h3>
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between items-center mb-2">

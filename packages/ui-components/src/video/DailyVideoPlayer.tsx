@@ -300,21 +300,23 @@ export const DailyVideoPlayer = forwardRef<DailyVideoPlayerRef, DailyVideoPlayer
     return (
       <div className="relative w-full h-full bg-background rounded-xl overflow-hidden border border-border">
         {status === 'loading' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-background/80 z-10 transition-colors">
-            <Loader2 className="h-8 w-8 animate-spin mb-3 text-primary" />
-            <p className="text-sm font-semibold tracking-tight">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-muted-foreground bg-background/80 z-10 transition-colors px-4">
+            <Loader2 className="h-8 w-8 animate-spin mb-3 text-primary shrink-0" />
+            <p className="text-sm text-center font-semibold tracking-tight">
               Connecting to secure video session...
             </p>
           </div>
         )}
 
         {status === 'error' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-destructive bg-background z-10 p-8 text-center transition-colors">
-            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
-              <VideoOff className="h-8 w-8" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-destructive bg-background z-10 p-6 text-center transition-colors">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-3 sm:mb-4 shrink-0">
+              <VideoOff className="h-6 w-6 sm:h-8 sm:w-8" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Video Connection Failed</h3>
-            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+            <h3 className="text-base sm:text-xl text-center font-bold mb-2">
+              Video Connection Failed
+            </h3>
+            <p className="text-xs sm:text-sm text-center text-muted-foreground max-w-xs leading-relaxed">
               We couldn't establish a connection to the video room. Please check your internet and
               try again.
             </p>

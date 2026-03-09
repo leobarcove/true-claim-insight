@@ -33,6 +33,7 @@ import { PERMISSIONS, useHasAnyPermission } from '@/lib/permissions';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { convertToTitleCase, cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
+import { useLayout } from '@/components/layout';
 
 const getStatusBadge = (status: string) => {
   const variants: Record<
@@ -62,6 +63,8 @@ export function DashboardPage() {
   const [recentClaimsPage, setRecentClaimsPage] = useState(1);
   const [sessionsView, setSessionsView] = useState<'table' | 'card'>('card');
   const [sessionsPage, setSessionsPage] = useState(1);
+
+  const { currentWidth } = useLayout();
 
   const canViewClaims = useHasAnyPermission([
     PERMISSIONS.CLAIMS_VIEW_OWN,
@@ -175,7 +178,11 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col h-full">
       <Header
-        title={`${getGreeting()}, ${user?.fullName.split(' ')[0] || 'Adjuster'}`}
+        title={
+          currentWidth > 430
+            ? `${getGreeting()}, ${user?.fullName.split(' ')[0] || 'Adjuster'}`
+            : 'Dashboard'
+        }
         description="Here's what's happening with your claims today"
       />
 
@@ -194,7 +201,7 @@ export function DashboardPage() {
                 </p>
                 <div className="flex items-baseline gap-4">
                   {statsLoading ? (
-                    <Skeleton className="h-12 w-32 bg-primary-foreground/20" />
+                    <Skeleton className="h-12 w-16 sm:w-32 bg-primary-foreground/20" />
                   ) : (
                     <h2 className="text-5xl font-bold tracking-tight">
                       {statsData?.completedThisMonth || 0}
@@ -283,8 +290,8 @@ export function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Recent Claims */}
           <Card className="flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Recent Claims</CardTitle>
+            <CardHeader className="flex flex-col sm:flex-row items-center justify-between">
+              <CardTitle className="text-lg">Recent Claims</CardTitle>
               <div className="flex items-center gap-2">
                 {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
                   <Button
@@ -405,13 +412,13 @@ export function DashboardPage() {
                     [...Array(3)].map((_, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between p-3 rounded-lg border"
+                        className="flex flex-col sm:flex-row gap-4 items-center justify-between p-3 rounded-lg border"
                       >
                         <div className="space-y-2">
-                          <Skeleton className="h-4 w-24" />
-                          <Skeleton className="h-3 w-40" />
+                          <Skeleton className="h-4 w-12 sm:w-24" />
+                          <Skeleton className="h-3 w-20 sm:w-40" />
                         </div>
-                        <Skeleton className="h-6 w-20 rounded-full" />
+                        <Skeleton className="h-6 w-12 sm:w-20 rounded-full" />
                       </div>
                     ))
                   ) : recentClaims.length === 0 ? (
@@ -427,7 +434,7 @@ export function DashboardPage() {
                           canViewClaims && (window.location.href = `/claims/${claim.id}`)
                         }
                         className={cn(
-                          'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                          'flex flex-col sm:flex-row gap-4 items-center justify-between p-3 rounded-lg border transition-colors',
                           canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
                         )}
                       >
@@ -451,8 +458,8 @@ export function DashboardPage() {
 
           {/* Upcoming Sessions */}
           <Card className="flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Upcoming Sessions</CardTitle>
+            <CardHeader className="flex flex-col sm:flex-row items-center justify-between">
+              <CardTitle className="text-lg">Upcoming Sessions</CardTitle>
               <div className="flex items-center gap-2">
                 {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
                   <Button
@@ -519,7 +526,7 @@ export function DashboardPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-center sm:text-right">
                               <Skeleton className="h-3 w-24 ml-auto mb-1" />
                               <Skeleton className="h-3 w-16 ml-auto" />
                             </TableCell>
@@ -561,7 +568,7 @@ export function DashboardPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-center sm:text-right">
                               <p className="text-sm font-medium">
                                 {claim.scheduledAssessmentTime
                                   ? format(parseISO(claim.scheduledAssessmentTime), 'yyyy-MM-dd')
@@ -618,18 +625,18 @@ export function DashboardPage() {
                     [...Array(3)].map((_, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between p-3 rounded-lg border"
+                        className="flex flex-col sm:flex-row gap-4 items-center justify-between p-3 rounded-lg border"
                       >
                         <div className="flex items-center gap-3">
                           <Skeleton className="h-10 w-10 rounded-full" />
                           <div className="space-y-2">
-                            <Skeleton className="h-3 w-24" />
-                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-12 sm:w-24" />
+                            <Skeleton className="h-3 w-8 sm:w-16" />
                           </div>
                         </div>
                         <div className="flex flex-col items-end">
                           <Skeleton className="h-3 w-16 mb-1" />
-                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-3 w-16" />
                         </div>
                       </div>
                     ))
@@ -646,7 +653,7 @@ export function DashboardPage() {
                           canViewClaims && (window.location.href = `/claims/${claim.id}`)
                         }
                         className={cn(
-                          'flex items-center justify-between p-3 rounded-lg border transition-colors',
+                          'flex flex-col sm:flex-row gap-4 items-center justify-between p-3 rounded-lg border transition-colors',
                           canViewClaims ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-default'
                         )}
                       >

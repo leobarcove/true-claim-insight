@@ -79,7 +79,7 @@ export function TenantsPage() {
   const limit = 10;
 
   const { toast } = useToast();
-  const { isMobile } = useLayout();
+  const { isMobile, currentWidth } = useLayout();
 
   const tenantsTableRef = useRef<any>(null);
   const usersTableRef = useRef<any>(null);
@@ -151,12 +151,12 @@ export function TenantsPage() {
             if (activeTab === 'associations') associationsTableRef.current?.handleCreate();
           }}
         >
-          <Plus className="h-4 w-4 mr-2" />
-          New
+          <Plus className="h-4 w-4 mr-0 sm:mr-2" />
+          {currentWidth > 430 ? 'New' : ''}
         </Button>
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={isMobile ? 'Search...' : `Search ${activeTab}...`}
+            placeholder={isMobile ? 'Search' : `Search ${activeTab}...`}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className={isMobile ? 'w-[120px]' : 'w-[280px]'}

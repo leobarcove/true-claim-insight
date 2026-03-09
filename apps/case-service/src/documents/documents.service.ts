@@ -107,7 +107,7 @@ export class DocumentsService {
         tenantId: tenantContext.tenantId,
         userId: uploaderUserId,
         actorId: tenantContext.userId,
-        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
+        actorType: (tenantContext.userRole as any) || 'SYSTEM',
         metadata: {
           documentId: id,
           oldFilename: existingDoc.filename,
@@ -214,7 +214,7 @@ export class DocumentsService {
         tenantId: tenantContext.tenantId,
         userId: uploaderUserId,
         actorId: tenantContext.userId,
-        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
+        actorType: (tenantContext.userRole as any) || 'SYSTEM',
         metadata: {
           documentId: document.id,
           filename: document.filename,
@@ -311,7 +311,7 @@ export class DocumentsService {
         tenantId: tenantContext.tenantId,
         userId: actorUserId,
         actorId: tenantContext.userId,
-        actorType: (tenantContext.userRole as any) || 'ADJUSTER',
+        actorType: (tenantContext.userRole as any) || 'SYSTEM',
         metadata: {
           documentId: document.id,
           filename: document.filename,

@@ -7,11 +7,13 @@ import { Header } from '@/components/layout/header';
 import { useToast } from '@/hooks/use-toast';
 import { useClaim } from '@/hooks/use-claims';
 import { useUploadVideo } from '@/hooks/use-video-upload';
+import { useLayout } from '@/components/layout';
 
 export function UploadVideoPage() {
   const { id: claimId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { currentWidth } = useLayout();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: claim, isLoading: isClaimLoading } = useClaim(claimId || '');
@@ -111,7 +113,7 @@ export function UploadVideoPage() {
             <CardContent className="space-y-6">
               <div className="text-sm text-muted-foreground space-y-2">
                 <p>Upload a pre-recorded assessment video to analyze for deception indicators.</p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
+                <ul className="list-disc list-inside space-y-1 ml-2 text-xs sm:text-sm">
                   <li>Maximum file size: 500MB</li>
                   <li>Supported formats: MP4, WebM, MOV, AVI</li>
                   <li>You will be required to watch the entire video during processing</li>
@@ -182,14 +184,18 @@ export function UploadVideoPage() {
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button
                   className="flex-1"
                   onClick={handleUpload}
                   disabled={!selectedFile || uploadVideo.isPending}
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  {uploadVideo.isPending ? 'Uploading...' : 'Upload & Start Review'}
+                  {uploadVideo.isPending
+                    ? 'Uploading...'
+                    : currentWidth > 430
+                      ? 'Upload & Review'
+                      : 'Upload'}
                 </Button>
                 <Button
                   variant="outline"

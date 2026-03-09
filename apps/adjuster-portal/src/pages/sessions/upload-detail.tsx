@@ -200,7 +200,7 @@ export function UploadDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Video Player */}
             <Card className="overflow-hidden">
-              <div className="bg-slate-900 aspect-video flex items-center justify-center">
+              <div className="w-full h-full min-h-[45vh] bg-slate-900 aspect-video flex items-center justify-center">
                 {upload.videoUrl ? (
                   <video controls className="w-full h-full" src={upload.videoUrl}>
                     Your browser does not support the video tag.
@@ -216,7 +216,9 @@ export function UploadDetailPage() {
 
             {/* Metrics Graph */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Deception Metrics Over Time</h3>
+              <h3 className="text-base sm:text-lg font-semibold mb-4">
+                Deception Metrics Over Time
+              </h3>
               {metricsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={metricsData}>
@@ -294,7 +296,7 @@ export function UploadDetailPage() {
           <div className="space-y-6">
             {/* Upload Details */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Upload Details</h3>
+              <h3 className="text-base sm:text-lg font-semibold mb-4">Upload Details</h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -362,7 +364,7 @@ export function UploadDetailPage() {
             {/* Average Analysis Scores */}
             {avgScores && (
               <Card className="p-6">
-                <h3 className="text-lg font-semibold mb-4">Average Analysis</h3>
+                <h3 className="text-base sm:text-lg font-semibold mb-4">Average Analysis</h3>
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -432,7 +434,7 @@ export function UploadDetailPage() {
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-4">
+                <p className="text-xs text-muted-foreground text-center mt-4">
                   Based on {segments?.length || 0} analyzed segments
                 </p>
               </Card>

@@ -75,7 +75,7 @@ export function ClaimsListPage() {
   const [page, setPage] = useState(1);
   const limit = 10;
 
-  const { isMobile } = useLayout();
+  const { isMobile, currentWidth } = useLayout();
   const { user } = useAuthStore();
   const canCreateClaim = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
 
@@ -128,14 +128,14 @@ export function ClaimsListPage() {
         {canCreateClaim && (
           <Link to="/claims/new">
             <Button className="shadow-primary/20 shadow-lg -mr-3 scale-75">
-              <Plus className="h-4 w-4 mr-2" />
-              New
+              <Plus className="h-4 w-4 mr-0 sm:mr-2" />
+              {currentWidth > 430 ? 'New' : ''}
             </Button>
           </Link>
         )}
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={isMobile ? 'Search...' : 'Search by ID or name...'}
+            placeholder={isMobile ? 'Search' : 'Search by ID or name...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className={isMobile ? 'w-[120px]' : 'w-[280px]'}
