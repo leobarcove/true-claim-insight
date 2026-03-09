@@ -42,7 +42,7 @@ export function DocumentsListPage() {
       <Header title="Documents" description="Review Trinity Cross-Checks and Document Validity.">
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={isMobile ? 'Search...' : 'Search Claims or NRIC...'}
+            placeholder={isMobile ? 'Search' : 'Search Claims or NRIC...'}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className={isMobile ? 'w-[120px]' : 'w-[280px]'}

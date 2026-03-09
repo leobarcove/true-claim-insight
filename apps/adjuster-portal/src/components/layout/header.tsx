@@ -1,19 +1,28 @@
 import { Bell, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { useLayout } from './app-layout';
 
 interface HeaderProps {
   title: string | React.ReactNode;
   description?: string | React.ReactNode;
   children?: React.ReactNode;
+  className?: string;
 }
 
-export function Header({ title, description, children }: HeaderProps) {
+export function Header({ title, description, children, className }: HeaderProps) {
+  const { currentWidth } = useLayout();
+
   return (
-    <header className="flex h-20 items-center justify-between border-b bg-card px-6">
+    <header
+      className={cn('flex h-20 items-center justify-between border-b bg-card px-6', className)}
+    >
       <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        <h1 className="text-lg sm:text-xl font-semibold">{title}</h1>
+        {currentWidth > 430 && description && (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-4">

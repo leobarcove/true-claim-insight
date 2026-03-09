@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { Header } from '@/components/layout';
+import { Header, useLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,8 @@ export function SchedulePage() {
   const [scheduledDate, setScheduledDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [scheduledTime, setScheduledTime] = useState<string>('09:00');
   const [isEditing, setIsEditing] = useState(false);
+
+  const { currentWidth } = useLayout();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -199,8 +201,8 @@ export function SchedulePage() {
         >
           <DialogTrigger asChild>
             <Button onClick={handleAddNew} className="shadow-primary/20 shadow-lg -mr-3 scale-75">
-              <Plus className="h-4 w-4 mr-2" />
-              New
+              <Plus className="h-4 w-4 mr-0 sm:mr-2" />
+              {currentWidth > 430 ? 'New' : ''}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
@@ -522,7 +524,7 @@ export function SchedulePage() {
                         <div
                           key={claim.id}
                           onClick={() => navigate(`/claims/${claim.id}`)}
-                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                          className="flex flex-col sm:flex-row gap-4 items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
                         >
                           <div className="space-y-1 flex-1">
                             <p className="text-sm font-medium">{claim.claimNumber}</p>

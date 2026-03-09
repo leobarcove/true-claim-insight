@@ -183,7 +183,7 @@ export function VideoSessionsPage() {
       <Header title="Sessions" description="View and manage all live sessions and video uploads">
         <div className="flex items-center gap-2">
           <SearchInput
-            placeholder={isMobile ? 'Search...' : 'Search by ID or name...'}
+            placeholder={isMobile ? 'Search' : 'Search by ID or name...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className={isMobile ? 'w-[120px]' : 'w-[280px]'}

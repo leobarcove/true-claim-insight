@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   ArrowLeft,
   Maximize2,
-  XCircle,
   AlertCircle,
   RefreshCw,
   Camera,
@@ -43,6 +42,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Switch } from '@/components/ui/switch';
 import { InfoTooltip } from '@/components/ui/tooltip';
+import { useLayout } from '@/components/layout';
 
 const DEFAULT_EMOTIONS = [
   'Admiration',
@@ -275,6 +275,7 @@ export function VideoCallPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const { currentWidth } = useLayout();
   const queryClient = useQueryClient();
   const playerRef = useRef<DailyVideoPlayerRef>(null);
 
@@ -671,7 +672,7 @@ export function VideoCallPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-background text-foreground">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
-        <p className="text-lg font-medium">Preparing your secure video room...</p>
+        <p className="text-lg font-medium text-center">Preparing your video room...</p>
         <p className="text-xs text-muted-foreground mt-2">
           {joinRoom.isPending ? 'Requesting room access...' : 'Initializing...'}
         </p>
@@ -685,18 +686,18 @@ export function VideoCallPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full bg-background overflow-auto lg:overflow-hidden">
       {/* Video Header */}
       <Header
         title="Live Session"
         description={`Secure • Encrypted • ${claim?.claimNumber || claim?.id || 'Loading...'}`}
       >
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          {/* <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          {/* <Button
+          <Button
             variant="outline"
             size="sm"
             onClick={() => playerRef.current?.requestFullscreen()}
@@ -705,16 +706,16 @@ export function VideoCallPage() {
             Fullscreen
           </Button> */}
           <Button variant="destructive" size="sm" onClick={handleEndCall}>
-            <XCircle className="h-4 w-4 mr-2" />
-            End Assessment
+            <X className="h-4 w-4 sm:mr-2" />
+            {currentWidth > 430 && 'End Assessment'}
           </Button>
         </div>
       </Header>
 
       {/* Main Video Area */}
-      <div className="flex-1 p-4 flex gap-4 overflow-hidden">
+      <div className="flex-1 p-4 flex flex-col lg:flex-row gap-4 overflow-auto lg:overflow-hidden">
         {/* Left Column: Remote/Main Video */}
-        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl">
+        <div className="flex-1 relative rounded-xl overflow-hidden shadow-2xl min-h-[70vh] lg:min-h-0">
           <DailyVideoPlayer
             key={`daily-${joinData.url}`}
             ref={playerRef}
@@ -732,11 +733,11 @@ export function VideoCallPage() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="flex flex-col gap-4 w-128">
+        <div className="flex flex-col gap-4 w-full lg:w-128 shrink-0 lg:overflow-hidden">
           {/* Session Info */}
           <Card className="bg-card border-border p-2 shrink-0">
             <h3 className="text-xs font-semibold mb-2 uppercase tracking-wider">Session Info</h3>
-            <div className="flex items-center gap-8">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold">Claim ID</p>
                 <p className="text-xs text-muted-foreground">
@@ -759,10 +760,10 @@ export function VideoCallPage() {
           </Card>
 
           {/* Analysis Columns */}
-          <div className="flex flex-1 gap-4 min-h-0">
+          <div className="flex flex-col lg:flex-row flex-1 gap-4 min-h-0">
             {/* Deception Score */}
-            <div className="w-60 flex flex-col overflow-hidden">
-              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden min-h-[400px] lg:min-h-0">
                 <div className="flex items-center justify-between mb-4 shrink-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
@@ -791,7 +792,7 @@ export function VideoCallPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
                   <div className="flex items-end gap-2 mb-4">
                     <span className="text-md font-bold text-foreground">
                       {((deceptionData?.deceptionScore || 0) * 100).toFixed(2)}
@@ -800,7 +801,7 @@ export function VideoCallPage() {
                   </div>
 
                   {/* Metrics Graph */}
-                  <div className="pt-4 border-t border-border h-44 mb-8">
+                  <div className="pt-4 border-t border-border h-44 mb-4">
                     <p className="text-[10px] text-muted-foreground font-bold mb-2 uppercase">
                       Metrics
                     </p>
@@ -961,7 +962,7 @@ export function VideoCallPage() {
                       />
 
                       {/* Controls overlay */}
-                      <div className="absolute inset-0 flex items-center justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                      <div className="absolute inset-0 flex items-center justify-between p-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1014,8 +1015,8 @@ export function VideoCallPage() {
             </div>
 
             {/* Risk Analysis */}
-            <div className="w-60 flex flex-col overflow-hidden">
-              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Card className="bg-card border-border p-2 flex-1 flex flex-col overflow-hidden min-h-[300px] lg:min-h-0">
                 <div className="flex items-center justify-between mb-4 shrink-0">
                   <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Risk Analysis
@@ -1028,7 +1029,7 @@ export function VideoCallPage() {
                   </Badge>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar min-h-0">
                   {(() => {
                     const latestVoice = isClaimantInRoom
                       ? assessments?.find(a => a.assessmentType === 'VOICE_ANALYSIS')
@@ -1217,8 +1218,8 @@ export function VideoCallPage() {
       </div>
 
       {/* Control Bar */}
-      <div className="bg-card/80 backdrop-blur-md border-t border-border px-6 py-3 flex justify-center gap-4">
-        <p className="text-xs text-muted-foreground py-2">
+      <div className="bg-card/80 backdrop-blur-md border-t border-border px-4 py-2 lg:px-6 lg:py-3 flex justify-center gap-4">
+        <p className="text-xs text-muted-foreground text-center py-2">
           Assessment session is being recorded for quality and compliance.
         </p>
       </div>

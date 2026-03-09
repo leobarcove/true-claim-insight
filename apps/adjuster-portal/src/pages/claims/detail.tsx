@@ -22,6 +22,7 @@ import {
   RefreshCw,
   X,
   Lock,
+  Check,
 } from 'lucide-react';
 import { useRef } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
@@ -59,6 +60,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useMemo } from 'react';
+import { useLayout } from '@/components/layout';
 
 const statusConfig: Record<
   string,
@@ -121,7 +123,7 @@ const SessionChart = ({
 
   if (!deceptionData || deceptionData.length === 0) {
     return (
-      <div className="h-40 flex flex-col items-center justify-center text-xs text-muted-foreground bg-muted/40 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
+      <div className="h-40 flex flex-col items-center justify-center text-center text-xs text-muted-foreground bg-muted/40 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
         <Activity className="h-5 w-5 mb-2 opacity-20" />
         No risk data captured for this session.
       </div>
@@ -246,6 +248,7 @@ export function ClaimDetailPage() {
   const { id: claimId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isMobile, currentWidth } = useLayout();
 
   const { data: claim, isLoading } = useClaim(claimId || '');
   const updateStatus = useUpdateClaimStatus(claimId || '');
@@ -535,9 +538,11 @@ export function ClaimDetailPage() {
         title={
           <span className="flex items-center gap-3">
             {claim.claimNumber}
-            <Badge variant={statusConfig[claim.status].variant}>
-              {convertToTitleCase(statusConfig[claim.status].label)}
-            </Badge>
+            {!isMobile && (
+              <Badge variant={statusConfig[claim.status].variant}>
+                {convertToTitleCase(statusConfig[claim.status].label)}
+              </Badge>
+            )}
           </span>
         }
         description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
@@ -547,7 +552,7 @@ export function ClaimDetailPage() {
             <>
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+                className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('APPROVED')}
                 disabled={
                   claim.status === 'APPROVED' ||
@@ -563,11 +568,19 @@ export function ClaimDetailPage() {
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold">Approve</span>
+                      {currentWidth > 430 ? (
+                        <span className="font-bold">Approve</span>
+                      ) : (
+                        <span className="font-bold">
+                          <Check className="h-4 w-4" />
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-                      {modifier} + Enter
-                    </span>
+                    {!isMobile && (
+                      <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                        {modifier} + Enter
+                      </span>
+                    )}
                   </>
                 )}
               </Button>
@@ -575,7 +588,7 @@ export function ClaimDetailPage() {
               <Button
                 variant="destructive"
                 size="sm"
-                className="h-10 px-4 flex-col items-center justify-center min-w-[120px]"
+                className="h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('REJECTED')}
                 disabled={
                   claim.status === 'APPROVED' ||
@@ -591,11 +604,19 @@ export function ClaimDetailPage() {
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold">Reject</span>
+                      {currentWidth > 430 ? (
+                        <span className="font-bold">Reject</span>
+                      ) : (
+                        <span className="font-bold">
+                          <X className="h-4 w-4" />
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
-                      {modifier} + Backspace
-                    </span>
+                    {!isMobile && (
+                      <span className="text-[9px] opacity-80 font-normal leading-none font-mono tracking-tight">
+                        {modifier} + Backspace
+                      </span>
+                    )}
                   </>
                 )}
               </Button>
@@ -610,7 +631,7 @@ export function ClaimDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Incident Details */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardHeader className="flex flex-col sm:flex-row items-center justify-between pb-3">
                 <CardTitle>Incident Details</CardTitle>
                 <span className="text-xs text-muted-foreground">
                   Updated: {formatDate(claim.updatedAt)}
@@ -646,13 +667,13 @@ export function ClaimDetailPage() {
                 {/* Police Report */}
                 {claim.policeReportDate && (
                   <div className="pt-4 border-t">
-                    <div className="flex flex-row items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-center justify-between">
                       <p className="text-lg font-medium mb-2">Police Report</p>
                       <span className="text-xs text-muted-foreground mb-3">
                         Reported: {formatDate(claim.updatedAt)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                       <div className="flex flex-col justify-between">
                         <span className="text-xs font-medium">Report Number:</span>
                         <span className="text-xs text-muted-foreground">
@@ -758,7 +779,7 @@ export function ClaimDetailPage() {
 
             {/* Documents */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   Documents
                   <InfoTooltip
@@ -863,105 +884,109 @@ export function ClaimDetailPage() {
               <CardContent>
                 {claim.documents && claim.documents.length > 0 ? (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      {claim.documents
-                        .slice()
-                        .sort(
-                          (a: any, b: any) =>
-                            new Date(a.metadata?.replacedAt || a.createdAt).getTime() -
-                            new Date(b.metadata?.replacedAt || b.createdAt).getTime()
-                        )
-                        .slice((docPage - 1) * ITEMS_PER_PAGE, docPage * ITEMS_PER_PAGE)
-                        .map((doc: any) => (
-                          <div
-                            key={doc.id}
-                            className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              {doc.type === 'DAMAGE_PHOTO' ? (
-                                <Image className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                              )}
-                              <div>
-                                <p className="text-sm font-medium">{doc.filename}</p>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>{doc.type.replace(/_/gi, ' ')}</span>
-                                  <span>•</span>
-                                  <span>{formatFileSize(doc.fileSize)}</span>
-                                  <span>•</span>
-                                  <span>
-                                    {formatDateTime(doc.metadata?.replacedAt || doc.createdAt)}
-                                  </span>
+                    <div data-horizontal="true" className="overflow-x-auto custom-scrollbar pb-2">
+                      <div className="min-w-max space-y-2">
+                        {(claim.documents || [])
+                          .slice()
+                          .sort((a: any, b: any) => {
+                            const dateA = new Date(a.metadata?.replacedAt || a.createdAt).getTime();
+                            const dateB = new Date(b.metadata?.replacedAt || b.createdAt).getTime();
+                            return dateA - dateB;
+                          })
+                          .slice((docPage - 1) * ITEMS_PER_PAGE, docPage * ITEMS_PER_PAGE)
+                          .map((doc: any) => (
+                            <div
+                              key={doc.id}
+                              className="flex items-center justify-between p-3 bg-muted/50 rounded-lg gap-4 whitespace-nowrap"
+                            >
+                              <div className="flex items-center gap-3 shrink-0">
+                                {doc.type === 'DAMAGE_PHOTO' ? (
+                                  <Image className="h-4 w-4 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium whitespace-nowrap">
+                                    {doc.filename}
+                                  </p>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                                    <span>{doc.type.replace(/_/gi, ' ')}</span>
+                                    <span>•</span>
+                                    <span>{formatFileSize(doc.fileSize)}</span>
+                                    <span>•</span>
+                                    <span>
+                                      {formatDateTime(doc.metadata?.replacedAt || doc.createdAt)}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <InfoTooltip
+                                  content="View"
+                                  direction="top"
+                                  fontSize="text-[11px]"
+                                  trigger={
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => {
+                                        if (doc.storageUrl) {
+                                          window.open(doc.storageUrl, '_blank');
+                                        }
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  }
+                                />
+                                <InfoTooltip
+                                  content="Download"
+                                  direction="top"
+                                  fontSize="text-[11px]"
+                                  trigger={
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => {
+                                        if (doc.storageUrl) {
+                                          downloadFile(doc.storageUrl, doc.filename);
+                                        }
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  }
+                                />
+                                <InfoTooltip
+                                  content="Replace"
+                                  direction="top"
+                                  fontSize="text-[11px]"
+                                  trigger={
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 hover:bg-amber-600 transition-colors group"
+                                      onClick={() => {
+                                        setSelectedDocForReplace(doc);
+                                        setIsReplaceConfirmOpen(true);
+                                      }}
+                                      disabled={replaceDocument.isPending}
+                                    >
+                                      {replaceDocument.isPending &&
+                                      selectedDocForReplace?.id === doc.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                      ) : (
+                                        <RefreshCw className="h-4 w-4 text-amber-600 group-hover:text-white transition-colors" />
+                                      )}
+                                    </Button>
+                                  }
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <InfoTooltip
-                                content="View"
-                                direction="top"
-                                fontSize="text-[11px]"
-                                trigger={
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => {
-                                      if (doc.storageUrl) {
-                                        window.open(doc.storageUrl, '_blank');
-                                      }
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                              <InfoTooltip
-                                content="Download"
-                                direction="top"
-                                fontSize="text-[11px]"
-                                trigger={
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => {
-                                      if (doc.storageUrl) {
-                                        downloadFile(doc.storageUrl, doc.filename);
-                                      }
-                                    }}
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                              <InfoTooltip
-                                content="Replace"
-                                direction="top"
-                                fontSize="text-[11px]"
-                                trigger={
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 hover:bg-amber-600 transition-colors group"
-                                    onClick={() => {
-                                      setSelectedDocForReplace(doc);
-                                      setIsReplaceConfirmOpen(true);
-                                    }}
-                                    disabled={replaceDocument.isPending}
-                                  >
-                                    {replaceDocument.isPending &&
-                                    selectedDocForReplace?.id === doc.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                    ) : (
-                                      <RefreshCw className="h-4 w-4 text-amber-600 group-hover:text-white transition-colors" />
-                                    )}
-                                  </Button>
-                                }
-                              />
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                      </div>
                     </div>
 
                     {/* Documents Pagination Controls */}
@@ -1115,7 +1140,7 @@ export function ClaimDetailPage() {
                             className="space-y-4 border-b pb-8 last:border-0 last:pb-0"
                           >
                             <div
-                              className="flex items-center justify-between cursor-pointer group"
+                              className="flex flex-col sm:flex-row gap-3 items-center justify-between cursor-pointer group"
                               onClick={() => toggleSession(session.id)}
                             >
                               <div className="flex items-center gap-2">
@@ -1432,30 +1457,30 @@ export function ClaimDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Plate No:</span>
                   <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Chassis No:</span>
                   <span className="font-medium text-uppercase">
                     {claim.vehicleChassisNumber || 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Engine No:</span>
                   <span className="font-medium text-uppercase">
                     {claim.vehicleEngineNumber || 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Make/Model:</span>
                   <span className="font-medium">
                     {claim.vehicleMake} {claim.vehicleModel}
                     {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Year:</span>
                   <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
                 </div>
@@ -1471,29 +1496,29 @@ export function ClaimDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Policy No:</span>
                   <span className="font-medium">{claim.policyNumber || 'N/A'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Policy Type:</span>
                   <span className="font-medium text-uppercase">
                     {convertToTitleCase(claim.claimType)}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Sum Insured:</span>
                   <span className="font-medium text-uppercase">
                     {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">NCD Rate:</span>
                   <span className="font-medium">
                     {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Panel Workshop:</span>
                   <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
                 </div>

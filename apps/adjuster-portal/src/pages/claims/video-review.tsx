@@ -794,7 +794,7 @@ export function VideoReviewPage() {
           </p>
           {isActuallyPreparing && (
             <p className="text-xs text-muted-foreground mt-2">
-              Downloading and caching video for real-time assessment
+              Downloading video for real-time assessment...
             </p>
           )}
         </div>
@@ -843,14 +843,14 @@ export function VideoReviewPage() {
       </Header>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 flex gap-4 overflow-hidden">
+      <div className="flex-1 p-4 flex flex-col lg:flex-row gap-4 overflow-auto lg:overflow-hidden">
         {/* Video Player */}
         <div className="flex-1 flex flex-col gap-4">
           <div className="relative rounded-xl overflow-hidden shadow-2xl bg-black flex-1">
             <video
               ref={videoRef}
               src={videoSrc}
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain min-h-[45vh]"
               controlsList="nodownload nofullscreen noremoteplayback"
               disablePictureInPicture
               onContextMenu={e => e.preventDefault()}
@@ -904,13 +904,13 @@ export function VideoReviewPage() {
         </div>
 
         {/* Right Sidebar - Metrics & Risk */}
-        <div className="flex flex-col gap-4 w-128 overflow-hidden">
+        <div className="flex flex-col gap-4 w-full lg:w-128 shrink-0 sm:overflow-hidden">
           {/* Session Info */}
           <Card className="bg-card border-border p-2 shrink-0">
             <h3 className="text-xs font-semibold text-foreground mb-2 uppercase tracking-wider">
               Session Info
             </h3>
-            <div className="flex items-center gap-8">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold">Claim ID</p>
                 <p className="text-xs text-muted-foreground">
@@ -932,9 +932,9 @@ export function VideoReviewPage() {
             </div>
           </Card>
 
-          <div className="flex flex-1 gap-4 min-h-0">
+          <div className="flex flex-col lg:flex-row flex-1 gap-4 min-h-0">
             {/* Deception Score */}
-            <div className="w-60 flex flex-col">
+            <div className="flex-1 flex flex-col">
               <Card className="bg-card border-border p-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -1088,7 +1088,7 @@ export function VideoReviewPage() {
             </div>
 
             {/* Risk Analysis Card */}
-            <div className="w-60 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
               <Card className="bg-card border-border p-4 flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between mb-4 shrink-0">
                   <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">

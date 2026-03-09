@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 export interface LayoutContextType {
   isMobile: boolean;
   isCollapsed: boolean;
+  currentWidth: number;
 }
 
 const breakpoint = {
@@ -25,6 +26,7 @@ export function useLayout() {
 }
 
 export function AppLayout() {
+  const [currentWidth, setCurrentWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= currentBreakpoint);
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth <= currentBreakpoint);
 
@@ -42,13 +44,14 @@ export function AppLayout() {
         setIsCollapsed(false);
       }
       lastWidth = width;
+      setCurrentWidth(width);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
-    <LayoutContext.Provider value={{ isMobile, isCollapsed }}>
+    <LayoutContext.Provider value={{ isMobile, isCollapsed, currentWidth }}>
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar isCollapsed={isCollapsed} onCollapseChange={setIsCollapsed} isMobile={isMobile} />
         <main

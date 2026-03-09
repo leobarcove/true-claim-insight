@@ -11,7 +11,7 @@ const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
   ({ className, onSearch, onChange, ...props }, ref) => {
     const [modifier, setModifier] = React.useState<string>('Ctrl');
     const inputRef = React.useRef<HTMLInputElement>(null);
-    const { isMobile } = useLayout();
+    const { isMobile, currentWidth } = useLayout();
 
     React.useImperativeHandle(ref, () => inputRef.current!);
 
@@ -43,7 +43,9 @@ const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
           className={cn(
             'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-9 text-sm shadow-sm transition-all file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             isMobile ? 'pr-4' : 'pr-20',
-            className
+            currentWidth > 430 ? '' : 'pr-0 text-xs',
+            className,
+            currentWidth > 430 ? '' : 'w-[100px]'
           )}
           onChange={e => {
             onChange?.(e);
