@@ -59,3 +59,49 @@ export function useDeleteAccount() {
     },
   });
 }
+
+export function useUploadAvatar() {
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+
+  return useMutation({
+    mutationFn: async (file: File) => {
+      if (!user?.id) throw new Error('User not logged in');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('userId', user.id);
+
+      const { data } = await apiClient.post<ApiResponse<{ avatarUrl: string }>>(
+        `/users/avatar`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+    },
+  });
+}
+
+export function useDeleteAvatar() {
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('User not logged in');
+      const { data } = await apiClient.delete<ApiResponse<void>>(`/users/avatar`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+    },
+  });
+}

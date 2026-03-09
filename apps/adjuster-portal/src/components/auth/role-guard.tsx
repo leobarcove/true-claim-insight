@@ -14,13 +14,8 @@ interface RoleRouteProps {
  * Route guard that restricts access based on user role.
  * If the user's role is not in allowedRoles, they are redirected or shown fallback.
  */
-export function RoleRoute({
-  children,
-  allowedRoles,
-  fallback,
-  redirectTo = '/',
-}: RoleRouteProps) {
-  const user = useAuthStore((state) => state.user);
+export function RoleRoute({ children, allowedRoles, fallback, redirectTo = '/' }: RoleRouteProps) {
+  const user = useAuthStore(state => state.user);
 
   if (!user || !allowedRoles.includes(user.role)) {
     if (fallback) {
@@ -70,7 +65,7 @@ interface RoleOnlyProps {
  * Conditionally renders children based on user role (not permission).
  */
 export function RoleOnly({ roles, children, fallback = null }: RoleOnlyProps) {
-  const user = useAuthStore((state) => state.user);
+  const user = useAuthStore(state => state.user);
 
   if (!user || !roles.includes(user.role)) {
     return <>{fallback}</>;

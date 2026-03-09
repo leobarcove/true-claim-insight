@@ -34,7 +34,6 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { InfoTooltip } from '@/components/ui/tooltip';
-import { convertToTitleCase } from '@/lib/utils';
 
 const DEFAULT_EMOTIONS = [
   'Admiration',

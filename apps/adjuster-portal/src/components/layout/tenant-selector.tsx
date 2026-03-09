@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuthStore, UserTenant } from '@/stores/auth-store';
 import { useSwitchTenant } from '@/hooks/use-auth';
 import { useTenants } from '@/hooks/use-admin';
@@ -12,8 +12,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { ChevronsUpDown, Check, Building2 } from 'lucide-react';
+import { Check, Building2 } from 'lucide-react';
 
 interface TenantSelectorProps {
   open?: boolean;

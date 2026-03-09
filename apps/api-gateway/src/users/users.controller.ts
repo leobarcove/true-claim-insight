@@ -1,3 +1,6 @@
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { catchError, map } from 'rxjs/operators';
 import {
   Controller,
   Get,
@@ -8,6 +11,7 @@ import {
   Body,
   UseGuards,
   Query,
+  Req,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -20,14 +24,21 @@ import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
-import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  private videoServiceUrl: string;
+
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService
+  ) {
+    this.videoServiceUrl = this.configService.get('videoService') || 'http://localhost:3002';
+  }
 
   @Get()
   @Roles('FIRM_ADMIN', 'SUPER_ADMIN')
@@ -94,7 +105,85 @@ export class UsersController {
       currentTenantId: (user as any).currentTenantId,
       tenantName: user.tenant?.name || (user as any).currentTenant?.name,
       licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+      avatarUrl: (user as any).avatarUrl,
     };
+  }
+
+  @Post('avatar')
+  @ApiOperation({ summary: 'Upload a user avatar profile image' })
+  async uploadAvatar(@Req() req: any, @CurrentUser() currentUser: Express.User) {
+    if (typeof req.isMultipart !== 'function' || !req.isMultipart()) {
+      throw new HttpException('Request must be multipart', HttpStatus.BAD_REQUEST);
+    }
+
+    const data = await req.file();
+    if (!data) {
+      throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
+    }
+
+    const FormData = require('form-data');
+    const form = new FormData();
+    const buffer = await data.toBuffer();
+
+    form.append('file', buffer, {
+      filename: data.filename,
+      contentType: data.mimetype,
+    });
+
+    const headers = {
+      Authorization: req.headers.authorization || '',
+      'X-Tenant-Id':
+        req.tenantContext?.tenantId ||
+        (currentUser as any)?.currentTenantId ||
+        currentUser?.tenantId ||
+        '',
+      'X-User-Id': currentUser.id,
+      'X-User-Role': req.tenantContext?.userRole || currentUser?.role || '',
+      ...form.getHeaders(),
+    };
+
+    return this.httpService
+      .post(`${this.videoServiceUrl}/api/v1/uploads/avatar`, form, {
+        headers,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      })
+      .pipe(
+        map(response => response.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to upload avatar',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Delete('avatar')
+  @ApiOperation({ summary: 'Delete user avatar' })
+  async deleteAvatar(@Req() req: any, @CurrentUser() currentUser: Express.User) {
+    const headers = {
+      Authorization: req.headers.authorization || '',
+      'X-Tenant-Id':
+        req.tenantContext?.tenantId ||
+        (currentUser as any)?.currentTenantId ||
+        currentUser?.tenantId ||
+        '',
+      'X-User-Id': currentUser.id,
+      'X-User-Role': req.tenantContext?.userRole || currentUser?.role || '',
+    };
+
+    return this.httpService
+      .delete(`${this.videoServiceUrl}/api/v1/uploads/avatar`, { headers })
+      .pipe(
+        map(response => response.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to delete avatar',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
   }
 
   @Patch(':id')
@@ -139,6 +228,7 @@ export class UsersController {
       tenantId: updatedUser.tenantId,
       currentTenantId: (updatedUser as any).currentTenantId,
       tenantName: updatedUser.tenant?.name || (updatedUser as any).currentTenant?.name,
+      avatarUrl: (updatedUser as any).avatarUrl,
     };
   }
 

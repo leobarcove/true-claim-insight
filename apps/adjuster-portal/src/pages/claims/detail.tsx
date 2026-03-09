@@ -132,39 +132,6 @@ const SessionChart = ({
 
   return (
     <div className="space-y-4">
-      {/* <div className="grid grid-cols-4 gap-2 mb-4">
-        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-500 uppercase font-bold">Deception Score</p>
-          <p className="text-sm font-bold" style={{ color: '#A855F7' }}>
-            {deception?.deceptionScore ? `${(deception.deceptionScore * 100).toFixed(0)}%` : '—'}
-          </p>
-        </div>
-        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-500 uppercase font-bold">Voice Stress</p>
-          <p className="text-sm font-semibold" style={{ color: '#72B0F2' }}>
-            {deception?.breakdown?.voiceStress
-              ? `${(deception.breakdown.voiceStress * 100).toFixed(0)}%`
-              : '—'}
-          </p>
-        </div>
-        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-500 uppercase font-bold">Visual Behavior</p>
-          <p className="text-sm font-semibold" style={{ color: '#2EE797' }}>
-            {deception?.breakdown?.visualBehavior
-              ? `${(deception.breakdown.visualBehavior * 100).toFixed(0)}%`
-              : '—'}
-          </p>
-        </div>
-        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-500 uppercase font-bold">Expression Measurement</p>
-          <p className="text-sm font-semibold" style={{ color: '#E884B6' }}>
-            {deception?.breakdown?.expressionMeasurement
-              ? `${(deception.breakdown.expressionMeasurement * 100).toFixed(0)}%`
-              : '—'}
-          </p>
-        </div>
-      </div> */}
-
       <div className="h-40 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
@@ -1289,31 +1256,6 @@ export function ClaimDetailPage() {
                     <p className="text-xs text-muted-foreground text-center mt-5">
                       Creates room and notifies claimant via SMS
                     </p>
-
-                    {/* DEV ONLY: Show Magic Link */}
-                    {/* {magicLink && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2">
-                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">
-                        [DEV ONLY] Magic Link
-                      </p>
-                      <div className="flex gap-2">
-                        <code className="text-[10px] bg-white p-1 rounded border flex-1 break-all">
-                          {magicLink}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-[10px]"
-                          onClick={() => {
-                            navigator.clipboard.writeText(magicLink);
-                            toast({ title: 'Copied to clipboard' });
-                          }}
-                        >
-                          Copy
-                        </Button>
-                      </div>
-                    </div>
-                  )} */}
                   </div>
                 </CardContent>
               </Card>

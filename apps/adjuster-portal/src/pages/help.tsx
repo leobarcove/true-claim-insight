@@ -4,8 +4,6 @@ import {
   MessageSquare,
   Video,
   FileText,
-  ExternalLink,
-  ChevronRight,
   HelpCircle,
   Clock,
   Mail,
@@ -127,27 +125,6 @@ export function HelpPage() {
         <div className="mx-auto space-y-8">
           <div className="flex flex-col-reverse lg:grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              {/* Knowledge Base Categories */}
-              {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {categories.map(category => (
-                  <Card
-                    key={category.name}
-                    className="border-border/60 hover:shadow-md transition-all cursor-pointer group"
-                  >
-                    <CardContent className="p-6 flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        <category.icon className="h-6 w-6" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{category.name}</h3>
-                        <p className="text-xs text-muted-foreground">{category.count} articles</p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div> */}
-
               {/* FAQs */}
               <div className="space-y-4">
                 <h2 className="text-xl font-bold flex items-center gap-2 pb-3">
@@ -266,27 +243,6 @@ export function HelpPage() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* <Card className="border-border/60 shadow-sm overflow-hidden">
-                <div className="p-1 bg-gradient-to-r from-blue-500 to-indigo-600" />
-                <CardHeader>
-                  <CardTitle className="text-lg">Resource Center</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors border-b border-border/50">
-                    <span className="text-sm font-medium">Video Tutorials</span>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors border-b border-border/50">
-                    <span className="text-sm font-medium">User Manual (PDF)</span>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
-                    <span className="text-sm font-medium">API Documentation</span>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </CardContent>
-              </Card> */}
             </div>
           </div>
         </div>

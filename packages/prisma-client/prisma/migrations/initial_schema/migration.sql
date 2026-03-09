@@ -61,6 +61,7 @@ CREATE TABLE "users" (
     "phoneNumber" TEXT NOT NULL,
     "role" "UserRole" NOT NULL,
     "licenseNumber" TEXT,
+    "avatarUrl" TEXT,
     "tenantId" TEXT,
     "currentTenantId" TEXT,
     "isVerified" BOOLEAN NOT NULL DEFAULT false,

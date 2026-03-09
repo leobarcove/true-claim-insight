@@ -22,6 +22,7 @@ export interface User {
   tenantName: string;
   licenseNumber?: string;
   bcillaCertified?: boolean;
+  avatarUrl?: string;
 }
 
 export interface UserTenant {

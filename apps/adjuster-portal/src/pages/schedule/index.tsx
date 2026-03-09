@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header, useLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,10 +44,10 @@ import {
   isToday,
   parseISO,
 } from 'date-fns';
-import { cn, convertToTitleCase } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useClaims, useScheduleSession, claimKeys, useClaimStats } from '@/hooks/use-claims';
-import type { ClaimStatus, SessionStatus } from '@tci/shared-types';
+import type { SessionStatus } from '@tci/shared-types';
 import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui';
 

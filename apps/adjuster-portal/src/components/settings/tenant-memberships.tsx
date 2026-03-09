@@ -17,9 +17,7 @@ export function TenantMemberships() {
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle>Tenant Memberships</CardTitle>
-          <CardDescription>
-            You are not currently associated with any tenants.
-          </CardDescription>
+          <CardDescription>You are not currently associated with any tenants.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -47,9 +45,7 @@ export function TenantMemberships() {
     <Card className="border-border/60 shadow-sm">
       <CardHeader>
         <CardTitle>Tenant Memberships</CardTitle>
-        <CardDescription>
-          Organizations you belong to and your role in each.
-        </CardDescription>
+        <CardDescription>Organizations you belong to and your role in each.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -62,9 +58,7 @@ export function TenantMemberships() {
                 key={tenant.tenantId}
                 className={cn(
                   'flex items-center gap-4 p-4 rounded-xl border transition-all',
-                  isActive
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border/50 hover:border-border'
+                  isActive ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-border'
                 )}
               >
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -73,9 +67,7 @@ export function TenantMemberships() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm truncate">
-                      {tenant.tenantName}
-                    </h3>
+                    <h3 className="font-semibold text-sm truncate">{tenant.tenantName}</h3>
                     {isActive && (
                       <Badge variant="default" className="text-xs">
                         Active
@@ -138,8 +130,8 @@ export function TenantMemberships() {
           <div className="mt-4 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
             <p className="font-medium mb-1">💡 Tip:</p>
             <p>
-              You can quickly switch between tenants using the tenant switcher in the sidebar.
-              Your active tenant determines which data you see and can access.
+              You can quickly switch between tenants using the tenant switcher in the sidebar. Your
+              active tenant determines which data you see and can access.
             </p>
           </div>
         )}
