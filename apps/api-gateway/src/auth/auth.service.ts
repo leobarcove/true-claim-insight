@@ -34,6 +34,7 @@ export interface AuthResponse {
     role: string;
     phoneNumber: string;
     licenseNumber?: string | null;
+    avatarUrl?: string | null;
     tenantId: string | null;
     currentTenantId: string | null;
     tenantName: string;
@@ -86,6 +87,7 @@ export class AuthService {
             phoneNumber: existingUser.phoneNumber,
             licenseNumber:
               existingUser.licenseNumber || (existingUser as any).adjuster?.licenseNumber,
+            avatarUrl: (existingUser as any).avatarUrl,
             tenantId: existingUser.tenantId,
             currentTenantId: activeTenantId,
             tenantName: activeTenantName,
@@ -128,6 +130,7 @@ export class AuthService {
         role: user.role,
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+        avatarUrl: (user as any).avatarUrl,
         tenantId: user.tenantId,
         currentTenantId: activeTenantId,
         tenantName: activeTenantName,
@@ -183,6 +186,7 @@ export class AuthService {
         role: user.role,
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+        avatarUrl: (user as any).avatarUrl,
         tenantId: user.tenantId,
         currentTenantId: activeTenantId,
         tenantName: activeTenantName,
@@ -226,6 +230,7 @@ export class AuthService {
         role: user.role,
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+        avatarUrl: (user as any).avatarUrl,
         tenantId: user.tenantId,
         currentTenantId: activeTenantId,
         tenantName: activeTenantName,
@@ -370,6 +375,7 @@ export class AuthService {
         role: updatedUser.role,
         phoneNumber: updatedUser.phoneNumber,
         licenseNumber: updatedUser.licenseNumber || (updatedUser as any).adjuster?.licenseNumber,
+        avatarUrl: (updatedUser as any).avatarUrl,
         tenantId: updatedUser.tenantId,
         currentTenantId: tenantId,
         tenantName: (user as any).currentTenant?.name || '',

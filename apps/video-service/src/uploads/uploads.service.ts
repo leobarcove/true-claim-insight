@@ -159,6 +159,101 @@ export class UploadsService {
     return outputPath;
   }
 
+  async uploadAvatar(userId: string, filename: string, mimeType: string, filePath: string) {
+    const { apiUrl, key } = this.getSupabaseConfig();
+    const bucketName = 'tci-users';
+    const ext = require('path').extname(filename);
+    const baseName = require('path').basename(filename, ext);
+    const safeBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    const storagePath = `${userId}/avatar/${safeBaseName}_${Date.now()}${ext.toLowerCase()}`;
+
+    const fileContent = await fs.readFile(filePath);
+
+    const uploadResponse = await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': mimeType,
+        'x-upsert': 'true',
+      },
+      body: fileContent,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Supabase upload failed: ${errorText}`);
+    }
+
+    // Generate signed URL
+    const expiresIn = 10 * 365 * 24 * 60 * 60;
+    const signResponse = await fetch(
+      `${apiUrl}/storage/v1/object/sign/${bucketName}/${storagePath}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn }),
+      }
+    );
+
+    if (!signResponse.ok) {
+      const signErrorText = await signResponse.text();
+      throw new Error(`Failed to generate signed URL: ${signErrorText}`);
+    }
+
+    const signData = (await signResponse.json()) as { signedURL: string };
+    let signedUrl = signData.signedURL;
+    if (signedUrl && signedUrl.startsWith('/')) {
+      if (signedUrl.startsWith('/storage/v1')) {
+        signedUrl = `${apiUrl}${signedUrl}`;
+      } else {
+        signedUrl = `${apiUrl}/storage/v1${signedUrl}`;
+      }
+    }
+
+    // Update the User in Prisma
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: signedUrl },
+    });
+
+    // Cleanup local temp file
+    await fs.unlink(filePath).catch(() => {});
+
+    return { avatarUrl: signedUrl };
+  }
+
+  async removeAvatar(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.avatarUrl) return { success: true };
+
+    const { apiUrl, key } = this.getSupabaseConfig();
+    const bucketName = 'tci-users';
+    const bucketToken = `${bucketName}/`;
+
+    if (user.avatarUrl.includes(bucketToken)) {
+      const pathWithQuery = user.avatarUrl.split(bucketToken)[1];
+      if (pathWithQuery) {
+        const storagePath = pathWithQuery.split('?')[0];
+        if (storagePath) {
+          await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${key}` },
+          });
+        }
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: null },
+    });
+
+    return { success: true };
+  }
+
   async getUpload(uploadId: string, tenantContext: TenantContext) {
     const upload = await this.prisma.videoUpload.findUnique({
       where: { id: uploadId },

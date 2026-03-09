@@ -15,6 +15,7 @@ model User {
   phoneNumber      String
   role             UserRole
   licenseNumber    String?
+  avatarUrl  String?
   tenantId         String? // Deprecated: kept for backward compatibility
   currentTenantId  String? // Active tenant context for current session
   isVerified       Boolean            @default(false)

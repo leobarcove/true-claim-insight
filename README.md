@@ -36,7 +36,8 @@ True Claim Insight digitises the assessment workflow between loss adjusters and 
 
 The system utilizes specialized storage buckets for different types of data:
 
-- `tci-uploads`: Primary bucket for video session uploads and raw recordings (hardcoded in `video-service`).
+- `tci-users`: Primary bucket for user-related assets and profile data (configured in `uploads.service`).
+- `tci-uploads`: Primary bucket for video session uploads and raw recordings (configured in `video-service`).
 - `tci-documents`: Secure storage for claimant documents, IDs, and case-related evidence (configured in `case-service`).
 - `tci-recordings`: Storage for final processed and signed session recordings.
 - `risk_analysis`: Default bucket for risk engines to store detailed analysis reports and findings.

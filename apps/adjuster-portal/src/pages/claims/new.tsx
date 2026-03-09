@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { Button, Progress } from '@/components/ui';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui';
 import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';

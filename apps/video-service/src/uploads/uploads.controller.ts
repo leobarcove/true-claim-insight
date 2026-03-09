@@ -95,6 +95,57 @@ export class UploadsController {
     };
   }
 
+  @Post('avatar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload a user avatar profile image' })
+  async uploadAvatar(@Req() req: any, @Tenant() tenantContext: TenantContext) {
+    if (!req.isMultipart()) {
+      throw new BadRequestException('Request must be multipart');
+    }
+
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    if (!data.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    // Default to currently authed user
+    const userIdField = data.fields?.userId;
+    const userId = userIdField?.value || userIdField || tenantContext.userId;
+
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = `avatar-${uniqueSuffix}${extname(data.filename)}`;
+    const filePath = path.join(uploadDir, filename);
+
+    await pipeline(data.file, fs.createWriteStream(filePath));
+
+    const result = await this.uploadsService.uploadAvatar(
+      userId,
+      data.filename,
+      data.mimetype,
+      filePath
+    );
+
+    return result;
+  }
+
+  @Delete('avatar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete user avatar' })
+  async deleteAvatar(@Tenant() tenantContext: TenantContext) {
+    if (!tenantContext || !tenantContext.userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.uploadsService.removeAvatar(tenantContext.userId);
+  }
+
   @Get(':uploadId')
   @ApiOperation({ summary: 'Get video upload details' })
   @ApiResponse({ status: 200, description: 'Upload details retrieved' })
@@ -121,7 +172,12 @@ export class UploadsController {
     @Body() body: { startTime: number; endTime: number },
     @Tenant() tenantContext: TenantContext
   ) {
-    const result = await this.uploadsService.processSegment(uploadId, body.startTime, body.endTime, tenantContext);
+    const result = await this.uploadsService.processSegment(
+      uploadId,
+      body.startTime,
+      body.endTime,
+      tenantContext
+    );
     return result;
   }
 
@@ -129,7 +185,10 @@ export class UploadsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate consent form after video processing' })
   @ApiResponse({ status: 200, description: 'Consent form generated' })
-  async generateConsent(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+  async generateConsent(
+    @Param('uploadId') uploadId: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
     const result = await this.uploadsService.generateConsent(uploadId, tenantContext);
     return result;
   }
@@ -138,7 +197,7 @@ export class UploadsController {
   @ApiOperation({ summary: 'Get all video uploads' })
   @ApiResponse({ status: 200, description: 'All uploads retrieved' })
   async getAllUploads(
-    @Query('page') page: number = 1, 
+    @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Tenant() tenantContext?: TenantContext
   ) {
@@ -155,7 +214,10 @@ export class UploadsController {
   @Get(':uploadId/segments')
   @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
   @ApiResponse({ status: 200, description: 'Segments retrieved' })
-  async getUploadSegments(@Param('uploadId') uploadId: string, @Tenant() tenantContext: TenantContext) {
+  async getUploadSegments(
+    @Param('uploadId') uploadId: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
     const segments = await this.uploadsService.getUploadSegments(uploadId, tenantContext);
     return segments;
   }

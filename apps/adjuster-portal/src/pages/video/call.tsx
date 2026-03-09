@@ -2,7 +2,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   ArrowLeft,
-  Maximize2,
   AlertCircle,
   RefreshCw,
   Camera,
@@ -693,18 +692,6 @@ export function VideoCallPage() {
         description={`Secure • Encrypted • ${claim?.claimNumber || claim?.id || 'Loading...'}`}
       >
         <div className="flex items-center gap-3">
-          {/* <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => playerRef.current?.requestFullscreen()}
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            Fullscreen
-          </Button> */}
           <Button variant="destructive" size="sm" onClick={handleEndCall}>
             <X className="h-4 w-4 sm:mr-2" />
             {currentWidth > 430 && 'End Assessment'}

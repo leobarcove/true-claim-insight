@@ -1,14 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
   FileText,
   Video,
   Clock,
   CheckCircle,
   TrendingUp,
-  Search,
-  List,
-  Grid,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
@@ -293,24 +289,6 @@ export function DashboardPage() {
             <CardHeader className="flex flex-col sm:flex-row items-center justify-between">
               <CardTitle className="text-lg">Recent Claims</CardTitle>
               <div className="flex items-center gap-2">
-                {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-6 w-6 rounded-md ${recentClaimsView === 'table' ? 'bg-background shadow-sm' : ''}`}
-                    onClick={() => setRecentClaimsView('table')}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-6 w-6 rounded-md ${recentClaimsView === 'card' ? 'bg-background shadow-sm' : ''}`}
-                    onClick={() => setRecentClaimsView('card')}
-                  >
-                    <Grid className="h-4 w-4" />
-                  </Button>
-                </div> */}
                 {canViewClaims && (
                   <Button
                     variant="outline"
@@ -461,24 +439,6 @@ export function DashboardPage() {
             <CardHeader className="flex flex-col sm:flex-row items-center justify-between">
               <CardTitle className="text-lg">Upcoming Sessions</CardTitle>
               <div className="flex items-center gap-2">
-                {/* <div className="flex items-center bg-muted/50 rounded-lg p-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-6 w-6 rounded-md ${sessionsView === 'table' ? 'bg-background shadow-sm' : ''}`}
-                    onClick={() => setSessionsView('table')}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-6 w-6 rounded-md ${sessionsView === 'card' ? 'bg-background shadow-sm' : ''}`}
-                    onClick={() => setSessionsView('card')}
-                  >
-                    <Grid className="h-4 w-4" />
-                  </Button>
-                </div> */}
                 {canViewSessions && (
                   <Button
                     variant="outline"

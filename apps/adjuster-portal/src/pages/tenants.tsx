@@ -15,7 +15,6 @@ import {
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -27,11 +26,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
@@ -182,7 +179,6 @@ export function TenantsPage() {
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {/* <tab.icon className="h-4 w-4" /> */}
                   {tab.label} ({tab?.count || 0})
                 </button>
               ))}
@@ -307,15 +303,6 @@ const TenantsTable = forwardRef(
 
     return (
       <>
-        {/* <Card className="mb-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle>Organization Tenants</CardTitle>
-              <CardDescription>View and manage all active tenants in the system.</CardDescription>
-            </div>
-          </CardHeader>
-        </Card> */}
-
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">
@@ -686,15 +673,6 @@ const UsersTable = forwardRef(
 
     return (
       <>
-        {/* <Card className="mb-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle>System Users</CardTitle>
-              <CardDescription>View and manage all registered users in the system.</CardDescription>
-            </div>
-          </CardHeader>
-        </Card> */}
-
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">
@@ -1087,15 +1065,6 @@ const UserTenantsTable = forwardRef(
 
     return (
       <>
-        {/* <Card className="mb-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle>User-Tenant Associations</CardTitle>
-              <CardDescription>Manage which users belong to which tenants.</CardDescription>
-            </div>
-          </CardHeader>
-        </Card> */}
-
         <div className="transition-all duration-300">
           {isLoading ? (
             <div className="rounded-md border animate-in fade-in duration-300">

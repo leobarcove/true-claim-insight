@@ -140,6 +140,7 @@ export class AuthController {
       role: user.role,
       phoneNumber: user.phoneNumber,
       licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
+      avatarUrl: (user as any).avatarUrl,
       tenantId: user.tenantId,
       currentTenantId: (user as any).currentTenantId || user.tenantId,
       tenantName: user.tenant?.name || (user as any).currentTenant?.name,

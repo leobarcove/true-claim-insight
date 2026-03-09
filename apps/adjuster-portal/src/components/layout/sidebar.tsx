@@ -20,7 +20,7 @@ import {
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLogout } from '@/hooks/use-auth';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from '@/hooks/use-theme';
 import { Button } from '@/components/ui/button';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { InfoTooltip } from '@/components/ui/tooltip';
 import { TenantSelector } from './tenant-selector';
 import { useSuperAdminNoTenant } from '@/hooks/use-super-admin-no-tenant';
-import { PERMISSIONS, ROLE_PERMISSIONS, useHasAnyPermission } from '@/lib/permissions';
+import { PERMISSIONS, ROLE_PERMISSIONS } from '@/lib/permissions';
 
 interface NavItem {
   name: string;
@@ -373,6 +373,11 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
               >
                 <div className="relative">
                   <Avatar className="h-10 w-10 border-2 border-background shadow-md bg-muted ring-2 ring-primary/5 group-hover:ring-primary/20 transition-all duration-300">
+                    <AvatarImage
+                      src={user?.avatarUrl || ''}
+                      alt="Avatar"
+                      className="object-cover w-full h-full"
+                    />
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
                       {user ? getInitials(user.fullName) : 'U'}
                     </AvatarFallback>
@@ -407,6 +412,11 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
                 <div className="flex items-center gap-3 px-1">
                   <div className="relative">
                     <Avatar className="h-10 w-10 border-2 border-background shadow-sm bg-muted ring-1 ring-primary/10">
+                      <AvatarImage
+                        src={user?.avatarUrl || ''}
+                        alt="Avatar"
+                        className="object-cover w-full h-full"
+                      />
                       <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                         {user ? getInitials(user.fullName) : 'U'}
                       </AvatarFallback>

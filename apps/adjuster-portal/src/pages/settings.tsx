@@ -1,27 +1,22 @@
 import { useState, useEffect } from 'react';
-import {
-  User,
-  Settings as SettingsIcon,
-  Bell,
-  Lock,
-  Globe,
-  Mail,
-  Phone,
-  Shield,
-  Loader2,
-} from 'lucide-react';
+import { User, Lock, Globe, Mail, Phone, Shield, Loader2 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { convertToTitleCase, getInitials, cn } from '@/lib/utils';
-import { useUpdateProfile, useUpdatePassword, useDeleteAccount } from '@/hooks/use-user';
+import {
+  useUpdateProfile,
+  useUpdatePassword,
+  useDeleteAccount,
+  useUploadAvatar,
+  useDeleteAvatar,
+} from '@/hooks/use-user';
 import { useCurrentUser } from '@/hooks/use-auth';
 import { useForm } from 'react-hook-form';
 import {
@@ -159,6 +154,53 @@ export function SettingsPage() {
     }
   };
 
+  const uploadAvatarMutation = useUploadAvatar();
+  const deleteAvatarMutation = useDeleteAvatar();
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 800 * 1024) {
+      toast({
+        title: 'File too large',
+        description: 'Please select an image smaller than 800KB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await uploadAvatarMutation.mutateAsync(file);
+      toast({
+        title: 'Avatar updated',
+        description: 'Your profile picture has been updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'There was an error updating your avatar.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      await deleteAvatarMutation.mutateAsync();
+      toast({
+        title: 'Avatar removed',
+        description: 'Your profile picture has been removed.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Remove failed',
+        description: 'There was an error removing your avatar.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'security', label: 'Security', icon: Lock },
@@ -235,14 +277,46 @@ export function SettingsPage() {
                     <form onSubmit={handleSubmitProfile(onUpdateProfile)} className="space-y-6">
                       <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
                         <Avatar className="h-24 w-24 border-2 border-background shadow-md">
+                          <AvatarImage
+                            src={user?.avatarUrl || ''}
+                            alt="Avatar"
+                            className="object-cover w-full h-full"
+                          />
                           <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
                             {user ? getInitials(user.fullName) : 'U'}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="space-y-2">
-                          <Button variant="outline" size="sm" type="button">
-                            Change Avatar
-                          </Button>
+                        <div className="space-y-2 flex flex-col items-start">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              type="button"
+                              onClick={() => document.getElementById('avatar-upload')?.click()}
+                              disabled={uploadAvatarMutation.isPending}
+                            >
+                              {uploadAvatarMutation.isPending ? 'Uploading...' : 'Change Avatar'}
+                            </Button>
+                            {user?.avatarUrl && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                type="button"
+                                onClick={handleRemoveAvatar}
+                                disabled={deleteAvatarMutation.isPending}
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                {deleteAvatarMutation.isPending ? 'Removing...' : 'Remove'}
+                              </Button>
+                            )}
+                          </div>
+                          <input
+                            type="file"
+                            id="avatar-upload"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleAvatarChange}
+                          />
                           <p className="text-xs text-muted-foreground">
                             JPG, GIF or PNG. Max size of 800K
                           </p>

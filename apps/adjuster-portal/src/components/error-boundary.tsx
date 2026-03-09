@@ -13,10 +13,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-export class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -27,7 +24,6 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to monitoring service in production
     console.error('Error caught by boundary:', error, errorInfo);
   }
 
@@ -54,8 +50,8 @@ export class ErrorBoundary extends React.Component<
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <p className="text-sm text-muted-foreground">
-                An unexpected error occurred. Please try refreshing the page or
-                contact support if the problem persists.
+                An unexpected error occurred. Please try refreshing the page or contact support if
+                the problem persists.
               </p>
               {this.state.error && (
                 <details className="text-left">
