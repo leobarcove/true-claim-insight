@@ -167,7 +167,7 @@ export function HelpPage() {
                           onClick={() => toggleFAQ(faq.question)}
                         >
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-base font-semibold">
+                            <CardTitle className="text-base sm:text-lg font-semibold">
                               {faq.question}
                             </CardTitle>
                             <ChevronDown

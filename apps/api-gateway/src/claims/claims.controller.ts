@@ -60,6 +60,11 @@ export class ClaimsController {
     const payload = {
       ...createClaimDto,
       claimantId,
+      tenantId:
+        createClaimDto.tenantId ||
+        req.tenantContext?.tenantId ||
+        req.user?.currentTenantId ||
+        req.user?.tenantId,
     };
     delete payload.claimantNric;
     delete payload.claimantPhone;
