@@ -700,17 +700,19 @@ export class ClaimsService {
     metadata: any,
     tenantContext?: TenantContext
   ) {
-    let actorType: 'CLAIMANT' | 'ADJUSTER' | 'ADMIN' | 'SYSTEM' = 'SYSTEM';
+    let actorType:
+      | 'CLAIMANT'
+      | 'ADJUSTER'
+      | 'FIRM_ADMIN'
+      | 'SUPER_ADMIN'
+      | 'SIU_INVESTIGATOR'
+      | 'COMPLIANCE_OFFICER'
+      | 'SUPPORT_DESK'
+      | 'SHARIAH_REVIEWER'
+      | 'SYSTEM' = 'SYSTEM';
 
     if (tenantContext?.userRole) {
-      const role = tenantContext.userRole;
-      if (role === 'CLAIMANT') {
-        actorType = 'CLAIMANT';
-      } else if (role === 'ADJUSTER') {
-        actorType = 'ADJUSTER';
-      } else if (['FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'].includes(role)) {
-        actorType = 'ADMIN';
-      }
+      actorType = tenantContext.userRole as typeof actorType;
     }
 
     await this.prisma.auditTrail.create({

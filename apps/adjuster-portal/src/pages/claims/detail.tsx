@@ -1236,7 +1236,9 @@ export function ClaimDetailPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
                     <Activity className="h-8 w-8 mb-2 opacity-20" />
-                    <p className="text-sm">No analysis sessions found for this claim.</p>
+                    <p className="text-sm text-center">
+                      No analysis sessions found for this claim.
+                    </p>
                   </div>
                 )}
               </CardContent>
