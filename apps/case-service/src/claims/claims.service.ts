@@ -261,6 +261,13 @@ export class ClaimsService {
         notes: {
           orderBy: { createdAt: 'desc' },
         },
+        // Non-motor polymorphic sub-tables. floodClaim is null for non-flood
+        // categories; the UI checks `claim.category` to decide which panel
+        // to render. Add fire/lightning/burglary includes as those tables land.
+        floodClaim: true,
+        fraudSignals: {
+          orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
+        },
       } as any,
     });
 

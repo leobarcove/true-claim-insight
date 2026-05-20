@@ -369,7 +369,7 @@ export function DashboardPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                              {claim.claimType.replace('_', ' ')}
+                              {claim.claimType?.replace('_', ' ') ?? '—'}
                             </TableCell>
                             <TableCell>{getStatusBadge(claim.status)}</TableCell>
                             <TableCell>
@@ -420,7 +420,7 @@ export function DashboardPage() {
                           <p className="text-sm font-medium">{claim.claimNumber}</p>
                           <p className="text-xs text-muted-foreground">
                             {claim.claimant?.fullName} • {claim.vehiclePlateNumber} •{' '}
-                            {convertToTitleCase(claim.claimType)}
+                            {claim.claimType ? convertToTitleCase(claim.claimType) : '—'}
                           </p>
                         </div>
                         <div className="flex flex-col items-center gap-1">

@@ -382,7 +382,7 @@ export function ClaimsListPage() {
                           {claim.claimant?.fullName || claim.claimantId}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          {typeLabels[claim.claimType] || claim.claimType}
+                          {claim.claimType ? typeLabels[claim.claimType] || claim.claimType : '—'}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
@@ -451,7 +451,7 @@ export function ClaimsListPage() {
                           <p className="font-medium">{claim.claimant?.fullName}</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <Badge variant="secondary" className="text-[10px]">
-                              {typeLabels[claim.claimType] || claim.claimType}
+                              {claim.claimType ? typeLabels[claim.claimType] || claim.claimType : '—'}
                             </Badge>
                           </p>
                         </div>

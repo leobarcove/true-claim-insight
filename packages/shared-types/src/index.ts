@@ -36,6 +36,108 @@ export enum ClaimType {
   WINDSCREEN = 'WINDSCREEN',
 }
 
+// Coarse-grained category drives polymorphic sub-tables, evidence checklists,
+// and which FraudSignalProvider plugins apply.
+export enum ClaimCategory {
+  MOTOR = 'MOTOR',
+  FLOOD = 'FLOOD',
+  FIRE = 'FIRE',
+  LIGHTNING = 'LIGHTNING',
+  BURGLARY = 'BURGLARY',
+  PERSONAL_ACCIDENT = 'PERSONAL_ACCIDENT',
+  HOH = 'HOH',
+  OTHER = 'OTHER',
+}
+
+export enum FloodSource {
+  RIVER_OVERFLOW = 'RIVER_OVERFLOW',
+  FLASH_FLOOD = 'FLASH_FLOOD',
+  COASTAL_SURGE = 'COASTAL_SURGE',
+  DRAINAGE_FAILURE = 'DRAINAGE_FAILURE',
+  RAINWATER_INGRESS = 'RAINWATER_INGRESS',
+  DAM_RELEASE = 'DAM_RELEASE',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export enum PropertyType {
+  RESIDENTIAL = 'RESIDENTIAL',
+  COMMERCIAL = 'COMMERCIAL',
+  INDUSTRIAL = 'INDUSTRIAL',
+  MIXED_USE = 'MIXED_USE',
+  AGRICULTURAL = 'AGRICULTURAL',
+  OTHER = 'OTHER',
+}
+
+export enum FraudCategory {
+  PARAMETRIC = 'PARAMETRIC',
+  IDENTITY = 'IDENTITY',
+  BEHAVIOURAL = 'BEHAVIOURAL',
+  DOCUMENT = 'DOCUMENT',
+  NETWORK = 'NETWORK',
+  ENVIRONMENTAL = 'ENVIRONMENTAL',
+  INVENTORY = 'INVENTORY',
+  POLICY = 'POLICY',
+}
+
+export enum SignalSeverity {
+  INFO = 'INFO',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export interface FloodClaim {
+  id: string;
+  claimId: string;
+  tenantId?: string;
+  incidentStart: string;
+  incidentEnd?: string;
+  waterDepthCm?: number;
+  durationHours?: number;
+  source?: FloodSource;
+  propertyType?: PropertyType;
+  propertyFloorLevel?: number;
+  propertyElevationMeters?: number;
+  postcode?: string;
+  state?: string;
+  parametricTriggerMet?: boolean;
+  metMalaysiaEventRef?: string;
+  jpsGaugeId?: string;
+  buildingDamageRm?: number | string;
+  contentsDamageRm?: number | string;
+  vehicleDamageRm?: number | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FraudSignal {
+  id: string;
+  claimId: string;
+  provider: string;
+  category: FraudCategory;
+  signalType: string;
+  severity: SignalSeverity;
+  confidence: number;
+  message?: string;
+  rawData?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface EvidenceRequirementResolved {
+  documentType: string;
+  isMandatory: boolean;
+  description?: string;
+  sortOrder: number;
+  satisfied: boolean;
+  uploaded: Array<{
+    id: string;
+    type: string;
+    filename: string;
+    createdAt: string;
+  }>;
+}
+
 export enum ClaimStatus {
   SUBMITTED = 'SUBMITTED',
   DOCUMENTS_PENDING = 'DOCUMENTS_PENDING',
@@ -180,8 +282,13 @@ export interface Claim {
   adjusterId?: string;
   insurerTenantId?: string;
   policyNumber: string;
-  claimType: ClaimType;
+  category: ClaimCategory;
+  claimType?: ClaimType | null;
   status: ClaimStatus;
+  // Non-motor polymorphic sub-table (populated when category=FLOOD)
+  floodClaim?: FloodClaim | null;
+  // Fraud signals attached to this claim, newest/highest severity first
+  fraudSignals?: FraudSignal[];
   incidentDate: string;
   incidentTime?: string;
   incidentLocation: Location;
