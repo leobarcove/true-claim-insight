@@ -7,6 +7,7 @@ import {
   FraudSignalProvider,
 } from './types';
 import { MockBaselineProvider } from './providers/mock-baseline.provider';
+import { MetMalaysiaRainfallProvider } from './providers/met-malaysia-rainfall.provider';
 
 /**
  * Orchestrates fraud-signal evaluation across all registered providers.
@@ -30,15 +31,15 @@ export class FraudSignalOrchestrator {
 
   constructor(
     private readonly prisma: PrismaService,
-    mockBaseline: MockBaselineProvider
+    mockBaseline: MockBaselineProvider,
+    metMalaysiaRainfall: MetMalaysiaRainfallProvider
     // Future providers — inject and append:
-    //   metMalaysia: MetMalaysiaRainfallProvider,
     //   jpsGauges: JpsGaugeProvider,
     //   sentinelSatellite: SentinelFloodImageryProvider,
     //   repeatClaimant: RepeatClaimantGraphProvider,
     //   documentForgery: DocumentForgeryProvider,
   ) {
-    this.providers = [mockBaseline];
+    this.providers = [mockBaseline, metMalaysiaRainfall];
   }
 
   /**
