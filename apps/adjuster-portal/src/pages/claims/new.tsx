@@ -2,16 +2,20 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
 import { ArrowLeft } from 'lucide-react';
+import type { ClaimCategory } from '@tci/shared-types';
 import { Button } from '@/components/ui';
 import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
+import { CategoryPicker } from '@/components/claims/non-motor/category-picker';
+import { FloodFNOLForm } from '@/components/claims/non-motor/flood-fnol-form';
 
 export function NewClaimPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [category, setCategory] = useState<ClaimCategory | null>(null);
 
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
@@ -152,19 +156,27 @@ export function NewClaimPage() {
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="mx-auto">
+        <div className="mx-auto max-w-4xl">
           <div className="bg-card rounded-lg border shadow-sm p-8">
             {isSubmitting ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 <p className="text-muted-foreground">Submitting claim details...</p>
               </div>
-            ) : (
+            ) : !category ? (
+              <CategoryPicker onSelect={setCategory} />
+            ) : category === 'MOTOR' ? (
               <ClaimSubmissionWizard
                 mode="AGENT"
                 onSuccess={handleSuccess}
-                onCancel={() => navigate(-1)}
+                onCancel={() => setCategory(null)}
               />
+            ) : category === 'FLOOD' ? (
+              <FloodFNOLForm onCancel={() => setCategory(null)} />
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                Coming soon: {category} claims
+              </div>
             )}
           </div>
         </div>

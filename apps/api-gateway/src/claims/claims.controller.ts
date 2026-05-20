@@ -259,15 +259,34 @@ export class ClaimsController {
 
   @Post('flood')
   @ApiOperation({ summary: 'Create a new flood claim' })
-  createFlood(@Body() body: any, @Req() req: any) {
+  async createFlood(@Body() body: any, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
       'X-User-Id': req.user?.id,
       'X-User-Role': req.tenantContext?.userRole || req.user?.role,
     };
+
+    // Same claimant-resolution pattern as the motor POST /claims route:
+    // if the caller passes claimantNric + claimantPhone instead of an id,
+    // upsert the Claimant and substitute the resulting id.
+    let claimantId = body.claimantId;
+    if (!claimantId && body.claimantNric && body.claimantPhone) {
+      const claimant = await this.claimantsService.findOrCreate({
+        nric: body.claimantNric,
+        phoneNumber: body.claimantPhone,
+        fullName: body.claimantName,
+      });
+      claimantId = claimant.id;
+    }
+
+    const payload = { ...body, claimantId };
+    delete payload.claimantNric;
+    delete payload.claimantPhone;
+    delete payload.claimantName;
+
     return this.httpService
-      .post(`${this.caseServiceUrl}/api/v1/claims/flood`, body, { headers })
+      .post(`${this.caseServiceUrl}/api/v1/claims/flood`, payload, { headers })
       .pipe(
         map(response => response.data.data),
         catchError(e => {
