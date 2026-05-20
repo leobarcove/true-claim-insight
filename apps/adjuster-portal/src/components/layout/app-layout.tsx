@@ -54,9 +54,14 @@ export function AppLayout() {
     <LayoutContext.Provider value={{ isMobile, isCollapsed, currentWidth }}>
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar isCollapsed={isCollapsed} onCollapseChange={setIsCollapsed} isMobile={isMobile} />
+        {/* position: relative is intentional — Radix Select renders a hidden
+            absolutely-positioned native <select> for accessibility/form
+            submission. Without a positioned ancestor those elements resolve
+            against the document and inflate <html> scrollHeight, producing
+            a second scrollbar alongside <main>'s overflow-auto. */}
         <main
           className={cn(
-            'flex-1 overflow-auto transition-all duration-300',
+            'relative flex-1 overflow-auto transition-all duration-300',
             isMobile ? 'ml-20' : ''
           )}
         >
