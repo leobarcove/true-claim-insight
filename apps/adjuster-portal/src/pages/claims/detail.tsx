@@ -65,6 +65,7 @@ import { getCategoryConfig } from '@/lib/category-config';
 import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
+import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
 const statusConfig: Record<
   string,
@@ -892,6 +893,15 @@ export function ClaimDetailPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                {/* Signature lifecycle status + actions.
+                                    Only consent statements get the
+                                    "Request" button; other types still
+                                    show a status badge if non-default. */}
+                                <SignatureControls
+                                  doc={doc}
+                                  claimId={claim.id}
+                                  canRequest={doc.type === 'SIGNED_STATEMENT'}
+                                />
                                 <InfoTooltip
                                   content="View"
                                   direction="top"
