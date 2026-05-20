@@ -253,6 +253,98 @@ export class ClaimsController {
       );
   }
 
+  // ============================================================
+  // Non-motor claim endpoints (Flood is the first concrete type)
+  // ============================================================
+
+  @Post('flood')
+  @ApiOperation({ summary: 'Create a new flood claim' })
+  createFlood(@Body() body: any, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/flood`, body, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to create flood claim',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get('flood')
+  @ApiOperation({ summary: 'List flood claims' })
+  listFlood(@Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/flood`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to list flood claims',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get('flood/:id')
+  @ApiOperation({ summary: 'Get a flood claim with sub-table data' })
+  getFlood(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/flood/${id}`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch flood claim',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get(':id/evidence-checklist')
+  @ApiOperation({ summary: 'Get evidence checklist for a claim (any category)' })
+  getEvidenceChecklist(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/evidence-checklist`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch evidence checklist',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
   @Get(':id/timeline')
   @ApiOperation({ summary: 'Get claim timeline' })
   getTimeline(@Param('id') id: string, @Req() req: any) {

@@ -61,6 +61,10 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { useLayout } from '@/components/layout';
+import { getCategoryConfig } from '@/lib/category-config';
+import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
+import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
+import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
 
 const statusConfig: Record<
   string,
@@ -512,7 +516,7 @@ export function ClaimDetailPage() {
             )}
           </span>
         }
-        description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
+        description={`${claim.claimant?.fullName || claim.claimantId} • ${claim.category === 'MOTOR' ? convertToTitleCase(claim.claimType ?? 'Motor') : getCategoryConfig(claim.category).label}`}
       >
         <div className="flex items-center gap-3">
           {canApprove && (
@@ -1392,44 +1396,57 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Vehicle Info */}
-            <Card>
-              <CardHeader className="py-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Car className="h-4 w-4" />
-                  Vehicle Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Plate No:</span>
-                  <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Chassis No:</span>
-                  <span className="font-medium text-uppercase">
-                    {claim.vehicleChassisNumber || 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Engine No:</span>
-                  <span className="font-medium text-uppercase">
-                    {claim.vehicleEngineNumber || 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Make/Model:</span>
-                  <span className="font-medium">
-                    {claim.vehicleMake} {claim.vehicleModel}
-                    {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Year:</span>
-                  <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Category-aware detail panel: Vehicle (motor) or Property (flood) */}
+            {claim.category === 'MOTOR' && (
+              <Card>
+                <CardHeader className="py-4">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    Vehicle Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Plate No:</span>
+                    <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Chassis No:</span>
+                    <span className="font-medium text-uppercase">
+                      {claim.vehicleChassisNumber || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Engine No:</span>
+                    <span className="font-medium text-uppercase">
+                      {claim.vehicleEngineNumber || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Make/Model:</span>
+                    <span className="font-medium">
+                      {claim.vehicleMake} {claim.vehicleModel}
+                      {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Year:</span>
+                    <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {claim.category === 'FLOOD' && <PropertyDetailsPanel claim={claim} />}
+
+            {/* Non-motor value-add cards. The evidence checklist + fraud
+                signals also benefit motor claims once their requirement
+                rows are seeded, but for now the panels stay flood-only. */}
+            {claim.category !== 'MOTOR' && (
+              <>
+                <EvidenceChecklistCard claimId={claim.id} />
+                <FraudSignalsCard claimId={claim.id} />
+              </>
+            )}
 
             {/* Policy Information */}
             <Card>
@@ -1447,7 +1464,9 @@ export function ClaimDetailPage() {
                 <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Policy Type:</span>
                   <span className="font-medium text-uppercase">
-                    {convertToTitleCase(claim.claimType)}
+                    {claim.category === 'MOTOR'
+                      ? convertToTitleCase(claim.claimType ?? 'Motor')
+                      : getCategoryConfig(claim.category).label}
                   </span>
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between">
