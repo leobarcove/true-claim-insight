@@ -20,9 +20,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Waves } from 'lucide-react';
+import { Loader2, Sparkles, Waves } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCreateFloodClaim } from '@/hooks/use-non-motor';
+import { AiImportSection } from './ai-import-section';
+import type { ExtractionResult } from '@/hooks/use-ai-extraction';
 
 // Match the FloodSource / PropertyType enum values without importing the
 // runtime enum (CJS-ESM interop dance — see category-config.tsx note).
@@ -109,6 +111,7 @@ export function FloodFNOLForm({ onCancel }: Props) {
     register,
     handleSubmit,
     setValue,
+    reset,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
@@ -118,6 +121,104 @@ export function FloodFNOLForm({ onCancel }: Props) {
       incidentStart: new Date().toISOString().slice(0, 16),
     },
   });
+
+  /**
+   * Map extraction webhook output to form fields. Only the documents the
+   * webhook actually parses (mykad, policy_document) yield useful structured
+   * data; the other slots are file attachments for the record.
+   */
+  const handleExtracted = (extraction: ExtractionResult) => {
+    let appliedFields = 0;
+
+    // MyKad: name + NRIC. Webhook returns slightly varying shapes, so we
+    // probe a few common paths.
+    const mykadDoc =
+      extraction.mykad?.document?.front ??
+      extraction.mykad?.document ??
+      extraction.mykad?.data;
+    if (mykadDoc) {
+      const name = mykadDoc.name ?? mykadDoc.full_name;
+      const nric = mykadDoc.identity_number ?? mykadDoc.nric ?? mykadDoc.ic_number;
+      const address = mykadDoc.address ?? mykadDoc.full_address;
+      if (name) {
+        setValue('claimantName', String(name), { shouldValidate: true });
+        appliedFields++;
+      }
+      if (nric) {
+        setValue('claimantNric', String(nric), { shouldValidate: true });
+        appliedFields++;
+      }
+      // MyKad address often makes a good default for property address.
+      if (address) {
+        setValue('address', String(address), { shouldValidate: true });
+        appliedFields++;
+      }
+    }
+
+    // Policy: policy number.
+    const policyDoc =
+      extraction.policy_document?.document ?? extraction.policy_document?.data;
+    if (policyDoc) {
+      const policyNo =
+        policyDoc.policy_no ?? policyDoc.policy_number ?? policyDoc.policyNo;
+      if (policyNo) {
+        setValue('policyNumber', String(policyNo), { shouldValidate: true });
+        appliedFields++;
+      }
+    }
+
+    if (appliedFields > 0) {
+      toast({
+        title: 'AI extraction applied',
+        description: `${appliedFields} field${appliedFields > 1 ? 's' : ''} auto-filled. Review and adjust before submitting.`,
+      });
+    } else {
+      toast({
+        title: 'No fields extracted',
+        description:
+          'The OCR pipeline did not return any structured fields from these documents.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  /**
+   * One-click demo data — realistic Klang Valley flood claim. Useful for
+   * insurer demos and QA without hand-typing 20+ fields.
+   */
+  const fillDemoData = () => {
+    const now = new Date();
+    const twoDaysAgo = new Date(now.getTime() - 2 * 86400_000);
+    const incidentStart = new Date(twoDaysAgo.getFullYear(), twoDaysAgo.getMonth(), twoDaysAgo.getDate(), 6, 30);
+    const incidentEnd = new Date(now.getTime() - 12 * 3600_000);
+    reset({
+      claimantName: 'Siti Nurhaliza binti Rahman',
+      claimantNric: '880214-10-5432',
+      claimantPhone: '+60123456789',
+      policyNumber: 'POL-FLD-2026-007821',
+      incidentDate: now.toISOString().slice(0, 10),
+      address: 'No. 12, Jalan Sri Muda 5, Taman Sri Muda, 40400 Shah Alam, Selangor',
+      description:
+        "Heavy monsoon rainfall caused Klang River to overflow into Taman Sri Muda overnight. Ground floor flooded to ~1.2m, damaging furniture, electrical appliances, and the family car parked outside.",
+      incidentStart: incidentStart.toISOString().slice(0, 16),
+      incidentEnd: incidentEnd.toISOString().slice(0, 16),
+      waterDepthCm: 120,
+      durationHours: 36,
+      source: 'RIVER_OVERFLOW',
+      propertyType: 'RESIDENTIAL',
+      propertyFloorLevel: 0,
+      propertyElevationMeters: 12.5,
+      postcode: '40400',
+      state: 'Selangor',
+      buildingDamageRm: 35000,
+      contentsDamageRm: 18000,
+      vehicleDamageRm: 22000,
+    });
+    toast({
+      title: 'Demo data filled',
+      description: 'Sample flood claim populated. Review before submitting.',
+    });
+  };
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -174,18 +275,33 @@ export function FloodFNOLForm({ onCancel }: Props) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-md bg-cyan-50 dark:bg-cyan-950/30 flex items-center justify-center">
-          <Waves className="h-5 w-5 text-cyan-600" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-md bg-cyan-50 dark:bg-cyan-950/30 flex items-center justify-center flex-shrink-0">
+            <Waves className="h-5 w-5 text-cyan-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold">New flood claim</h2>
+            <p className="text-sm text-muted-foreground">
+              Capture incident, property, and damage details. External verification
+              (MetMalaysia rainfall, JPS gauges) runs automatically after submission.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-semibold">New flood claim</h2>
-          <p className="text-sm text-muted-foreground">
-            Capture incident, property, and damage details. External verification
-            (MetMalaysia rainfall, JPS gauges) runs automatically after submission.
-          </p>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={fillDemoData}
+          className="flex-shrink-0"
+        >
+          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+          Fill demo data
+        </Button>
       </div>
+
+      {/* AI document import — extracts NRIC name + policy number, optional */}
+      <AiImportSection onExtracted={handleExtracted} />
 
       {/* Claimant + Policy */}
       <Card>

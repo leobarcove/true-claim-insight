@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
 import { ArrowLeft } from 'lucide-react';
 import type { ClaimCategory } from '@tci/shared-types';
@@ -10,12 +10,37 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
 import { CategoryPicker } from '@/components/claims/non-motor/category-picker';
 import { FloodFNOLForm } from '@/components/claims/non-motor/flood-fnol-form';
+import { categoryConfig } from '@/lib/category-config';
+
+// Valid category keys for URL query param parsing. Sourced from the
+// registry so a new category gets accepted automatically.
+const VALID_CATEGORIES = new Set(Object.keys(categoryConfig));
+
+function parseCategoryParam(raw: string | null): ClaimCategory | null {
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  return VALID_CATEGORIES.has(upper) ? (upper as ClaimCategory) : null;
+}
 
 export function NewClaimPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [category, setCategory] = useState<ClaimCategory | null>(null);
+
+  // Category lives in the URL (?category=flood) so the link is shareable.
+  // Reading from searchParams on every render keeps it in sync with
+  // back/forward navigation without needing a separate useEffect.
+  const category = parseCategoryParam(searchParams.get('category'));
+
+  const setCategory = (next: ClaimCategory | null) => {
+    if (next) {
+      setSearchParams({ category: next.toLowerCase() }, { replace: false });
+    } else {
+      // Drop the param entirely when going back to the picker.
+      setSearchParams({}, { replace: false });
+    }
+  };
 
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
