@@ -239,10 +239,19 @@ pnpm build
 
 ## Test Credentials (Local Development)
 
-After running migrations, register a test user or use:
+All seeded users share the same password: `DemoPass123!`
 
-| Role     | Email                   | Password      |
-| -------- | ----------------------- | ------------- |
-| Adjuster | ahmad@adjustingfirm.com | SecureP@ss123 |
+| Role                | Email                    | Tenant                    |
+| ------------------- | ------------------------ | ------------------------- |
+| SUPER_ADMIN         | superadmin@tci.com       | —                         |
+| FIRM_ADMIN          | admin@pacific.com        | Pacific (adjusting firm)  |
+| ADJUSTER            | adjuster@pacific.com     | Pacific (adjusting firm)  |
+| FIRM_ADMIN          | admin@allianz.com        | Allianz (insurer)         |
+| SIU_INVESTIGATOR    | siu@allianz.com          | Allianz                   |
+| COMPLIANCE_OFFICER  | compliance@allianz.com   | Allianz                   |
+| SUPPORT_DESK        | support@allianz.com      | Allianz                   |
+| SHARIAH_REVIEWER    | shariah@allianz.com      | Allianz                   |
 
-**Note:** You must first register the user via `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs
+Use `adjuster@pacific.com` to log in to the adjuster-portal (http://localhost:4000).
+
+**Source of truth:** `packages/prisma-client/prisma/seed.ts`. To register additional users, use `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs.
