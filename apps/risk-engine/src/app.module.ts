@@ -13,6 +13,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { EventsGateway } from './trinity/events.gateway';
 import { StorageService } from './common/services/storage.service';
 import { TrinityReportGenerator } from './trinity/trinity-report.generator';
+import { FraudSignalsModule } from './fraud-signals/fraud-signals.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TrinityReportGenerator } from './trinity/trinity-report.generator';
     AssessmentsModule,
     ExtractionModule,
     TenantModule,
+    FraudSignalsModule,
   ],
   controllers: [RiskController],
   providers: [
