@@ -1,33 +1,45 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { LlmProvider } from './llm-provider.interface';
 
+/**
+ * LlmProvider impl backed by the self-hosted Qwen / DeepSeek GPU service
+ * over a Cloudflare tunnel. Keeps document data in Malaysian
+ * infrastructure (PDPA / data-sovereignty alignment).
+ *
+ * Refactored from the original GpuClientService — same network calls,
+ * now behind the LlmProvider interface so it can be swapped via the
+ * LLM_PROVIDER DI token.
+ */
 @Injectable()
-export class GpuClientService {
-  private readonly logger = new Logger(GpuClientService.name);
+export class OllamaGpuLlmProvider implements LlmProvider {
+  private readonly logger = new Logger(OllamaGpuLlmProvider.name);
   private readonly baseUrl: string;
 
-  constructor(private configService: ConfigService) {
+  readonly name = 'OllamaGpu';
+  readonly defaultModel = 'qwen2.5:7b';
+
+  constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
       'GPU_SERVICE_URL',
       'https://begins-bottles-nicholas-resulted.trycloudflare.com'
     );
   }
 
-  async ocr(fileBuffer: Buffer, filename: string): Promise<any> {
+  async ocr(fileBuffer: Buffer, filename: string): Promise<{ text: string }> {
     const formData = new FormData();
     const blob = new Blob([fileBuffer]);
     formData.append('file', blob, filename);
     formData.append('engine', 'surya');
-
-    return this.post('/v3/ocr', formData);
+    const resp = await this.post('/v3/ocr', formData);
+    return { text: resp?.text ?? '' };
   }
 
-  async generateJson(prompt: string, model = 'qwen2.5:7b'): Promise<any> {
+  async generateJson(prompt: string, model = this.defaultModel): Promise<any> {
     const formData = new FormData();
     formData.append('prompt', prompt);
     formData.append('model', model);
     formData.append('format', 'json');
-
     return this.post('/v3/llm/generate', formData);
   }
 
@@ -43,7 +55,6 @@ export class GpuClientService {
     formData.append('prompt', prompt);
     formData.append('model', model);
     formData.append('format', 'json');
-
     return this.post('/v3/llm/vision', formData);
   }
 
@@ -53,7 +64,6 @@ export class GpuClientService {
     formData.append('model', model);
     formData.append('stream', 'false');
     formData.append('options', JSON.stringify({ temperature: 0.3 }));
-
     return this.post('/v3/llm/generate', formData);
   }
 
