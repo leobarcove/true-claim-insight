@@ -169,7 +169,7 @@ export function NewClaimPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <Header
         title="Create New Claim"
         description="Assist a claimant by initiating their claim file."
@@ -180,7 +180,11 @@ export function NewClaimPage() {
         </Button>
       </Header>
 
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      {/* AppLayout's main area already provides the single scrollable region.
+          Don't add overflow-auto here — that nests a second scrollbar inside
+          the layout's scrollbar, which looks especially broken on tall forms
+          like the flood FNOL. */}
+      <div className="p-6 space-y-6">
         <div className="mx-auto max-w-4xl">
           <div className="bg-card rounded-lg border shadow-sm p-8">
             {isSubmitting ? (
