@@ -508,6 +508,56 @@ export class ClaimsService {
   }
 
   /**
+   * Return the evidence checklist for a claim: required document types for
+   * the claim's category (from EvidenceRequirement config), each annotated
+   * with whether the claimant has uploaded one yet.
+   *
+   * Resolution order for requirements:
+   *   1. Tenant-specific rows (tenantId = claim.tenantId)
+   *   2. Global default rows (tenantId IS NULL)
+   * Tenant-specific overrides global for the same documentType.
+   */
+  async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {
+    const claim = await this.findOne(id, tenantContext);
+
+    const [tenantReqs, globalReqs, uploadedDocs] = await Promise.all([
+      claim.tenantId
+        ? this.prisma.evidenceRequirement.findMany({
+            where: { tenantId: claim.tenantId, category: claim.category },
+            orderBy: { sortOrder: 'asc' },
+          })
+        : Promise.resolve([]),
+      this.prisma.evidenceRequirement.findMany({
+        where: { tenantId: null, category: claim.category },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.document.findMany({
+        where: { claimId: id },
+        select: { id: true, type: true, filename: true, createdAt: true },
+      }),
+    ]);
+
+    const byType = new Map<string, (typeof globalReqs)[number]>();
+    for (const r of globalReqs) byType.set(r.documentType, r);
+    for (const r of tenantReqs) byType.set(r.documentType, r); // override
+
+    const uploadedByType = new Map<string, typeof uploadedDocs>();
+    for (const d of uploadedDocs) {
+      if (!uploadedByType.has(d.type)) uploadedByType.set(d.type, []);
+      uploadedByType.get(d.type)!.push(d);
+    }
+
+    return Array.from(byType.values()).map(req => ({
+      documentType: req.documentType,
+      isMandatory: req.isMandatory,
+      description: req.description,
+      sortOrder: req.sortOrder,
+      uploaded: uploadedByType.get(req.documentType) ?? [],
+      satisfied: (uploadedByType.get(req.documentType)?.length ?? 0) > 0,
+    }));
+  }
+
+  /**
    * Get claim timeline/audit trail with tenant validation
    */
   async getTimeline(id: string, tenantContext?: TenantContext) {

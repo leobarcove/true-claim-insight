@@ -119,6 +119,8 @@ model Tenant {
   vehicleMakes        VehicleMake[]
   vehicleModels       VehicleModel[]
   ownedClaims         Claim[]
+  floodClaims         FloodClaim[]
+  evidenceRequirements EvidenceRequirement[]
 
   @@map("tenants")
 }
@@ -197,7 +199,11 @@ model Claim {
   adjusterId              String?
   insurerTenantId         String?
   policyNumber            String
-  claimType               ClaimType
+  // Coarse-grained category drives the polymorphic sub-table relation and
+  // determines which evidence checklist + fraud providers apply.
+  category                ClaimCategory @default(MOTOR)
+  // Motor-specific subtype. Required when category=MOTOR, otherwise nullable.
+  claimType               ClaimType?
   status                  ClaimStatus @default(SUBMITTED)
   incidentDate            DateTime
   incidentTime            DateTime?
@@ -244,6 +250,10 @@ model Claim {
   sessions                Session[]
   videoUploads            VideoUpload[]
   trinityChecks           TrinityCheck[]
+  // Per-category polymorphic sub-tables. Exactly one should be populated,
+  // matching the value in `category`.
+  floodClaim              FloodClaim?
+  fraudSignals            FraudSignal[]
 
   @@index([claimantId])
   @@index([nric])
@@ -251,8 +261,115 @@ model Claim {
   @@index([status])
   @@index([tenantId])
   @@index([userId])
+  @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
+}
+
+// ============================================================================
+// Non-motor: Flood (first non-motor type — Klang Valley monsoon, flash floods,
+// coastal surge). Pattern is reusable for Fire, Lightning, Burglary etc.
+//
+// Fields mirror what overseas systems anchor on:
+//  - elevationMeters / floorLevel: NFIP/FEMA elevation certificate pattern
+//  - postcode + jpsGaugeId: enables JPS InfoBanjir gauge cross-reference
+//  - parametricTriggerMet: Swiss Re parametric flood pattern
+//  - metMalaysiaEventRef: named storm/monsoon event linkage
+// ============================================================================
+model FloodClaim {
+  id                       String         @id @default(uuid())
+  claimId                  String         @unique
+  tenantId                 String?
+
+  // Incident specifics
+  incidentStart            DateTime
+  incidentEnd              DateTime?
+  waterDepthCm             Int?
+  durationHours            Int?
+  source                   FloodSource?
+
+  // Property + geography
+  propertyType             PropertyType?
+  propertyFloorLevel       Int?
+  propertyElevationMeters  Float?
+  postcode                 String?
+  state                    String?
+
+  // External verification — written by FraudSignalProvider plugins
+  parametricTriggerMet     Boolean?
+  metMalaysiaEventRef      String?
+  jpsGaugeId               String?
+
+  // Damage breakdown (claimant-declared, validated by inspection)
+  buildingDamageRm         Decimal?       @db.Decimal(12, 2)
+  contentsDamageRm         Decimal?       @db.Decimal(12, 2)
+  vehicleDamageRm          Decimal?       @db.Decimal(12, 2)
+
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  claim                    Claim          @relation(fields: [claimId], references: [id])
+  tenant                   Tenant?        @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([incidentStart])
+  @@index([postcode])
+  @@map("flood_claims")
+}
+
+// ============================================================================
+// Fraud signal records — Shift Technology pattern.
+// Each detector (parametric weather check, document forgery, repeat claimant,
+// behavioural Hume score, etc.) writes one row per signal it produces.
+// The risk-engine fuses signals into an overall score; the adjuster UI lists
+// individual signals with severity + evidence.
+// ============================================================================
+model FraudSignal {
+  id          String         @id @default(uuid())
+  claimId     String
+  // Free-form provider id (e.g. "MetMalaysiaRainfall", "RepeatClaimantGraph",
+  // "HumeBehavioural"). Kept as string rather than enum so plugins can register
+  // without schema migrations.
+  provider    String
+  category    FraudCategory
+  signalType  String
+  severity    SignalSeverity
+  confidence  Float
+  message     String?
+  rawData     Json           @default("{}")
+  createdAt   DateTime       @default(now())
+
+  claim       Claim          @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@index([provider])
+  @@index([category])
+  @@index([severity])
+  @@map("fraud_signals")
+}
+
+// ============================================================================
+// Evidence checklist — data-driven per ClaimCategory + tenant.
+// Lets each insurer define their own required documents for each claim type
+// without code changes. Null tenantId = global default.
+// ============================================================================
+model EvidenceRequirement {
+  id           String        @id @default(uuid())
+  tenantId     String?
+  category     ClaimCategory
+  documentType DocumentType
+  isMandatory  Boolean       @default(true)
+  description  String?
+  sortOrder    Int           @default(0)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, category, documentType])
+  @@index([category])
+  @@map("evidence_requirements")
 }
 
 model ClaimNote {
@@ -479,12 +596,66 @@ enum UserTenantStatus {
 }
 
 
+// Coarse-grained claim category drives polymorphic sub-tables, evidence
+// checklists, and which FraudSignalProvider plugins apply.
+enum ClaimCategory {
+  MOTOR
+  FLOOD
+  FIRE
+  LIGHTNING
+  BURGLARY
+  PERSONAL_ACCIDENT
+  HOH                 // Houseowner / Householder umbrella (multi-peril)
+  OTHER
+}
+
+// Motor-specific subtype — only meaningful when category=MOTOR.
 enum ClaimType {
   OWN_DAMAGE
   THIRD_PARTY_PROPERTY
   THIRD_PARTY_INJURY
   THEFT
   WINDSCREEN
+}
+
+enum FloodSource {
+  RIVER_OVERFLOW
+  FLASH_FLOOD
+  COASTAL_SURGE
+  DRAINAGE_FAILURE
+  RAINWATER_INGRESS
+  DAM_RELEASE
+  UNKNOWN
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+  MIXED_USE
+  AGRICULTURAL
+  OTHER
+}
+
+// Shift Technology-inspired signal taxonomy. Each detector tags its output
+// with one category so the adjuster UI can group them sensibly.
+enum FraudCategory {
+  PARAMETRIC      // External trigger verification (rainfall, lightning strikes)
+  IDENTITY        // eKYC, deepfake, liveness checks
+  BEHAVIOURAL     // Hume voice/face, Parselmouth voice stress, attention
+  DOCUMENT        // OCR + forgery + duplicate-receipt detection
+  NETWORK         // Graph: repeat claimants, linked accounts, shared addresses
+  ENVIRONMENTAL   // Weather, satellite, geo, timezone evidence
+  INVENTORY       // Contents inventory validation, market-value checks
+  POLICY          // Policy timing anomalies (new policy + immediate claim)
+}
+
+enum SignalSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum ClaimStatus {
@@ -551,6 +722,16 @@ enum DocumentType {
   NRIC
   OTHER_DOCUMENT
   CLAIMANT_SCREENSHOT
+  // Non-motor evidence types
+  BOMBA_REPORT          // Fire & Rescue Department report (fire claims)
+  FLOOD_AUTHORITY_REPORT // NADMA / JPS / local council flood notice
+  WEATHER_REPORT        // MetMalaysia weather/rainfall/lightning record
+  UTILITY_SURGE_REPORT  // TNB / utility company surge incident (lightning)
+  INVENTORY_LIST        // Contents inventory for fire/flood/burglary
+  PROOF_OF_OWNERSHIP    // Receipts, serial numbers, photos predating loss
+  MEDICAL_REPORT        // PA / injury claims
+  PROPERTY_TITLE        // Geran / property ownership
+  UTILITY_BILL          // Address proof
 }
 
 enum ActorType {

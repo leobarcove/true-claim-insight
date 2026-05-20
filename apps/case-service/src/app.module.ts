@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ClaimsModule } from './claims/claims.module';
 import { AdjustersModule } from './adjusters/adjusters.module';
 import { DocumentsModule } from './documents/documents.module';
+import { FloodClaimsModule } from './flood-claims/flood-claims.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
 import { TenantModule } from './tenant/tenant.module';
@@ -49,6 +50,7 @@ import configuration from './config/configuration';
     ClaimsModule,
     AdjustersModule,
     DocumentsModule,
+    FloodClaimsModule,
     HealthModule,
   ],
   providers: [

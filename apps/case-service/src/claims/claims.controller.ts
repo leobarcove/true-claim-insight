@@ -196,6 +196,19 @@ export class ClaimsController {
     return this.claimsService.getTimeline(id, tenantContext);
   }
 
+  @Get(':id/evidence-checklist')
+  @ApiOperation({
+    summary:
+      'Get evidence checklist for a claim — required documents for its category plus upload status',
+  })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  async getEvidenceChecklist(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.getEvidenceChecklist(id, tenantContext);
+  }
+
   @Post(':id/notes')
   @ApiOperation({ summary: 'Add a note to a claim (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
