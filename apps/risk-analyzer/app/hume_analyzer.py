@@ -26,13 +26,18 @@ class HumeAnalyzer:
         """Initialize HumeAI client."""
         if not config.HUME_API_KEY:
             raise ValueError("HUME_API_KEY not configured")
-        
+
         self.api_key = config.HUME_API_KEY
         self.timeout = config.HUME_JOB_TIMEOUT
         self.poll_interval = config.HUME_POLL_INTERVAL
 
         self.socket = None
         self.client = AsyncHumeClient(api_key=self.api_key)
+        # Serialize access to the shared stream socket. Hume's stream API permits
+        # only one in-flight recv per connection, so concurrent send_file() calls
+        # collide with "cannot call recv while another coroutine is already
+        # waiting for the next message".
+        self._socket_lock = asyncio.Lock()
     
     async def _connect(self):
         if self.client and not self.socket:
@@ -50,14 +55,15 @@ class HumeAnalyzer:
     async def analyze_audio(self, audio_path: str) -> Dict[str, Any]:
         """
         Analyze audio file for vocal prosody and emotions using Stream API.
-        """        
+        """
         try:
             model_config = StreamConfig(prosody={})
-            result = await self.socket.send_file(audio_path, config=model_config)
+            async with self._socket_lock:
+                result = await self.socket.send_file(audio_path, config=model_config)
             results_list = result if isinstance(result, list) else [result]
             metrics = self._extract_from_stream_results(results_list, "prosody")
             return metrics
-            
+
         except Exception as e:
             print(f"[HumeAnalyzer] Audio analysis failed: {e}")
             raise
@@ -75,8 +81,9 @@ class HumeAnalyzer:
                 model_config = StreamConfig(face={}, prosody={})
             else:
                 model_config = StreamConfig(face={})
-                
-            result = await self.socket.send_file(video_path, config=model_config)
+
+            async with self._socket_lock:
+                result = await self.socket.send_file(video_path, config=model_config)
             
             # Check if any part of the result contains the 'video_no_audio' error
             results_list = result if isinstance(result, list) else [result]
@@ -94,7 +101,8 @@ class HumeAnalyzer:
             if has_prosody_error:
                 print(f"[HumeAnalyzer] Video has no audio (detected in response), retrying with face only...")
                 face_only_config = StreamConfig(face={})
-                result = await self.socket.send_file(video_path, config=face_only_config)
+                async with self._socket_lock:
+                    result = await self.socket.send_file(video_path, config=face_only_config)
                 results_list = result if isinstance(result, list) else [result]
                 metrics = self._extract_from_stream_results(results_list, "face")
                 metrics["details"] = "Video analysis limited to facial expressions (no audio detected)."
@@ -111,7 +119,8 @@ class HumeAnalyzer:
                 try:
                     # Retry with only face model
                     face_only_config = StreamConfig(face={})
-                    result = await self.socket.send_file(video_path, config=face_only_config)
+                    async with self._socket_lock:
+                        result = await self.socket.send_file(video_path, config=face_only_config)
                     results_list = result if isinstance(result, list) else [result]
                     metrics = self._extract_from_stream_results(results_list, "face")
                     metrics["details"] = "Video analysis limited to facial expressions (no audio detected)."

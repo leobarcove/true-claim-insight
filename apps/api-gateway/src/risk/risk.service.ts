@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -172,7 +172,10 @@ export class RiskService {
         errorMessage = errorText || errorMessage;
       }
 
-      throw new Error(`Risk engine error: ${errorMessage}`);
+      // BadGatewayException is caught by Nest's global filter and returns a clean
+      // 502 to the client. A plain `throw new Error` here would surface as an
+      // unhandledRejection in any fire-and-forget caller and terminate the process.
+      throw new BadGatewayException(`Risk engine error: ${errorMessage}`);
     }
 
     return response.json();

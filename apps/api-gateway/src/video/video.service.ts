@@ -75,12 +75,18 @@ export class VideoService {
     });
 
     const result = await this.handleResponse(response);
-    try {
-      this.logger.log(`Session ${id} ended. Generating consent form...`);
-      this.riskService.generateConsentForm(id, tenantId, userId, userRole);
-    } catch (error: any) {
-      this.logger.error(`Failed to generate consent form for session ${id}: ${error.message}`);
-    }
+    this.logger.log(`Session ${id} ended. Generating consent form...`);
+    // Fire-and-forget by design (PDF generation is slow), but rejections must be caught
+    // here or Node will terminate the process via unhandledRejection.
+    this.riskService
+      .generateConsentForm(id, tenantId, userId, userRole)
+      .then(() => this.logger.log(`Consent form generated for session ${id}`))
+      .catch((error: Error) =>
+        this.logger.error(
+          `Failed to generate consent form for session ${id}: ${error.message}`,
+          error.stack
+        )
+      );
 
     return result;
   }
