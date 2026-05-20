@@ -8,6 +8,7 @@ import { AdjustersModule } from './adjusters/adjusters.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FloodClaimsModule } from './flood-claims/flood-claims.module';
 import { HealthModule } from './health/health.module';
+import { SignaturesModule } from './signatures/signatures.module';
 import { PrismaModule } from './config/prisma.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
@@ -52,6 +53,7 @@ import configuration from './config/configuration';
     DocumentsModule,
     FloodClaimsModule,
     HealthModule,
+    SignaturesModule,
   ],
   providers: [
     {
