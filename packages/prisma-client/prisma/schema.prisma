@@ -471,8 +471,18 @@ model Document {
   mimeType     String?
   status       DocumentStatus @default(QUEUED)
   metadata     Json         @default("{}")
-  signedAt     DateTime?
-  documentHash String?
+  // ===== Digital signature lifecycle =====
+  // Set on every Document so we can show a "not requested" badge on the UI
+  // for non-signable docs (photos, receipts) as well as track the lifecycle
+  // for consent forms. The provider abstraction (Stub today, SigningCloud
+  // later) writes these columns through case-service's SignaturesService.
+  signatureStatus      SignatureStatus @default(NOT_REQUESTED)
+  signatureRequestId   String?         // External provider reference (SigningCloud envelope id)
+  signatureUrl         String?         // URL the signer (claimant) opens to sign
+  signatureRequestedAt DateTime?       // When the signing request was created
+  signedAt             DateTime?       // When the claimant completed signing
+  signedStorageUrl     String?         // URL of the countersigned PDF (signed PDF stored separately)
+  documentHash         String?
   createdAt    DateTime     @default(now())
   tenantId     String?      // Organization ownership
   userId       String?      // Uploader ID
@@ -482,7 +492,16 @@ model Document {
   analysis     DocumentAnalysis?
 
   @@index([claimId])
+  @@index([signatureStatus])
   @@map("documents")
+}
+
+enum SignatureStatus {
+  NOT_REQUESTED  // Default — signing has not been initiated
+  PENDING        // Signing request created, signer has not yet completed
+  SIGNED         // Signer completed; signedStorageUrl populated
+  EXPIRED        // Request expired before signer completed
+  CANCELLED      // Request explicitly cancelled
 }
 
 model DocumentAnalysis {
