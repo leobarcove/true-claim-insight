@@ -1,10 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
 import type {
+  Claim,
   EvidenceRequirementResolved,
   FraudSignal,
+  FloodSource,
+  PropertyType,
 } from '@tci/shared-types';
 import { claimKeys } from './use-claims';
+
+export interface CreateFloodClaimInput {
+  // Core claim — supply either an existing claimantId, OR claimantNric +
+  // claimantPhone (+ optional claimantName) and the api-gateway will
+  // upsert a Claimant for you.
+  claimantId?: string;
+  claimantNric?: string;
+  claimantPhone?: string;
+  claimantName?: string;
+  nric?: string;
+  policyNumber: string;
+  incidentDate: string;
+  incidentLocation: { address: string; latitude?: number; longitude?: number };
+  description: string;
+  isPdpaCompliant?: boolean;
+  // Flood-specific
+  incidentStart: string;
+  incidentEnd?: string;
+  waterDepthCm?: number;
+  durationHours?: number;
+  source?: FloodSource;
+  propertyType?: PropertyType;
+  propertyFloorLevel?: number;
+  propertyElevationMeters?: number;
+  postcode?: string;
+  state?: string;
+  buildingDamageRm?: number;
+  contentsDamageRm?: number;
+  vehicleDamageRm?: number;
+}
 
 /**
  * Hooks for non-motor extensions: evidence checklist and fraud signals.
@@ -19,6 +52,28 @@ export const nonMotorKeys = {
   fraudSignals: (claimId: string) =>
     ['fraud-signals', claimId] as const,
 };
+
+/**
+ * Create a flood claim. Hits the api-gateway POST /claims/flood proxy,
+ * which forwards to case-service where Claim + FloodClaim are inserted
+ * in a single transaction.
+ */
+export function useCreateFloodClaim() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateFloodClaimInput) => {
+      const { data } = await apiClient.post<ApiResponse<Claim>>(
+        '/claims/flood',
+        input
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: claimKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: claimKeys.stats() });
+    },
+  });
+}
 
 /**
  * Evidence checklist for a claim. The backend resolves which document
