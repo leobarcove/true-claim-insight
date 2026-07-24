@@ -75,3 +75,5 @@ playwright-report/
 screenshots/
 claim-detail-*.png
 *.test.png
+docker-compose.override.yml
+.gstack/
