@@ -146,6 +146,9 @@ model Adjuster {
 
   @@index([tenantId])
   @@map("adjusters")
+  authoredReports   AdjusterReport[] @relation("ReportAuthor")
+  reviewedReports   AdjusterReport[] @relation("ReportReviewer")
+  signedReports     AdjusterReport[] @relation("ReportSigner")
 }
 
 model Claimant {
@@ -279,6 +282,7 @@ model Claim {
   @@index([createdAt(sort: Desc)])
   @@map("claims")
   slaClocks               SlaClock[]
+  reports                 AdjusterReport[]
 }
 
 // ============================================================================
@@ -1217,4 +1221,86 @@ model SlaClock {
   @@index([state, dueAt])
   @@index([stage])
   @@map("sla_clocks")
+}
+
+// ============================================================================
+// ADJUSTER REPORTS — the firm's core work product (BNM Adjuster PD 12.6–12.7)
+// ============================================================================
+
+enum AdjusterReportType {
+  PRELIMINARY
+  INTERIM
+  FINAL
+  SUPPLEMENTARY
+}
+
+enum AdjusterReportStatus {
+  DRAFT     /// being written by the author
+  IN_REVIEW /// submitted, awaiting sign-off
+  SIGNED    /// signed by a qualified adjusting employee
+  ISSUED    /// released to the insurer — immutable from here
+  WITHDRAWN /// superseded or retracted, retained for the record
+}
+
+/// An adjuster's report on a claim.
+///
+/// PD 12.7 restricts authorship to adjusting employees and requires a junior's
+/// report to be signed by a senior, so `authorAdjusterId` and `signedByAdjusterId`
+/// are separate and both point at Adjuster rather than User — a report cannot be
+/// authored by someone who is not an adjusting employee.
+///
+/// PD 12.6 requires the report to disclose facts, assumptions, methods, sources
+/// and databases relied on. Those sections are mandatory in the template registry
+/// and cannot be signed while empty.
+///
+/// Reports are never edited after issue. A correction supersedes the previous
+/// version via `supersedesId`, so the record shows what was told to the insurer
+/// and when — which is the question a s.146 examination asks.
+model AdjusterReport {
+  id      String               @id @default(uuid())
+  claimId String
+  type    AdjusterReportType
+  status  AdjusterReportStatus @default(DRAFT)
+
+  /// Increments per claim and type; a superseding report carries the next number.
+  version     Int     @default(1)
+  supersedesId String? @unique
+
+  /// Section key → { heading, body, aiAssisted }. The template registry defines
+  /// which keys are mandatory; see report-templates.ts.
+  sections Json @default("{}")
+
+  authorAdjusterId   String
+  reviewerAdjusterId String?
+  signedByAdjusterId String?
+
+  /// Recorded when the countersign requirement could not be verified against
+  /// seniority data, so the basis of a sign-off is never silently assumed.
+  countersignBasis String?
+
+  submittedAt DateTime?
+  signedAt    DateTime?
+  issuedAt    DateTime?
+
+  withdrawnAt     DateTime?
+  withdrawnReason String?
+
+  /// Rendered PDF, once issued.
+  renderedDocumentId String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim      Claim           @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  author     Adjuster        @relation("ReportAuthor", fields: [authorAdjusterId], references: [id])
+  reviewer   Adjuster?       @relation("ReportReviewer", fields: [reviewerAdjusterId], references: [id])
+  signedBy   Adjuster?       @relation("ReportSigner", fields: [signedByAdjusterId], references: [id])
+  supersedes AdjusterReport? @relation("ReportSupersession", fields: [supersedesId], references: [id])
+  supersededBy AdjusterReport? @relation("ReportSupersession")
+
+  @@index([claimId])
+  @@index([status])
+  @@index([authorAdjusterId])
+  @@map("adjuster_reports")
 }

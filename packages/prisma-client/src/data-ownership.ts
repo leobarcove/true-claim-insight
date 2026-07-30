@@ -44,6 +44,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // the claims context alongside the engagement they time.
   slaPolicy: 'claims',
   slaClock: 'claims',
+  // The firm's work product on a claim.
+  adjusterReport: 'claims',
   caseDocument: 'claims',
   document: 'claims',
   policy: 'claims',
