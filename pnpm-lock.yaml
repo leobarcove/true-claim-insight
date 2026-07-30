@@ -409,6 +409,9 @@ importers:
       passport-jwt:
         specifier: ^4.0.1
         version: 4.0.1
+      pdfkit:
+        specifier: ^0.17.2
+        version: 0.17.2
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -434,6 +437,9 @@ importers:
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
+      '@types/pdfkit':
+        specifier: ^0.17.5
+        version: 0.17.5
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.0.0
         version: 8.50.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)

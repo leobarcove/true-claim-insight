@@ -14,6 +14,7 @@ import { SignaturesModule } from './signatures/signatures.module';
 import { PrismaModule } from './config/prisma.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { QueueModule } from './queue/queue.module';
+import { ReportsModule } from './reports/reports.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
 
@@ -53,6 +54,7 @@ import configuration from './config/configuration';
 
     // Durable background work (SLA clocks, notifications, retention)
     QueueModule,
+    ReportsModule,
 
     // Multi-tenancy
     TenantModule,
