@@ -90,7 +90,7 @@ export enum CaseInitiator {
 export enum PolicySource {
   MANUAL = 'MANUAL',
   API = 'API',
-  SCRAPED = 'SCRAPED',
+  FILE_FEED = 'FILE_FEED',
 }
 
 export enum DocumentValidationStatus {

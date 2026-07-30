@@ -821,7 +821,7 @@ enum CaseInitiator {
 enum PolicySource {
   MANUAL   // keyed in from insurer emails
   API      // insurer API integration (future)
-  SCRAPED  // agency-portal scraping (future)
+  FILE_FEED // structured file drop from the insurer (SFTP or agreed inbox schema)
 }
 
 enum DocumentValidationStatus {

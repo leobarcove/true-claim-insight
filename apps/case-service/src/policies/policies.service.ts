@@ -7,7 +7,9 @@ import { CreatePolicyDto } from './dto/create-policy.dto';
  * Minimal policy store for the TPA model. Policy data currently arrives from
  * the insurer (MSIG) by email and is keyed in manually (source=MANUAL).
  * Future adapters upsert here too: an insurer API integration (source=API)
- * or an agency-portal scraper (source=SCRAPED) — no schema change required.
+ * or a structured file drop from the insurer (source=FILE_FEED) — no schema
+ * change required. Note: scraping an insurer's agency portal is deliberately
+ * not an option here (docs/MASTER_PLAN.md §6.11).
  *
  * Lookup deliberately spans tenants: the TPA administers policies for every
  * insurer on its panel, and case intake needs to match a claimant-supplied
