@@ -46,6 +46,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   slaClock: 'claims',
   // The firm's work product on a claim.
   adjusterReport: 'claims',
+  // Who may decide a claim's outcome, and up to what value.
+  authorityLimit: 'claims',
   caseDocument: 'claims',
   document: 'claims',
   policy: 'claims',

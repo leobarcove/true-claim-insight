@@ -127,6 +127,7 @@ model Tenant {
 
   @@map("tenants")
   slaPolicies      SlaPolicy[]
+  authorityLimits  AuthorityLimit[]
 }
 
 model Adjuster {
@@ -149,6 +150,7 @@ model Adjuster {
   authoredReports   AdjusterReport[] @relation("ReportAuthor")
   reviewedReports   AdjusterReport[] @relation("ReportReviewer")
   signedReports     AdjusterReport[] @relation("ReportSigner")
+  authorityLimits   AuthorityLimit[]
 }
 
 model Claimant {
@@ -1303,4 +1305,50 @@ model AdjusterReport {
   @@index([status])
   @@index([authorAdjusterId])
   @@map("adjuster_reports")
+}
+
+// ============================================================================
+// AUTHORITY LIMITS — segregation of duties (§4.3 A3; PD 11.2(d))
+// ============================================================================
+
+/// Who may approve a claim, and up to what value.
+///
+/// The defect this closes: an adjuster could assess a claim and approve it in
+/// the same breath, at any amount, with nothing recording that the same person
+/// did both. Segregation of duties is the control every financial-services
+/// examiner looks for first, and its absence is not mitigated by good intent.
+///
+/// A limit may be attached to a role (everyone holding it) or to a named
+/// adjuster (which takes precedence). `maxApprovalAmount` null means unlimited
+/// — deliberate and explicit rather than implied by an absent row, because
+/// "no limit configured" and "no limit intended" must not look the same.
+model AuthorityLimit {
+  id       String  @id @default(uuid())
+  tenantId String
+
+  /// Applies to everyone holding this role. Mutually exclusive with adjusterId.
+  role       UserRole?
+  /// Applies to one named adjuster, overriding any role limit.
+  adjusterId String?
+
+  /// Null applies to every claim category.
+  category ClaimCategory?
+
+  /// Null means no ceiling. Absence of a row means no authority at all.
+  maxApprovalAmount Decimal? @db.Decimal(14, 2)
+
+  /// May the holder approve a claim they assessed themselves? Default false —
+  /// the four-eyes principle is the point of the model.
+  canApproveOwnAssessment Boolean @default(false)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  adjuster Adjuster? @relation(fields: [adjusterId], references: [id])
+
+  @@index([tenantId, role])
+  @@index([adjusterId])
+  @@map("authority_limits")
 }

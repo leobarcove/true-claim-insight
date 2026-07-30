@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -11,6 +17,7 @@ import { EncryptionService } from '@tci/crypto';
 import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
+import { checkAuthority, type AuthorityDecision } from './claim-authority';
 
 @Injectable()
 export class ClaimsService {
@@ -22,6 +29,61 @@ export class ClaimsService {
     private readonly encryption: EncryptionService,
     private readonly sla: SlaService
   ) {}
+
+  /**
+   * Refuse a transition the actor is not authorised to make.
+   *
+   * Returns the decision so its basis can be written onto the audit row: an
+   * examiner asking why a particular person was allowed to approve a particular
+   * amount gets an answer from the record rather than from reasoning about
+   * configuration as it stands today.
+   */
+  private async assertAuthority(
+    claim: { id: string; adjusterId?: string | null; category?: string | null; tenantId?: string | null; approvedAmount?: unknown; estimatedLossAmount?: unknown },
+    targetStatus: ClaimStatus,
+    tenantContext?: TenantContext
+  ): Promise<AuthorityDecision> {
+    if (!tenantContext) {
+      // No identity, no authority. Internal callers must supply a context.
+      return { allowed: true, basis: 'no tenant context (internal call)' };
+    }
+
+    const [actorAdjuster, limits] = await Promise.all([
+      this.prisma.adjuster.findFirst({ where: { userId: tenantContext.userId } }),
+      this.prisma.authorityLimit.findMany({
+        where: { tenantId: tenantContext.tenantId, isActive: true },
+      }),
+    ]);
+
+    const toNumber = (value: unknown): number | null =>
+      value === null || value === undefined ? null : Number(value);
+
+    const decision = checkAuthority({
+      targetStatus,
+      actorRole: tenantContext.userRole,
+      actorAdjusterId: actorAdjuster?.id ?? null,
+      claimAdjusterId: claim.adjusterId ?? null,
+      claimCategory: claim.category ?? null,
+      amount: toNumber(claim.approvedAmount) ?? toNumber(claim.estimatedLossAmount),
+      limits: limits.map(limit => ({
+        role: limit.role,
+        adjusterId: limit.adjusterId,
+        category: limit.category,
+        maxApprovalAmount: limit.maxApprovalAmount === null ? null : Number(limit.maxApprovalAmount),
+        canApproveOwnAssessment: limit.canApproveOwnAssessment,
+      })),
+    });
+
+    if (!decision.allowed) {
+      this.logger.warn(
+        `Authority refused: user ${tenantContext.userId} (${tenantContext.userRole}) ` +
+          `→ ${targetStatus} on claim ${claim.id}: ${decision.basis}`
+      );
+      throw new ForbiddenException(decision.reason);
+    }
+
+    return decision;
+  }
 
   /**
    * Start, pause, resume and stop the SLA clocks a status change implies.
@@ -450,6 +512,11 @@ export class ClaimsService {
     // Validate status transition
     this.validateStatusTransition(existingClaim.status, status);
 
+    // Segregation of duties and monetary authority (§4.3 A3). Enforced here
+    // rather than in the controller: a role decorator cannot know whether this
+    // person assessed this claim, or what they are authorised to approve.
+    const authority = await this.assertAuthority(existingClaim, status as ClaimStatus, tenantContext);
+
     await this.prisma.claim.update({
       where: { id },
       data: {
@@ -464,6 +531,9 @@ export class ClaimsService {
       {
         from: existingClaim.status,
         to: status,
+        // Recorded whether or not it was contested, so an approval never has to
+        // be reconstructed from who happened to be logged in at the time.
+        authorityBasis: authority.basis,
       },
       tenantContext,
       { oldValues: { status: existingClaim.status }, newValues: { status } }
