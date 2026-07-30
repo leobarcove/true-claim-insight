@@ -325,6 +325,32 @@ The question asked was "is the system design properly done?" — answer: **not y
 | **A7** | **`api-gateway` is not a gateway** | It proxies most routes while owning four domains, validates little, and forwards `any` in places. Pick one identity: stateless edge (auth, rate limiting, routing) or a BFF that owns those domains deliberately |
 | **A8** | **Documentation describes services that don't exist** | `identity-service`, `document-service`, `insurer-dashboard` are empty directories in `CLAUDE.md`'s architecture — the same false-comfort pattern as §3.6. Correct `CLAUDE.md` |
 
+#### A2 resolution — declared bounded contexts, enforced (decided: future-proof approach)
+
+Rather than choosing between "move code into case-service" and "leave it and be careful", ownership is **declared as data and enforced by a test**. This survives future service splits or merges, because the contexts follow the domain rather than today's process boundaries.
+
+| Context | Owner today | Tables |
+|---|---|---|
+| `identity` | api-gateway (natural seam if an identity-service is ever extracted) | user, userTenant, tenant, tenantAccessLog, otpCode, claimant |
+| `claims` | case-service | claim, case, caseDocument, document, policy, claimNote, floodClaim, travelClaim, evidenceRequirement, adjuster, auditTrail |
+| `assessment` | video-service + risk-engine | session, sessionClientInfo, videoUpload, deceptionScore, riskAssessment, trinityCheck, documentAnalysis, fraudSignal |
+| `reference` | api-gateway | vehicleMake, vehicleModel (motor legacy) |
+
+Declared in `packages/prisma-client/src/data-ownership.ts`; enforced by `apps/case-service/src/common/data-ownership.spec.ts`, which scans every service's source for Prisma write calls and fails on any cross-context write. **Reads are permitted** — cross-context reads are a coupling smell, not a corruption hazard, and forbidding them would need an API layer that does not exist yet.
+
+**Six known violations are declared as exceptions**, each with a named resolution, and the list is a **ratchet the test enforces — it may shrink, never grow**:
+
+| Service → table | Resolution |
+|---|---|
+| video-service → `claim` | Call case-service `PATCH /claims/:id/status` over the internal channel |
+| video-service → `document` | Call case-service `POST /claims/:claimId/documents` |
+| video-service → `user` | Read-only lookup; no writes to identity |
+| risk-engine → `document` | Case-service endpoint for analysis results to update document state |
+| risk-engine → `floodClaim` | Emit the FraudSignal only; case-service applies the parametric flag |
+| case-service → `claimant` | Gateway resolves the claimant and passes `claimantId` |
+
+Why a static test rather than a runtime Prisma extension: `$extends` returns a *new* client object, so adopting it would churn every call site in four services, and it catches violations only when the code path runs. The static scan catches them at review time. Runtime enforcement becomes worthwhile once the exception list is empty and call sites are being refactored anyway — recorded as a follow-up, not built speculatively.
+
 #### Recommendation on structure
 
 **Do not do a big-bang merge.** The cheap fix captures most of the value: **enforce data ownership at the API boundary** — `video-service` and `risk-engine` call case-service endpoints instead of writing its tables; `api-gateway` either hands its four domains to case-service or is acknowledged as a BFF that owns them. Days, not weeks, and it removes the silent-corruption failure mode without a rewrite.
@@ -484,7 +510,7 @@ Verdict: **the system design is not yet sound.** Three blocking defects (A1 no s
 | **A1 internal service auth** | ✅ `9c10847`. `InternalHttpModule` injects `x-internal-key` as an axios instance default so none of the ~27 gateway call sites can forget it; the three internal services require it before honouring identity headers and **fail closed** when unconfigured. Deliberately excluded from the `ocr` and `location` modules, which call third-party hosts. Verified: forged headers → 403 (with and without a wrong key), all staff and claimant flows → 200/201 |
 | **A4 CI + first compliance tests** | ✅ `.github/workflows/ci.yml` (typecheck job across six apps + compliance job) and **27 passing tests** in two suites: `tenant.service.spec.ts` (PII redaction, NRIC fail-closed masking, behavioural/fraud data withheld from claimants and support desk, private-note isolation) and `case-flows.spec.ts` (CSP 24h/30-day flags stay advisory, evidence completeness counts mandatory only, flow integrity, the "D7 522" alphanumeric-flight-code regression). Both suites are pure functions, so no database is needed in CI |
 | **A8 documentation correction** | ✅ `CLAUDE.md` now reflects reality: the three phantom services and the `infrastructure/` tree are listed as *not built*; AWS/EKS marked as target-not-actual; third-party integrations split into integrated vs not, with the offshore data-residency caveat stated |
-| **A2 data ownership** | ⬜ **awaiting your decision** — see the two options in §4.3. Nothing else in Phase 0b is blocked by it |
+| **A2 data ownership** | ◐ **foundation done** — bounded contexts declared and enforced by test (§4.3 A2 resolution); the six existing violations are declared exceptions on a shrink-only ratchet. **Remaining:** work the six exceptions down to zero, each by calling the owning service instead of writing its tables. New violations are now impossible to add unnoticed |
 
 A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain tracked and deferred. A3 (segregation of duties) is in Phase 1a as `AuthorityLimit`.
 
