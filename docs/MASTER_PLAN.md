@@ -4,7 +4,9 @@
 
 The operator runs an unlicensed TPA (claims administration for insurers; MSIG verbally agreed as first client, white-label, multi-panel ambition) and intends to become a **BNM-registered adjuster** under the Financial Services Act 2013. The two governing documents — the FSA 2013 and BNM's *Registration Procedures and Requirements on Professionalism of Adjusters* (BNM/RH/PD 032-29, 29 Aug 2025) — plus the Claims Settlement Practices PD (CSP, BNM/RH/PD 029-69) define the obligations this system must embody. Compliance is non-negotiable: every binding requirement must map to an enforced system control.
 
-This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md` (Rev 5), which governs the sequencing in §5 and the feasibility position in §8. A per-requirement compliance verification audit produced the verdict column in §3.
+This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md`, which governs the sequencing in §5 and the feasibility position in §8. A per-requirement compliance verification audit produced the verdict column in §3.
+
+> **Cross-reference note.** Section numbers cited as "research §n" refer to `MARKET_RESEARCH_TPA_REVENUE.md` as at 30 July 2026 (§5 revenue paths, §6 cost/P&L, §7 verdict, §8 risk register, §9 partner ask, §10 unverified items). That document is actively revised — if its numbering shifts again, the figures used here (funding RM900k–1.4M vs RM300–500k, breakeven months 15–22, RM13–18M base steady state, RM8–12/claim Path C pricing) are the load-bearing values to re-verify, not the section labels.
 
 ### Scope — target claim lines
 
@@ -24,7 +26,20 @@ Two consequences that recur throughout this plan:
 
 ## 1. Vision & operating model
 
-**The licence flag concept** — TPA→adjuster transition is a capability flip, not a rebuild:
+### Decided trajectory: TPA first, registration when volume justifies it
+
+This is settled, and it governs every sequencing decision in §5:
+
+1. **Now — operate as a TPA** (claims administration for insurers, white-label) plus travel/Group PA volume. Funding need ~RM300–500k, near-breakeven in year 1 (§8.2). No regulated payroll.
+2. **Then — apply for BNM registration** once claim volume supports two senior adjusting employees (RM24–40k/month) and the panel relationships exist to keep them busy.
+
+The consequence for engineering is the whole point of this plan: **the foundations must be correct from day one so registration is a capability flip, not a rebuild.** Concretely that means, in the order it matters —
+
+- **Build the regulated machinery early but ship it inert.** Report structure, review/sign-off workflow, competency and COI models, audit trail, retention: all present behind `licensedMode`, exercised in TPA mode without the hard gates. Retrofitting sign-off chains and evidential audit onto a year of live claims data is the expensive path.
+- **Never encode an assumption that only holds today.** Two live examples: a single adjusting firm (§4.2 `resolveCaseTenant`) and TPA-only outputs. Both are cheap to keep open now and costly to open later.
+- **Keep the record honest from the first claim.** The registration application's credibility rests on demonstrable practice — 7 years of retained records, audited decisions, disclosed methods. Records created before registration are exactly the evidence BNM will look at, so they must be right from the start rather than from the application date.
+
+**The licence flag concept** — the TPA→adjuster transition is that capability flip:
 
 | Mode | What the firm does | What the system enforces |
 |---|---|---|
@@ -135,6 +150,20 @@ ELSE escalate one level (video → site → expert) on any trigger:
 ```
 
 Mode changes are audited and disclosed in the report (PD 12.6 methodology disclosure).
+
+### 2.5 The assessment mode is also the cost control
+
+Travel/Group PA revenue is **RM8–12 per claim** (research §5, Path C), against an insurer's internal handling cost of ~RM20–80. At that price the platform's per-claim COGS decides whether the line makes money — and the expensive components already exist in the codebase and will silently run on everything unless the router stops them.
+
+**Binding rule: the assessment mode sets the COGS ceiling.**
+
+| Mode | Permitted per-claim spend | Explicitly not permitted |
+|---|---|---|
+| `DESK_REVIEW` (the Path C default) | Document extraction only, on **in-country** inference. Target **≪ RM5/claim** | No video session, no Hume prosody/face analysis, no per-minute vendors, no eKYC unless a flag demands it |
+| `REMOTE_VIDEO` | Video + behavioural analysis justified by claim value | — |
+| `SITE_VISIT` / `EXPERT_REFERRAL` | Travel time / expert fee; priced into the fee note | — |
+
+Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, an amount revision, an AI-extraction inconsistency) and recorded — never the default. Two present-day hazards this rule closes: `GeminiLlmProvider` is a paid offshore API on the default path, and `risk-analyzer` performs Hume prosody/face analysis per session; either running on every RM10 travel claim inverts the unit economics. Phase 1b implements the router with this ceiling as an enforced constraint, not a guideline.
 
 ---
 
@@ -298,12 +327,13 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 - PDPA minimum: `Consent` entity captured **before** processing, NRIC/bank field encryption with key management, backfill of existing plaintext, `isPdpaCompliant` derived from a real consent record — **prod**
 - Notifications: email transport (real SMTP; Mailhog locally), EN/BM templates, delivery log, OTP off console — **prod**
 - Server-side status guards + basic `AuthorityLimit` (no self-approval) — **prod**
+- **Foundations items (cheap now, expensive later — see §6.5, §6.14):** resolve the handling firm explicitly in `resolveCaseTenant` instead of "first `ADJUSTING_FIRM` found"; fix the travel evidence-checklist filter (`claims.service.ts:533`); rename `PolicySource.SCRAPED` → `FILE_FEED`; populate `oldValues/newValues` in `claims.service.createAuditTrail` (the pre-image is already fetched at line 332 and discarded) — **prod**
 
-**Exit:** every mutation audited with before/after; consent is a record, not a badge; the firm can chase documents and answer "who did what, when" — the questions an insurer's vendor assessment asks. PDPA rows and s.146 readiness green.
+**Exit:** every mutation audited with before/after; consent is a record, not a badge; no single-firm assumption remains in the code; the firm can answer "who did what, when, and on whose instruction" — the questions an insurer's vendor assessment asks. PDPA rows and s.146 readiness green.
 
 #### Phase 1b — "Promise and keep turnaround" (~4–6 weeks) · unblocks the value proposition
 - SLA engine: BullMQ on existing Redis, Malaysian working-day calendar (national + state holidays), clocks for ACK ≤1 day / preliminary / final ≤10 days from `documentsCompleteAt`, pause-on-awaiting-documents, breach escalation — **prod**
-- Assessment-mode router + small-claims fast-track profile (per-tenant thresholds) — **prod**
+- Assessment-mode router + small-claims fast-track profile (per-tenant thresholds), **enforcing the §2.5 COGS ceiling** — a `DESK_REVIEW` claim must be structurally incapable of invoking video, biometric or per-minute vendors without a recorded escalation trigger — **prod**
 - Fix travel checklist bug (`claims.service.ts:534`); in-scope evidence requirement sets; checklist-complete event that starts the final-report clock — **prod**
 
 **Exit:** a fast-track desk-review claim completes inside its SLA with the clock visible and breaches escalating. Matrix row 12.5 and the CSP ACK/final anchors green.
@@ -360,7 +390,7 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 - SMS channel; insurer status-push API — demo
 
 ### Phase 6 — MI + scale
-MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rates), regulatory-return extracts, multi-panel onboarding from tenant config, **catastrophe surge-capacity product** (subscription that smooths the lumpy property revenue — see §8), SHARIAH_REVIEWER surface if a takaful panel lands, new `ClaimCategory` values as clients instruct those lines (engineering, liability, MAT, bonds, WC).
+MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rates), regulatory-return extracts, multi-panel onboarding from tenant config, **catastrophe surge-capacity product** — *gated on G10: no insurer is known to buy one today, and honouring it requires a standby contractor pool* — SHARIAH_REVIEWER surface if a takaful panel lands, new `ClaimCategory` values as clients instruct those lines (engineering, liability, MAT, bonds, WC).
 
 ---
 
@@ -370,7 +400,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 2. **Dual Case/Claim lifecycle** — keep the boundary (Case = pre-claim intake funnel; Claim = regulated engagement); adopt Case's transition-table pattern for Claim guards (Ph 1); revisit only if Assignment-without-Case proves awkward.
 3. **Offshore LLM** — local (Ollama) default for PII docs from Ph 2; Gemini only under explicit per-tenant policy for non-PII. Until then: do not demo AI extraction on real claimant documents.
 4. **Merimen dependency** — market's appointment rail but access is insurer-sponsored/uncertain. Assignment is channel-agnostic from Ph 2 (manual/email works); Merimen is an ingestion adapter (Ph 5), never a schema assumption. **Ask MSIG early which channel they will use.**
-5. **Single-firm assumption** in `resolveCaseTenant` — acceptable now; documented constraint; breaks any future multi-firm SaaS ambition.
+5. **Single-firm assumption — fix it now, it is a foundations item.** `resolveCaseTenant` currently resolves a claimant self-serve case to "the first `ADJUSTING_FIRM` tenant found". That is the one place the codebase assumes a single adjusting firm, and it is the cheapest possible moment to remove it. The rest of the platform is already genuinely multi-tenant (`Tenant` with ADJUSTING_FIRM/INSURER types, `UserTenant` m:n, tenant-scoped queries and redaction), so the fix is small: resolve the **handling firm explicitly** — from the insurer's panel configuration, the intake channel, or the `Assignment` — instead of picking one arbitrarily. **Phase 1a.** Doing this does not build a SaaS product; it merely stops foreclosing Path B (§6.14) for the sake of one convenience shortcut.
 6. **No queue/scheduler exists** — BullMQ on existing Redis, one shared worker pattern; decide first because Phases 1–2 all sit on it.
 7. **Regulatory interpretation** — have the Order's registration requirements and PD applicability confirmed by counsel before the licensed-mode flip (Ph 5). The system makes the facts demonstrable; it is not the legal opinion.
 8. **MSIG is verbal** — keep Phases 1–2 client-agnostic; MSIG-specific behaviour lives only in tenant config.
@@ -378,7 +408,8 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 10. **Three disconnected risk scores** (DeceptionScore, RiskAssessment, FraudSignal) — do not merge into one opaque number (itself a Sch 7/explainability risk); Ph 4 presents all three with provenance.
 11. **Portal scraping is not an available option — decided.** A proposal existed to scrape the insurer's agency portal for policy data and describe it externally as "a dedicated team reviewing policies". This plan rejects it on three independent grounds: the insurer has already stated that agents/adjusters may not log into its system, so automated access breaches the access terms and risks the Computer Crimes Act 1997; describing automation as a human team misrepresents the service to the client whose data is at stake; and either, if discovered during a vendor security assessment, ends the relationship and damages the registration application. **The sanctioned path is a structured policy file feed** (SFTP or an agreed inbox schema) — Phase 2, `PolicySource.FILE_FEED`. If the insurer declines a feed, the fallback is manual keying of the emailed data, not scraping.
 12. **AI is disclosed, not downplayed — decided.** A position existed to use AI internally while minimising it externally. BNM PD **12.6** requires the adjusting report to disclose the facts, assumptions, **methods**, sources and databases behind the assessment, so AI contribution to an assessment is a disclosable method. The defensible posture is the one the system already supports: human-in-the-loop sign-off, full audit trail with before/after values, explicit methodology sections, provenance kept on each risk signal, and no automated decision on medical claims. Downplaying invites the scrutiny it is meant to avoid; documented explainability answers the regulator's actual concern (accountability), and is also what insurer vendor assessments ask for.
-13. **Do not claim in-country AI processing until it is true.** The live default is Gemini (offshore) whenever `GEMINI_API_KEY` is set, and the "sovereign" Ollama path defaults to an ephemeral Cloudflare tunnel. Until Phase 2 lands real in-country hosting, any external statement must be framed as a dated architecture commitment, not a present fact. See §3.6 item 10 and §6.3.
+14. **Path B (platform sold *to* insurers and other adjusting firms) — kept open, not built.** The research values it at RM0.4M / RM2.3M / RM6–8M ARR and the §7 verdict names it one of only three routes to an outcome larger than a RM13–18M services business. This plan does **not** build it: with a TPA-first trajectory the near-term buyer is the insurer, not a peer adjusting firm. But it must not be foreclosed by accident, which is why item 5 is a Phase 1a fix rather than an accepted constraint. Decision rule: **keep multi-firm tenancy structurally possible at near-zero cost; build Path B only against a signed pilot with a firm that is not ours.** Revisit if an incumbent (Sedgwick / McLarens / Crawford / MAC) opens a licensing conversation — the research flags that as an untested but plausible channel.
+15. **Do not claim in-country AI processing until it is true.** The live default is Gemini (offshore) whenever `GEMINI_API_KEY` is set, and the "sovereign" Ollama path defaults to an ephemeral Cloudflare tunnel. Until Phase 2 lands real in-country hosting, any external statement must be framed as a dated architecture commitment, not a present fact. See §3.6 item 10 and §6.3.
 
 ---
 
@@ -395,6 +426,8 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 Neutral read against `docs/MARKET_RESEARCH_TPA_REVENUE.md`. The conclusion is **conditionally feasible** — the technology is the easy part; regulated headcount, funding and panel access are the constraints, and the phase plan must not run ahead of them.
 
+Given the decided trajectory in §1 (TPA now, registration later), the **near-term funding case is the Path C column** — RM300–500k and near-breakeven — not the RM900k–1.4M registered route. The registered-route economics in §8.2 remain the plan of record for the *second* step, and the §9 partner ask in the research (a qualified non-motor adjuster, panel access, funding) is what converts step 1 into step 2.
+
 ### 8.1 The constraint that engineering cannot solve
 
 BNM PD 12.1/12.2 require adjusting work to be done **only by the firm's own full-time adjusting employees**; 12.3 requires a supervised year for new employees; 12.4/12.7 require reports by anyone with **under 5 years in that subject matter** to be signed off by a senior with 5 years in it.
@@ -405,7 +438,7 @@ BNM PD 12.1/12.2 require adjusting work to be done **only by the firm's own full
 
 So: **talent, not technology, gates the registered route.** A credible alternative is acquiring or partnering with a small existing registered firm rather than building the credential from zero — worth pricing before committing to the hiring path.
 
-### 8.2 Funding reality (from research §5.4)
+### 8.2 Funding reality (research §6.4)
 
 | | Registered adjuster (A) + travel/PA (C) | Travel/PA platform only (C), unregistered |
 |---|---|---|
@@ -472,8 +505,10 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 | **G7** | Realistic cases-per-adjuster-per-month with AI assistance | The productivity claim underpinning margins | Time-and-motion during pilot |
 | **G8** | Is a registered adjuster a **"reporting institution" under the AMLA First Schedule**? | Whether STR/CDD obligations attach to the firm directly or only to the insurer — sets the Phase 5 AMLA scope | Counsel; ask alongside G3/G4 |
 | **G9** | Will the insurer supply a **policy data file feed** (SFTP or agreed inbox schema), and can it carry travel dates / flight details? | Phase 2 ingestion design; and it is the hard prerequisite for proactive flight-delay detection | Ask MSIG with G2 — same conversation |
+| **G10** | Would any Malaysian insurer actually **buy a catastrophe surge-capacity licence**? | The Phase 6 surge product. Research calls it the most promising non-linear revenue structure **and** found no evidence any insurer buys one today; it also needs a standby contractor pool, which is a real cost | Discovery with 3–5 insurers' claims/CAT teams before building |
+| **G11** | Are there **volume commitments** from concentrated travel/PA buyers? | Scaling the Path C automation. At RM8–12/claim, thin pricing against a handful of buyers means a lost contract removes most of the ARR | Contract minimum volumes before headcount or heavy build |
 
-**Sequencing rule:** G2, G3 and G9 before Phase 2 (they determine `Assignment`, whether the travel line is regulated, and whether ingestion is a feed or manual). G1, G4, G5 before any investor financial model or fee-note build. G6, G7 before scaling headcount. G8 before the Phase 5 AMLA build.
+**Sequencing rule:** G2, G3 and G9 before Phase 2 (they determine `Assignment`, whether the travel line is regulated, and whether ingestion is a feed or manual). G1, G4, G5 before any investor financial model or fee-note build. G6, G7, G11 before scaling headcount or heavy Path C build. G8 before the Phase 5 AMLA build. G10 before any Phase 6 surge-capacity work.
 
 **Cheapest gates first:** G2, G9 and the file-feed request are one conversation with MSIG and cost nothing. G3, G4, G8 are one counsel engagement. Do both before writing Phase 2 code.
 
