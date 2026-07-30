@@ -79,6 +79,40 @@ export class CasesService {
     private readonly documentValidation: DocumentValidationService
   ) {}
 
+  /**
+   * Evidential audit record for case activity. Intake and vetting decisions
+   * (above all the case→claim conversion — the insurer handback) must be
+   * reconstructable for BNM examination (FSA s.146) and PD 12.8 records
+   * requirements; oldValues/newValues carry the before/after state.
+   */
+  private async audit(
+    entityId: string,
+    action: string,
+    tenantContext: TenantContext,
+    options: { oldValues?: unknown; newValues?: unknown; metadata?: unknown } = {}
+  ) {
+    try {
+      await this.prisma.auditTrail.create({
+        data: {
+          entityId,
+          entityType: 'CASE',
+          action,
+          oldValues: (options.oldValues as Prisma.InputJsonValue) ?? undefined,
+          newValues: (options.newValues as Prisma.InputJsonValue) ?? undefined,
+          metadata: (options.metadata as Prisma.InputJsonValue) ?? undefined,
+          tenantId: tenantContext.tenantId,
+          userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+          actorId: tenantContext.userId,
+          actorType: (tenantContext.userRole as any) ?? 'SYSTEM',
+        },
+      });
+    } catch (error) {
+      // An audit failure must be loud in logs but must not roll back the
+      // business operation that already succeeded.
+      this.logger.error(`Audit write failed for case ${entityId} (${action}): ${error}`);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Create
   // -------------------------------------------------------------------------
@@ -132,6 +166,15 @@ export class CasesService {
     });
 
     this.logger.log(`Case created: ${created.caseNumber} (${channel}, ${dto.travelClaimType})`);
+    await this.audit(created.id, 'CASE_CREATED', tenantContext, {
+      newValues: {
+        caseNumber: created.caseNumber,
+        channel,
+        initiatedBy,
+        travelClaimType: dto.travelClaimType,
+        claimantId,
+      },
+    });
     return this.withFlowState(created);
   }
 
@@ -162,6 +205,9 @@ export class CasesService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        // Queue listing never needs payout details or the raw answer blob —
+        // they stay on the detail endpoint, which is role-gated separately.
+        omit: { bankName: true, bankAccountNumber: true, bankAccountHolderName: true, answers: true },
         include: {
           claimant: { select: { id: true, fullName: true, phoneNumber: true } },
           policy: { select: { id: true, policyNumber: true, insuredName: true } },
@@ -232,6 +278,11 @@ export class CasesService {
       await this.prisma.case.update({
         where: { id },
         data: { status: CaseStatus.UNDER_REVIEW },
+      });
+      await this.audit(id, 'CASE_STATUS_CHANGED', tenantContext, {
+        oldValues: { status: CaseStatus.SUBMITTED },
+        newValues: { status: CaseStatus.UNDER_REVIEW },
+        metadata: { trigger: 'operator opened case detail' },
       });
       caseRow.status = CaseStatus.UNDER_REVIEW;
     }
@@ -337,10 +388,14 @@ export class CasesService {
 
     // Local-LLM validation hook (slice 1: records SKIPPED)
     const validation = await this.documentValidation.validate(document);
-    return this.prisma.caseDocument.update({
+    const stored = await this.prisma.caseDocument.update({
       where: { id: document.id },
       data: { validationStatus: validation.status, validationNote: validation.note },
     });
+    await this.audit(caseRow.id, 'CASE_DOCUMENT_UPLOADED', tenantContext, {
+      newValues: { documentId: stored.id, documentType, fileName: file.filename, stepId },
+    });
+    return stored;
   }
 
   async submit(id: string, tenantContext: TenantContext) {
@@ -376,6 +431,10 @@ export class CasesService {
       data: { status: CaseStatus.SUBMITTED, submittedAt: new Date() },
     });
     this.logger.log(`Case submitted: ${updated.caseNumber}`);
+    await this.audit(id, 'CASE_SUBMITTED', tenantContext, {
+      oldValues: { status: caseRow.status },
+      newValues: { status: CaseStatus.SUBMITTED, submittedAt: updated.submittedAt },
+    });
     return this.withFlowState(updated);
   }
 
@@ -400,14 +459,19 @@ export class CasesService {
   }
 
   async linkPolicy(id: string, policyId: string, tenantContext: TenantContext) {
-    await this.getStaffCase(id, tenantContext);
+    const caseRow = await this.getStaffCase(id, tenantContext);
     const policy = await this.prisma.policy.findUnique({ where: { id: policyId } });
     if (!policy) throw new NotFoundException('Policy not found');
-    return this.prisma.case.update({
+    const updated = await this.prisma.case.update({
       where: { id },
       data: { policyId, needsPolicyReview: false },
       include: { policy: true },
     });
+    await this.audit(id, 'CASE_POLICY_LINKED', tenantContext, {
+      oldValues: { policyId: caseRow.policyId, needsPolicyReview: caseRow.needsPolicyReview },
+      newValues: { policyId, policyNumber: policy.policyNumber, needsPolicyReview: false },
+    });
+    return updated;
   }
 
   /**
@@ -522,6 +586,18 @@ export class CasesService {
     this.logger.log(
       `Case ${converted.caseNumber} converted to claim ${converted.convertedClaim?.claimNumber}`
     );
+    // The conversion is the insurer handback — the most consequential decision
+    // in the intake flow, so its audit record carries the full linkage.
+    await this.audit(id, 'CASE_CONVERTED', tenantContext, {
+      oldValues: { status: caseRow.status },
+      newValues: {
+        status: CaseStatus.CONVERTED,
+        claimId: converted.convertedClaimId,
+        claimNumber: converted.convertedClaim?.claimNumber,
+        policyNumber,
+        documentsCopied: documents.length,
+      },
+    });
     return converted;
   }
 
@@ -602,6 +678,10 @@ export class CasesService {
       data: { status: to, reviewNote: note },
     });
     this.logger.log(`Case ${updated.caseNumber} → ${to}`);
+    await this.audit(id, 'CASE_STATUS_CHANGED', tenantContext, {
+      oldValues: { status: caseRow.status, reviewNote: caseRow.reviewNote },
+      newValues: { status: to, reviewNote: note },
+    });
     return updated;
   }
 

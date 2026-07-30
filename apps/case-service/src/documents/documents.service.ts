@@ -295,7 +295,12 @@ export class DocumentsService {
   async remove(claimId: string, id: string, tenantContext: TenantContext) {
     const document = await this.findOne(claimId, id, tenantContext);
 
-    // Delete from database (soft delete in production)
+    // WARNING: this is a hard delete and it is not compliant. BNM Adjuster PD
+    // 12.8 requires adjusting records and supporting documents to be retained
+    // for at least 7 years, and StorageService has no delete method — so the
+    // stored file is orphaned while the DB row and its extracted OCR text are
+    // destroyed. Soft delete + RetentionPolicy is Phase 2 of
+    // docs/MASTER_PLAN.md; until then this route is restricted to firm admins.
     await this.prisma.document.delete({
       where: { id },
     });

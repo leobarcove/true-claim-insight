@@ -232,7 +232,9 @@ export function FloodFNOLForm({ onCancel }: Props) {
         incidentDate: new Date(values.incidentDate).toISOString(),
         incidentLocation: { address: values.address },
         description: values.description,
-        isPdpaCompliant: true,
+        // PDPA consent is NOT asserted here — see docs/MASTER_PLAN.md Phase 1
+        // (Consent entity). Previously hardcoded true, which showed claimants
+        // as having consented when no consent record existed.
         // Flood sub-table
         incidentStart: new Date(values.incidentStart).toISOString(),
         incidentEnd: values.incidentEnd

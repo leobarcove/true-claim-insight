@@ -11,8 +11,11 @@ export interface DocumentValidationResult {
  * LLM that will check uploaded evidence (does the document name match the
  * claimant, is it the requested document type, is it complete/legible).
  *
- * Kept local (self-hosted) by design for PDPA/data-sovereignty reasons.
- * Slice 1 returns SKIPPED so the pipeline is wired without any model call.
+ * NOT IMPLEMENTED. Every document is recorded as SKIPPED — no validation runs
+ * and no model is called, so `CaseDocument.validationStatus` must not be read
+ * as evidence that a document was checked. Scheduled for Phase 4 of
+ * docs/MASTER_PLAN.md, and it must run on in-country infrastructure before it
+ * sees claimant documents (PDPA / data sovereignty).
  */
 @Injectable()
 export class DocumentValidationService {

@@ -3,9 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { LlmProvider } from './llm-provider.interface';
 
 /**
- * LlmProvider impl backed by the self-hosted Qwen / DeepSeek GPU service
- * over a Cloudflare tunnel. Keeps document data in Malaysian
- * infrastructure (PDPA / data-sovereignty alignment).
+ * LlmProvider impl backed by the self-hosted Qwen / DeepSeek GPU service.
+ *
+ * DATA SOVEREIGNTY STATUS: not yet achieved. The intended benefit is keeping
+ * claimant documents on Malaysian infrastructure, but the default endpoint
+ * below is an ephemeral Cloudflare quick-tunnel, so traffic egresses through
+ * Cloudflare and the host is not a stable in-country deployment. Provisioning
+ * real local infrastructure and making this the default for PII documents is
+ * Phase 2 of docs/MASTER_PLAN.md. Do not describe this path as PDPA-compliant
+ * until GPU_SERVICE_URL points at controlled in-country infrastructure.
  *
  * Refactored from the original GpuClientService — same network calls,
  * now behind the LlmProvider interface so it can be swapped via the
