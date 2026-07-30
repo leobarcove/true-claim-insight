@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual, createHmac } from 'crypto';
-import { PrismaService } from '../../config/prisma.service';
 import { KEY_PROVIDER, KeyProvider } from './key-provider.interface';
+import { KEY_STORE, KeyStore } from './key-store.interface';
 
 /**
  * Field-level encryption for personal data (PDPA), using envelope encryption.
@@ -27,7 +27,7 @@ export class EncryptionService implements OnModuleInit {
   private currentVersion?: number;
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(KEY_STORE) private readonly keyStore: KeyStore,
     @Inject(KEY_PROVIDER) private readonly keyProvider: KeyProvider
   ) {}
 
@@ -42,10 +42,7 @@ export class EncryptionService implements OnModuleInit {
    * loser of the race re-reads the winner's row instead of creating a second key.
    */
   private async loadCurrentKey(): Promise<number> {
-    const existing = await this.prisma.encryptionKey.findFirst({
-      where: { retiredAt: null },
-      orderBy: { version: 'desc' },
-    });
+    const existing = await this.keyStore.findActiveKey();
 
     if (existing) {
       this.dataKeys.set(existing.version, await this.keyProvider.unwrapDataKey(existing.wrappedDataKey));
@@ -58,8 +55,10 @@ export class EncryptionService implements OnModuleInit {
     const wrappedDataKey = await this.keyProvider.wrapDataKey(dataKey);
 
     try {
-      const created = await this.prisma.encryptionKey.create({
-        data: { version: 1, wrappedDataKey, algorithm: this.algorithm },
+      const created = await this.keyStore.createKey({
+        version: 1,
+        wrappedDataKey,
+        algorithm: this.algorithm,
       });
       this.dataKeys.set(created.version, dataKey);
       this.currentVersion = created.version;
@@ -75,7 +74,7 @@ export class EncryptionService implements OnModuleInit {
     const cached = this.dataKeys.get(version);
     if (cached) return cached;
 
-    const row = await this.prisma.encryptionKey.findUnique({ where: { version } });
+    const row = await this.keyStore.findKeyByVersion(version);
     if (!row) {
       throw new Error(
         `No data key with version ${version}. A value was encrypted with a key that is no longer ` +

@@ -34,7 +34,16 @@ describe('TenantService.redactClaim (compliance)', () => {
     status: 'UNDER_REVIEW',
     approvedAmount: 12500,
     sumInsured: 50000,
-    claimant: { id: 'c1', nric: '880101-14-5555', dateOfBirth: '1988-01-01', fullName: 'Kumar' },
+    // NRIC is encrypted at rest: the row carries ciphertext, a blind index and a
+    // clear tail — never a plaintext NRIC.
+    claimant: {
+      id: 'c1',
+      nricEncrypted: 'v1:aXY=:Y2lwaGVy:dGFn',
+      nricHash: 'abc123',
+      nricLast4: '5555',
+      dateOfBirth: '1988-01-01',
+      fullName: 'Kumar',
+    },
     trinityChecks: [{ id: 't1', score: 42 }],
     fraudSignals: [{ id: 'f1', severity: 'HIGH' }],
     riskAssessments: [{ id: 'r1' }],
@@ -90,12 +99,24 @@ describe('TenantService.redactClaim (compliance)', () => {
     });
   });
 
-  describe('NRIC masking (PDPA)', () => {
-    it('masks the top-level NRIC and the nested claimant NRIC for low-privilege roles', () => {
-      const r = service.redactClaim(claim(), context('ADJUSTER'));
+  describe('NRIC protection (PDPA)', () => {
+    it('never returns ciphertext or the blind index to any role', () => {
+      for (const role of ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'CLAIMANT', 'SUPPORT_DESK']) {
+        const r = service.redactClaim(claim(), context(role));
+
+        expect(r.claimant.nricEncrypted).toBeUndefined();
+        expect(r.claimant.nricHash).toBeUndefined();
+        expect(r.nricEncrypted).toBeUndefined();
+        // The clear tail is what screens display.
+        expect(r.claimant.nricLast4).toBe('5555');
+      }
+    });
+
+    it('masks any legacy plaintext NRIC still in flight for low-privilege roles', () => {
+      const legacy = { ...claim(), nric: '880101-14-5555' };
+      const r = service.redactClaim(legacy, context('ADJUSTER'));
 
       expect(r.nric).toBe('********5555');
-      expect(r.claimant.nric).toBe('********5555');
     });
 
     it('fails closed on a non-canonical NRIC rather than passing it through', () => {
@@ -106,20 +127,10 @@ describe('TenantService.redactClaim (compliance)', () => {
       expect(r.nric).toBe('************');
     });
 
-    it('never returns the NRIC hash or ciphertext to any role', () => {
-      const input = claim() as any;
-      input.claimant.nricHash = 'hash';
-      input.claimant.nricEncrypted = Buffer.from('cipher');
-
-      const r = service.redactClaim(input, context('ADJUSTER'));
-
-      expect(r.claimant.nricHash).toBeUndefined();
-      expect(r.claimant.nricEncrypted).toBeUndefined();
-    });
-
-    it('leaves the NRIC intact for privileged investigative roles', () => {
+    it('leaves a legacy plaintext NRIC intact for privileged investigative roles', () => {
+      const legacy = { ...claim(), nric: '880101-14-5555' };
       for (const role of ['FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR']) {
-        const r = service.redactClaim(claim(), context(role));
+        const r = service.redactClaim(legacy, context(role));
         expect(r.nric).toBe('880101-14-5555');
       }
     });

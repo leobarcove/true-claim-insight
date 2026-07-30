@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PolicySource, Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { CreatePolicyDto } from './dto/create-policy.dto';
+import { EncryptionService } from '@tci/crypto';
 
 /**
  * Minimal policy store for the TPA model. Policy data currently arrives from
@@ -17,7 +18,19 @@ import { CreatePolicyDto } from './dto/create-policy.dto';
  */
 @Injectable()
 export class PoliciesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService
+  ) {}
+
+  /** Encrypted insured NRIC from the insurer feed, plus a clear display tail. */
+  private async encryptedInsuredNric(nric: string | null | undefined) {
+    if (!nric) return {};
+    return {
+      insuredNricEncrypted: await this.encryption.encrypt(nric),
+      insuredNricLast4: this.encryption.lastDigits(nric),
+    };
+  }
 
   async search(query: { search?: string; page?: string; limit?: string }) {
     const page = Math.max(1, Number(query.page) || 1);
@@ -66,7 +79,7 @@ export class PoliciesService {
       },
       update: {
         insuredName: dto.insuredName,
-        insuredNric: dto.insuredNric,
+        ...(await this.encryptedInsuredNric(dto.insuredNric)),
         insuredPhone: dto.insuredPhone,
         planTier: dto.planTier,
         tripStartDate: dto.tripStartDate ? new Date(dto.tripStartDate) : undefined,
@@ -77,7 +90,7 @@ export class PoliciesService {
         tenantId: dto.tenantId,
         policyNumber: dto.policyNumber,
         insuredName: dto.insuredName,
-        insuredNric: dto.insuredNric,
+        ...(await this.encryptedInsuredNric(dto.insuredNric)),
         insuredPhone: dto.insuredPhone,
         planTier: dto.planTier,
         tripStartDate: dto.tripStartDate ? new Date(dto.tripStartDate) : null,

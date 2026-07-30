@@ -10,6 +10,22 @@ import {
   PolicySource,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { EncryptionService, EnvKeyProvider } from '@tci/crypto';
+import { PrismaKeyStore } from '../src/key-store';
+
+/**
+ * Encryption for seeded personal data, using the same key custody as the
+ * services: master key from ENCRYPTION_MASTER_KEY, data keys wrapped in
+ * `encryption_keys`. The seed therefore also bootstraps key v1 on a fresh
+ * database, so the first service to boot adopts the existing key rather than
+ * racing to create one.
+ */
+async function buildEncryption(prisma: PrismaClient) {
+  const configLike = { get: (key: string) => process.env[key] } as never;
+  const service = new EncryptionService(new PrismaKeyStore(prisma), new EnvKeyProvider(configLike));
+  await service.onModuleInit();
+  return service;
+}
 
 const MALAYSIA_CARS: Record<string, string[]> = {
   Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa', 'Traz'],
@@ -116,6 +132,7 @@ async function main() {
 
   const password = 'DemoPass123!';
   const hashedPassword = await bcrypt.hash(password, 12);
+  const encryption = await buildEncryption(prisma);
 
   // 1. Create Tenants
   const ALLIANZ_ID = 'd601d36d-2d41-471b-9d41-325091726a57';
@@ -374,6 +391,9 @@ async function main() {
     },
   });
 
+  // Insured NRICs go in encrypted, exactly as the application writes them, so
+  // demo data has the same shape as production and nobody is tempted to
+  // reintroduce a plaintext column to make the seed work.
   const samplePolicies = [
     {
       policyNumber: 'MSIG-TRV-2026-0001',
@@ -406,14 +426,22 @@ async function main() {
     },
   ];
 
-  for (const policy of samplePolicies) {
+  for (const { insuredNric, ...policy } of samplePolicies) {
+    const encrypted = insuredNric
+      ? {
+          insuredNricEncrypted: await encryption.encrypt(insuredNric),
+          insuredNricLast4: encryption.lastDigits(insuredNric),
+        }
+      : {};
+
     await prisma.policy.upsert({
       where: {
         tenantId_policyNumber: { tenantId: msigTenant.id, policyNumber: policy.policyNumber },
       },
-      update: {},
+      update: encrypted,
       create: {
         ...policy,
+        ...encrypted,
         tenantId: msigTenant.id,
         source: PolicySource.MANUAL,
         coverageSnapshot: { currency: 'MYR', asSuppliedBy: 'MSIG email' },

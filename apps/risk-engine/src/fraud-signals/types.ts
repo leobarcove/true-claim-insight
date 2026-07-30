@@ -4,6 +4,7 @@ import {
   SignalSeverity,
   Prisma,
 } from '@prisma/client';
+import type { FraudClaim } from './fraud-claim.query';
 
 /**
  * Context passed to every provider when evaluating a claim. Loaded once by
@@ -16,14 +17,7 @@ export interface FraudSignalContext {
   tenantId: string | null;
   // Lazily loaded relations — providers should access via the loader to keep
   // queries minimal. The base loader is wired up by the orchestrator.
-  claim: Prisma.ClaimGetPayload<{
-    include: {
-      claimant: true;
-      adjuster: true;
-      documents: true;
-      floodClaim: true;
-    };
-  }>;
+  claim: FraudClaim;
 }
 
 /**

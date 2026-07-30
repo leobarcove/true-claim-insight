@@ -169,7 +169,7 @@ Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, 
 
 ## 3. Compliance matrix (with current-state verdicts)
 
-Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Result: 0 PASS, 7 PARTIAL, 20 FAIL.** The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
+Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Baseline at first audit: 0 PASS, 7 PARTIAL, 20 FAIL. Current: 1 PASS, 7 PARTIAL, 19 FAIL** (PDPA NRIC/bank-detail protection is the first row to reach PASS — server-side enforcement plus a CI test asserting the control). The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
 
 ### 3.1 BNM Adjuster PD (binding "S" paragraphs)
 
@@ -220,7 +220,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 | Requirement | Current | Target control | Phase |
 |---|---|---|---|
 | Consent (lawful basis, withdrawal) | **FAIL** — `isPdpaCompliant` hardcoded `true` by frontends, gates nothing; biometric-consent PDF generated *after* recording is analysed; withdrawal impossible | `Consent` entity at intake + claim registration; purpose-bound; captured *before* processing; replaces hardcoded flag | 1 |
-| NRIC/bank-detail protection | **FAIL** — plaintext NRIC live + indexed; `nricHash`/`nricEncrypted` writers have zero callers; NRIC written to application logs; `verify-nric` endpoint lacks JwtAuthGuard; cases module returns full bank details with no role gating or redaction | Field-level encryption; masking extended to Cases; endpoint/role hotfixes in Phase 0 | 0/1 |
+| NRIC/bank-detail protection | **PASS** — NRIC and bank account number encrypted at rest (AES-256-GCM envelope, versioned ciphertext); plaintext columns dropped, not merely shadowed; lookup via HMAC blind index; ciphertext and index omitted from query results by default so they cannot reach a browser; full value only through an audited firm-admin reveal. NRIC removed from logs; `verify-nric` throttled with non-enumerating errors. **Tests:** 15 crypto (incl. a simulated KMS custody migration) + a schema-reading omit-coverage test | Rotation drill and KMS custody transfer remain operational tasks | done |
 | Retention/deletion | **FAIL** — no deletion/anonymisation mechanism exists; cases can never be deleted; claim documents hard-deleted while storage objects orphan | `RetentionPolicy` (7-yr floor per PD 12.8, scheduled deletion/anonymisation; legal hold) | 2 |
 | Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim) | **FAIL** — five live offshore recipients, none gated; Gemini is the live default for MyKad/police-report images; the "sovereign" Ollama path points at an ephemeral Cloudflare tunnel | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
 | AMLA/CTF screening | **FAIL** — no screening/CDD/STR concepts; `KycStatus` writer has zero callers, nothing gates on it | Sanctions/PEP screening plugin at claimant/payee registration; suspicious-matter → ComplianceEvent | 5 |
@@ -486,7 +486,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 ## 7. Verification
 
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
-- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current baseline: **0 PASS / 7 PARTIAL / 20 FAIL** — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
+- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Baseline **0 PASS / 7 PARTIAL / 20 FAIL** → current **1 PASS / 7 PARTIAL / 19 FAIL** — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
 - **Feasibility gates:** the §9.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §9.2 funding decision before Phase 3.
 - **Architecture gate:** the three blocking defects in §4.3 (A1 service auth, A2 data ownership, A3 segregation of duties) must be closed before the platform holds real claimant data in any shared environment. A1 and A2 are Phase 0b; A3 is Phase 1a.
 - **Execution order:** Phase 0 hotfixes (done — `e404fc5`), Phase 1a foundations batch (done — `939ac39`), then **Phase 0b architecture hardening**, then the remainder of Phase 1a (audit interceptor + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
@@ -528,17 +528,23 @@ A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain trac
 | `audit_trail` append-only at DB level | ⬜ table still mutable |
 | `Consent` entity + capture before processing | ⬜ **blocked on consent wording (EN/BM)** |
 | Bank-detail encryption | ✅ envelope encryption live (AES-256-GCM, versioned ciphertext, master key behind a `KeyProvider` so AWS KMS is a one-class swap with **no data re-encryption**). Plaintext column dropped in the same migration; sensitive answers masked in `Case.answers`; ciphertext never shipped to a browser; full value only via an **audited** firm-admin-only reveal endpoint. 15 crypto compliance tests incl. a simulated KMS custody migration |
-| NRIC encryption | ⬜ **deferred, deliberately** — NRIC touches 29 files and risk-engine's Trinity engine performs identity matching on it, so it needs a decrypt path in the assessment context plus a blind-index migration. `blindIndex()` (HMAC + pepper) is built and tested ready for it. Scoped as its own piece of work, not bolted onto this one |
+| NRIC encryption | ✅ done — plaintext `claimants.nric`, `claims.nric` and `policies.insuredNric` dropped; each replaced by ciphertext + an HMAC **blind index** (`NRIC_INDEX_PEPPER`) + a clear `nricLast4` for display. Lookups match on the index; `verify-nric` compares indexes in constant time and never decrypts. Verified live: 0 plaintext occurrences across all three tables including JSON blobs, and a case submitted with a *different* phone number correctly resolved to the existing claimant by NRIC. The earlier concern that Trinity matches against a stored NRIC was **wrong** — Trinity compares document-to-document, so encryption costs fraud detection nothing. Correction to the earlier note: the pepper is effectively permanent (changing it invalidates every stored index) |
+| Ciphertext confined to the server | ✅ `SENSITIVE_FIELD_OMIT` passed to every `PrismaClient`, so ciphertext and blind indexes are absent from query results **by default** and the few decrypting paths opt back in visibly (`omit: { nricHash: false }`). Services extend `PrismaClient<TciPrismaOptions>` so the omit reaches the generated types and a forgotten opt-in is a *compile* error. Found by review, not by assumption: `GET /cases/:id` and `GET /policies` had been shipping ciphertext and the blind index to the browser. A schema-reading test fails if a new encrypted column is added without an omit entry (mutation-tested) |
 | Notifications (email transport, templates, delivery log) | ⬜ **blocked on SMTP provider**; queue decision pending |
 | Server-side status guards + `AuthorityLimit` | ⬜ |
 
+### Shared crypto infrastructure (supports both encryption items)
+`@tci/crypto` is a package, not case-service-local code, because the gateway encrypts too. It holds `EncryptionService`, the `KeyProvider` (master-key custody) and `KeyStore` (data-key persistence) interfaces, and `EnvKeyProvider`. It deliberately does **not** depend on Prisma. The Prisma-backed key store lives once in `@tci/prisma-client` (`PrismaKeyStore`) — it was duplicated byte-for-byte in two services, and since the queries encode *which key version is active*, two copies drifting would produce undecryptable data rather than a clean failure. The seed uses the same class and the same master key, so seeded personal data is encrypted exactly as the application writes it; verified by decrypting seeded ciphertext from a separate process.
+
 ### Open decisions blocking further Phase 1a work
-1. **Encryption key custody** — KMS envelope encryption vs configured master key. Blocks the encryption item; migrating encrypted data later is painful.
+1. ~~**Encryption key custody**~~ — resolved: master key in `.env` behind `KeyProvider`, AWS KMS is a one-class swap with no data re-encryption. Key custody is now only an operational step, not a design decision.
 2. **BullMQ now or in 1b** — recommendation: now, since notification delivery reliability wants it and 1b needs it regardless.
 3. **Consent wording (EN + BM)** and an SMTP provider account.
 
 ### Known non-blocking defects
 - `Claim.claimType` is null for every non-motor claim, so the claimant app renders a blank "Claim Type" label. Cosmetic; the real subtype lives on `TravelClaim.travelClaimType`. Fix when the claimant claim-detail view is next touched.
+- **Generated documents show `••••1234` instead of the full NRIC.** video-service and risk-engine render reports but hold no encryption key by design, so they cannot decrypt. The fix is an audited identity endpoint on case-service that they call — deliberately not a second copy of the key. Adjuster reports are a Phase 1 item, so this lands with the report engine.
+- `pnpm dev` had been failing outright: turbo's default concurrency is 10 and the repo now has 10 persistent dev tasks. Raised to 20 in the root `dev` script so adding an app does not break local startup again.
 
 ---
 

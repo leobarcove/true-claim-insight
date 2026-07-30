@@ -225,6 +225,9 @@ importers:
       '@prisma/client':
         specifier: ^6.2.0
         version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
+      '@tci/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@tci/prisma-client':
         specifier: workspace:*
         version: link:../../packages/prisma-client
@@ -312,7 +315,7 @@ importers:
         version: 0.5.21
       ts-jest:
         specifier: ^29.2.0
-        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3)))(typescript@5.9.3)
+        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3)
       ts-loader:
         specifier: ^9.5.0
         version: 9.5.4(typescript@5.9.3)(webpack@5.103.0)
@@ -373,6 +376,9 @@ importers:
       '@prisma/client':
         specifier: ^6.2.0
         version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
+      '@tci/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@tci/prisma-client':
         specifier: workspace:*
         version: link:../../packages/prisma-client
@@ -448,7 +454,7 @@ importers:
         version: 0.5.21
       ts-jest:
         specifier: ^29.2.0
-        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3)))(typescript@5.9.3)
+        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3)
       ts-loader:
         specifier: ^9.5.0
         version: 9.5.4(typescript@5.9.3)(webpack@5.103.0)
@@ -710,7 +716,7 @@ importers:
         version: 0.5.21
       ts-jest:
         specifier: ^29.2.0
-        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3)))(typescript@5.9.3)
+        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3)
       ts-loader:
         specifier: ^9.5.0
         version: 9.5.4(typescript@5.9.3)(webpack@5.103.0)
@@ -849,7 +855,7 @@ importers:
         version: 0.5.21
       ts-jest:
         specifier: ^29.2.0
-        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3)))(typescript@5.9.3)
+        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3)
       ts-loader:
         specifier: ^9.5.0
         version: 9.5.4(typescript@5.9.3)(webpack@5.103.0)
@@ -863,6 +869,31 @@ importers:
         specifier: ^5.8.0
         version: 5.9.3
 
+  packages/crypto:
+    dependencies:
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.0
+        version: 4.0.2(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+    devDependencies:
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.3
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3))
+      ts-jest:
+        specifier: ^29.2.0
+        version: 29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+
   packages/prisma-client:
     dependencies:
       '@prisma/client':
@@ -872,6 +903,9 @@ importers:
         specifier: ^5.1.1
         version: 5.1.1
     devDependencies:
+      '@tci/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@types/bcrypt':
         specifier: ^5.0.2
         version: 5.0.2
@@ -14553,7 +14587,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-jest@29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3)(ts-node@10.9.2(@types/node@22.19.3)(typescript@5.9.3)))(typescript@5.9.3):
+  ts-jest@29.4.6(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@22.19.3))(typescript@5.9.3):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0

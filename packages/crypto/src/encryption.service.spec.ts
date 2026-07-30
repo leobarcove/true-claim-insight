@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { EncryptionService } from './encryption.service';
 import { EnvKeyProvider } from './env-key-provider';
-import type { KeyProvider } from './key-provider.interface';
+import type { KeyStore, StoredDataKey } from './key-store.interface';
 
 /**
  * COMPLIANCE TESTS — field-level encryption of personal data (PDPA).
@@ -22,24 +22,23 @@ describe('EncryptionService (compliance)', () => {
   const config = (key: string) => ({ get: (name: string) => (name === 'ENCRYPTION_MASTER_KEY' ? key : undefined) }) as any;
 
   /** In-memory stand-in for the encryption_keys table. */
-  const prismaStub = () => {
-    const rows: any[] = [];
-    return {
+  const keyStoreStub = () => {
+    const rows: Array<StoredDataKey & { retiredAt: Date | null }> = [];
+    const store: KeyStore & { rows: typeof rows } = {
       rows,
-      encryptionKey: {
-        findFirst: async () => rows.find(r => !r.retiredAt) ?? null,
-        findUnique: async ({ where }: any) => rows.find(r => r.version === where.version) ?? null,
-        create: async ({ data }: any) => {
-          if (rows.some(r => r.version === data.version)) throw new Error('unique violation');
-          const row = { id: `k${data.version}`, retiredAt: null, ...data };
-          rows.push(row);
-          return row;
-        },
+      findActiveKey: async () => rows.find(r => !r.retiredAt) ?? null,
+      findKeyByVersion: async version => rows.find(r => r.version === version) ?? null,
+      createKey: async key => {
+        if (rows.some(r => r.version === key.version)) throw new Error('unique violation');
+        const row = { ...key, retiredAt: null };
+        rows.push(row);
+        return row;
       },
-    } as any;
+    };
+    return store;
   };
 
-  const build = async (key = masterKey, prisma = prismaStub()) => {
+  const build = async (key = masterKey, prisma = keyStoreStub()) => {
     const service = new EncryptionService(prisma, new EnvKeyProvider(config(key)));
     await service.onModuleInit();
     return { service, prisma };
@@ -106,7 +105,6 @@ describe('EncryptionService (compliance)', () => {
     prisma.rows[0].retiredAt = new Date();
     const dataKeyV2 = randomBytes(32);
     prisma.rows.push({
-      id: 'k2',
       version: 2,
       wrappedDataKey: await new EnvKeyProvider(config(masterKey)).wrapDataKey(dataKeyV2),
       algorithm: 'aes-256-gcm',

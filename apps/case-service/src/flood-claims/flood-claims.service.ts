@@ -7,6 +7,7 @@ import { ClaimCategory, Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { CreateFloodClaimDto } from './dto/create-flood-claim.dto';
+import { EncryptionService } from '@tci/crypto';
 
 /**
  * Flood-specific claim service. Creates both the base Claim row (with
@@ -17,7 +18,10 @@ import { CreateFloodClaimDto } from './dto/create-flood-claim.dto';
 export class FloodClaimsService {
   private readonly logger = new Logger(FloodClaimsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService
+  ) {}
 
   async create(dto: CreateFloodClaimDto, tenantContext: TenantContext) {
     const claimNumber = await this.generateClaimNumber();
@@ -34,7 +38,7 @@ export class FloodClaimsService {
           claimType: null, // motor-specific subtype not applicable
           policyNumber: dto.policyNumber,
           claimantId: dto.claimantId,
-          nric: dto.nric,
+          ...(await this.encryptedNric(dto.nric)),
           incidentDate: new Date(dto.incidentDate),
           incidentLocation: dto.incidentLocation as Prisma.InputJsonValue,
           description: dto.description,
@@ -125,4 +129,18 @@ export class FloodClaimsService {
     const count = await this.prisma.claim.count();
     return `CLM-${year}-${String(count + 1).padStart(6, '0')}`;
   }
+
+  /**
+   * Encrypted NRIC snapshot for a claim: ciphertext plus a clear tail for
+   * display. No blind index here — lookups go through the Claimant record,
+   * which is the identity authority.
+   */
+  private async encryptedNric(nric: string | null | undefined) {
+    if (!nric) return {};
+    return {
+      nricEncrypted: await this.encryption.encrypt(nric),
+      nricLast4: this.encryption.lastDigits(nric),
+    };
+  }
+
 }

@@ -149,9 +149,15 @@ model Adjuster {
 
 model Claimant {
   id            String    @id @default(uuid())
-  nric          String?   @unique
+  /// Blind index (HMAC-SHA256 of the normalised NRIC with a secret pepper).
+  /// Carries the uniqueness that plaintext `nric` used to, and is the only way
+  /// to look a claimant up by NRIC. HMAC not a bare hash: a Malaysian NRIC is
+  /// 12 structured digits, so an unpeppered rainbow table is trivial.
   nricHash      String?   @unique
-  nricEncrypted Bytes?
+  /// Encrypted NRIC (v<n>:<iv>:<ciphertext>:<tag>).
+  nricEncrypted String?
+  /// Last 4 digits, clear, so screens can identify a person without decrypting.
+  nricLast4     String?
   fullName      String?
   dateOfBirth   DateTime?
   phoneNumber   String    @unique
@@ -169,7 +175,6 @@ model Claimant {
   cases         Case[]
 
   @@index([phoneNumber])
-  @@index([nric])
   @@index([tenantId])
   @@index([userId])
   @@map("claimants")
@@ -199,7 +204,9 @@ model Claim {
   id                      String      @id @default(uuid())
   claimNumber             String      @unique
   claimantId              String
-  nric                    String?
+  /// Encrypted NRIC snapshot for this claim; see Claimant.nricEncrypted.
+  nricEncrypted           String?
+  nricLast4               String?
   adjusterId              String?
   insurerTenantId         String?
   policyNumber            String
@@ -263,7 +270,6 @@ model Claim {
   fraudSignals            FraudSignal[]
 
   @@index([claimantId])
-  @@index([nric])
   @@index([adjusterId])
   @@index([status])
   @@index([tenantId])
@@ -401,7 +407,8 @@ model Policy {
   tenantId         String       // Insurer tenant (e.g. MSIG)
   policyNumber     String
   insuredName      String
-  insuredNric      String?
+  insuredNricEncrypted String?
+  insuredNricLast4 String?
   insuredPhone     String?
   planTier         String?
   tripStartDate    DateTime?

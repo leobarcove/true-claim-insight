@@ -11,7 +11,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "tsx --env-file-if-exists=../../.env prisma/seed.ts",
     "clean": "rm -rf dist node_modules/.prisma"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "bcrypt": "^5.1.1"
   },
   "devDependencies": {
+    "@tci/crypto": "workspace:*",
     "@types/bcrypt": "^5.0.2",
     "prisma": "^6.2.0",
     "tsx": "^4.19.0",

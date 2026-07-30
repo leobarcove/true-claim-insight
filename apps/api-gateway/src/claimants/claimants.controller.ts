@@ -10,10 +10,9 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../config/prisma.service';
+import { ClaimantsService } from './claimants.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
-
-const normalizeNric = (n: string) => n?.replace(/\D/g, '') || '';
 
 const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/g, '0') || '';
 
@@ -23,7 +22,10 @@ const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/
 export class ClaimantsController {
   private readonly logger = new Logger(ClaimantsController.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly claimantsService: ClaimantsService
+  ) {}
 
   @Post('verify-nric')
   // Deliberately unauthenticated: the claimant proves identity here as part of
@@ -58,7 +60,9 @@ export class ClaimantsController {
       include: {
         claim: {
           include: {
-            claimant: true,
+            // Opting back into the blind index: this route exists to compare it.
+            // Nothing here is returned to the caller, only the boolean verdict.
+            claimant: { omit: { nricHash: false } },
           },
         },
       },
@@ -77,8 +81,9 @@ export class ClaimantsController {
       throw verificationFailed();
     }
 
-    const isNricValid =
-      normalizeNric(nric) === normalizeNric(claimant.nric || session.claim.nric || '');
+    // Blind-index comparison: the NRIC is encrypted at rest and is never
+    // decrypted to answer an identity check.
+    const isNricValid = this.claimantsService.matchesNric(claimant, nric);
     const isPhoneValid =
       normalizePhoneNumber(phoneNumber) === normalizePhoneNumber(claimant.phoneNumber);
 

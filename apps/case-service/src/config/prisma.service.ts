@@ -1,10 +1,14 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@tci/prisma-client';
+import { PrismaClient, SENSITIVE_FIELD_OMIT, type TciPrismaOptions } from '@tci/prisma-client';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient<TciPrismaOptions>
+  implements OnModuleInit, OnModuleDestroy {
   constructor() {
     super({
+      // Ciphertext and blind indexes never leave the database by default.
+      omit: SENSITIVE_FIELD_OMIT,
       log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
       datasources: {
         db: {
