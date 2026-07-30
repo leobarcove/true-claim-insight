@@ -257,12 +257,12 @@ Read together: nothing in Phase 1 is wasted, but the *reason* to build it now is
 
 1. **Traceability**: every matrix row gets an ID; every implementing PR references row IDs; no control without a requirement, no requirement without a control.
 2. **Enforcement in code**: gates are server-side (guards/transactions), never UI-only — e.g. junior report cannot reach ISSUED without senior sign-off; documents cannot be hard-deleted; status transitions role-gated.
-3. **Compliance tests in CI**: automated tests assert each control ("junior cannot finalise report", "audit row written on every claim mutation", "SLA breach fires escalation"); the suite is demonstrable evidence in a s.146 examination.
+3. **Compliance tests in CI**: automated tests assert each control ("junior cannot finalise report", "audit row written on every claim mutation", "SLA breach fires escalation"); the suite is demonstrable evidence in a s.146 examination. ⚠️ **This mechanism does not exist yet** — there are zero tests and no CI in the repository (§4.3 A4). Standing it up is a Phase 0b item, because until it exists every "PASS" in §3 rests on manual verification alone.
 4. **Live compliance dashboard** (Ph 3): matrix rendered from production data — e.g. % reports senior-signed, CPD standing, SLA hit rates, unresolved ComplianceEvents.
 
 ---
 
-## 4. Domain model evolution
+## 4. Domain model & architecture
 
 Conventions respected: kebab-case, British English, polymorphic subtables off `Claim`, data-driven registries (like `EvidenceRequirement`), provider plugin pattern (like FraudSignal providers / LlmProvider).
 
@@ -303,6 +303,36 @@ New NestJS modules (case-service unless noted): `reports/`, `assignments/`, `sla
 
 ---
 
+### 4.3 Architecture assessment (audited 30 July 2026)
+
+The question asked was "is the system design properly done?" — answer: **not yet.** Three defects are blocking. Each was demonstrated against the running system, not inferred from reading code.
+
+#### Blocking
+
+| # | Defect | Evidence | Fix |
+|---|---|---|---|
+| **A1** | **No authentication between services.** `InternalAuthGuard` (`apps/case-service/src/common/guards/internal-auth.guard.ts:27`) trusts three plain HTTP headers with no credential. Its own comment says production needs an API key or mTLS; that was never done | Sending `X-User-Id: forged`, an arbitrary `X-Tenant-Id` and `X-User-Role: FIRM_ADMIN` directly to `:3001` returned real claim records. `main.ts:112` binds `0.0.0.0`, and no Kubernetes network policy exists to contain it. **Blast radius: full cross-tenant read/write of claimant PII** | Shared internal secret validated on every service-to-service call (~half a day), mTLS when infrastructure exists |
+| **A2** | **Four services share one database with no data ownership.** `video-service/rooms.service.ts:54,85` writes `Claim`; `video-service/uploads.service.ts` and two `risk-engine` files write `Document`; `api-gateway` writes four domains directly (otp, claimants, master-data, users). A distributed monolith: microservice cost (four deploy units, network hops, **no cross-service transactions**) with monolith coupling (any service can corrupt any table) | grep of `prisma.<table>.create/update` per service | Enforce ownership at the API boundary — see recommendation below |
+| **A3** | **No segregation of duties.** The 20-permission × 8-role matrix in `adjuster-portal/src/lib/permissions.ts` is frontend-only, and the same role holds `claims:assign` and `claims:approve` | A plain `ADJUSTER` token moved a claim to `APPROVED` through the API with no authority check | `AuthorityLimit` + server-side status guards — already scoped in Phase 1a |
+
+#### Material
+
+| # | Defect | Note |
+|---|---|---|
+| **A4** | **Zero tests, no CI** | Not one test file exists (only third-party ones inside the Python venv); four services declare `"test": "jest"` with nothing to run; no `.github/workflows`. Critical because §3.5 makes "compliance tests in CI" the *entire* mechanism for evidencing controls under FSA s.146 — that mechanism currently has no foundation |
+| **A5** | **No deployment artefacts** | No Dockerfiles, no `infrastructure/` directory, despite `CLAUDE.md` documenting Docker 27 + EKS + Terraform. Insurer vendor assessments ask for deployment, DR and network topology. This is also where the network policy mitigating A1 would live |
+| **A6** | **No observability** | No Sentry / OpenTelemetry / metrics — only the default Nest logger. Cannot evidence SLA performance or investigate an incident, both of which the CSP turnaround story depends on |
+| **A7** | **`api-gateway` is not a gateway** | It proxies most routes while owning four domains, validates little, and forwards `any` in places. Pick one identity: stateless edge (auth, rate limiting, routing) or a BFF that owns those domains deliberately |
+| **A8** | **Documentation describes services that don't exist** | `identity-service`, `document-service`, `insurer-dashboard` are empty directories in `CLAUDE.md`'s architecture — the same false-comfort pattern as §3.6. Correct `CLAUDE.md` |
+
+#### Recommendation on structure
+
+**Do not do a big-bang merge.** The cheap fix captures most of the value: **enforce data ownership at the API boundary** — `video-service` and `risk-engine` call case-service endpoints instead of writing its tables; `api-gateway` either hands its four domains to case-service or is acknowledged as a BFF that owns them. Days, not weeks, and it removes the silent-corruption failure mode without a rewrite.
+
+Merging is the fallback if ownership enforcement proves awkward. If it comes to that, the honest end state for a one-engineer team is **two backend services** — one core API plus `risk-analyzer`, which genuinely warrants a separate Python/ML runtime — and two frontends. The current seven-way split is not earning its operational cost. Either way: **stop adding services.**
+
+---
+
 ## 5. Phased roadmap
 
 "Prod" = production-grade before MSIG go-live; "demo" = sufficient to validate, hardening deferred.
@@ -319,8 +349,20 @@ Security/integrity defects confirmed by the compliance audit that cannot wait fo
 8. Cases module writes audit rows for every transition, `convert()` above all.
 9. Legal review note: claimant-web title/PWA tagline "Insurance Claims Made Easy" vs FSA s.139.
 
+### Phase 0b — Architecture hardening (~1 week; before further feature work)
+From the architecture audit (§4.3). A1 comes first: until it is fixed, every other control in this plan can be bypassed by anyone who can reach port 3001, which makes the PDPA and vendor-assessment story indefensible.
+
+1. **A1 — internal service authentication.** Shared internal secret (env-configured) validated by `InternalAuthGuard` on every service-to-service call; reject requests carrying identity headers without it. Bind services to localhost in dev, and record mTLS as the production step once deployment artefacts exist — **prod**
+2. **A2 — data ownership decision + enforcement.** `video-service` and `risk-engine` stop writing case-service tables (`Claim`, `Document`) and call case-service endpoints instead. Decide explicitly whether `api-gateway` keeps its four owned domains (otp, claimants, master-data, users) as a BFF or hands them over — record the decision either way — **prod**
+3. **A4 — minimal CI + the first compliance test.** GitHub Actions running typecheck across all five apps plus one real compliance test (suggested first: "a claimant token cannot read deception data"). §3.5 makes CI the evidencing mechanism for FSA s.146, so it must exist before the plan starts depending on it — **prod**
+4. **A8 — correct `CLAUDE.md`**: remove `identity-service`, `document-service`, `insurer-dashboard` and the `infrastructure/` tree from the documented architecture, or create them. Do not leave documentation describing services that do not exist — **prod**
+
+Deferred from this phase but tracked: **A5** deployment artefacts (needed for the network policy that properly contains A1, and for insurer vendor assessment), **A6** observability (needed to evidence SLA performance), **A7** gateway identity clean-up. **A3** is already scoped inside Phase 1a as `AuthorityLimit`.
+
+**Exit:** a forged-header request to any service is rejected; no service writes another service's tables; CI is green on every push and fails on a broken control; the documented architecture matches the repository.
+
 ### Phase 1 — Compliance foundation + professional core
-Split into three shippable stages (§9.3–8.4): ~13–19 engineer-weeks in total, ordered so the work that unblocks insurer onboarding and revenue lands before the work that only pays off once senior adjusters are hired.
+Split into three shippable stages (§9.3–9.4): ~13–19 engineer-weeks in total, ordered so the work that unblocks insurer onboarding and revenue lands before the work that only pays off once senior adjusters are hired.
 
 #### Phase 1a — "Operate honestly" (~5–7 weeks) · unblocks insurer vendor assessment
 - Evidential audit trail: interceptor persists, before/after values, append-only at DB level, coverage across cases/policies/video/auth — **prod**
@@ -410,6 +452,8 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 12. **AI is disclosed, not downplayed — decided.** A position existed to use AI internally while minimising it externally. BNM PD **12.6** requires the adjusting report to disclose the facts, assumptions, **methods**, sources and databases behind the assessment, so AI contribution to an assessment is a disclosable method. The defensible posture is the one the system already supports: human-in-the-loop sign-off, full audit trail with before/after values, explicit methodology sections, provenance kept on each risk signal, and no automated decision on medical claims. Downplaying invites the scrutiny it is meant to avoid; documented explainability answers the regulator's actual concern (accountability), and is also what insurer vendor assessments ask for.
 14. **Path B (platform sold *to* insurers and other adjusting firms) — kept open, not built.** The research values it at RM0.4M / RM2.3M / RM6–8M ARR and the §7 verdict names it one of only three routes to an outcome larger than a RM13–18M services business. This plan does **not** build it: with a TPA-first trajectory the near-term buyer is the insurer, not a peer adjusting firm. But it must not be foreclosed by accident, which is why item 5 is a Phase 1a fix rather than an accepted constraint. Decision rule: **keep multi-firm tenancy structurally possible at near-zero cost; build Path B only against a signed pilot with a firm that is not ours.** Revisit if an incumbent (Sedgwick / McLarens / Crawford / MAC) opens a licensing conversation — the research flags that as an untested but plausible channel.
 15. **Do not claim in-country AI processing until it is true.** The live default is Gemini (offshore) whenever `GEMINI_API_KEY` is set, and the "sovereign" Ollama path defaults to an ephemeral Cloudflare tunnel. Until Phase 2 lands real in-country hosting, any external statement must be framed as a dated architecture commitment, not a present fact. See §3.6 item 10 and §6.3.
+16. **Service-to-service trust is the largest single exposure (§4.3 A1).** Demonstrated: forged identity headers to `:3001` return real claim data, with services bound to `0.0.0.0` and no network policy. Every control in §3 — role gating, redaction, tenant isolation, audit — sits *behind* the gateway and is bypassed entirely by a direct call. Treat this as the first work item of Phase 0b, not a backlog entry. Until it is closed, do not expose any service beyond localhost and do not put real claimant data in a shared environment.
+17. **"Microservices" is currently a distributed monolith (§4.3 A2).** Four services write one database with no ownership boundaries, so a schema change can silently break three services and any service can corrupt any table — while cross-service operations have no transaction. The decided response is to enforce ownership at the API boundary rather than merge services, and to **stop adding services**. If ownership enforcement proves awkward, the fallback end state is two backend services (core API + `risk-analyzer`) plus two frontends.
 
 ---
 
@@ -418,7 +462,8 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
 - **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current baseline: **0 PASS / 7 PARTIAL / 20 FAIL** — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
 - **Feasibility gates:** the §9.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §9.2 funding decision before Phase 3.
-- **Execution order:** Phase 0 hotfixes (done — commit `e404fc5`), then Phase 1a (audit + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
+- **Architecture gate:** the three blocking defects in §4.3 (A1 service auth, A2 data ownership, A3 segregation of duties) must be closed before the platform holds real claimant data in any shared environment. A1 and A2 are Phase 0b; A3 is Phase 1a.
+- **Execution order:** Phase 0 hotfixes (done — `e404fc5`), Phase 1a foundations batch (done — `939ac39`), then **Phase 0b architecture hardening**, then the remainder of Phase 1a (audit interceptor + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
 
 ---
 
@@ -428,6 +473,12 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 ### Phase 0 — complete ✅ (`e404fc5`)
 All nine items done and verified: `@Roles` on every Cases endpoint (SUPPORT_DESK → 403 confirmed), bank details and answers omitted from the queue listing, `verify-nric` throttled with non-enumerating errors, `complete-signature` restricted to firm admins, `redactClaim` extended (nested claimant NRIC fail-closed, session deception/fraud data stripped for claimant + support desk), NRIC removed from logs, Cases audit rows on every transition incl. `convert()`, false-comfort assertions corrected, branch committed and pushed.
+
+### Architecture audit — complete, 30 July 2026 (findings in §4.3)
+Verdict: **the system design is not yet sound.** Three blocking defects (A1 no service-to-service auth — demonstrated; A2 shared database with no data ownership; A3 no segregation of duties — demonstrated) plus five material ones (A4 zero tests/no CI, A5 no deployment artefacts, A6 no observability, A7 gateway identity, A8 documentation describes non-existent services). **Phase 0b now precedes further feature work.** Method note: three delegated auditor agents were dispatched and none returned findings; everything in §4.3 is first-hand verification against the running system.
+
+### Phase 0b — Architecture hardening: not started ⬜
+A1 internal service auth · A2 data-ownership enforcement · A4 minimal CI + first compliance test · A8 CLAUDE.md correction. A5/A6/A7 tracked, deferred. A3 lives in Phase 1a.
 
 ### Phase 1a — in progress (~15% → foundations batch done, `939ac39`)
 
