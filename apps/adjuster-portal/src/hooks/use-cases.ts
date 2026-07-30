@@ -59,7 +59,9 @@ export interface CaseSummary {
   currentStep?: FlowStep | null;
   completeness?: CompletenessSummary | null;
   bankName?: string | null;
-  bankAccountNumber?: string | null;
+  /** Last 4 digits only. The full number is encrypted at rest and returned
+   *  solely by the audited reveal endpoint. */
+  bankAccountLast4?: string | null;
   bankAccountHolderName?: string | null;
   documents?: CaseDocumentSummary[];
   evidenceRequirements?: Array<{

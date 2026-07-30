@@ -12,6 +12,7 @@ import { PoliciesModule } from './policies/policies.module';
 import { HealthModule } from './health/health.module';
 import { SignaturesModule } from './signatures/signatures.module';
 import { PrismaModule } from './config/prisma.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
 
@@ -45,6 +46,9 @@ import configuration from './config/configuration';
 
     // Database
     PrismaModule,
+
+    // Field-level encryption for personal data (PDPA)
+    CryptoModule,
 
     // Multi-tenancy
     TenantModule,

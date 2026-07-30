@@ -12,9 +12,10 @@
  * services, and no owner to reason about invariants with.
  *
  * Rather than merging services (expensive) or relying on convention (rots),
- * ownership is declared here as data and enforced at runtime by
- * `enforceDataOwnership()`. New violations therefore fail loudly the first time
- * they run, instead of becoming next year's audit finding.
+ * ownership is declared here as data and enforced by a test that scans every
+ * service's source for Prisma writes:
+ * apps/case-service/src/common/data-ownership.spec.ts. A new violation fails CI
+ * at review time rather than becoming next year's audit finding.
  *
  * Bounded contexts
  * ----------------
@@ -24,7 +25,7 @@
  * an identity-service is ever extracted.
  */
 
-export type DataContext = 'identity' | 'claims' | 'assessment' | 'reference';
+export type DataContext = 'identity' | 'claims' | 'assessment' | 'reference' | 'platform';
 
 /** Which context owns each Prisma model (lower-camel model names). */
 export const MODEL_OWNERSHIP: Record<string, DataContext> = {
@@ -59,6 +60,11 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   documentAnalysis: 'assessment',
   fraudSignal: 'assessment',
 
+  // platform — cross-cutting infrastructure, not business data.
+  // Only the encrypting service writes key material; a second encryptor would
+  // read the same rows rather than create competing key versions.
+  encryptionKey: 'platform',
+
   // reference — master data (motor legacy; see MASTER_PLAN scope note)
   vehicleMake: 'reference',
   vehicleModel: 'reference',
@@ -67,7 +73,7 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
 /** Which contexts each service is allowed to write. */
 export const SERVICE_CONTEXTS: Record<string, DataContext[]> = {
   'api-gateway': ['identity', 'reference'],
-  'case-service': ['claims'],
+  'case-service': ['claims', 'platform'],
   'video-service': ['assessment'],
   'risk-engine': ['assessment'],
 };

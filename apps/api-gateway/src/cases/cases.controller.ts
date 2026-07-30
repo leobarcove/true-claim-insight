@@ -180,6 +180,17 @@ export class CasesController {
     );
   }
 
+  @Get(':id/payout-details')
+  @ApiOperation({ summary: 'Decrypt payout bank details (audited, firm admins only)' })
+  revealPayoutDetails(@Param('id') id: string, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.get(`${this.caseServiceUrl}/api/v1/cases/${id}/payout-details`, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to retrieve payout details'
+    );
+  }
+
   @Post(':id/link-policy')
   @ApiOperation({ summary: 'Manually link a policy' })
   linkPolicy(@Param('id') id: string, @Body() body: any, @Req() req: any) {

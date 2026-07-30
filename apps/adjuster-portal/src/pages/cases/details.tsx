@@ -416,10 +416,10 @@ export function CaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-1">
-                {caseData.bankAccountNumber ? (
+                {caseData.bankAccountLast4 ? (
                   <>
                     <p className="font-medium">{caseData.bankName}</p>
-                    <p>{caseData.bankAccountNumber}</p>
+                    <p className="font-mono">•••• {caseData.bankAccountLast4}</p>
                     <p className="text-muted-foreground">{caseData.bankAccountHolderName}</p>
                   </>
                 ) : (

@@ -376,6 +376,26 @@ model TravelClaim {
 // manually via email; later via API integration or agency-portal scraping.
 // Both future adapters upsert rows here with the appropriate `source`.
 // ============================================================================
+/// Wrapped data-encryption keys (envelope encryption).
+///
+/// Field values are encrypted with a data key (DEK); the DEK itself is stored
+/// here wrapped by a master key (KEK) held outside the database — in the
+/// environment today, in AWS KMS later. Migrating to KMS therefore means
+/// re-wrapping this one row, NOT re-encrypting any data.
+///
+/// Multiple rows may coexist so a key can be rotated gradually: every
+/// ciphertext carries the version that produced it.
+model EncryptionKey {
+  id              String    @id @default(uuid())
+  version         Int       @unique
+  wrappedDataKey  String    // DEK encrypted by the master key
+  algorithm       String    @default("aes-256-gcm")
+  createdAt       DateTime  @default(now())
+  retiredAt       DateTime? // set when no longer used for new writes
+
+  @@map("encryption_keys")
+}
+
 model Policy {
   id               String       @id @default(uuid())
   tenantId         String       // Insurer tenant (e.g. MSIG)
@@ -425,8 +445,13 @@ model Case {
   incidentDate          DateTime?        // promoted for queue + deadline calc
   destination           String?          // promoted for queue display
   sourceMeta            Json?            // EMAIL: {from, subject, receivedAt}; WHATSAPP later
-  bankName              String?          // payout details (PDPA-sensitive)
-  bankAccountNumber     String?
+  bankName              String?          // not an identifier; stored in the clear
+  /// Encrypted payout account number (v<n>:<iv>:<ciphertext>:<tag>).
+  /// Never expose to a claimant; decrypt only for payout/operator review.
+  bankAccountNumberEncrypted String?
+  /// Last 4 digits kept in the clear so operator screens can display an
+  /// account without decrypting anything.
+  bankAccountLast4      String?
   bankAccountHolderName String?
   notifiedLate          Boolean          @default(false) // notified >24h after incident
   outOfWindow           Boolean          @default(false) // notified >30 days after incident
