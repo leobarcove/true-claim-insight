@@ -78,7 +78,10 @@ export function NewClaimPage() {
         policeReportNumber: data.policeReportNumber || '',
         policeReportDate: data.policeReportDate || '',
         policeStation: data.policeStation || '',
-        isPdpaCompliant: true,
+        // PDPA consent is NOT asserted here. It is only true once a Consent
+        // record exists for the claimant (see docs/MASTER_PLAN.md Phase 1);
+        // hardcoding it displayed a "PDPA Consented" badge for consent that
+        // had never been obtained.
       };
 
       console.log('Submitting claim payload:', payload);

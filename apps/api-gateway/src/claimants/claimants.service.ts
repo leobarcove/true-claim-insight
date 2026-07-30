@@ -66,7 +66,8 @@ export class ClaimantsService {
     nric?: string;
     fullName?: string;
   }, tenant?: TenantContext): Promise<Claimant> {
-    this.logger.log(`Creating new claimant for phone: ${data.phoneNumber}, NRIC: ${data.nric}`);
+    // PDPA: never write NRIC (or other identity numbers) to application logs.
+    this.logger.log(`Creating new claimant for phone: ${data.phoneNumber}`);
 
     return this.prisma.claimant.create({
       data: {

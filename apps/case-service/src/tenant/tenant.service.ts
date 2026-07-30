@@ -249,9 +249,25 @@ export class TenantService {
 
     const redacted = { ...claim };
 
-    // 1. PII Masking (NRIC)
+    // 1. PII Masking (NRIC) — top-level and the nested claimant record, which
+    // is routinely attached via `include: { claimant: true }`. Fail closed:
+    // if the value doesn't match the canonical NRIC shape, mask it entirely
+    // rather than letting a non-standard format pass through unredacted.
+    const maskNric = (value: string) => {
+      const match = value.match(/^(\d{6})-?(\d{2})-?(\d{4})$/);
+      return match ? `********${match[3]}` : '************';
+    };
     if (redacted.nric && !isHighPrivilege) {
-      redacted.nric = redacted.nric.replace(/^(\d{6})-?\d{2}-?(\d{4})$/, '********$2');
+      redacted.nric = maskNric(redacted.nric);
+    }
+    if (redacted.claimant && !isHighPrivilege) {
+      redacted.claimant = { ...redacted.claimant };
+      if (redacted.claimant.nric) redacted.claimant.nric = maskNric(redacted.claimant.nric);
+      delete redacted.claimant.nricHash;
+      delete redacted.claimant.nricEncrypted;
+      if (role === 'CLAIMANT' || role === 'SUPPORT_DESK') {
+        delete redacted.claimant.dateOfBirth;
+      }
     }
 
     // 2. Financial & Risk Redaction
@@ -261,6 +277,30 @@ export class TenantService {
       delete redacted.excessAmount;
       delete redacted.sumInsured;
       delete redacted.trinityChecks;
+    }
+
+    // 2b. Behavioural/fraud analysis never reaches claimants or support desk.
+    // FSA Sch 7 (misleading/deceptive conduct) and basic fairness: deception
+    // scores and fraud signals are internal work product, not consumer output.
+    if (['SUPPORT_DESK', 'CLAIMANT'].includes(role)) {
+      delete redacted.deceptionData;
+      delete redacted.riskAssessments;
+      delete redacted.fraudSignals;
+      if (Array.isArray(redacted.sessions)) {
+        redacted.sessions = redacted.sessions.map((session: any) => {
+          const cleaned = { ...session };
+          delete cleaned.summary;
+          delete cleaned.deceptionScores;
+          delete cleaned.riskAssessments;
+          delete cleaned.screenshots;
+          delete cleaned.clientInfos;
+          return cleaned;
+        });
+      }
+      if (redacted.summary) {
+        const { deceptionScore, isHighRisk, ...safeSummary } = redacted.summary;
+        redacted.summary = safeSummary;
+      }
     }
 
     // 3. SIU & Private Note Isolation

@@ -9,8 +9,15 @@ import { LlmProvider } from './llm-provider.interface';
  * Trade-off vs OllamaGpuLlmProvider:
  *  + Faster, more capable, lower operational burden (no GPU box to run).
  *  + Structured JSON output is reliable (responseMimeType=application/json).
- *  - Routes document data through Google's API. Confirm PDPA / data-
- *    sovereignty alignment before flipping the default in production.
+ *  - Routes document data (incl. MyKad images and NRIC values) through
+ *    Google's API, outside Malaysia.
+ *
+ * ⚠️ THIS IS CURRENTLY THE LIVE DEFAULT whenever GEMINI_API_KEY is set — the
+ * caveat below was written as a pre-condition but the default was flipped
+ * anyway. Until Phase 2 of docs/MASTER_PLAN.md makes an in-country provider
+ * the default for documents containing personal data, do not process real
+ * claimant documents through this provider; a cross-border transfer basis
+ * under PDPA has not been established.
  *
  * One model handles all four LlmProvider methods (text, vision, OCR,
  * reasoning) — Gemini Flash is multimodal. Override per call site via

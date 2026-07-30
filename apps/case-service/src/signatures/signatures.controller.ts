@@ -8,6 +8,8 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SignaturesService } from './signatures.service';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 
@@ -23,8 +25,9 @@ import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenan
  */
 @ApiTags('signatures')
 @Controller({ path: 'documents', version: '1' })
-@UseGuards(InternalAuthGuard, TenantGuard)
+@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
+@Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
 export class SignaturesController {
   constructor(private readonly service: SignaturesService) {}
 
@@ -38,9 +41,12 @@ export class SignaturesController {
   }
 
   @Post(':id/complete-signature')
+  // A signed document is a legal artefact — until the real vendor webhook
+  // replaces this stand-in, only firm admins may flip a document to SIGNED.
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary:
-      'Mark the document as SIGNED. Stand-in for the vendor webhook; safe to call from the UI in dev/demo.',
+      'Mark the document as SIGNED. Stand-in for the vendor webhook; restricted to firm admins.',
   })
   completeSignature(
     @Param('id', ParseUUIDPipe) id: string,

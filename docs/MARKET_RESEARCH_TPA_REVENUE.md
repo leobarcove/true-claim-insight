@@ -1,4 +1,4 @@
-# Market Research: Claims Assessment Charges to Insurers in Malaysia — Non-Motor Lines — Revenue Forecast
+# Market Research: Claims Assessment Charges to Insurers in Malaysia — Non-Motor Lines + PA (excl. Individual PA) — Revenue Forecast
 
 > **Purpose:** Neutral, research-based assessment of what loss adjusters and claims service
 > providers charge Malaysian insurers in the **non-motor general insurance lines**, the size of
@@ -124,6 +124,28 @@ adjusted claims. Against a normal-year in-scope claims baseline of RM1.5–2B:
 This is **materially smaller than the motor fee pool** (previously estimated at
 RM200–400M/year) — fewer, larger, more technical cases.
 
+### The PA/travel segment: no adjusters, different fee logic
+
+For Group PA, Travel PA and rider claims, **loss adjusters are largely absent** — insurers
+adjudicate in-house on documents, with assistance companies handling the overseas-emergency
+slice (Europ Assistance for Tune Protect, with MiCare on admission support; Allianz's own
+assistance network). What insurers "pay" for claims handling here is internal operations
+cost plus assistance-company retainers, not per-case adjusting fees. Consequences:
+
+- **There is no incumbent fee to capture** — the revenue model is per-claim adjudication
+  automation, fraud screening, or SaaS to the insurer's claims team, priced against the
+  insurer's internal cost per claim (estimate: RM20–80 of internal handling cost on a small
+  travel claim) and against leakage reduction.
+- **Speed benchmarks are already extreme:** instant parametric flight-delay payouts via
+  DuitNow (Tune Protect), 3-working-day guarantees with a pay-double penalty (Allianz,
+  claims ≤RM5,000 via app). Any offering must match or enable this, not slow it down.
+- **Fraud is document fraud:** inflated/fabricated baggage claims, doctored receipts,
+  claims for trips not taken, undisclosed pre-existing conditions — a strong fit for
+  document-AI and voice-risk screening rather than video site assessment.
+- **Buyers are concentrated:** Tune Protect (AirAsia channel), Allianz, Zurich, Etiqa,
+  AIG and airline/banca partnerships control most Malaysian travel-claim volume — a
+  handful of logos to sell to.
+
 ### Market structure — who earns these fees today
 
 Of the **55 firms on BNM's List of Registered Adjusters** (verified 21 July 2026), non-motor
@@ -154,6 +176,12 @@ binding constraint for any new entrant.
    adjusting employees; 5-year seniority for sign-off; 15 CPD hours/year; 7-year record
    retention. Path options: (a) register an adjusting subsidiary and hire senior non-motor
    adjusters, or (b) sell the platform to insurers and existing adjusting firms.
+   **PA/travel nuance:** desktop adjudication of travel/group PA claims as an outsourced
+   service for an insurer likely falls under BNM's *outsourcing* rules (insurer stays
+   accountable) rather than requiring *adjusting* registration — but the FSA s.2(1)
+   definition of adjusting business ("investigating the cause and circumstances of a loss
+   and ascertaining the quantum") is broad enough that this needs a formal legal read
+   before building the travel product.
 2. **Merimen is less of a blocker here.** The Merimen eClaims rail is motor-centric;
    non-motor claims workflows are more bespoke (email, reports, site visits) — a genuine
    digitisation gap, but also a sign that volumes were historically too low to justify
@@ -211,6 +239,25 @@ AI fraud analysis potentially several USD/claim) is proportionally less painful 
 in motor because per-case pricing is 3–10× higher — one genuine advantage of the non-motor
 scope.
 
+### Path C — travel / Group PA claims adjudication platform (the volume engine)
+
+Sold to insurers as automation + fraud screening on high-volume PA-class claims. Pricing
+must sit below the insurer's internal handling cost (~RM20–80/claim, estimate) and COGS
+must be kept minimal per claim (document AI, no video, selective eKYC/voice-risk only on
+flagged claims):
+
+| Scenario | Claims/yr on platform | Pricing | ARR |
+| --- | --- | --- | --- |
+| Conservative (1 travel insurer) | 30,000 | RM8/claim | RM0.24M |
+| Base (2–3 insurers incl. one airline channel) | 150,000 | RM10/claim + RM200k/insurer fraud tier | RM2.0M |
+| Optimistic (majority of travel-claim volume + group PA batches) | 400,000 | RM12/claim blended + fraud tiers | RM6–8M |
+
+Path C's role in the portfolio is **recurring, non-lumpy transaction revenue** that
+smooths the catastrophe-driven Path A/B property income — and the fraud-screening data
+network effect grows with every claim processed. Its risk is the inverse: thin per-claim
+pricing means volume commitments from a small set of concentrated buyers are essential
+before building.
+
 ---
 
 ## 5. Verdict on profitability (non-motor scope)
@@ -227,12 +274,21 @@ scope.
 - **The strongest genuine wedge:** catastrophe surge remote assessment + BNM turnaround
   compliance + fraud screening on property claims. This is a real, regulator-aligned gap
   that incumbents' site-visit model handles poorly.
-- **Honest bottom line:** as a standalone business, non-motor claims assessment in Malaysia
-  is a **niche, cash-generative, expertise-driven business plausibly reaching RM5–20M
-  revenue at maturity** — not a venture-scale volume market. It becomes more attractive as
-  (a) a beachhead with regional expansion (the same internationals treat Malaysia as one
-  node in an Asia network), or (b) the surge/fraud platform layer sold to the industry
-  rather than competing with it.
+- **The PA/travel inclusion changes the shape of the business.** Property/catastrophe work
+  is high-value and lumpy; travel/group PA is low-value and recurring. Together they form a
+  **two-engine model**: Path C transaction volume covers the base while Path A/B
+  catastrophe and complex-loss work provides the high-margin spikes. The PA class is also
+  the fastest-growing GI line (+12.2% in 2025) with a very low loss ratio — insurers there
+  invest in claims experience as a sales weapon, which is an easier conversation than
+  cost-cutting.
+- **Honest bottom line:** as a standalone business, the combined non-motor + PA (excl.
+  Individual PA) scope in Malaysia plausibly supports **RM5–25M revenue at maturity**
+  (Path A/B property RM5–20M, Path C travel/PA adding RM2–8M of recurring ARR) — a solid,
+  cash-generative niche, but still not a venture-scale volume market on Malaysia alone. It
+  becomes more attractive as (a) a beachhead with regional expansion (the same
+  internationals and travel insurers operate Asia-wide networks — Tune Protect alone spans
+  a dozen markets), or (b) the surge/fraud platform layer sold to the industry rather than
+  competing with it.
 
 ---
 
@@ -241,13 +297,16 @@ scope.
 | Open question | How to validate |
 | --- | --- |
 | Actual non-motor fee scales / time-and-expense rates on insurer panels | Interviews with claims heads at PIAM member insurers; ex-staff of the international adjusting firms |
-| Annual count of non-motor adjuster instructions (the weakest estimate here) | ISM member data via an insurer partner; AMLA member firms |
+| Annual count of non-motor adjuster instructions | ISM member data via an insurer partner; AMLA member firms |
+| **Annual travel/group PA claim counts and internal cost-per-claim** (the load-bearing number for Path C) | Discovery with Tune Protect, Allianz, Zurich, Etiqa claims operations |
+| Individual-PA vs Group/Travel-PA split of the RM1.6B PA class | ISM statistics via an insurer partner |
+| Whether desktop travel-claim adjudication requires adjusting registration or falls under outsourcing rules | Formal legal opinion (FSA s.2(1) definition vs BNM outsourcing policy) |
 | Insurer appetite for a surge-capacity subscription product | Direct discovery conversations with 3–5 insurers' claims/CAT teams |
-| Where travel claims would sit contractually (PA-class boundary) | Product/legal review with a partner insurer |
 | Whether internationals would license a third-party remote-assessment platform | BD conversations with Sedgwick/McLarens/Crawford Malaysia |
 
-Recommended: 5–10 primary conversations before financial commitment. The fee-per-case table
-and the instruction-count range are the two load-bearing estimates.
+Recommended: 5–10 primary conversations before financial commitment. The three load-bearing
+estimates are the property fee-per-case table, the adjuster-instruction count, and the
+travel/PA claim-count range.
 
 ---
 
@@ -268,6 +327,8 @@ and the instruction-count range are the two load-bearing estimates.
 - Loss adjuster fee bases (time/hourly rate vs ad-valorem scale fee) — Australian Treasury consultation submission, Insurance Claims Handling — https://treasury.gov.au/sites/default/files/2019-10/t406602_iicp.pdf
 - AMLA (Association of Malaysian Loss Adjusters) — https://amla1981.org/
 - Malayan Adjustment Company — https://www.macsb.com.my/
+- Tune Protect Travel Easy (instant DuitNow flight-delay claims, 3:3:3 promise, Europ Assistance/MiCare partnerships) — https://www.tuneprotect.com/my/products/travel-easy-insurance
+- Allianz Travel Insurance Malaysia (3-working-day claims guarantee "or we pay double", benefit schedule) — https://www.allianz.com.my/personal/home-motor-and-travel/travel-and-flight-insurance/allianz-travel-insurance.html
 
 ---
 
@@ -279,3 +340,4 @@ and the instruction-count range are the two load-bearing estimates.
 | 2 | 30 Jul 2026 | **Fact-check pass 1** — corrected registered adjuster count to the verified **55 firms** on BNM's list; separated motor *claims paid* from *net claims incurred*; flagged RM7,585 severity figure as likely motorcycle-segment; replaced modelled salary data with verified job-posting ranges. |
 | 3 | 30 Jul 2026 | **Fact-check pass 2 (consistency review)** — fixed medical-TPA revenue inference; restricted international-firm names to those verified on the BNM list; tightened claim-count arithmetic; added revision history. |
 | 4 | 30 Jul 2026 | **Scope change: motor, PA and medical claims excluded.** Report rebuilt around non-motor lines (fire/property, engineering, liability, MAT, misc): new demand-side data (fire CR 69.5% / RM700.8M profit 2025; Dec 2021 flood RM2–3B exposure; ~RM1.6B normal-year in-scope NCI), non-motor fee structures (ad-valorem scale + time-and-expense), competitive landscape (Sedgwick, Crawford, Charles Taylor, McLarens), revised fee pool (~RM30–80M/yr) and rebuilt revenue scenarios including a catastrophe surge-capacity subscription concept. Motor figures retained only as comparison anchors. |
+| 5 | 30 Jul 2026 | **Scope change: PA class re-included, except Individual PA.** Group PA, Travel PA, PA riders and affinity PA now in scope (travel insurance is a PA-class product, so partial inclusion is required to capture travel claims). Added: PA demand data (RM1.6B premium 2025, +12.2% fastest-growing line, ~RM0.2B NCI), travel-claims operating reality (document adjudication, no adjusters, instant/parametric payout benchmarks from Tune Protect and Allianz), the outsourcing-vs-adjusting regulatory question, **Path C** travel/Group-PA adjudication revenue scenarios, and a two-engine verdict (recurring travel volume + lumpy property/catastrophe value). In-scope premium base raised to ~RM10.8–11.0B (~47–48% of GI). |

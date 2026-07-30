@@ -23,6 +23,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 
 const STAFF_ROLES = [UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN] as const;
+// Intake endpoints: claimant self-serve plus adjusting staff. RolesGuard treats
+// missing @Roles metadata as allow-all, so every route must declare its list —
+// otherwise support/compliance roles reach claimant PII and bank details.
+const INTAKE_ROLES = [UserRole.CLAIMANT, ...STAFF_ROLES] as const;
 
 @ApiTags('cases')
 @ApiBearerAuth()
@@ -33,6 +37,7 @@ export class CasesController {
   constructor(private readonly service: CasesService) {}
 
   @Post()
+  @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Create a travel intake case (claimant or staff)' })
   create(@Body() dto: CreateCaseDto, @Tenant() tenantContext: TenantContext) {
     return this.service.create(dto, tenantContext);
@@ -46,18 +51,21 @@ export class CasesController {
   }
 
   @Get('mine')
+  @Roles(UserRole.CLAIMANT)
   @ApiOperation({ summary: "List the authenticated claimant's own cases" })
   findMine(@Tenant() tenantContext: TenantContext) {
     return this.service.findMine(tenantContext);
   }
 
   @Get(':id')
+  @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Case detail with documents, checklist and flow state' })
   findOne(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
     return this.service.findOne(id, tenantContext);
   }
 
   @Patch(':id/answers')
+  @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Save one intake answer and advance the conversation' })
   patchAnswer(
     @Param('id', ParseUUIDPipe) id: string,
@@ -68,6 +76,7 @@ export class CasesController {
   }
 
   @Post(':id/documents/upload')
+  @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Upload an intake evidence document (multipart)' })
   async upload(
     @Param('id', ParseUUIDPipe) id: string,
@@ -80,6 +89,7 @@ export class CasesController {
   }
 
   @Post(':id/submit')
+  @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Submit the case for operator vetting' })
   submit(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
     return this.service.submit(id, tenantContext);

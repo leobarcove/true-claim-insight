@@ -7,6 +7,7 @@ import {
   Logger,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../config/prisma.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -25,12 +26,18 @@ export class ClaimantsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post('verify-nric')
+  // Deliberately unauthenticated: the claimant proves identity here as part of
+  // the magic-link video join, before any login exists. Hardened against use
+  // as an NRIC/phone confirmation oracle: strict per-route throttle and
+  // non-enumerating error responses (never reveal whether the session,
+  // claimant, NRIC or phone was the mismatch).
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Verify claimant NRIC before joining video assessment (public - part of magic link flow)',
   })
   @ApiResponse({ status: 200, description: 'NRIC verified successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid NRIC' })
+  @ApiResponse({ status: 400, description: 'Verification failed' })
   async verifyNric(
     @Body('nric') nric: string,
     @Body('phoneNumber') phoneNumber: string,
@@ -57,27 +64,26 @@ export class ClaimantsController {
       },
     });
 
-    if (!session) {
-      throw new HttpException('Session not found', HttpStatus.NOT_FOUND);
+    // Single generic failure for every mismatch class — an unauthenticated
+    // caller must not be able to distinguish "no such session" from "wrong
+    // NRIC" from "wrong phone" (enumeration/oracle resistance).
+    const verificationFailed = () => {
+      this.logger.warn(`Verification failed for session ${sessionId}`);
+      return new HttpException('Verification failed.', HttpStatus.BAD_REQUEST);
+    };
+
+    const claimant = session?.claim?.claimant;
+    if (!session || !claimant) {
+      throw verificationFailed();
     }
 
-    const claimant = session.claim.claimant;
-    if (!claimant) {
-      throw new HttpException('Claimant not found for this session', HttpStatus.NOT_FOUND);
-    }
-
-    // Compare NRIC and Phone
     const isNricValid =
       normalizeNric(nric) === normalizeNric(claimant.nric || session.claim.nric || '');
     const isPhoneValid =
       normalizePhoneNumber(phoneNumber) === normalizePhoneNumber(claimant.phoneNumber);
 
     if (!isNricValid || !isPhoneValid) {
-      this.logger.warn(`Verification failed for session ${sessionId}: Invalid NRIC or Phone`);
-      throw new HttpException(
-        'Verification failed. Invalid NRIC or Phone Number.',
-        HttpStatus.BAD_REQUEST
-      );
+      throw verificationFailed();
     }
 
     return {
