@@ -243,7 +243,8 @@ These are settled. Re-open them explicitly rather than drifting from them.
 2. **TPA now, BNM registration when volume supports two senior adjusters.** Build the regulated machinery early but ship it inert behind `licensedMode`, so registration is a capability flip rather than a rebuild.
 3. **Data ownership is declared and enforced.** See `packages/prisma-client/src/data-ownership.ts` and the test that scans for cross-context writes. The exception list may shrink, never grow.
 4. **Personal data is encrypted at rest** with the master key behind a `KeyProvider` (`packages/crypto`), so moving to AWS KMS re-wraps one row and touches no data. Only the gateway and case-service hold a key.
-5. **Prefer the durable design over the quick fix**, and never leave a partial migration — say so and scope it separately instead.
+5. **Ciphertext and blind indexes never leave the server.** `SENSITIVE_FIELD_OMIT` (in `@tci/prisma-client`) is passed to every `PrismaClient`, so those columns are absent from query results by default; a path that genuinely decrypts opts back in with `omit: { <field>: false }`. Add any new encrypted or hashed personal-data column to that map — `sensitive-fields.spec.ts` reads the Prisma schema and fails if you forget. A `…Last4` tail is what screens display.
+6. **Prefer the durable design over the quick fix**, and never leave a partial migration — say so and scope it separately instead.
 
 ## Development Commands
 
