@@ -46,7 +46,58 @@ export enum ClaimCategory {
   BURGLARY = 'BURGLARY',
   PERSONAL_ACCIDENT = 'PERSONAL_ACCIDENT',
   HOH = 'HOH',
+  TRAVEL = 'TRAVEL',
   OTHER = 'OTHER',
+}
+
+// Travel-specific subtype — only meaningful when category=TRAVEL.
+// Exactly the five categories agreed for the MSIG TPA scope.
+export enum TravelClaimType {
+  FLIGHT_DELAY = 'FLIGHT_DELAY',
+  LUGGAGE_DAMAGE = 'LUGGAGE_DAMAGE',
+  LUGGAGE_LOSS = 'LUGGAGE_LOSS',
+  TRIP_CANCELLATION = 'TRIP_CANCELLATION',
+  MEDICAL = 'MEDICAL',
+}
+
+// Pre-claim intake (Case) lifecycle. Cases are TPA-internal vetting records;
+// conversion creates the insurer-facing Claim.
+export enum CaseStatus {
+  DRAFT = 'DRAFT',
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  INFO_REQUESTED = 'INFO_REQUESTED',
+  REFERRED_TO_EXPERT = 'REFERRED_TO_EXPERT',
+  CONVERTED = 'CONVERTED',
+  REJECTED = 'REJECTED',
+  ABANDONED = 'ABANDONED',
+}
+
+export enum CaseChannel {
+  WEB_CHAT = 'WEB_CHAT',
+  STAFF = 'STAFF',
+  EMAIL = 'EMAIL',
+  WHATSAPP = 'WHATSAPP',
+}
+
+export enum CaseInitiator {
+  CLAIMANT = 'CLAIMANT',
+  STAFF = 'STAFF',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum PolicySource {
+  MANUAL = 'MANUAL',
+  API = 'API',
+  SCRAPED = 'SCRAPED',
+}
+
+export enum DocumentValidationStatus {
+  PENDING = 'PENDING',
+  PASSED = 'PASSED',
+  FLAGGED = 'FLAGGED',
+  SKIPPED = 'SKIPPED',
 }
 
 export enum FloodSource {
@@ -194,6 +245,26 @@ export enum DocumentType {
   POLICY_DOCUMENT = 'POLICY_DOCUMENT',
   NRIC = 'NRIC',
   OTHER_DOCUMENT = 'OTHER_DOCUMENT',
+  CLAIMANT_SCREENSHOT = 'CLAIMANT_SCREENSHOT',
+  // Non-motor evidence types
+  BOMBA_REPORT = 'BOMBA_REPORT',
+  FLOOD_AUTHORITY_REPORT = 'FLOOD_AUTHORITY_REPORT',
+  WEATHER_REPORT = 'WEATHER_REPORT',
+  UTILITY_SURGE_REPORT = 'UTILITY_SURGE_REPORT',
+  INVENTORY_LIST = 'INVENTORY_LIST',
+  PROOF_OF_OWNERSHIP = 'PROOF_OF_OWNERSHIP',
+  MEDICAL_REPORT = 'MEDICAL_REPORT',
+  PROPERTY_TITLE = 'PROPERTY_TITLE',
+  UTILITY_BILL = 'UTILITY_BILL',
+  // Travel evidence types
+  BOARDING_PASS = 'BOARDING_PASS',
+  FLIGHT_ITINERARY = 'FLIGHT_ITINERARY',
+  AIRLINE_DELAY_CONFIRMATION = 'AIRLINE_DELAY_CONFIRMATION',
+  PROPERTY_IRREGULARITY_REPORT = 'PROPERTY_IRREGULARITY_REPORT',
+  BAGGAGE_TAG = 'BAGGAGE_TAG',
+  PASSPORT = 'PASSPORT',
+  OVERSEAS_MEDICAL_BILL = 'OVERSEAS_MEDICAL_BILL',
+  TRAVEL_BOOKING_INVOICE = 'TRAVEL_BOOKING_INVOICE',
 }
 
 export enum DocumentStatus {
@@ -475,3 +546,32 @@ export interface RiskAssessmentResponse {
   };
   analysedAt: string;
 }
+
+// Travel claim intake flow definitions (Case guided intake).
+// NOTE: explicit named re-exports (not `export *`) — the frontends consume the
+// compiled CJS dist, and the CJS→ESM named-export lexer cannot see through
+// tsc's __exportStar helper, but does detect explicit re-export bindings.
+export {
+  CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_LABELS,
+  NOTIFY_WITHIN_HOURS,
+  CLAIM_WINDOW_DAYS,
+  getFlow,
+  getStep,
+  resolveNextStep,
+  validateAnswer,
+  computeDeadlineFlags,
+  computeCompleteness,
+} from './case-flows';
+export type {
+  AnswerType,
+  AnswerValidation,
+  AnswerValue,
+  CaseAnswers,
+  CaseFlow,
+  CompletenessSummary,
+  DeadlineFlags,
+  DocumentTypeLike,
+  FlowStep,
+  TravelClaimTypeLike,
+} from './case-flows';

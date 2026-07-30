@@ -5,8 +5,10 @@ import { APP_GUARD } from '@nestjs/core';
 
 import { ClaimsModule } from './claims/claims.module';
 import { AdjustersModule } from './adjusters/adjusters.module';
+import { CasesModule } from './cases/cases.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FloodClaimsModule } from './flood-claims/flood-claims.module';
+import { PoliciesModule } from './policies/policies.module';
 import { HealthModule } from './health/health.module';
 import { SignaturesModule } from './signatures/signatures.module';
 import { PrismaModule } from './config/prisma.module';
@@ -50,8 +52,10 @@ import configuration from './config/configuration';
     // Feature modules
     ClaimsModule,
     AdjustersModule,
+    CasesModule,
     DocumentsModule,
     FloodClaimsModule,
+    PoliciesModule,
     HealthModule,
     SignaturesModule,
   ],

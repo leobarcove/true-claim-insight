@@ -120,7 +120,10 @@ model Tenant {
   vehicleModels       VehicleModel[]
   ownedClaims         Claim[]
   floodClaims         FloodClaim[]
+  travelClaims        TravelClaim[]
   evidenceRequirements EvidenceRequirement[]
+  cases               Case[]
+  policies            Policy[]
 
   @@map("tenants")
 }
@@ -163,6 +166,7 @@ model Claimant {
   tenant        Tenant?   @relation(fields: [tenantId], references: [id])
   user          User?     @relation(fields: [userId], references: [id])
   claims        Claim[]
+  cases         Case[]
 
   @@index([phoneNumber])
   @@index([nric])
@@ -253,6 +257,9 @@ model Claim {
   // Per-category polymorphic sub-tables. Exactly one should be populated,
   // matching the value in `category`.
   floodClaim              FloodClaim?
+  travelClaim             TravelClaim?
+  // Pre-claim intake request this claim was converted from, if any.
+  sourceCase              Case?
   fraudSignals            FraudSignal[]
 
   @@index([claimantId])
@@ -318,6 +325,150 @@ model FloodClaim {
 }
 
 // ============================================================================
+// Non-motor: Travel (TPA model — travel claim requests captured as Cases and
+// converted into Claim + TravelClaim on operator approval). Mirrors the
+// FloodClaim polymorphic sub-table pattern.
+// ============================================================================
+model TravelClaim {
+  id                 String          @id @default(uuid())
+  claimId            String          @unique
+  tenantId           String?
+  travelClaimType    TravelClaimType
+  policyId           String?         // carried from the source Case
+
+  // Trip context
+  tripStartDate      DateTime?
+  tripEndDate        DateTime?
+  destinationCountry String?
+
+  // Flight delay
+  airline            String?
+  flightNumber       String?
+  scheduledDeparture DateTime?
+  actualDeparture    DateTime?
+  delayHours         Float?
+
+  // Luggage damage / loss
+  baggageTagNumber   String?
+
+  // Medical (form + expert routing only — never auto-assessed)
+  treatmentCountry   String?
+  hospitalName       String?
+  referredToExpert   Boolean         @default(false)
+
+  // Trip cancellation
+  cancellationReason String?
+
+  estimatedAmountRm  Decimal?        @db.Decimal(12, 2)
+
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  claim              Claim           @relation(fields: [claimId], references: [id])
+  tenant             Tenant?         @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("travel_claims")
+}
+
+// ============================================================================
+// TPA intake — Policy data supplied by the insurer (MSIG). Today this arrives
+// manually via email; later via API integration or agency-portal scraping.
+// Both future adapters upsert rows here with the appropriate `source`.
+// ============================================================================
+model Policy {
+  id               String       @id @default(uuid())
+  tenantId         String       // Insurer tenant (e.g. MSIG)
+  policyNumber     String
+  insuredName      String
+  insuredNric      String?
+  insuredPhone     String?
+  planTier         String?
+  tripStartDate    DateTime?
+  tripEndDate      DateTime?
+  destination      String?
+  coverageSnapshot Json?        // benefits/limits exactly as supplied
+  source           PolicySource @default(MANUAL)
+  externalRef      String?      // insurer API id / scrape reference (future)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  tenant           Tenant       @relation(fields: [tenantId], references: [id])
+  cases            Case[]
+
+  @@unique([tenantId, policyNumber])
+  @@index([tenantId, insuredPhone])
+  @@map("policies")
+}
+
+// ============================================================================
+// Case — pre-claim intake request (FNOL). Channel-agnostic conversational
+// artifact: web chat wizard, staff capture, logged email, or (future)
+// WhatsApp bot / system-initiated proactive cases. A human operator vets the
+// case and converts it into a Claim (+ TravelClaim) — the insurer handback.
+// ============================================================================
+model Case {
+  id                    String           @id @default(uuid())
+  caseNumber            String           @unique        // CSE-2026-000001 via case_number_seq
+  tenantId              String
+  channel               CaseChannel      @default(WEB_CHAT)
+  initiatedBy           CaseInitiator    @default(CLAIMANT)
+  status                CaseStatus       @default(DRAFT)
+  category              ClaimCategory    @default(TRAVEL)
+  travelClaimType       TravelClaimType?
+  claimantId            String?
+  createdByUserId       String?          // staff capture / email logging
+  policyId              String?
+  policyNumberRaw       String?          // as typed/extracted, pre-match
+  needsPolicyReview     Boolean          @default(false) // no auto-match found
+  currentStepId         String?          // conversational cursor for resume
+  answers               Json             @default("{}") // Record<stepId, value>; pre-filled for SYSTEM cases
+  incidentDate          DateTime?        // promoted for queue + deadline calc
+  destination           String?          // promoted for queue display
+  sourceMeta            Json?            // EMAIL: {from, subject, receivedAt}; WHATSAPP later
+  bankName              String?          // payout details (PDPA-sensitive)
+  bankAccountNumber     String?
+  bankAccountHolderName String?
+  notifiedLate          Boolean          @default(false) // notified >24h after incident
+  outOfWindow           Boolean          @default(false) // notified >30 days after incident
+  reviewNote            String?          // info request / expert note / reject reason
+  convertedClaimId      String?          @unique
+  submittedAt           DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  tenant                Tenant           @relation(fields: [tenantId], references: [id])
+  claimant              Claimant?        @relation(fields: [claimantId], references: [id])
+  policy                Policy?          @relation(fields: [policyId], references: [id])
+  convertedClaim        Claim?           @relation(fields: [convertedClaimId], references: [id])
+  documents             CaseDocument[]
+
+  @@index([tenantId, status])
+  @@index([claimantId])
+  @@index([createdAt(sort: Desc)])
+  @@map("cases")
+}
+
+model CaseDocument {
+  id               String                   @id @default(uuid())
+  caseId           String
+  tenantId         String
+  documentType     DocumentType
+  fileName         String
+  storagePath      String                   // same StorageService bucket as claim documents
+  mimeType         String?
+  sizeBytes        Int?
+  stepId           String?                  // which intake step produced it
+  // Local-LLM document validation hook (name match, completeness).
+  // Slice 1 sets SKIPPED; the validation service fills these in later.
+  validationStatus DocumentValidationStatus @default(SKIPPED)
+  validationNote   String?
+  createdAt        DateTime                 @default(now())
+  case             Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("case_documents")
+}
+
+// ============================================================================
 // Fraud signal records — Shift Technology pattern.
 // Each detector (parametric weather check, document forgery, repeat claimant,
 // behavioural Hume score, etc.) writes one row per signal it produces.
@@ -357,6 +508,9 @@ model EvidenceRequirement {
   id           String        @id @default(uuid())
   tenantId     String?
   category     ClaimCategory
+  // Travel subtype refinement — null for non-travel categories, letting each
+  // travel claim type (flight delay, luggage loss, ...) have its own checklist.
+  travelClaimType TravelClaimType?
   documentType DocumentType
   isMandatory  Boolean       @default(true)
   description  String?
@@ -367,7 +521,7 @@ model EvidenceRequirement {
 
   tenant       Tenant?       @relation(fields: [tenantId], references: [id])
 
-  @@unique([tenantId, category, documentType])
+  @@unique([tenantId, category, travelClaimType, documentType])
   @@index([category])
   @@map("evidence_requirements")
 }
@@ -625,7 +779,56 @@ enum ClaimCategory {
   BURGLARY
   PERSONAL_ACCIDENT
   HOH                 // Houseowner / Householder umbrella (multi-peril)
+  TRAVEL
   OTHER
+}
+
+// Travel-specific subtype — only meaningful when category=TRAVEL.
+// Exactly the five categories agreed for the MSIG TPA scope.
+enum TravelClaimType {
+  FLIGHT_DELAY
+  LUGGAGE_DAMAGE
+  LUGGAGE_LOSS
+  TRIP_CANCELLATION
+  MEDICAL
+}
+
+enum CaseStatus {
+  DRAFT              // created, intake in progress
+  IN_PROGRESS        // answers being captured
+  SUBMITTED          // claimant/staff finished review + submit
+  UNDER_REVIEW       // operator opened it (vetting)
+  INFO_REQUESTED     // operator asked for more info — claimant can amend
+  REFERRED_TO_EXPERT // MEDICAL: routed to human expert, awaiting outcome
+  CONVERTED          // Claim created (handback to insurer)
+  REJECTED
+  ABANDONED
+}
+
+enum CaseChannel {
+  WEB_CHAT
+  STAFF
+  EMAIL
+  WHATSAPP
+}
+
+enum CaseInitiator {
+  CLAIMANT
+  STAFF
+  SYSTEM   // future proactive detection (e.g. flight-delay feed)
+}
+
+enum PolicySource {
+  MANUAL   // keyed in from insurer emails
+  API      // insurer API integration (future)
+  SCRAPED  // agency-portal scraping (future)
+}
+
+enum DocumentValidationStatus {
+  PENDING
+  PASSED
+  FLAGGED
+  SKIPPED
 }
 
 // Motor-specific subtype — only meaningful when category=MOTOR.
@@ -751,6 +954,15 @@ enum DocumentType {
   MEDICAL_REPORT        // PA / injury claims
   PROPERTY_TITLE        // Geran / property ownership
   UTILITY_BILL          // Address proof
+  // Travel evidence types
+  BOARDING_PASS
+  FLIGHT_ITINERARY               // e-ticket / booking confirmation
+  AIRLINE_DELAY_CONFIRMATION     // airline delay/cancellation notice
+  PROPERTY_IRREGULARITY_REPORT   // PIR (luggage damage/loss)
+  BAGGAGE_TAG
+  PASSPORT
+  OVERSEAS_MEDICAL_BILL
+  TRAVEL_BOOKING_INVOICE         // bookings, cancellation/refund proof
 }
 
 enum ActorType {

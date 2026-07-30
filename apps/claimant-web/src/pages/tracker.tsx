@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Video, FileText, LogOut, Loader2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Video, FileText, LogOut, Loader2, ArrowRight, Plane } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useClaims, useClaimSessions } from '@/hooks/use-claims';
 import { cn, convertToTitleCase, formatDate } from '@/lib/utils';
 import type { Claim } from '@tci/shared-types';
 
 export function AssessmentTrackerPage() {
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
   const { data: claimsData, isLoading: isLoadingClaims } = useClaims(user?.id);
@@ -62,6 +63,25 @@ export function AssessmentTrackerPage() {
             </div>
           </div>
         </div>
+
+        {/* Travel claim intake entry */}
+        <button
+          onClick={() => navigate('/cases/new')}
+          className="w-full flex items-center justify-between gap-4 rounded-3xl border border-primary/20 bg-primary/5 p-5 text-left hover:bg-primary/10 transition-colors"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+              <Plane size={22} />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-foreground">Start a travel claim</p>
+              <p className="text-xs text-muted-foreground">
+                Flight delay, luggage, trip cancellation or overseas medical
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-primary shrink-0" />
+        </button>
 
         {/* Active Claims List */}
         <div className="space-y-4">

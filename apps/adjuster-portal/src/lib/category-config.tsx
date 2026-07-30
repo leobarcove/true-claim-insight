@@ -13,6 +13,7 @@ import {
   Car,
   Flame,
   Home,
+  Plane,
   Shield,
   Stethoscope,
   Waves,
@@ -33,6 +34,7 @@ const CATEGORY = {
   BURGLARY: 'BURGLARY' as ClaimCategory,
   PERSONAL_ACCIDENT: 'PERSONAL_ACCIDENT' as ClaimCategory,
   HOH: 'HOH' as ClaimCategory,
+  TRAVEL: 'TRAVEL' as ClaimCategory,
   OTHER: 'OTHER' as ClaimCategory,
 };
 
@@ -124,6 +126,18 @@ export const categoryConfig = {
     iconColor: 'text-emerald-600',
     accentBg: 'bg-emerald-50 dark:bg-emerald-950/30',
     accentText: 'text-emerald-700 dark:text-emerald-300',
+    enabled: false,
+  },
+  [CATEGORY.TRAVEL]: {
+    key: CATEGORY.TRAVEL,
+    label: 'Travel',
+    description: 'Flight delay, luggage, trip cancellation, overseas medical',
+    icon: Plane,
+    iconColor: 'text-sky-600',
+    accentBg: 'bg-sky-50 dark:bg-sky-950/30',
+    accentText: 'text-sky-700 dark:text-sky-300',
+    // Travel claims enter via the Cases intake (pre-claim vetting), not the
+    // direct FNOL form — converted cases still render in the claims list.
     enabled: false,
   },
   [CATEGORY.OTHER]: {

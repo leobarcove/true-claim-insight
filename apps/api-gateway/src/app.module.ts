@@ -12,6 +12,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { VideoModule } from './video/video.module';
+import { CasesModule } from './cases/cases.module';
 import { ClaimsModule } from './claims/claims.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
@@ -55,6 +56,7 @@ import configuration from './config/configuration';
     AuthModule,
     UsersModule,
     VideoModule,
+    CasesModule,
     ClaimsModule,
     ClaimantsModule,
     HealthModule,
