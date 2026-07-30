@@ -582,8 +582,18 @@ no code change per insurer</td>
 <td>Built</td>
 </tr>
 <tr>
-<td>Remote video assessment, eKYC, digital signing loop</td>
+<td>Remote video assessment (Daily.co integration)</td>
 <td>Built</td>
+</tr>
+<tr>
+<td>Digital signing</td>
+<td>Lifecycle and provider interface built; <strong>stub provider only —
+no signing vendor integrated yet</strong></td>
+</tr>
+<tr>
+<td>eKYC / identity verification</td>
+<td>Status tracking in the claim record; <strong>no verification vendor
+integrated yet</strong></td>
 </tr>
 <tr>
 <td>Audit trail (<code>AuditTrail</code>) supporting BNM's 7-year
@@ -603,8 +613,17 @@ unbuilt (fee scales, time entries, disbursements, fee notes); there is
 no BNM change-notification register; and the licensed-mode hard gates
 (qualified-assignee-only, junior supervision with senior countersign,
 conflict-of-interest screening, CPD floor) are specified but not
-implemented. A clause-by-clause compliance audit of these gaps has been
+implemented. Third-party signing and eKYC vendors are not yet
+integrated. A clause-by-clause compliance audit of these gaps has been
 completed internally.</p>
+<p><strong>Data residency — an open commitment, not yet a property of
+the system.</strong> Malaysian data residency (AWS ap-southeast-5) is
+the stated design target and is set as a configuration default, but the
+platform is <strong>not yet containerised and has no deployment
+manifests</strong>, so residency is not currently enforced by
+infrastructure. This will be an early question in any insurer's
+information-security review and is treated as a build prerequisite, not
+a claim.</p>
 <p><strong>Legacy motor surface.</strong> Motor code
 (<code>ClaimCategory.MOTOR</code>, motor rule engine, vehicle master
 data) remains in the repository and functional but is <strong>not a
@@ -1411,9 +1430,15 @@ carried forward.</p>
 precise figures:</p>
 <ol type="1">
 <li><strong>Monthly breakeven arrives in Year 2; cash payback in Year
-3.</strong> The base case turns profitable on a monthly basis during
-Year 2, but cumulative losses are only recovered during Year 3. Fund the
-business to survive roughly 24 months, not 12.</li>
+3.</strong> Three different milestones are easy to confuse. <em>Monthly
+breakeven</em> is the first month revenue covers costs. <em>Annual
+breakeven</em> is the first profitable full year — Year 2, at RM250,000.
+<strong>Cash payback is the point where cumulative profits have repaid
+every earlier loss</strong> — the year the cumulative row crosses zero,
+which is Year 3. Year 2 is profitable yet the business is still
+RM215,000 down overall. When a partner asks "when do I get my money
+back," they mean payback, not monthly breakeven. Fund the business to
+survive roughly 24 months, not 12.</li>
 <li><strong>Margins expand with scale because the cost base is largely
 fixed.</strong> Compliance, office and senior-adjuster capacity are step
 costs; revenue grows faster than they do. That is the AI-native thesis
@@ -1440,6 +1465,172 @@ senior-adjuster capacity are step costs that revenue outgrows. If fees
 compress, that falls to ~16%. Pushing toward the platform-led mix (Paths
 B and C) improves margin and scalability but lowers absolute
 revenue.</p>
+<h3 id="67-cash-flow-and-the-real-funding-requirement">6.7 Cash flow and
+the real funding requirement</h3>
+<p>Profit is not cash. Insurers settle on 30–90 day terms, so revenue is
+invoiced well before it is collected. The table below assumes 35% of a
+quarter's invoicing is collected within that quarter and 65% in the
+following one — and it moves the payback date.</p>
+<p><strong>Base case, quarterly cash (RM'000)</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Invoiced</th>
+<th>Collected</th>
+<th>Cash costs</th>
+<th>Net cash</th>
+<th>Cumulative cash</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Y1 Q1</td>
+<td>—</td>
+<td>—</td>
+<td>(330)</td>
+<td>(330)</td>
+<td>(330)</td>
+</tr>
+<tr>
+<td>Y1 Q2</td>
+<td>50</td>
+<td>18</td>
+<td>(170)</td>
+<td>(152)</td>
+<td>(482)</td>
+</tr>
+<tr>
+<td>Y1 Q3</td>
+<td>150</td>
+<td>85</td>
+<td>(210)</td>
+<td>(125)</td>
+<td>(608)</td>
+</tr>
+<tr>
+<td>Y1 Q4</td>
+<td>300</td>
+<td>202</td>
+<td>(225)</td>
+<td>(22)</td>
+<td>(630)</td>
+</tr>
+<tr>
+<td>Y2 Q1</td>
+<td>350</td>
+<td>318</td>
+<td>(400)</td>
+<td>(82)</td>
+<td>(712)</td>
+</tr>
+<tr>
+<td><strong>Y2 Q2</strong></td>
+<td>500</td>
+<td>402</td>
+<td>(450)</td>
+<td>(48)</td>
+<td><strong>(760)</strong> ← trough</td>
+</tr>
+<tr>
+<td>Y2 Q3</td>
+<td>600</td>
+<td>535</td>
+<td>(500)</td>
+<td>35</td>
+<td>(725)</td>
+</tr>
+<tr>
+<td>Y2 Q4</td>
+<td>750</td>
+<td>652</td>
+<td>(540)</td>
+<td>112</td>
+<td>(612)</td>
+</tr>
+<tr>
+<td>Y3 Q1</td>
+<td>900</td>
+<td>802</td>
+<td>(800)</td>
+<td>2</td>
+<td>(610)</td>
+</tr>
+<tr>
+<td>Y3 Q2</td>
+<td>1,050</td>
+<td>952</td>
+<td>(850)</td>
+<td>102</td>
+<td>(508)</td>
+</tr>
+<tr>
+<td>Y3 Q3</td>
+<td>1,200</td>
+<td>1,102</td>
+<td>(880)</td>
+<td>222</td>
+<td>(285)</td>
+</tr>
+<tr>
+<td>Y3 Q4</td>
+<td>1,350</td>
+<td>1,252</td>
+<td>(1,036)</td>
+<td>216</td>
+<td>(68)</td>
+</tr>
+</tbody>
+</table>
+<p>Three consequences:</p>
+<ul>
+<li><strong>The cash trough is RM760,000, reached around month
+18</strong> (Y2 Q2) — deeper and later than the Year 1 accounting loss
+of RM465,000 suggests. The trough, not the first-year loss, is what has
+to be funded.</li>
+<li><strong>Cash payback lags accounting payback by about two
+quarters.</strong> Cumulative net profit turns positive during Year 3,
+but cumulative <em>cash</em> is still RM68,000 negative at the end of
+Year 3 and only crosses zero in early Year 4, because roughly RM880,000
+is sitting in receivables by then.</li>
+<li><strong>Working capital grows with success.</strong> Every step up
+in revenue ties up more cash in unpaid invoices. Fast growth consumes
+cash even while the P&amp;L looks healthy.</li>
+</ul>
+<p><strong>Funding requirement</strong></p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Amount</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operating cash trough</td>
+<td>RM760,000</td>
+</tr>
+<tr>
+<td>Contingency at 25% of the trough</td>
+<td>RM190,000</td>
+</tr>
+<tr>
+<td><strong>Working funding required</strong></td>
+<td><strong>≈RM950,000</strong></td>
+</tr>
+<tr>
+<td>BNM minimum paid-up capital</td>
+<td>Locked capital — <strong>amount unverified</strong> (§10)</td>
+</tr>
+<tr>
+<td><strong>Total to raise</strong></td>
+<td><strong>RM900,000–1,400,000</strong> depending on the capital
+requirement and buffer</td>
+</tr>
+</tbody>
+</table>
+<p>Do not distribute profits before cash payback in Year 4; Years 2 and
+3 profits are needed to refill the hole dug in Year 1.</p>
 <hr />
 <h2 id="7-verdict-on-profitability">7. Verdict on profitability</h2>
 <ul>
