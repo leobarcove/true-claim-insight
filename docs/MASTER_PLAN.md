@@ -2,11 +2,23 @@
 
 ## Context
 
-The operator runs an unlicensed TPA (claims administration for insurers; MSIG verbally agreed as first client, white-label, multi-panel ambition) and intends to become a **BNM-registered adjuster** under the Financial Services Act 2013. The user supplied the two governing documents — the FSA 2013 and BNM's *Registration Procedures and Requirements on Professionalism of Adjusters* (BNM/RH/PD 032-29, 29 Aug 2025) — and asked for a master plan that makes the system embody the required SOPs, grounded in Malaysian market practice, focused on **non-motor claims**, with the complete claimant→agent/insurer→adjusting-firm user flow made explicit. Compliance is non-negotiable: every binding requirement must map to an enforced system control.
+The operator runs an unlicensed TPA (claims administration for insurers; MSIG verbally agreed as first client, white-label, multi-panel ambition) and intends to become a **BNM-registered adjuster** under the Financial Services Act 2013. The two governing documents — the FSA 2013 and BNM's *Registration Procedures and Requirements on Professionalism of Adjusters* (BNM/RH/PD 032-29, 29 Aug 2025) — plus the Claims Settlement Practices PD (CSP, BNM/RH/PD 029-69) define the obligations this system must embody. Compliance is non-negotiable: every binding requirement must map to an enforced system control.
 
-This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of both regulatory documents, (3) the BNM Claims Settlement Practices PD (CSP, BNM/RH/PD 029-69) timeline anchors, and (4) market research on Malaysian adjusting practice (AMLA, appointment channels, report conventions). A separate per-requirement compliance verification audit produced the verdict column in §3.
+This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md` (Rev 5), which governs the sequencing in §5 and the feasibility position in §8. A per-requirement compliance verification audit produced the verdict column in §3.
 
-**Regulatory posture in one line:** adjusting is a *registered business* (FSA Sch 1 Pt 2 item 10) — registration arises by operation of law once the Order's requirements are met; BNM standards under s.18(2) are binding and monetary-penalty-exposed (Sch 15); adjusters are "financial service providers" caught by conduct rules (s.123/124 + Sch 7); BNM can examine without notice (s.146). The system is therefore the firm's compliance evidence.
+### Scope — target claim lines
+
+| | Lines |
+|---|---|
+| **In scope** | Fire/Property (incl. **flood**, lightning), burglary/theft, HOH, Construction & Engineering, Liability, MAT, Bonds, Workmen's Compensation, Miscellaneous — plus the PA class **excluding Individual PA**: Group PA, **Travel PA (travel insurance)**, riders, affinity |
+| **Explicitly excluded** | **Motor** · **Individual PA** (standalone personal-accident adjudication) · **Medical & Health** |
+
+Two consequences that recur throughout this plan:
+
+- **Travel is a PA-class product, not a class of its own.** Malaysian travel insurance is written under the PA class (PA core benefits + travel-inconvenience add-ons). Travel claims are therefore in scope via Group/Travel PA, and the travel policy's *medical-expenses benefit* stays in scope as a travel benefit — while standalone Medical & Health insurance is out. This is why the already-built travel Cases line is on-strategy.
+- **Motor code exists in the repo but is not a target.** `ClaimCategory.MOTOR`, the motor Trinity rule engine and the vehicle master data remain functional; they are legacy surface. Do not extend them. Where a choice arises between generalising motor code and building non-motor properly, build non-motor.
+
+**Regulatory posture in one line:** adjusting is a *registered business* (FSA Sch 1 Pt 2 item 10) — registration arises by operation of law once the Order's requirements are met; BNM standards under s.18(2) are binding and monetary-penalty-exposed (Sch 15); a **registered** adjuster is a "financial service provider" caught by conduct rules (s.123/124 + Sch 7); BNM can examine without notice (s.146). The system is therefore the firm's compliance evidence.
 
 ---
 
@@ -18,11 +30,21 @@ This plan was produced from: (1) a full codebase audit, (2) paragraph-level extr
 |---|---|---|
 | `TPA` (today) | Claims administration on behalf of insurer; no independent adjusting opinion | Full workflow; outputs labelled "assessment summaries"; soft gates |
 | `REGISTERED_ADJUSTER` | Independent appointed adjusting; issues adjuster's reports | Same workflow + hard gates: qualified-assignee-only, junior supervision + senior countersign, mandatory COI screen, BNM change notifications, CPD floor |
-| Marine/aviation (optional) | Exempt from registration (FSA s.17(2)(b)) | Unregulated line, same rigour, no registration gates. Not in scope until demanded |
+| MAT (marine/aviation) | In commercial scope; adjusting of **maritime and aviation losses is exempt from registration** (FSA s.17(2)(b)) | Same rigour, no registration gates. Build only when a client instructs it |
 
 **White-label multi-panel:** each insurer is a `Tenant` (type INSURER) with its own branding, fee scales, SLA thresholds and assessment-mode routing — hung off the currently-unused `Tenant.settings`, promoted to a structured per-tenant config surface. The firm is one ADJUSTING_FIRM tenant.
 
-**Product thesis:** non-motor adjusting is document-heavy, timeline-bound (CSP), and dominated by small-to-mid claims where a site visit is economically irrational. The wedge is the **assessment-mode router** — DESK_REVIEW / REMOTE_VIDEO / SITE_VISIT / EXPERT_REFERRAL selected per category + amount + fraud flags, thresholds per insurer tenant. Fast-track desk review of small claims is the core product; the existing video/AI stack is the differentiator for the middle band.
+**Product thesis — two engines, deliberately different.** The in-scope lines split into two operating models that share one platform:
+
+| | Property/CAT engine | Travel & Group PA engine |
+|---|---|---|
+| Lines | Fire/property, flood, burglary, HOH, engineering, liability | Travel PA, Group PA, riders, affinity |
+| Claim shape | Low volume, high value, lumpy, event-driven | High volume, low value (typically RM200–3,000), recurring |
+| Assessment | Site visit / remote video, technical quantum | Document adjudication, no site visit |
+| Registration | Registered adjusting work | Legal status **unverified** — may not be adjusting business at all (§8 gate G3) |
+| Economics | High margin, catastrophe spikes (flood claims 2–5× surge) | Thin per case, covers the fixed base |
+
+The wedge on the property side is the **assessment-mode router** (DESK_REVIEW / REMOTE_VIDEO / SITE_VISIT / EXPERT_REFERRAL by category + amount + fraud flags, per-tenant thresholds) combined with CSP turnaround compliance and catastrophe surge capacity — precisely where the incumbents' site-visit model is structurally weak. The wedge on the travel side is speed and volume: competitors already pay flight-delay claims instantly, so parity is the floor, not the differentiator.
 
 ---
 
@@ -158,7 +180,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 
 | Ref | Constraint | Current | Target control | Phase |
 |---|---|---|---|---|
-| s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs | **FAIL** — no content governance; and `GET /claims/:id` returns deception scores/risk data to claimants (redaction misses `sessions[].summary`, `deceptionData`, `fraudSignals`) | Versioned, compliance-approved templates; LLM output never verbatim to claimants; redaction fix in Phase 0 | 0/1 (flag) / 5 (formal approval) |
+| s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs. **Applicability:** s.121 defines "financial service provider" as an *authorized* or *registered* person, so these duties attach **on registration**. Unregistered today, the operator is bound instead by (a) its contract with the insurer, which flows down the insurer's own Sch 7 duties, (b) the CSP PD via the insurer, and (c) general consumer-protection and misrepresentation law. Practically the same bar; state it accurately rather than overstating present direct exposure | **FAIL** — no content governance; and `GET /claims/:id` returned deception scores/risk data to claimants (fixed in Phase 0) | Versioned, compliance-approved templates; LLM output never verbatim to claimants | 0 (redaction, done) / 1 (template flag) / 5 (formal approval) |
 | s.143 | Produce documents/information to BNM in specified form | **FAIL** — no export/bundle capability of any kind | Claim-file export bundle (docs + audit + reports) | 2 |
 | s.146 | No-notice examination — audit-ready always | **FAIL** — see audit-trail row above | Append-only evidential audit trail + this matrix as live dashboard | 1 |
 | s.139 | "Insurance" naming restriction | **PARTIAL** — brand clean, but claimant-web title/PWA manifest say "Insurance Claims Made Easy"; refer to counsel | Policy note + legal review of taglines | 0 |
@@ -187,6 +209,20 @@ The audit's most dangerous items are places where the system *claims* a control 
 8. Evidence checklist UI implies gating ("3 of 5 documents") that doesn't exist.
 9. Signature completion endpoint is forgeable (stub provider, no role restriction).
 10. `validationStatus` populated on every case document by a stub that always returns SKIPPED.
+
+### 3.7 When each obligation actually bites
+
+The matrix above is the *target* state. Which rows are live obligations depends on operating mode, and the plan should not pretend otherwise:
+
+| Obligation set | Unregistered TPA (today) | On registration |
+|---|---|---|
+| PDPA 2010 (consent, security, retention, cross-border) | **Live now** — applies to any data user | Live |
+| Insurer contract + vendor security assessment (ISO 27001-grade controls, data residency, audit rights) | **Live now** — commercially gating, insurers will not onboard without it | Live |
+| CSP PD timelines | Indirect — flowed down by the insurer contract; the firm's SLA promises are contractual | Direct on registered adjusters |
+| BNM Adjuster PD 10–13 (fit & proper, COI, competency, supervision, sign-off, 7-yr records, CPD, notifications) | Not applicable — but **evidence of these practices is what makes the registration application credible** | **Binding**, Sch 15 penalty-exposed |
+| FSA ss.123–124 + Sch 7, s.143 submission, s.146 examination | Indirect (via insurer) | **Direct** |
+
+Read together: nothing in Phase 1 is wasted, but the *reason* to build it now is PDPA + insurer procurement + registration readiness — not present-day BNM enforcement risk.
 
 ### 3.5 How 100% technical compliance is maintained
 
@@ -229,9 +265,10 @@ Conventions respected: kebab-case, British English, polymorphic subtables off `C
 | `Claim` | Add assignmentId, assessmentMode, `documentsCompleteAt` (starts 10-day clock), reserve amount; server-side status transition guards (adopt the Cases transition-table pattern) |
 | `Adjuster` | Wire dead fields; employmentType (FULL_TIME required in licensed mode); seniority via AdjusterCompetency; capacity config replaces hardcoded 10 |
 | `AuditTrail` | oldValues/newValues; append-only (revoke UPDATE/DELETE at DB level); implement interceptor TODO; extend coverage to cases/policies/video/auth |
-| `EvidenceRequirement` | Fix travel bug (claims.service.ts:534); non-motor requirement sets (fire/burglary/HOH/PA: bomba report, police report, invoices, valuation, medical); emit checklist-complete event |
+| `EvidenceRequirement` | Fix travel bug (claims.service.ts:534); in-scope requirement sets (fire/flood/burglary/HOH: bomba report, police report, purchase invoices, valuation/quantum surveyor docs, inventory list, Group PA: employer confirmation + medical certificate); emit checklist-complete event |
 | `FraudSignal` | Non-motor providers (Ph 4): invoice anomaly, burglary consistency, travel doc checks; live MetMalaysia data |
 | `Case` | Channel values AGENT/BROKER/INSURER_FORWARDED; keep Case/Claim boundary (see §6.2) |
+| `ClaimCategory` | Today: MOTOR, FLOOD, FIRE, LIGHTNING, BURGLARY, PERSONAL_ACCIDENT, HOH, TRAVEL, OTHER. The in-scope lines **Engineering, Liability, MAT, Bonds and Workmen's Compensation have no enum value** — add each only when a client instructs that line (adding a value is a migration + a `category-config` entry + an evidence set, i.e. cheap on demand and pointless in advance). Repurpose `PERSONAL_ACCIDENT` for **Group PA only**; Individual PA is out of scope and must not be marketed on it |
 
 New NestJS modules (case-service unless noted): `reports/`, `assignments/`, `sla/`, `billing/`, `compliance/`, plus `notifications/` as its own concern. One durable queue (BullMQ on existing Redis) shared by SLA ticks, notifications, retention jobs, report rendering.
 
@@ -253,16 +290,31 @@ Security/integrity defects confirmed by the compliance audit that cannot wait fo
 8. Cases module writes audit rows for every transition, `convert()` above all.
 9. Legal review note: claimant-web title/PWA tagline "Insurance Claims Made Easy" vs FSA s.139.
 
-### Phase 1 — Compliance foundation + professional core ("BNM-ready on paper")
-- Report engine: AdjusterReport + templates (fire/property + travel), versions, review → senior sign-off workflow, PDF render — **prod**
-- SLA engine: BullMQ, Malaysian working-day calendar, ACK ≤1 day / prelim / final ≤10 days clocks, pause-on-awaiting-documents, breach escalation — **prod**
-- Notifications: email channel (real SMTP; Mailhog locally), EN/BM templates, delivery log, OTP off console — **prod**
-- Evidential audit trail: interceptor implemented, before/after values, append-only, full coverage — **prod**
-- PDPA minimum: Consent entity at intake, NRIC/bank encryption, remove hardcoded flag — **prod**
-- Server-side status guards + basic AuthorityLimit (no self-approval) — **prod**
-- Fix travel checklist bug; non-motor evidence sets — **prod**
+### Phase 1 — Compliance foundation + professional core
+Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in total, ordered so the work that unblocks insurer onboarding and revenue lands before the work that only pays off once senior adjusters are hired.
 
-**Exit criteria:** a claim runs intake → assessment → senior-signed final report PDF → issued, with every deadline clocked, every mutation audited, every message logged, consent recorded. Matrix rows 12.5, 12.6, 12.7(workflow), ACK/final CSP anchors, Sch 7 basics, s.146 readiness green.
+#### Phase 1a — "Operate honestly" (~5–7 weeks) · unblocks insurer vendor assessment
+- Evidential audit trail: interceptor persists, before/after values, append-only at DB level, coverage across cases/policies/video/auth — **prod**
+- PDPA minimum: `Consent` entity captured **before** processing, NRIC/bank field encryption with key management, backfill of existing plaintext, `isPdpaCompliant` derived from a real consent record — **prod**
+- Notifications: email transport (real SMTP; Mailhog locally), EN/BM templates, delivery log, OTP off console — **prod**
+- Server-side status guards + basic `AuthorityLimit` (no self-approval) — **prod**
+
+**Exit:** every mutation audited with before/after; consent is a record, not a badge; the firm can chase documents and answer "who did what, when" — the questions an insurer's vendor assessment asks. PDPA rows and s.146 readiness green.
+
+#### Phase 1b — "Promise and keep turnaround" (~4–6 weeks) · unblocks the value proposition
+- SLA engine: BullMQ on existing Redis, Malaysian working-day calendar (national + state holidays), clocks for ACK ≤1 day / preliminary / final ≤10 days from `documentsCompleteAt`, pause-on-awaiting-documents, breach escalation — **prod**
+- Assessment-mode router + small-claims fast-track profile (per-tenant thresholds) — **prod**
+- Fix travel checklist bug (`claims.service.ts:534`); in-scope evidence requirement sets; checklist-complete event that starts the final-report clock — **prod**
+
+**Exit:** a fast-track desk-review claim completes inside its SLA with the clock visible and breaches escalating. Matrix row 12.5 and the CSP ACK/final anchors green.
+
+#### Phase 1c — "Work product" (~4–6 weeks) · registration readiness, ships inert
+- Report engine: `AdjusterReport` + `ReportTemplate` (fire/property first, then travel), versions, review → sign-off workflow, mandatory Methodology/Sources/Assumptions sections (PD 12.6), PDF render on the existing pdfkit infrastructure — **prod**
+- Senior-countersign workflow present and enforced **when `licensedMode` is on**; in TPA mode the same engine issues "assessment summaries" without the countersign gate — **prod**
+
+**Exit:** a claim runs intake → assessment → senior-signed final report PDF → issued. Matrix rows 12.6 and 12.7 (workflow) green; 12.7 data-driven enforcement follows in Phase 3 once competency data exists.
+
+> **Gate before Phase 2:** answer **G2** (MSIG's appointment channel) and **G3** (is desktop travel adjudication regulated?) from §8.6. Both change what Phase 2 should build.
 
 ### Phase 2 — Money + routing ("run MSIG properly")
 - Billing: FeeScale, TimeEntry/Disbursement, FeeNote + SST, statements + ageing — **prod**
@@ -276,7 +328,10 @@ Security/integrity defects confirmed by the compliance audit that cannot wait fo
 
 **Exit criteria:** MSIG pilot end-to-end incl. fee note; small claim completes desk-review fast-track ≤3 wkg days; offshore-LLM exposure closed.
 
+> **Billing timing (§8.3):** at pilot volumes, invoicing from accounting software is rational. Build `FeeNote`/`FeeScale` when volume passes roughly 20 claims/month **or** when G1 (validated fee scales) lands — whichever comes first. Do not build it on assumed fee structures.
+
 ### Phase 3 — People engine (PD 12.x staffing standards)
+> **Gated on hiring**, not on engineering: this phase only becomes real once adjusting employees exist to hold competencies, seniority and CPD records. Build it when the funding decision in §8.2 is made; before that, the schema can land but the screens have no data.
 - AdjusterCompetency, seniority (<5-yr rule), ConflictDeclaration + per-assignment gate, rotation counters, capacity config — **prod**
 - Assignment engine: qualified-only (licensed mode), competency match, COI block, rotation warnings — **prod**
 - Data-driven senior-countersign enforcement — **prod**
@@ -303,7 +358,7 @@ Security/integrity defects confirmed by the compliance audit that cannot wait fo
 - SMS channel; insurer status-push API — demo
 
 ### Phase 6 — MI + scale
-MI dashboards (SLA per insurer, fee ageing, utilisation, fraud hit rates), regulatory-return extracts, multi-panel onboarding from tenant config, SHARIAH_REVIEWER surface if takaful panel lands, marine/aviation line if demanded.
+MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rates), regulatory-return extracts, multi-panel onboarding from tenant config, **catastrophe surge-capacity product** (subscription that smooths the lumpy property revenue — see §8), SHARIAH_REVIEWER surface if a takaful panel lands, new `ClaimCategory` values as clients instruct those lines (engineering, liability, MAT, bonds, WC).
 
 ---
 
@@ -326,6 +381,100 @@ MI dashboards (SLA per insurer, fee ageing, utilisation, fraud hit rates), regul
 
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
 - **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current baseline: **0 PASS / 7 PARTIAL / 20 FAIL** — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
-- **Execution start (immediately after approval):** Phase 0 hotfixes (incl. commit/push the feature branch); write this plan to `docs/MASTER_PLAN.md`; then open Phase 1 with the BullMQ + working-day-calendar foundation, followed by the report engine.
+- **Feasibility gates:** the §8.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §8.2 funding decision before Phase 3.
+- **Execution order:** Phase 0 hotfixes (done — commit `e404fc5`), then Phase 1a (audit + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
 
-*Plan provenance: drafted from a functional codebase audit (round 1), a per-requirement compliance verification audit with file:line evidence (round 2), and a cross-check review that corrected the matrix, added fit-and-proper coverage, and promoted urgent findings to Phase 0 (round 3). Regulatory sources: FSA 2013 (user-supplied PDF, section-level extraction), BNM/RH/PD 032-29 Adjusters PD (user-supplied PDF, read in full), BNM/RH/PD 029-69 CSP PD (fetched from BNM), market research on Malaysian adjusting practice.*
+---
+
+## 8. Feasibility check
+
+Neutral read against `docs/MARKET_RESEARCH_TPA_REVENUE.md`. The conclusion is **conditionally feasible** — the technology is the easy part; regulated headcount, funding and panel access are the constraints, and the phase plan must not run ahead of them.
+
+### 8.1 The constraint that engineering cannot solve
+
+BNM PD 12.1/12.2 require adjusting work to be done **only by the firm's own full-time adjusting employees**; 12.3 requires a supervised year for new employees; 12.4/12.7 require reports by anyone with **under 5 years in that subject matter** to be signed off by a senior with 5 years in it.
+
+- Senior non-motor adjusters: **RM12,000–20,000/month**; **two is the practical minimum** (one senior means losing that person halts all sign-off).
+- AI raises throughput — plausibly 40–60 → 100–150 cases/adjuster/month — but **cannot reduce headcount below the lawful sign-off minimum**.
+- 55 registered firms compete for the same scarce talent.
+
+So: **talent, not technology, gates the registered route.** A credible alternative is acquiring or partnering with a small existing registered firm rather than building the credential from zero — worth pricing before committing to the hiring path.
+
+### 8.2 Funding reality (from research §5.4)
+
+| | Registered adjuster (A) + travel/PA (C) | Travel/PA platform only (C), unregistered |
+|---|---|---|
+| Year-1 revenue | RM300k–600k | RM100k–400k |
+| Year-1 result | **(RM450k–1.02M)** | **(RM250k) to +RM100k** |
+| Year-1 funding need | **RM900k–1.4M** | **RM300k–500k** |
+| Breakeven | months 15–22 (base) | materially sooner |
+
+Dominant variable is **time-to-first-panel-appointment** (6–12 month insurer procurement cycles), because regulated payroll burns whether or not instructions flow. Steady state is a **15–25% EBITDA services business with a software layer** on a **RM60–150M addressable** national pool — a solid niche, not a venture-scale volume market.
+
+### 8.3 What this means for the phase plan
+
+The plan's original instinct — lead with the adjuster's report engine to be "BNM-ready" — is **premature if the near-term business is TPA administration plus travel/PA volume**, because:
+
+- The report engine with senior countersign only produces value once there are **senior adjusters to sign** and **appointments to report on**. Both are funding-gated.
+- What actually unblocks near-term revenue is duller: **PDPA compliance, evidential audit and information-security posture** (insurers will not onboard a vendor without them), **notifications** (you cannot chase documents without email), and **turnaround measurement** (you cannot promise an SLA you cannot see).
+- Billing can stay manual far longer than it feels: at pilot volumes, invoicing from accounting software is rational; a `FeeNote` module before ~20 claims/month is premature optimisation.
+
+Recommended re-sequencing is reflected in §5 (Phase 1 split into 1a/1b/1c). The registered-adjuster machinery is still built — behind `licensedMode` so it ships inert — but it follows the revenue-unblocking work rather than preceding it.
+
+### 8.4 Effort realism
+
+Rough engineer-weeks for a **single founder-engineer with AI assistance, no QA/DevOps**:
+
+| Work | Weeks |
+|---|---|
+| Evidential audit trail (interceptor persistence, before/after diffs, append-only constraints, coverage) | 1.5–2 |
+| Consent entity + NRIC/bank encryption (key management, backfill of existing plaintext, masking) | 2–3 |
+| Notifications (transport, EN/BM templates, delivery log, provider abstraction) | 1.5–2 |
+| SLA engine (BullMQ, Malaysian working-day calendar incl. state holidays, clocks, pause, breach escalation) | 2–3 |
+| Assessment-mode router + fast-track profile | 1–1.5 |
+| Report engine (entity, templates, versions, review → sign-off, PDF render) | 3–5 |
+| Status guards + AuthorityLimit | 1 |
+| In-scope evidence requirement sets | 0.5–1 |
+| **Total** | **~13–19 weeks (3–4.5 months)** |
+
+That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if a second engineer must be onboarded mid-flight, and note that **compliance tests (§3.5) are part of each item's estimate, not extra.**
+
+### 8.5 Items that need money or third parties, not code
+
+| Item | Dependency |
+|---|---|
+| ISO 27001 (or equivalent) + insurer penetration tests | RM60k–170k; commercially gating for insurer onboarding |
+| PI insurance, cyber cover, DPO function | Recurring compliance cost |
+| In-country LLM hosting (replacing the Cloudflare-tunnel default) | Real infrastructure spend; blocks PDPA-safe AI extraction |
+| SigningCloud / e-signature vendor | Contract + integration |
+| WhatsApp Business API | Meta business verification + template approval |
+| Sanctions/PEP screening data | Licensed data feed |
+| MetMalaysia live rainfall data | Data licence or agreement |
+| Merimen appointment rail | Insurer-sponsored access, uncertain |
+| Senior adjuster recruitment | RM30k–70k headhunting, scarce pool |
+| Minimum paid-up capital | **Unverified** — see gate G4 |
+
+### 8.6 Go/no-go gates — validate before the engineering that depends on them
+
+| Gate | Question | Blocks | How |
+|---|---|---|---|
+| **G1** | Actual per-case non-motor fee scales on insurer panels | Any revenue model; billing design | 5–10 primary interviews (claims heads, ex-adjusting-firm staff) |
+| **G2** | Which channel will MSIG use to send appointments (Merimen / email / portal)? | `Assignment` design, Phase 5 integration | Ask MSIG directly — cheapest gate on the list |
+| **G3** | **Is desktop travel-claim adjudication itself "adjusting business" under FSA s.2(1)?** | The entire Path C economics — if yes, it inherits the registered cost base | Formal legal opinion (RM20k–40k) |
+| **G4** | Minimum paid-up capital for adjusting business (Schedule 2 of the Registered Businesses Order) | Funding requirement | Confirm with BNM / counsel |
+| **G5** | Does SST (8%) apply to adjusting / claims-administration fees? | Pricing and cash flow | Tax adviser |
+| **G6** | Travel/Group PA annual claim counts and insurers' internal cost-per-claim | Path C volume thesis | Discovery with travel insurers |
+| **G7** | Realistic cases-per-adjuster-per-month with AI assistance | The productivity claim underpinning margins | Time-and-motion during pilot |
+
+**Sequencing rule:** G2 and G3 before Phase 2 (they determine `Assignment` and whether the travel line is regulated). G1, G4, G5 before any investor financial model or fee-note build. G6, G7 before scaling headcount.
+
+### 8.7 Honest verdict
+
+- **Feasible as a compliance-grade platform** — every BNM requirement in §3 is implementable, and the codebase already has the harder parts (multi-tenancy, document AI, video, fraud plugin architecture).
+- **Feasible as a business only with either** ~RM900k–1.4M to fund the registered route through a 15–22 month breakeven, **or** a deliberate decision to run unregistered travel/PA + TPA administration first (RM300k–500k) and register later once revenue supports the payroll.
+- **The riskiest assumptions are commercial, not technical:** unverified fee scales (G1), the travel-adjudication legal question (G3), and 6–12 month panel procurement. Engineering should not outrun them.
+- **Not venture-scale in Malaysia alone.** RM13–18M revenue at maturity (base case) on a 15–25% EBITDA margin. A larger outcome needs regional expansion, selling the platform *to* the industry, or the motor pool this scope deliberately excludes — and that is a strategy decision, not a system-design one.
+
+---
+
+*Plan provenance: (round 1) functional codebase audit; (round 2) per-requirement compliance verification audit with file:line evidence; (round 3) cross-check that corrected the matrix, added fit-and-proper coverage and promoted urgent findings to Phase 0; (round 4) scope correction — motor, Individual PA and Medical & Health excluded, travel confirmed in scope via the PA class, FSA s.121 applicability made precise, §3.7 added; (round 5) feasibility check against the market research economics, phase re-sequencing and go/no-go gates (§8). Regulatory sources: FSA 2013 and BNM/RH/PD 032-29 (user-supplied PDFs, read directly), BNM/RH/PD 029-69 CSP PD (fetched from BNM), `docs/MARKET_RESEARCH_TPA_REVENUE.md` Rev 5 for market and cost data.*
