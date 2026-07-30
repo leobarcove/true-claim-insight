@@ -9,9 +9,11 @@ import { RoomsModule } from './rooms/rooms.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { TenantModule } from './tenant/tenant.module';
+import { AuditModule } from './common/audit/audit.module';
 
 @Module({
   imports: [
+    AuditModule,
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,

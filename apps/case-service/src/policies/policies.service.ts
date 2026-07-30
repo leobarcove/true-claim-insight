@@ -3,6 +3,7 @@ import { PolicySource, Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { CreatePolicyDto } from './dto/create-policy.dto';
 import { EncryptionService } from '@tci/crypto';
+import { AuditService } from '../common/audit/audit.service';
 
 /**
  * Minimal policy store for the TPA model. Policy data currently arrives from
@@ -20,7 +21,8 @@ import { EncryptionService } from '@tci/crypto';
 export class PoliciesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly encryption: EncryptionService
+    private readonly encryption: EncryptionService,
+    private readonly audit: AuditService
   ) {}
 
   /** Encrypted insured NRIC from the insurer feed, plus a clear display tail. */
@@ -73,7 +75,16 @@ export class PoliciesService {
   }
 
   async create(dto: CreatePolicyDto) {
-    return this.prisma.policy.upsert({
+    // Policy data arrives from the insurer by email and is keyed in by hand, so
+    // the audit row answers a question that will eventually be asked: on whose
+    // authority does the system believe this cover existed? The insured NRIC is
+    // recorded only as its ciphertext-free tail — audit_trail is append-only, so
+    // anything personal written here could never afterwards be removed.
+    const previous = await this.prisma.policy.findUnique({
+      where: { tenantId_policyNumber: { tenantId: dto.tenantId, policyNumber: dto.policyNumber } },
+    });
+
+    const policy = await this.prisma.policy.upsert({
       where: {
         tenantId_policyNumber: { tenantId: dto.tenantId, policyNumber: dto.policyNumber },
       },
@@ -99,5 +110,30 @@ export class PoliciesService {
         source: PolicySource.MANUAL,
       },
     });
+
+    await this.audit.record({
+      entityType: 'POLICY',
+      entityId: policy.id,
+      action: previous ? 'POLICY_UPDATED' : 'POLICY_CREATED',
+      tenantId: dto.tenantId,
+      oldValues: previous
+        ? {
+            insuredName: previous.insuredName,
+            insuredNricLast4: previous.insuredNricLast4,
+            planTier: previous.planTier,
+            destination: previous.destination,
+          }
+        : undefined,
+      newValues: {
+        policyNumber: policy.policyNumber,
+        insuredName: policy.insuredName,
+        insuredNricLast4: policy.insuredNricLast4,
+        planTier: policy.planTier,
+        destination: policy.destination,
+      },
+      metadata: { source: PolicySource.MANUAL },
+    });
+
+    return policy;
   }
 }

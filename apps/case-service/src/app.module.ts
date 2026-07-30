@@ -17,6 +17,7 @@ import { QueueModule } from './queue/queue.module';
 import { ReportsModule } from './reports/reports.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
+import { AuditModule } from './common/audit/audit.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import configuration from './config/configuration';
 
     // Database
     PrismaModule,
+    AuditModule,
 
     // Field-level encryption for personal data (PDPA)
     CryptoModule,

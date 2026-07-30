@@ -19,6 +19,7 @@ import ffprobeStatic = require('ffprobe-static');
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
+import { AuditService } from '../common/audit/audit.service';
 
 const execAsync = promisify(exec);
 
@@ -43,7 +44,8 @@ export class UploadsService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly audit: AuditService
   ) {
     this.analyzerUrl = this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005');
     this.logger.log(`Local Storage initialized: ${uploadDir}`);
@@ -901,6 +903,23 @@ export class UploadsService {
         this.logger.error(`Failed to delete video file: ${error.message}`);
       }
     }
+
+    // PD 12.8 requires records — including recordings — to be retained for seven
+    // years. Deleting one is therefore the most consequential act in this
+    // service, and the row recording it is written *before* the delete so a
+    // failure cannot leave evidence destroyed with nothing to show for it.
+    await this.audit.record({
+      entityType: 'VIDEO_UPLOAD',
+      entityId: uploadId,
+      action: 'RECORDING_DELETED',
+      oldValues: {
+        sessionId: upload.sessionId ?? null,
+        claimId: upload.claimId ?? null,
+        videoUrl: upload.videoUrl,
+        createdAt: upload.createdAt,
+      },
+      metadata: { note: 'video file and database row removed' },
+    });
 
     await this.prisma.videoUpload.delete({ where: { id: uploadId } });
     return { success: true };
