@@ -1,3 +1,4 @@
+import { withVerifiedYear } from './holiday-test-support';
 import {
   MALAYSIAN_HOLIDAYS,
   UnverifiedHolidayYearError,
@@ -14,26 +15,6 @@ import {
  */
 describe('Malaysian working days', () => {
   const d = (isoDate: string) => new Date(`${isoDate}T00:00:00Z`);
-
-  /**
-   * A verified year is installed for the duration of each test. The production
-   * table is deliberately unverified, and these tests must exercise the
-   * arithmetic without depending on holiday data nobody has checked yet.
-   */
-  const withVerifiedYear = (
-    year: number,
-    holidays: { date: string; name: string; states?: string[] }[],
-    run: () => void
-  ) => {
-    const original = MALAYSIAN_HOLIDAYS[year];
-    MALAYSIAN_HOLIDAYS[year] = { verifiedAgainstGazette: true, holidays };
-    try {
-      run();
-    } finally {
-      if (original) MALAYSIAN_HOLIDAYS[year] = original;
-      else delete MALAYSIAN_HOLIDAYS[year];
-    }
-  };
 
   describe('refusing to guess', () => {
     it('throws rather than computing a deadline in an unverified year', () => {

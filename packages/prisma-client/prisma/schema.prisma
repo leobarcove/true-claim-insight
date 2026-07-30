@@ -126,6 +126,7 @@ model Tenant {
   policies            Policy[]
 
   @@map("tenants")
+  slaPolicies      SlaPolicy[]
 }
 
 model Adjuster {
@@ -277,6 +278,7 @@ model Claim {
   @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
+  slaClocks               SlaClock[]
 }
 
 // ============================================================================
@@ -1119,4 +1121,100 @@ model SessionClientInfo {
   @@index([tenantId])
   @@index([userId])
   @@map("session_client_info")
+}
+
+// ============================================================================
+// SLA CLOCKS — turnaround obligations (BNM CSP PD 029-69; Adjuster PD 12.5)
+// ============================================================================
+
+/// A stage of the claim journey that carries a turnaround obligation.
+/// Firm-side stages are ours to meet; insurer-side stages are measured only, so
+/// the firm can evidence where a delay actually originated.
+enum SlaStage {
+  ACK_TO_INSURER      /// firm acknowledges an appointment — 1 working day
+  PRELIMINARY_REPORT  /// market practice, per-insurer target
+  FINAL_REPORT        /// 10 working days from complete documents
+  SUPPLEMENTARY_CLAIM /// 5 working days
+  INSURER_DECISION    /// insurer side: 7 working days — monitored, not owned
+  INSURER_PAYMENT     /// insurer side: 14 working days non-motor — monitored
+}
+
+enum SlaClockState {
+  RUNNING
+  PAUSED   /// stopped by a dependency outside the firm's control
+  MET      /// completed on or before the deadline
+  BREACHED /// deadline passed while still running
+}
+
+/// Configured turnaround target for one stage.
+///
+/// `tenantId` null is the platform default; a row with a tenantId overrides it
+/// for that insurer, which is what makes white-label multi-panel operation
+/// possible without code changes.
+model SlaPolicy {
+  id                    String   @id @default(uuid())
+  tenantId              String?
+  stage                 SlaStage
+  workingDays           Int
+  /// Warn this many working days before the deadline. Skipped when the target
+  /// is not longer than the warning window — a 1-day SLA cannot warn early.
+  warnWorkingDaysBefore Int      @default(1)
+  /// Malaysian state whose weekend pattern and holidays apply. Null uses the
+  /// national calendar (Saturday–Sunday).
+  calendarState         String?
+  /// Insurer-side stages: measure and report, never escalate against the firm.
+  monitorOnly           Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant Tenant?    @relation(fields: [tenantId], references: [id])
+  clocks SlaClock[]
+
+  @@unique([tenantId, stage])
+  @@index([stage])
+  @@map("sla_policies")
+}
+
+/// A running deadline against one claim and stage.
+///
+/// History is kept: a stage may legitimately recur (a second supplementary
+/// claim), so completed clocks are never overwritten. A partial unique index
+/// added in the migration guarantees at most one RUNNING or PAUSED clock per
+/// claim and stage, so the state cannot become ambiguous.
+model SlaClock {
+  id       String        @id @default(uuid())
+  claimId  String
+  policyId String
+  stage    SlaStage
+  state    SlaClockState @default(RUNNING)
+
+  startedAt DateTime @default(now())
+  /// Deadline in working days from startedAt, per the policy's calendar.
+  dueAt     DateTime
+
+  pausedAt DateTime?
+  /// Working days that remained when the clock was paused. The deadline is
+  /// recomputed from the resume date, so a pause never silently consumes time.
+  remainingWorkingDaysAtPause Int?
+  pauseReason                 String?
+
+  stoppedAt   DateTime?
+  breachedAt  DateTime?
+  /// Set when the due-soon warning has fired, so it fires once.
+  warnedAt    DateTime?
+  /// Raised on each escalation step after a breach.
+  escalationLevel Int @default(0)
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim  Claim     @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  policy SlaPolicy @relation(fields: [policyId], references: [id])
+
+  @@index([claimId])
+  @@index([state, dueAt])
+  @@index([stage])
+  @@map("sla_clocks")
 }
