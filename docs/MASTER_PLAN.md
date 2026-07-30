@@ -477,8 +477,16 @@ All nine items done and verified: `@Roles` on every Cases endpoint (SUPPORT_DESK
 ### Architecture audit — complete, 30 July 2026 (findings in §4.3)
 Verdict: **the system design is not yet sound.** Three blocking defects (A1 no service-to-service auth — demonstrated; A2 shared database with no data ownership; A3 no segregation of duties — demonstrated) plus five material ones (A4 zero tests/no CI, A5 no deployment artefacts, A6 no observability, A7 gateway identity, A8 documentation describes non-existent services). **Phase 0b now precedes further feature work.** Method note: three delegated auditor agents were dispatched and none returned findings; everything in §4.3 is first-hand verification against the running system.
 
-### Phase 0b — Architecture hardening: not started ⬜
-A1 internal service auth · A2 data-ownership enforcement · A4 minimal CI + first compliance test · A8 CLAUDE.md correction. A5/A6/A7 tracked, deferred. A3 lives in Phase 1a.
+### Phase 0b — Architecture hardening: 3 of 4 done
+
+| Item | State |
+|---|---|
+| **A1 internal service auth** | ✅ `9c10847`. `InternalHttpModule` injects `x-internal-key` as an axios instance default so none of the ~27 gateway call sites can forget it; the three internal services require it before honouring identity headers and **fail closed** when unconfigured. Deliberately excluded from the `ocr` and `location` modules, which call third-party hosts. Verified: forged headers → 403 (with and without a wrong key), all staff and claimant flows → 200/201 |
+| **A4 CI + first compliance tests** | ✅ `.github/workflows/ci.yml` (typecheck job across six apps + compliance job) and **27 passing tests** in two suites: `tenant.service.spec.ts` (PII redaction, NRIC fail-closed masking, behavioural/fraud data withheld from claimants and support desk, private-note isolation) and `case-flows.spec.ts` (CSP 24h/30-day flags stay advisory, evidence completeness counts mandatory only, flow integrity, the "D7 522" alphanumeric-flight-code regression). Both suites are pure functions, so no database is needed in CI |
+| **A8 documentation correction** | ✅ `CLAUDE.md` now reflects reality: the three phantom services and the `infrastructure/` tree are listed as *not built*; AWS/EKS marked as target-not-actual; third-party integrations split into integrated vs not, with the offshore data-residency caveat stated |
+| **A2 data ownership** | ⬜ **awaiting your decision** — see the two options in §4.3. Nothing else in Phase 0b is blocked by it |
+
+A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain tracked and deferred. A3 (segregation of duties) is in Phase 1a as `AuthorityLimit`.
 
 ### Phase 1a — in progress (~15% → foundations batch done, `939ac39`)
 

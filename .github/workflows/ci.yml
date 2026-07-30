@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Two jobs, deliberately separated:
+#   typecheck  — does it still compile?
+#   compliance — do the controls the platform claims still hold?
+#
+# The compliance job is not "just tests". docs/MASTER_PLAN.md §3.5 makes this
+# suite the evidencing mechanism for the controls asserted to BNM (FSA s.146
+# allows examination without notice), so a red compliance job means a
+# compliance regression, not merely a broken build. Do not skip or soft-fail it.
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # shared-types is consumed as compiled output by the other packages.
+      - name: Build shared packages
+        run: pnpm --filter @tci/shared-types build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @tci/prisma-client exec prisma generate
+
+      - name: Typecheck all apps
+        run: |
+          failed=0
+          for app in api-gateway case-service video-service risk-engine adjuster-portal claimant-web; do
+            echo "::group::typecheck $app"
+            if ! (cd "apps/$app" && npx tsc --noEmit); then
+              echo "::error title=Typecheck failed::$app"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
+
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @tci/shared-types build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @tci/prisma-client exec prisma generate
+
+      # Current suites (no database required — pure functions):
+      #   tenant.service.spec.ts  PII redaction, NRIC masking fail-closed,
+      #                           behavioural/fraud data withheld from claimants
+      #   case-flows.spec.ts      CSP 24h/30-day deadline flags stay advisory,
+      #                           evidence completeness, flow integrity
+      - name: Compliance tests
+        run: pnpm --filter @tci/case-service test

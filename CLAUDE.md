@@ -45,20 +45,27 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 
 ### Infrastructure
 
-- **AWS Malaysia** (ap-southeast-5) for data sovereignty
-- **Docker 27.x** + **Kubernetes (EKS) 1.31+** for deployment
-- **Turborepo 2.3.x** monorepo structure
+- **Turborepo 2.3.x** monorepo structure (actual)
+- **Target, not yet built:** AWS Malaysia (ap-southeast-5) for data sovereignty; Docker + Kubernetes (EKS) for deployment. `AWS_REGION` is currently read by no code, and there are no Dockerfiles or manifests — treat data residency as an open commitment, not a property of the system (`docs/MASTER_PLAN.md` §3.4, §4.3 A5)
 
 ### Third-Party Integrations
 
-| Provider       | Purpose              |
-| -------------- | -------------------- |
-| Daily.co       | Video calls          |
-| Innov8tif/CTOS | eKYC (OCR, Liveness) |
-| Clearspeed     | Voice risk analysis  |
-| Hive AI        | Deepfake detection   |
-| MediaPipe      | Attention tracking   |
-| SigningCloud   | Digital signatures   |
+| Provider       | Purpose              | Status |
+| -------------- | -------------------- | ------ |
+| Daily.co       | Video calls          | **integrated** |
+| Hume AI        | Voice/face prosody analysis | **integrated** (risk-analyzer) |
+| MediaPipe / Parselmouth | Attention & voice-stress analysis | **integrated** (risk-analyzer) |
+| Google Gemini  | Document extraction  | **integrated — offshore; see caveat below** |
+| Supabase Storage | Document storage   | **integrated**, with local-filesystem fallback |
+| Innov8tif/CTOS | eKYC (OCR, Liveness) | not integrated |
+| Clearspeed     | Voice risk analysis  | not integrated |
+| Hive AI        | Deepfake detection   | not integrated |
+| SigningCloud   | Digital signatures   | not integrated — provider interface exists with a stub |
+
+⚠️ **Data residency caveat.** Gemini, Hume and Daily.co all process claimant
+personal data outside Malaysia, and no cross-border transfer basis has been
+established. Do not describe the system as keeping data in-country until the
+in-country LLM path is real (`docs/MASTER_PLAN.md` §3.4, risk 15).
 
 ## Coding Standards
 
@@ -71,29 +78,39 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 ### Project Structure
 
 ```
+**This reflects what actually exists.** Do not add a service to this tree before
+it exists — see `docs/MASTER_PLAN.md` §4.3 A8 for why (documenting phantom
+services misled an architecture review).
+
+```
 true-claim-insight/
 ├── apps/
-│   ├── api-gateway/          # NestJS - routing, auth
-│   ├── case-service/         # NestJS - claims lifecycle
-│   ├── video-service/        # NestJS - Daily.co rooms
-│   ├── identity-service/     # NestJS - eKYC
-│   ├── risk-engine/          # NestJS - AI scoring
-│   ├── document-service/     # NestJS - reports, signing
-│   ├── adjuster-portal/      # React - adjuster web app
-│   ├── claimant-web/         # React PWA - claimant app
-│   └── insurer-dashboard/    # React - insurer portal
+│   ├── api-gateway/          # NestJS - edge: auth, proxying; also owns otp/claimants/master-data/users
+│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters
+│   ├── video-service/        # NestJS - Daily.co rooms, recordings, uploads
+│   ├── risk-engine/          # NestJS - Trinity rules, fraud signals, LLM extraction
+│   ├── risk-analyzer/        # Python FastAPI - Hume / Parselmouth / MediaPipe analysis
+│   ├── adjuster-portal/      # React - adjuster + operator web app
+│   └── claimant-web/         # React PWA - claimant app
 ├── packages/
-│   ├── shared-types/         # TypeScript interfaces (@tci/shared-types)
+│   ├── shared-types/         # TypeScript interfaces + intake flow definitions (@tci/shared-types)
 │   ├── ui-components/        # Shared React components (@tci/ui-components)
 │   └── prisma-client/        # Prisma schema + client (@tci/prisma-client)
-├── infrastructure/
-│   ├── terraform/
-│   └── kubernetes/
+├── .github/workflows/        # CI: typecheck + compliance tests
 └── docs/
+    ├── MASTER_PLAN.md        # Regulatory + build plan — read this first
+    ├── MARKET_RESEARCH_TPA_REVENUE.md
     ├── REQUIREMENTS.md       # Business requirements
     ├── ARCHITECTURE.md       # Technical architecture
     └── PROGRESS.md           # Task tracking
 ```
+
+**Not built (previously documented as if they existed):** `identity-service`
+(eKYC), `document-service` (reports/signing — reports are planned for
+case-service instead), `insurer-dashboard`, and the `infrastructure/`
+terraform + kubernetes tree. There are currently **no Dockerfiles and no
+deployment manifests**; local development runs on the host with
+`docker-compose` providing Postgres, Redis and Mailhog only.
 
 ### Code Guidelines
 
