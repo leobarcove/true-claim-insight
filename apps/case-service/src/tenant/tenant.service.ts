@@ -257,14 +257,21 @@ export class TenantService {
       const match = value.match(/^(\d{6})-?(\d{2})-?(\d{4})$/);
       return match ? `********${match[3]}` : '************';
     };
+    // NRIC is encrypted at rest, so there is no plaintext to mask: strip the
+    // ciphertext and the blind index from every response (a browser has no use
+    // for either, and the index is a lookup key) and let `nricLast4` carry
+    // display. `maskNric` remains for any legacy plaintext still in flight.
     if (redacted.nric && !isHighPrivilege) {
       redacted.nric = maskNric(redacted.nric);
     }
-    if (redacted.claimant && !isHighPrivilege) {
+    delete redacted.nricEncrypted;
+    if (redacted.claimant) {
       redacted.claimant = { ...redacted.claimant };
-      if (redacted.claimant.nric) redacted.claimant.nric = maskNric(redacted.claimant.nric);
-      delete redacted.claimant.nricHash;
       delete redacted.claimant.nricEncrypted;
+      delete redacted.claimant.nricHash;
+      if (redacted.claimant.nric && !isHighPrivilege) {
+        redacted.claimant.nric = maskNric(redacted.claimant.nric);
+      }
       if (role === 'CLAIMANT' || role === 'SUPPORT_DESK') {
         delete redacted.claimant.dateOfBirth;
       }

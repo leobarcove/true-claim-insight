@@ -7,6 +7,7 @@ import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { DocumentStatus } from '@tci/shared-types';
 import { ClaimCategory } from '@prisma/client';
+import { EncryptionService } from '@tci/crypto';
 
 @Injectable()
 export class ClaimsService {
@@ -14,7 +15,8 @@ export class ClaimsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly encryption: EncryptionService
   ) {}
 
   /**
@@ -32,7 +34,7 @@ export class ClaimsService {
         incidentLocation: createClaimDto.incidentLocation as any,
         description: createClaimDto.description,
         claimantId: createClaimDto.claimantId,
-        nric: createClaimDto.nric,
+        ...(await this.encryptedNric(createClaimDto.nric)),
         insurerTenantId: tenantContext.tenantId,
         tenantId: tenantContext.tenantId, // Standardized field
         userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext.userId, // Standardized field
@@ -886,4 +888,18 @@ export class ClaimsService {
       );
     }
   }
+
+  /**
+   * Encrypted NRIC snapshot for a claim: ciphertext plus a clear tail for
+   * display. No blind index here — lookups go through the Claimant record,
+   * which is the identity authority.
+   */
+  private async encryptedNric(nric: string | null | undefined) {
+    if (!nric) return {};
+    return {
+      nricEncrypted: await this.encryption.encrypt(nric),
+      nricLast4: this.encryption.lastDigits(nric),
+    };
+  }
+
 }

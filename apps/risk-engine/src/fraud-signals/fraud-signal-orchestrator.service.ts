@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { FraudSignal, Prisma } from '@prisma/client';
+import { loadFraudClaim } from './fraud-claim.query';
 import {
   FraudSignalContext,
   FraudSignalEmission,
@@ -47,15 +48,7 @@ export class FraudSignalOrchestrator {
    * signals. Returns the persisted rows.
    */
   async evaluateClaim(claimId: string): Promise<FraudSignal[]> {
-    const claim = await this.prisma.claim.findUnique({
-      where: { id: claimId },
-      include: {
-        claimant: true,
-        adjuster: true,
-        documents: true,
-        floodClaim: true,
-      },
-    });
+    const claim = await loadFraudClaim(this.prisma, claimId);
     if (!claim) {
       this.logger.warn(`evaluateClaim: claim ${claimId} not found`);
       return [];

@@ -712,11 +712,13 @@ export class UploadsService {
       claimId: upload.claimId,
       claimant: {
         name: upload.claim.claimant?.fullName || 'N/A',
-        nric:
-          upload.claim.claimant?.nric ||
-          upload.claim.nric ||
-          upload.claim.claimant?.nricHash ||
-          'N/A',
+        // This service holds no encryption key by design (MASTER_PLAN §4.3 A2):
+        // it shows the clear display tail. Restoring the full NRIC to generated
+        // documents needs the audited case-service identity endpoint — tracked
+        // as an open item, see the NRIC row in the plan's progress record.
+        nric: upload.claim.claimant?.nricLast4
+          ? `••••${upload.claim.claimant.nricLast4}`
+          : 'N/A',
         phone: upload.claim.claimant?.phoneNumber || 'N/A',
         email: upload.claim.claimant?.email || 'N/A',
       },

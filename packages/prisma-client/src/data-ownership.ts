@@ -72,7 +72,9 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
 
 /** Which contexts each service is allowed to write. */
 export const SERVICE_CONTEXTS: Record<string, DataContext[]> = {
-  'api-gateway': ['identity', 'reference'],
+  // 'platform': the gateway encrypts identity data (Claimant NRIC), so it is a
+  // legitimate holder of key material — not an exception.
+  'api-gateway': ['identity', 'reference', 'platform'],
   'case-service': ['claims', 'platform'],
   'video-service': ['assessment'],
   'risk-engine': ['assessment'],

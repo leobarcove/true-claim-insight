@@ -136,11 +136,13 @@ export class AssessmentsService {
       claimId: session.claimId,
       claimant: {
         name: session.claim.claimant.fullName || 'N/A',
-        nric:
-          session.claim.claimant.nric ||
-          session.claim.nric ||
-          session.claim.claimant.nricHash ||
-          'N/A',
+        // This service holds no encryption key by design (MASTER_PLAN §4.3 A2):
+        // it shows the clear display tail. Restoring the full NRIC to generated
+        // documents needs the audited case-service identity endpoint — tracked
+        // as an open item, see the NRIC row in the plan's progress record.
+        nric: session.claim.claimant.nricLast4
+          ? `••••${session.claim.claimant.nricLast4}`
+          : 'N/A',
         phone: session.claim.claimant.phoneNumber || 'N/A',
         email: session.claim.claimant.email || 'N/A',
       },

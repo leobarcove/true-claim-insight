@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -51,6 +52,9 @@ import configuration from './config/configuration';
 
     // Database
     PrismaModule,
+
+    // Field-level encryption of personal data (PDPA)
+    CryptoModule,
 
     // Feature modules
     AuthModule,

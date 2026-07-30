@@ -30,7 +30,7 @@ import { PrismaService } from '../config/prisma.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
-import { EncryptionService } from '../common/crypto/encryption.service';
+import { EncryptionService } from '@tci/crypto';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto } from './dto/review-case.dto';
@@ -511,7 +511,15 @@ export class CasesService {
   async revealPayoutDetails(id: string, tenantContext: TenantContext) {
     const caseRow = await this.getStaffCase(id, tenantContext);
 
-    const accountNumber = await this.encryption.decrypt(caseRow.bankAccountNumberEncrypted);
+    // Fetch the ciphertext in its own scoped read rather than widening
+    // getStaffCase, which every status transition also uses: the ciphertext
+    // should be loaded only where it is about to be decrypted. The access check
+    // above has already run.
+    const secret = await this.prisma.case.findUniqueOrThrow({
+      where: { id },
+      select: { bankAccountNumberEncrypted: true },
+    });
+    const accountNumber = await this.encryption.decrypt(secret.bankAccountNumberEncrypted);
 
     await this.audit(id, 'PAYOUT_DETAILS_REVEALED', tenantContext, {
       metadata: { reason: 'operator requested payout details', last4: caseRow.bankAccountLast4 },
@@ -812,16 +820,17 @@ export class CasesService {
 
     if (dto.claimantId) return dto.claimantId;
     if (dto.claimantPhone) {
+      // Fallback only. The gateway normally resolves the claimant (it owns the
+      // identity context) and passes claimantId. Deliberately does NOT write the
+      // NRIC: that needs both the encryption key and the index pepper, and
+      // keeping identity writes in one service is the point of ownership
+      // exception #6. A staff-supplied NRIC arrives via the gateway path.
       const claimant = await this.prisma.claimant.upsert({
         where: { phoneNumber: dto.claimantPhone },
-        update: {
-          fullName: dto.claimantFullName || undefined,
-          nric: dto.claimantNric || undefined,
-        },
+        update: { fullName: dto.claimantFullName || undefined },
         create: {
           phoneNumber: dto.claimantPhone,
           fullName: dto.claimantFullName,
-          nric: dto.claimantNric,
         },
       });
       return claimant.id;

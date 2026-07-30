@@ -213,10 +213,37 @@ async findOne(id: string, tenantContext?: TenantContext) {
 
 ## Documentation References
 
+**Read `docs/MASTER_PLAN.md` first.** It is the source of truth for what this
+platform is, what it must comply with, and what is built versus planned:
+
+| Section | Contains |
+| --- | --- |
+| §1 | Operating model, target claim lines (in/out of scope), the TPA→registered-adjuster trajectory |
+| §2 | End-to-end claim journey, and §2.5 the per-claim COGS ceiling the assessment mode enforces |
+| §3 | Compliance matrix — every binding BNM/FSA/PDPA requirement → system control → phase, with current PASS/PARTIAL/FAIL verdicts, plus §3.6 false-comfort findings |
+| §4 | Domain model, and §4.3 the architecture assessment (blocking defects A1–A3, material A4–A8) |
+| §5 | Phased roadmap (Phase 0 → 6) |
+| §6 | Risks and **decided positions** — e.g. no portal scraping, AI disclosed not downplayed |
+| §8 | **Progress record — what has actually shipped, with commit refs.** Update it whenever work completes |
+| §9 | Feasibility: funding, effort estimates, go/no-go gates G1–G11 |
+
+Supporting documents:
+
+- **Market and cost analysis:** `docs/MARKET_RESEARCH_TPA_REVENUE.md` (fee pool, year-1 P&L, the three revenue paths — governs §5 sequencing and §9)
 - **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
 - **Business requirements:** `docs/REQUIREMENTS.md`
 - **Technical architecture:** `docs/ARCHITECTURE.md`
-- **Task progress:** `docs/PROGRESS.md`
+- **Task progress:** `docs/PROGRESS.md` (older; the plan's §8 progress record is more current)
+
+### Standing decisions that constrain any change
+
+These are settled. Re-open them explicitly rather than drifting from them.
+
+1. **Target lines are non-motor**, excluding motor, Individual PA and Medical & Health. Travel is in scope because Malaysian travel insurance is written under the PA class. Motor code in the repo is legacy — do not extend it.
+2. **TPA now, BNM registration when volume supports two senior adjusters.** Build the regulated machinery early but ship it inert behind `licensedMode`, so registration is a capability flip rather than a rebuild.
+3. **Data ownership is declared and enforced.** See `packages/prisma-client/src/data-ownership.ts` and the test that scans for cross-context writes. The exception list may shrink, never grow.
+4. **Personal data is encrypted at rest** with the master key behind a `KeyProvider` (`packages/crypto`), so moving to AWS KMS re-wraps one row and touches no data. Only the gateway and case-service hold a key.
+5. **Prefer the durable design over the quick fix**, and never leave a partial migration — say so and scope it separately instead.
 
 ## Development Commands
 
