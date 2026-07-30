@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
+import { InternalHttpModule } from '../common/internal-http.module';
 import { ConfigModule } from '@nestjs/config';
 import { RiskController } from './risk.controller';
 import { RiskService } from './risk.service';
 import { FraudSignalsController } from './fraud-signals.controller';
 
 @Module({
-  imports: [HttpModule, ConfigModule],
+  imports: [InternalHttpModule, ConfigModule],
   controllers: [RiskController, FraudSignalsController],
   providers: [RiskService],
   exports: [RiskService],
