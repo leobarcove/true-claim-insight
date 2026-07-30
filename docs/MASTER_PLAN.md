@@ -4,7 +4,7 @@
 
 The operator runs an unlicensed TPA (claims administration for insurers; MSIG verbally agreed as first client, white-label, multi-panel ambition) and intends to become a **BNM-registered adjuster** under the Financial Services Act 2013. The two governing documents — the FSA 2013 and BNM's *Registration Procedures and Requirements on Professionalism of Adjusters* (BNM/RH/PD 032-29, 29 Aug 2025) — plus the Claims Settlement Practices PD (CSP, BNM/RH/PD 029-69) define the obligations this system must embody. Compliance is non-negotiable: every binding requirement must map to an enforced system control.
 
-This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md`, which governs the sequencing in §5 and the feasibility position in §8. A per-requirement compliance verification audit produced the verdict column in §3.
+This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md`, which governs the sequencing in §5 and the feasibility position in §9. A per-requirement compliance verification audit produced the verdict column in §3.
 
 > **Cross-reference note.** Section numbers cited as "research §n" refer to `MARKET_RESEARCH_TPA_REVENUE.md` as at 30 July 2026 (§5 revenue paths, §6 cost/P&L, §7 verdict, §8 risk register, §9 partner ask, §10 unverified items). That document is actively revised — if its numbering shifts again, the figures used here (funding RM900k–1.4M vs RM300–500k, breakeven months 15–22, RM13–18M base steady state, RM8–12/claim Path C pricing) are the load-bearing values to re-verify, not the section labels.
 
@@ -30,7 +30,7 @@ Two consequences that recur throughout this plan:
 
 This is settled, and it governs every sequencing decision in §5:
 
-1. **Now — operate as a TPA** (claims administration for insurers, white-label) plus travel/Group PA volume. Funding need ~RM300–500k, near-breakeven in year 1 (§8.2). No regulated payroll.
+1. **Now — operate as a TPA** (claims administration for insurers, white-label) plus travel/Group PA volume. Funding need ~RM300–500k, near-breakeven in year 1 (§9.2). No regulated payroll.
 2. **Then — apply for BNM registration** once claim volume supports two senior adjusting employees (RM24–40k/month) and the panel relationships exist to keep them busy.
 
 The consequence for engineering is the whole point of this plan: **the foundations must be correct from day one so registration is a capability flip, not a rebuild.** Concretely that means, in the order it matters —
@@ -56,7 +56,7 @@ The consequence for engineering is the whole point of this plan: **the foundatio
 | Lines | Fire/property, flood, burglary, HOH, engineering, liability | Travel PA, Group PA, riders, affinity |
 | Claim shape | Low volume, high value, lumpy, event-driven | High volume, low value (typically RM200–3,000), recurring |
 | Assessment | Site visit / remote video, technical quantum | Document adjudication, no site visit |
-| Registration | Registered adjusting work | Legal status **unverified** — may not be adjusting business at all (§8 gate G3) |
+| Registration | Registered adjusting work | Legal status **unverified** — may not be adjusting business at all (§9.6 gate G3) |
 | Economics | High margin, catastrophe spikes (flood claims 2–5× surge) | Thin per case, covers the fixed base |
 
 The wedge on the property side is the **assessment-mode router** (DESK_REVIEW / REMOTE_VIDEO / SITE_VISIT / EXPERT_REFERRAL by category + amount + fraud flags, per-tenant thresholds) combined with CSP turnaround compliance and catastrophe surge capacity — precisely where the incumbents' site-visit model is structurally weak. The wedge on the travel side is speed and volume: competitors already pay flight-delay claims instantly, so parity is the floor, not the differentiator.
@@ -320,7 +320,7 @@ Security/integrity defects confirmed by the compliance audit that cannot wait fo
 9. Legal review note: claimant-web title/PWA tagline "Insurance Claims Made Easy" vs FSA s.139.
 
 ### Phase 1 — Compliance foundation + professional core
-Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in total, ordered so the work that unblocks insurer onboarding and revenue lands before the work that only pays off once senior adjusters are hired.
+Split into three shippable stages (§9.3–8.4): ~13–19 engineer-weeks in total, ordered so the work that unblocks insurer onboarding and revenue lands before the work that only pays off once senior adjusters are hired.
 
 #### Phase 1a — "Operate honestly" (~5–7 weeks) · unblocks insurer vendor assessment
 - Evidential audit trail: interceptor persists, before/after values, append-only at DB level, coverage across cases/policies/video/auth — **prod**
@@ -344,7 +344,7 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 
 **Exit:** a claim runs intake → assessment → senior-signed final report PDF → issued. Matrix rows 12.6 and 12.7 (workflow) green; 12.7 data-driven enforcement follows in Phase 3 once competency data exists.
 
-> **Gate before Phase 2:** answer **G2** (MSIG's appointment channel) and **G3** (is desktop travel adjudication regulated?) from §8.6. Both change what Phase 2 should build.
+> **Gate before Phase 2:** answer **G2** (MSIG's appointment channel) and **G3** (is desktop travel adjudication regulated?) from §9.6. Both change what Phase 2 should build.
 
 ### Phase 2 — Ingestion + routing ("run MSIG properly")
 - **Inbound parsing (moved up from Phase 5 — this is the MSIG pilot's primary intake):**
@@ -360,10 +360,10 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 
 **Exit criteria:** an emailed FNOL becomes a matched, vetted case without manual keying; MSIG pilot runs end-to-end; a small claim completes desk-review fast-track ≤3 wkg days; offshore-LLM exposure closed.
 
-> **Billing timing (§8.3):** at pilot volumes, invoicing from accounting software is rational. Build `FeeNote`/`FeeScale` when volume passes roughly 20 claims/month **or** when G1 (validated fee scales) lands — whichever comes first. Do not build it on assumed fee structures.
+> **Billing timing (§9.3):** at pilot volumes, invoicing from accounting software is rational. Build `FeeNote`/`FeeScale` when volume passes roughly 20 claims/month **or** when G1 (validated fee scales) lands — whichever comes first. Do not build it on assumed fee structures.
 
 ### Phase 3 — People engine (PD 12.x staffing standards)
-> **Gated on hiring**, not on engineering: this phase only becomes real once adjusting employees exist to hold competencies, seniority and CPD records. Build it when the funding decision in §8.2 is made; before that, the schema can land but the screens have no data.
+> **Gated on hiring**, not on engineering: this phase only becomes real once adjusting employees exist to hold competencies, seniority and CPD records. Build it when the funding decision in §9.2 is made; before that, the schema can land but the screens have no data.
 - AdjusterCompetency, seniority (<5-yr rule), ConflictDeclaration + per-assignment gate, rotation counters, capacity config — **prod**
 - Assignment engine: qualified-only (licensed mode), competency match, COI block, rotation warnings — **prod**
 - Data-driven senior-countersign enforcement — **prod**
@@ -417,18 +417,52 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
 - **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current baseline: **0 PASS / 7 PARTIAL / 20 FAIL** — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
-- **Feasibility gates:** the §8.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §8.2 funding decision before Phase 3.
+- **Feasibility gates:** the §9.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §9.2 funding decision before Phase 3.
 - **Execution order:** Phase 0 hotfixes (done — commit `e404fc5`), then Phase 1a (audit + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
 
 ---
 
-## 8. Feasibility check
+## 8. Progress record
+
+**Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
+
+### Phase 0 — complete ✅ (`e404fc5`)
+All nine items done and verified: `@Roles` on every Cases endpoint (SUPPORT_DESK → 403 confirmed), bank details and answers omitted from the queue listing, `verify-nric` throttled with non-enumerating errors, `complete-signature` restricted to firm admins, `redactClaim` extended (nested claimant NRIC fail-closed, session deception/fraud data stripped for claimant + support desk), NRIC removed from logs, Cases audit rows on every transition incl. `convert()`, false-comfort assertions corrected, branch committed and pushed.
+
+### Phase 1a — in progress (~15% → foundations batch done, `939ac39`)
+
+| Item | State |
+|---|---|
+| Travel evidence-checklist subtype scoping | ✅ 4-level precedence; FLIGHT_DELAY returns 3 requirements, was 16 |
+| `oldValues/newValues` on claim audit rows | ✅ field-scoped diff, JSON-safe, pre-image captured pre-write and unredacted; wired to CLAIM_UPDATED / STATUS_CHANGED / ADJUSTER_ASSIGNED |
+| Explicit handling-firm resolution | ✅ insurer panel nomination → `HANDLING_FIRM_TENANT_ID` config; single-firm assumption removed |
+| `PolicySource.SCRAPED` → `FILE_FEED` | ✅ enum migration applied |
+| Build gate | ✅ all five apps typecheck clean (two pre-existing claimant-web errors cleared) |
+| Global `AuditLogInterceptor` persistence | ⬜ still a TODO — writes nothing |
+| Audit coverage: policies / video-service / auth | ⬜ zero rows |
+| `audit_trail` append-only at DB level | ⬜ table still mutable |
+| `Consent` entity + capture before processing | ⬜ **blocked on consent wording (EN/BM)** |
+| NRIC/bank field encryption | ⬜ **blocked on key-custody decision** |
+| Notifications (email transport, templates, delivery log) | ⬜ **blocked on SMTP provider**; queue decision pending |
+| Server-side status guards + `AuthorityLimit` | ⬜ |
+
+### Open decisions blocking further Phase 1a work
+1. **Encryption key custody** — KMS envelope encryption vs configured master key. Blocks the encryption item; migrating encrypted data later is painful.
+2. **BullMQ now or in 1b** — recommendation: now, since notification delivery reliability wants it and 1b needs it regardless.
+3. **Consent wording (EN + BM)** and an SMTP provider account.
+
+### Known non-blocking defects
+- `Claim.claimType` is null for every non-motor claim, so the claimant app renders a blank "Claim Type" label. Cosmetic; the real subtype lives on `TravelClaim.travelClaimType`. Fix when the claimant claim-detail view is next touched.
+
+---
+
+## 9. Feasibility check
 
 Neutral read against `docs/MARKET_RESEARCH_TPA_REVENUE.md`. The conclusion is **conditionally feasible** — the technology is the easy part; regulated headcount, funding and panel access are the constraints, and the phase plan must not run ahead of them.
 
-Given the decided trajectory in §1 (TPA now, registration later), the **near-term funding case is the Path C column** — RM300–500k and near-breakeven — not the RM900k–1.4M registered route. The registered-route economics in §8.2 remain the plan of record for the *second* step, and the §9 partner ask in the research (a qualified non-motor adjuster, panel access, funding) is what converts step 1 into step 2.
+Given the decided trajectory in §1 (TPA now, registration later), the **near-term funding case is the Path C column** — RM300–500k and near-breakeven — not the RM900k–1.4M registered route. The registered-route economics in §9.2 remain the plan of record for the *second* step, and the §9 partner ask in the research (a qualified non-motor adjuster, panel access, funding) is what converts step 1 into step 2.
 
-### 8.1 The constraint that engineering cannot solve
+### 9.1 The constraint that engineering cannot solve
 
 BNM PD 12.1/12.2 require adjusting work to be done **only by the firm's own full-time adjusting employees**; 12.3 requires a supervised year for new employees; 12.4/12.7 require reports by anyone with **under 5 years in that subject matter** to be signed off by a senior with 5 years in it.
 
@@ -438,7 +472,7 @@ BNM PD 12.1/12.2 require adjusting work to be done **only by the firm's own full
 
 So: **talent, not technology, gates the registered route.** A credible alternative is acquiring or partnering with a small existing registered firm rather than building the credential from zero — worth pricing before committing to the hiring path.
 
-### 8.2 Funding reality (research §6.4)
+### 9.2 Funding reality (research §6.4)
 
 | | Registered adjuster (A) + travel/PA (C) | Travel/PA platform only (C), unregistered |
 |---|---|---|
@@ -449,7 +483,7 @@ So: **talent, not technology, gates the registered route.** A credible alternati
 
 Dominant variable is **time-to-first-panel-appointment** (6–12 month insurer procurement cycles), because regulated payroll burns whether or not instructions flow. Steady state is a **15–25% EBITDA services business with a software layer** on a **RM60–150M addressable** national pool — a solid niche, not a venture-scale volume market.
 
-### 8.3 What this means for the phase plan
+### 9.3 What this means for the phase plan
 
 The plan's original instinct — lead with the adjuster's report engine to be "BNM-ready" — is **premature if the near-term business is TPA administration plus travel/PA volume**, because:
 
@@ -459,7 +493,7 @@ The plan's original instinct — lead with the adjuster's report engine to be "B
 
 Recommended re-sequencing is reflected in §5 (Phase 1 split into 1a/1b/1c). The registered-adjuster machinery is still built — behind `licensedMode` so it ships inert — but it follows the revenue-unblocking work rather than preceding it.
 
-### 8.4 Effort realism
+### 9.4 Effort realism
 
 Rough engineer-weeks for a **single founder-engineer with AI assistance, no QA/DevOps**:
 
@@ -477,7 +511,7 @@ Rough engineer-weeks for a **single founder-engineer with AI assistance, no QA/D
 
 That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if a second engineer must be onboarded mid-flight, and note that **compliance tests (§3.5) are part of each item's estimate, not extra.**
 
-### 8.5 Items that need money or third parties, not code
+### 9.5 Items that need money or third parties, not code
 
 | Item | Dependency |
 |---|---|
@@ -492,7 +526,7 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 | Senior adjuster recruitment | RM30k–70k headhunting, scarce pool |
 | Minimum paid-up capital | **Unverified** — see gate G4 |
 
-### 8.6 Go/no-go gates — validate before the engineering that depends on them
+### 9.6 Go/no-go gates — validate before the engineering that depends on them
 
 | Gate | Question | Blocks | How |
 |---|---|---|---|
@@ -512,7 +546,7 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 
 **Cheapest gates first:** G2, G9 and the file-feed request are one conversation with MSIG and cost nothing. G3, G4, G8 are one counsel engagement. Do both before writing Phase 2 code.
 
-### 8.7 Honest verdict
+### 9.7 Honest verdict
 
 - **Feasible as a compliance-grade platform** — every BNM requirement in §3 is implementable, and the codebase already has the harder parts (multi-tenancy, document AI, video, fraud plugin architecture).
 - **Feasible as a business only with either** ~RM900k–1.4M to fund the registered route through a 15–22 month breakeven, **or** a deliberate decision to run unregistered travel/PA + TPA administration first (RM300k–500k) and register later once revenue supports the payroll.
@@ -521,4 +555,4 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 
 ---
 
-*Plan provenance: (round 1) functional codebase audit; (round 2) per-requirement compliance verification audit with file:line evidence; (round 3) cross-check that corrected the matrix, added fit-and-proper coverage and promoted urgent findings to Phase 0; (round 4) scope correction — motor, Individual PA and Medical & Health excluded, travel confirmed in scope via the PA class, FSA s.121 applicability made precise, §3.7 added; (round 5) feasibility check against the market research economics, phase re-sequencing and go/no-go gates (§8). Regulatory sources: FSA 2013 and BNM/RH/PD 032-29 (user-supplied PDFs, read directly), BNM/RH/PD 029-69 CSP PD (fetched from BNM), `docs/MARKET_RESEARCH_TPA_REVENUE.md` Rev 5 for market and cost data.*
+*Plan provenance: (round 1) functional codebase audit; (round 2) per-requirement compliance verification audit with file:line evidence; (round 3) cross-check that corrected the matrix, added fit-and-proper coverage and promoted urgent findings to Phase 0; (round 4) scope correction — motor, Individual PA and Medical & Health excluded, travel confirmed in scope via the PA class, FSA s.121 applicability made precise, §3.7 added; (round 5) feasibility check against the market research economics, phase re-sequencing and go/no-go gates (§9). Regulatory sources: FSA 2013 and BNM/RH/PD 032-29 (user-supplied PDFs, read directly), BNM/RH/PD 029-69 CSP PD (fetched from BNM), `docs/MARKET_RESEARCH_TPA_REVENUE.md` for market and cost data. (Round 6) TPA-first trajectory recorded, Path B kept open, COGS ceiling added, gates G10–G11. §8 progress record is maintained continuously as work ships.*
