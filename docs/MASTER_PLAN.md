@@ -316,17 +316,19 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 
 > **Gate before Phase 2:** answer **G2** (MSIG's appointment channel) and **G3** (is desktop travel adjudication regulated?) from §8.6. Both change what Phase 2 should build.
 
-### Phase 2 — Money + routing ("run MSIG properly")
-- Billing: FeeScale, TimeEntry/Disbursement, FeeNote + SST, statements + ageing — **prod**
-- Assessment-mode router + small-claims fast-track profile — **prod**
-- Assignment entity + manual appointment capture + ack automation — **prod**
+### Phase 2 — Ingestion + routing ("run MSIG properly")
+- **Inbound parsing (moved up from Phase 5 — this is the MSIG pilot's primary intake):**
+  - FNOL email ingestion from the dedicated inbox → auto-create `Case` (channel EMAIL), attach the email's documents, attempt policy match, flag unmatched for the operator
+  - **Policy data file feed** from the insurer (SFTP or dedicated inbox, agreed CSV/Excel schema) → upsert `Policy`. Rename `PolicySource.SCRAPED` → `FILE_FEED` as part of this work; see §6.11 on why portal scraping is not an option — **prod**
+- `Assignment` entity + manual appointment capture + ack automation — **prod**
 - Quantum worksheet (average, betterment, depreciation, excess) — **prod** fire/property, demo others
 - RetentionPolicy engine — **prod**
 - Tenant config surface (structured settings UI) — **prod**
-- Local-LLM default for PII documents; per-tenant provider policy — **prod**
+- Local-LLM default for PII documents; per-tenant provider policy — **prod** *(closes the §6.3 exposure; must land before any public claim of in-country AI processing)*
 - Insurer-side clock monitoring (MI), s.143 export bundle — demo
+- Billing (FeeScale / FeeNote / SST) — **only when the trigger below is met**
 
-**Exit criteria:** MSIG pilot end-to-end incl. fee note; small claim completes desk-review fast-track ≤3 wkg days; offshore-LLM exposure closed.
+**Exit criteria:** an emailed FNOL becomes a matched, vetted case without manual keying; MSIG pilot runs end-to-end; a small claim completes desk-review fast-track ≤3 wkg days; offshore-LLM exposure closed.
 
 > **Billing timing (§8.3):** at pilot volumes, invoicing from accounting software is rational. Build `FeeNote`/`FeeScale` when volume passes roughly 20 claims/month **or** when G1 (validated fee scales) lands — whichever comes first. Do not build it on assumed fee structures.
 
@@ -350,11 +352,11 @@ Split into three shippable stages (§8.3–8.4): ~13–19 engineer-weeks in tota
 - Expert-referral workflow (external expert record, instruction letter, report slot) — demo
 
 ### Phase 5 — Connectivity + regulated-mode completion
-- Merimen intake integration (or structured email ingestion fallback) → auto-Assignment — **prod** (dependency-gated)
-- WhatsApp intake channel (Business API) — **prod**
-- AMLA screening provider + suspicious-matter escalation — **prod**
-- BnmNotification register + licensed-mode flip (hard gates live, report labelling, registration display) — **prod**
-- Template approval workflow (Sch 7 formal sign-off) — **prod**
+- Merimen appointment-rail integration → auto-`Assignment` — **prod** (dependency-gated on G2; email ingestion from Phase 2 is the fallback that makes this optional)
+- **Proactive outbound intake** (WhatsApp Business API + SYSTEM-initiated pre-filled cases). Note the two dependencies that do not exist yet and are not in the cost model: (a) a **flight-status data feed**, and (b) **itinerary-level policy data** from the insurer — without both, incident detection cannot work, so this is gated on the Phase 2 policy feed carrying travel dates and flight details. Competitors already pay flight-delay claims instantly, so treat this as parity, not differentiation — **prod**
+- AMLA screening provider + suspicious-matter escalation — **prod** (scope set by gate G8)
+- `BnmNotification` register + licensed-mode flip (hard gates live, report labelling, registration display) — **prod**
+- Template approval workflow (Sch 7 formal sign-off, now directly applicable) — **prod**
 - SMS channel; insurer status-push API — demo
 
 ### Phase 6 — MI + scale
@@ -374,6 +376,9 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 8. **MSIG is verbal** — keep Phases 1–2 client-agnostic; MSIG-specific behaviour lives only in tenant config.
 9. **Stub debt** (signature provider, rainfall data, doc validation) — each scheduled; nothing ships "prod" while its stub is load-bearing for that phase's exit criteria.
 10. **Three disconnected risk scores** (DeceptionScore, RiskAssessment, FraudSignal) — do not merge into one opaque number (itself a Sch 7/explainability risk); Ph 4 presents all three with provenance.
+11. **Portal scraping is not an available option — decided.** A proposal existed to scrape the insurer's agency portal for policy data and describe it externally as "a dedicated team reviewing policies". This plan rejects it on three independent grounds: the insurer has already stated that agents/adjusters may not log into its system, so automated access breaches the access terms and risks the Computer Crimes Act 1997; describing automation as a human team misrepresents the service to the client whose data is at stake; and either, if discovered during a vendor security assessment, ends the relationship and damages the registration application. **The sanctioned path is a structured policy file feed** (SFTP or an agreed inbox schema) — Phase 2, `PolicySource.FILE_FEED`. If the insurer declines a feed, the fallback is manual keying of the emailed data, not scraping.
+12. **AI is disclosed, not downplayed — decided.** A position existed to use AI internally while minimising it externally. BNM PD **12.6** requires the adjusting report to disclose the facts, assumptions, **methods**, sources and databases behind the assessment, so AI contribution to an assessment is a disclosable method. The defensible posture is the one the system already supports: human-in-the-loop sign-off, full audit trail with before/after values, explicit methodology sections, provenance kept on each risk signal, and no automated decision on medical claims. Downplaying invites the scrutiny it is meant to avoid; documented explainability answers the regulator's actual concern (accountability), and is also what insurer vendor assessments ask for.
+13. **Do not claim in-country AI processing until it is true.** The live default is Gemini (offshore) whenever `GEMINI_API_KEY` is set, and the "sovereign" Ollama path defaults to an ephemeral Cloudflare tunnel. Until Phase 2 lands real in-country hosting, any external statement must be framed as a dated architecture commitment, not a present fact. See §3.6 item 10 and §6.3.
 
 ---
 
@@ -465,8 +470,12 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 | **G5** | Does SST (8%) apply to adjusting / claims-administration fees? | Pricing and cash flow | Tax adviser |
 | **G6** | Travel/Group PA annual claim counts and insurers' internal cost-per-claim | Path C volume thesis | Discovery with travel insurers |
 | **G7** | Realistic cases-per-adjuster-per-month with AI assistance | The productivity claim underpinning margins | Time-and-motion during pilot |
+| **G8** | Is a registered adjuster a **"reporting institution" under the AMLA First Schedule**? | Whether STR/CDD obligations attach to the firm directly or only to the insurer — sets the Phase 5 AMLA scope | Counsel; ask alongside G3/G4 |
+| **G9** | Will the insurer supply a **policy data file feed** (SFTP or agreed inbox schema), and can it carry travel dates / flight details? | Phase 2 ingestion design; and it is the hard prerequisite for proactive flight-delay detection | Ask MSIG with G2 — same conversation |
 
-**Sequencing rule:** G2 and G3 before Phase 2 (they determine `Assignment` and whether the travel line is regulated). G1, G4, G5 before any investor financial model or fee-note build. G6, G7 before scaling headcount.
+**Sequencing rule:** G2, G3 and G9 before Phase 2 (they determine `Assignment`, whether the travel line is regulated, and whether ingestion is a feed or manual). G1, G4, G5 before any investor financial model or fee-note build. G6, G7 before scaling headcount. G8 before the Phase 5 AMLA build.
+
+**Cheapest gates first:** G2, G9 and the file-feed request are one conversation with MSIG and cost nothing. G3, G4, G8 are one counsel engagement. Do both before writing Phase 2 code.
 
 ### 8.7 Honest verdict
 
