@@ -72,10 +72,21 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @tci/prisma-client exec prisma generate
 
-      # Current suites (no database required — pure functions):
-      #   tenant.service.spec.ts  PII redaction, NRIC masking fail-closed,
-      #                           behavioural/fraud data withheld from claimants
-      #   case-flows.spec.ts      CSP 24h/30-day deadline flags stay advisory,
-      #                           evidence completeness, flow integrity
+      # Every package, not just case-service. A compliance matrix row may only
+      # reach PASS with a test asserting the control (§3.5), so a suite CI does
+      # not run cannot support a verdict — the audit-scope and encryption suites
+      # were passing locally and never executing here.
+      #
+      # Suites, and the controls they hold:
+      #   tenant.service          PII redaction, NRIC masking fail-closed
+      #   case-flows              CSP flags advisory, evidence completeness
+      #   sensitive-fields        no encrypted column reaches a response body
+      #   data-ownership          no undeclared cross-context writes
+      #   working-days / sla.*    CSP working-day arithmetic, clock lifecycle
+      #   report-templates        PD 12.6 disclosures mandatory
+      #   report-authority        PD 12.7 authorship, sign-off, licence flip
+      #   claim-authority         A3 segregation of duties, approval ceilings
+      #   audit-scope (gateway)   what becomes evidence; no body, no identifiers
+      #   encryption (crypto)     envelope encryption, KMS custody migration
       - name: Compliance tests
-        run: pnpm --filter @tci/case-service test
+        run: pnpm test
