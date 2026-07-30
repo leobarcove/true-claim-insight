@@ -117,6 +117,17 @@ export class CasesController {
     return this.service.referToExpert(id, dto.note, tenantContext);
   }
 
+  @Get(':id/payout-details')
+  // Firm admins only, and every call is audited — see revealPayoutDetails.
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Decrypt payout bank details (audited)' })
+  revealPayoutDetails(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.revealPayoutDetails(id, tenantContext);
+  }
+
   @Post(':id/link-policy')
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Manually link a policy to the case' })

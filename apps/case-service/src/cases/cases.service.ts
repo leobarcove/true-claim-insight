@@ -30,6 +30,7 @@ import { PrismaService } from '../config/prisma.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
+import { EncryptionService } from '../common/crypto/encryption.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto } from './dto/review-case.dto';
@@ -63,6 +64,17 @@ const CASE_STATUS_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
   [CaseStatus.ABANDONED]: [],
 };
 
+/**
+ * Intake answers whose raw value must never persist in `Case.answers`.
+ *
+ * The promoted column holds the encrypted value; the answer bag keeps only a
+ * mask. Without this, encrypting the column would be theatre — the readable
+ * copy would still sit in the JSON blob, in every backup, and in the review
+ * screen. The mask still reads as "answered" to the flow engine, so the
+ * conversation does not loop back and ask again.
+ */
+const SENSITIVE_ANSWER_STEPS = new Set(['bank-account-number']);
+
 /** Statuses in which intake answers may still be edited. */
 const EDITABLE_STATUSES: CaseStatus[] = [
   CaseStatus.DRAFT,
@@ -78,8 +90,24 @@ export class CasesService {
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
     private readonly documentValidation: DocumentValidationService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly encryption: EncryptionService
   ) {}
+
+  /**
+   * Replace sensitive answers with a display mask before persisting.
+   * The real value lives only in its encrypted column.
+   */
+  private redactSensitiveAnswers(answers: CaseAnswers): CaseAnswers {
+    const stored: CaseAnswers = { ...answers };
+    for (const stepId of SENSITIVE_ANSWER_STEPS) {
+      const value = stored[stepId];
+      if (value === undefined || value === null || value === '') continue;
+      if (typeof value === 'string' && value.startsWith('••••')) continue; // already masked
+      stored[stepId] = `••••${this.encryption.lastDigits(String(value)) ?? ''}`;
+    }
+    return stored;
+  }
 
   /**
    * Evidential audit record for case activity. Intake and vetting decisions
@@ -161,7 +189,7 @@ export class CasesService {
         claimantId,
         createdByUserId: isClaimant ? null : tenantContext.userId,
         currentStepId,
-        answers: answers as Prisma.InputJsonValue,
+        answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
         sourceMeta: (dto.sourceMeta as Prisma.InputJsonValue) ?? undefined,
         status: Object.keys(answers).length > 0 ? CaseStatus.IN_PROGRESS : CaseStatus.DRAFT,
         ...promoted,
@@ -211,7 +239,13 @@ export class CasesService {
         orderBy: { createdAt: 'desc' },
         // Queue listing never needs payout details or the raw answer blob —
         // they stay on the detail endpoint, which is role-gated separately.
-        omit: { bankName: true, bankAccountNumber: true, bankAccountHolderName: true, answers: true },
+        omit: {
+          bankName: true,
+          bankAccountNumberEncrypted: true,
+          bankAccountLast4: true,
+          bankAccountHolderName: true,
+          answers: true,
+        },
         include: {
           claimant: { select: { id: true, fullName: true, phoneNumber: true } },
           policy: { select: { id: true, policyNumber: true, insuredName: true } },
@@ -256,6 +290,7 @@ export class CasesService {
     const cases = await this.prisma.case.findMany({
       where: { claimantId: tenantContext.userId },
       orderBy: { createdAt: 'desc' },
+      omit: { bankAccountNumberEncrypted: true },
       include: { documents: true, policy: { select: { policyNumber: true } } },
     });
     return cases.map(caseRow => this.withFlowState(caseRow));
@@ -264,6 +299,9 @@ export class CasesService {
   async findOne(id: string, tenantContext: TenantContext) {
     const caseRow = await this.prisma.case.findUnique({
       where: { id },
+      // Ciphertext has no business reaching a browser: the last-4 is enough for
+      // display and the full value comes only from the audited reveal endpoint.
+      omit: { bankAccountNumberEncrypted: true },
       include: {
         claimant: true,
         policy: true,
@@ -341,7 +379,7 @@ export class CasesService {
     const updated = await this.prisma.case.update({
       where: { id },
       data: {
-        answers: answers as Prisma.InputJsonValue,
+        answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
         currentStepId: nextStepId,
         status:
           caseRow.status === CaseStatus.DRAFT ? CaseStatus.IN_PROGRESS : caseRow.status,
@@ -460,6 +498,30 @@ export class CasesService {
 
   async reject(id: string, note: string, tenantContext: TenantContext) {
     return this.transitionWithNote(id, CaseStatus.REJECTED, note, tenantContext);
+  }
+
+  /**
+   * Decrypt the payout account number for a single case.
+   *
+   * Decryption is a deliberate, audited act rather than a side effect of
+   * loading a case: BNM examination and PDPA both ask *who* accessed personal
+   * data, and this is the chokepoint that can answer it. Restricted to firm
+   * admins at the controller.
+   */
+  async revealPayoutDetails(id: string, tenantContext: TenantContext) {
+    const caseRow = await this.getStaffCase(id, tenantContext);
+
+    const accountNumber = await this.encryption.decrypt(caseRow.bankAccountNumberEncrypted);
+
+    await this.audit(id, 'PAYOUT_DETAILS_REVEALED', tenantContext, {
+      metadata: { reason: 'operator requested payout details', last4: caseRow.bankAccountLast4 },
+    });
+
+    return {
+      bankName: caseRow.bankName,
+      bankAccountHolderName: caseRow.bankAccountHolderName,
+      bankAccountNumber: accountNumber,
+    };
   }
 
   async linkPolicy(id: string, policyId: string, tenantContext: TenantContext) {
@@ -729,7 +791,12 @@ export class CasesService {
     const bankName = this.answerString(answers['bank-name']);
     if (bankName !== undefined) promoted.bankName = bankName;
     const bankAccount = this.answerString(answers['bank-account-number']);
-    if (bankAccount !== undefined) promoted.bankAccountNumber = bankAccount;
+    if (bankAccount !== undefined) {
+      // Encrypted at rest; only the last 4 digits stay readable so operator
+      // screens can identify the account without a decrypt (PDPA).
+      promoted.bankAccountNumberEncrypted = await this.encryption.encrypt(bankAccount);
+      promoted.bankAccountLast4 = this.encryption.lastDigits(bankAccount);
+    }
     const bankHolder = this.answerString(answers['bank-account-holder']);
     if (bankHolder !== undefined) promoted.bankAccountHolderName = bankHolder;
 
@@ -887,4 +954,6 @@ export class CasesService {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 }
+
+
 

@@ -527,7 +527,8 @@ A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain trac
 | Audit coverage: policies / video-service / auth | ⬜ zero rows |
 | `audit_trail` append-only at DB level | ⬜ table still mutable |
 | `Consent` entity + capture before processing | ⬜ **blocked on consent wording (EN/BM)** |
-| NRIC/bank field encryption | ⬜ **blocked on key-custody decision** |
+| Bank-detail encryption | ✅ envelope encryption live (AES-256-GCM, versioned ciphertext, master key behind a `KeyProvider` so AWS KMS is a one-class swap with **no data re-encryption**). Plaintext column dropped in the same migration; sensitive answers masked in `Case.answers`; ciphertext never shipped to a browser; full value only via an **audited** firm-admin-only reveal endpoint. 15 crypto compliance tests incl. a simulated KMS custody migration |
+| NRIC encryption | ⬜ **deferred, deliberately** — NRIC touches 29 files and risk-engine's Trinity engine performs identity matching on it, so it needs a decrypt path in the assessment context plus a blind-index migration. `blindIndex()` (HMAC + pepper) is built and tested ready for it. Scoped as its own piece of work, not bolted onto this one |
 | Notifications (email transport, templates, delivery log) | ⬜ **blocked on SMTP provider**; queue decision pending |
 | Server-side status guards + `AuthorityLimit` | ⬜ |
 
