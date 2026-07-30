@@ -169,7 +169,7 @@ Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, 
 
 ## 3. Compliance matrix (with current-state verdicts)
 
-Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 1 PASS, 7 PARTIAL, 23 FAIL** — counted from the rows below, not carried forward by hand. PDPA NRIC/bank-detail protection is the first row to reach PASS (server-side enforcement plus a CI test asserting the control). *Counting note:* the first audit reported 20 FAIL against a smaller matrix; rows were added afterwards when applicability and architecture findings were worked in, so the totals are recounted from the table each time rather than adjusted. A summary that drifts from its own rows is the false comfort of §3.6. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
+Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 4 PASS, 11 PARTIAL, 16 FAIL** (re-audited 31 July 2026; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
 
 ### 3.1 BNM Adjuster PD (binding "S" paragraphs)
 
@@ -178,16 +178,16 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 | 8.1/13.1 | Registration lifecycle; notify BNM ≤7 wkg days of capital/office/director/CEO/shareholder changes | **FAIL** — no directors/shareholders/capital entity, no notification tracking | `BnmNotification` register with own SLA clock (licensed mode) | 5 |
 | 10.1/10.2 | Fit & proper records for shareholders/KRPs | **FAIL** — no entity | Fit-and-proper attestation records + periodic re-attestation in compliance module | 3 |
 | 10.3, 12.1(d) | COI: staff/family ties to insurers/workshops; per-claim screening | **FAIL** — `assignAdjuster` performs no screening | `ConflictDeclaration` standing + per-assignment attestation; blocking gate | 3 |
-| 11.2(a) | End-to-end adjusting process embodied until report completion | **PARTIAL** — chain exists intake→assign→docs→session, terminates before any report | The claim-journey spine itself (§2) + report engine | 1–2 |
+| 11.2(a) | End-to-end adjusting process embodied until report completion | **PARTIAL** — the chain now terminates in a work product: intake → assign → documents → assessment → report drafted, signed and issued, verified end to end through the gateway. What is still missing is the *start*: appointment receipt has no representation (`Assignment` is Phase 2), so the process is embodied from intake to report but not from the insurer's instruction | The claim-journey spine itself (§2) + report engine | 1–2 |
 | 11.2(b) | Rotation of assignments + work-quality reviews | **FAIL** — workload scoring exists but advisory and orphaned | Rotation counters; QA review sampling on reports | 3 |
 | 11.2(d) | Escalation processes to Board | **FAIL** | `ComplianceEvent` register → Board-report export | 3 |
 | 11.2(e) | Pre-employment background screening | **FAIL** | Screening checklist + document slots on adjuster onboarding | 3 |
 | 12.1(a),(b), 12.2(a) | Adjusting work only by full-time qualified adjusting employees | **PARTIAL** — credential columns exist but inert (`licenseVerifiedAt` zero reads/writes; no HTTP path can update licence; no employment-type field) | Employment-type + qualification fields live; assignment engine refuses unqualified in licensed mode | 3 |
 | 12.2(b) | Assignment commensurate with skills/qualifications/experience | **PARTIAL** — assignment checks only tenant + existence; SUSPENDED adjuster is assignable | `AdjusterCompetency` (category × level × yearsInSubject) matching | 3 |
-| 12.3/12.4 | Junior (<5 yrs subject) supervised ≥1 yr; senior recognition criteria | **FAIL** — no seniority model | Seniority derivation; supervised-status on assignments | 3 |
+| 12.3/12.4 | Junior (<5 yrs subject) supervised ≥1 yr; senior recognition criteria | **PARTIAL** — the countersign machinery exists, blocks in licensed mode and is asserted by 16 tests incl. the licence flip. It cannot yet key off real seniority: `AdjusterCompetency` is Phase 3, so unknown seniority is treated as junior (the safe default) and the basis is persisted on every report | Seniority derivation; supervised-status on assignments | 3 |
 | 12.5 | Turnaround per internal policy honouring CSP | **PARTIAL** (vestigial) — `slaDeadline` one passthrough write, zero reads; **no scheduler in the entire monorepo** | `SlaPolicy` + `SlaClock` per stage; breach escalation | 1 |
-| 12.6 | Report discloses facts, assumptions, methods, sources, databases | **PARTIAL** — only artefact is the Trinity fraud PDF (machine analysis, no assumptions/scope/sources, no author) | `AdjusterReport` mandatory Methodology/Sources/Assumptions sections; AI-derived content flagged | 1 |
-| 12.7 | Reports authored by adjusting employees only; junior reports senior-signed | **FAIL** — zero matches for any review/sign-off concept; report PDF carries no adjuster name | Author restricted to adjusting employees; hard senior-countersign gate | 1 (workflow) / 3 (data-driven) |
+| 12.6 | Report discloses facts, assumptions, methods, sources, databases | **PASS** — the four disclosure sections are mandatory on every report type and enforced at *both* submit and sign, server-side; whitespace does not satisfy them. Held in a code registry, not a table, so they cannot be switched off with an UPDATE. The rendered PDF prints each section with the paragraph it satisfies and discloses AI-assisted sections. **Tests:** 13, in CI | `AdjusterReport` mandatory Methodology/Sources/Assumptions sections; AI-derived content flagged | 1 |
+| 12.7 | Reports authored by adjusting employees only; junior reports senior-signed | **PARTIAL** — authorship is enforced *structurally*: author and signer point at `Adjuster`, not `User`, so a FIRM_ADMIN without an adjuster profile is refused (verified live), and the report PDF now carries the author's name and licence number. The countersign half is not yet PASS — it blocks only in licensed mode, and on unknown rather than real seniority. **Tests:** 16, in CI | Author restricted to adjusting employees; hard senior-countersign gate | 1 (workflow) / 3 (data-driven) |
 | 12.8 | Records ≥7 years incl. photos, police/bomba reports, statements | **FAIL** — documents hard-deleted (with "soft delete in production" comment); StorageService has **no delete method** so files orphan; no retention anywhere | `RetentionPolicy` engine (7-yr floor, legal hold); soft-delete everywhere; storage lifecycle | 2 |
 | 12.9–12.11 | Training; CPD 15 hrs/yr; AMLA-referenced programmes | **FAIL** | `CpdRecord` ledger + annual floor dashboard | 3 |
 
@@ -196,12 +196,12 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 | Anchor | Current | Target control | Phase |
 |---|---|---|---|
 | Firm ack of appointment ≤1 wkg day | **FAIL** — no appointment entity, no ack timestamp, no working-day arithmetic anywhere | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
-| Preliminary report ~7–14 days (market practice) | **FAIL** | `SlaClock` PRELIM_REPORT (per-tenant target) | 1 |
-| Final report ≤10 wkg days from complete documents | **FAIL** — checklist computed but emits no completeness event; gates nothing | `SlaClock` FINAL_REPORT starting at checklist-complete event (`documentsCompleteAt`) | 1 |
+| Preliminary report ~7–14 days (market practice) | **FAIL** | **PARTIAL** — `SlaClock` starts on adjuster assignment and stops when the preliminary report is issued; per-insurer target with a platform default of 7 working days. Cannot operate until the gazetted holidays are entered | 1 |
+| Final report ≤10 wkg days from complete documents | **FAIL** — checklist computed but emits no completeness event; gates nothing | **PARTIAL** — clock wired, pauses on awaiting-documents and on SIU referral (banking the remaining days), stops when the final report is *issued* — the act CSP measures. Breach and escalation verified live. Cannot operate until the gazetted holidays are entered | 1 |
 | Supplementary claims 5 wkg days | **FAIL** — structurally precluded: CLOSED is terminal, `convertedClaimId @unique` blocks reopen | `SlaClock` SUPPLEMENTARY + reopen path | 2 |
-| ITO decision ≤7 days / payment ≤14 days (monitor) | **FAIL** | Insurer-side clocks, MI only | 2 |
+| ITO decision ≤7 days / payment ≤14 days (monitor) | **FAIL** | **PARTIAL** — `INSURER_PAYMENT` starts on approval and is measured as `monitorOnly`, so an insurer-side delay is evidenced without escalating against the firm. `INSURER_DECISION` is defined but unreachable: it starts at `UNDER_REVIEW`, a status the claim state machine has no route to | 2 |
 | Fee settlement by ITO (CSP 11.16–11.18) | **FAIL** — zero billing code | `FeeNote` ageing + per-insurer statements | 2 |
-| Records readily available (audit-readiness) | **PARTIAL** — 5 write sites all in case-service; `oldValues/newValues` written by zero code; global interceptor is a TODO; no immutability; cases module writes zero rows | Evidential audit trail (Ph 1) | 1 |
+| Records readily available (audit-readiness) | **PARTIAL** — 5 write sites all in case-service; `oldValues/newValues` written by zero code; global interceptor is a TODO; no immutability; cases module writes zero rows | **PASS** — `audit_trail` is append-only by database trigger (UPDATE never permitted; DELETE only under an explicit maintenance flag, verified). The interceptor persists rather than carrying a TODO, and never reads request bodies. Coverage across gateway, case-service and video-service through one shared writer; refusals recorded via the exception filter, which is the only place that sees guard rejections. **Tests:** 24, now actually run in CI | 1 |
 
 Working-day arithmetic requires a Malaysian holiday calendar (national + state) — part of the SLA engine (Ph 1).
 
@@ -209,9 +209,9 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 
 | Ref | Constraint | Current | Target control | Phase |
 |---|---|---|---|---|
-| s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs. **Applicability:** s.121 defines "financial service provider" as an *authorized* or *registered* person, so these duties attach **on registration**. Unregistered today, the operator is bound instead by (a) its contract with the insurer, which flows down the insurer's own Sch 7 duties, (b) the CSP PD via the insurer, and (c) general consumer-protection and misrepresentation law. Practically the same bar; state it accurately rather than overstating present direct exposure | **FAIL** — no content governance; and `GET /claims/:id` returned deception scores/risk data to claimants (fixed in Phase 0) | Versioned, compliance-approved templates; LLM output never verbatim to claimants | 0 (redaction, done) / 1 (template flag) / 5 (formal approval) |
+| s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs. **Applicability:** s.121 defines "financial service provider" as an *authorized* or *registered* person, so these duties attach **on registration**. Unregistered today, the operator is bound instead by (a) its contract with the insurer, which flows down the insurer's own Sch 7 duties, (b) the CSP PD via the insurer, and (c) general consumer-protection and misrepresentation law. Practically the same bar; state it accurately rather than overstating present direct exposure | **PARTIAL** — deception and fraud data no longer reach claimants (fixed in Phase 0, asserted by 8 tests); the adjuster report states in terms that the settlement decision rests with the insurer; AI contribution is disclosed per section rather than downplayed (§6). Still absent: versioned, compliance-approved claimant-facing templates | Versioned, compliance-approved templates; LLM output never verbatim to claimants | 0 (redaction, done) / 1 (template flag) / 5 (formal approval) |
 | s.143 | Produce documents/information to BNM in specified form | **FAIL** — no export/bundle capability of any kind | Claim-file export bundle (docs + audit + reports) | 2 |
-| s.146 | No-notice examination — audit-ready always | **FAIL** — see audit-trail row above | Append-only evidential audit trail + this matrix as live dashboard | 1 |
+| s.146 | No-notice examination — audit-ready always | **PASS** — see the audit row above. An examiner arriving unannounced can be shown who did what, who accessed which personal data, which requests were refused, and that no row can have been altered after the fact | Append-only evidential audit trail + this matrix as live dashboard | 1 |
 | s.139 | "Insurance" naming restriction | **PARTIAL** — brand clean, but claimant-web title/PWA manifest say "Insurance Claims Made Easy"; refer to counsel | Policy note + legal review of taglines | 0 |
 | s.240 | Director personal liability | — | Motivates ComplianceEvent/Board register | 3 |
 
@@ -227,17 +227,22 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
 
-The audit's most dangerous items are places where the system *claims* a control that does not run. These are corrected in Phase 0/1 by either implementing or removing the assertion:
-1. Global `AuditLogInterceptor` registered app-wide but persists nothing (TODO in code).
-2. `AuditTrail.oldValues/newValues` never populated — the pre-image is fetched then discarded.
-3. `nricHash`/`nricEncrypted` imply encryption that never runs; plaintext NRIC is live and logged.
-4. "PDPA Consented" badge asserted by frontend hardcode; docs record PDPA as delivered.
-5. `redactClaim` masks less than it appears (misses nested claimant NRIC, session risk data) and is absent from the Cases module entirely.
-6. Adjuster credential fields + ticked docs checklist ("BCILLA ✅") with zero enforcement.
-7. `slaDeadline` column implies turnaround tracking; nothing evaluates it.
-8. Evidence checklist UI implies gating ("3 of 5 documents") that doesn't exist.
-9. Signature completion endpoint is forgeable (stub provider, no role restriction).
-10. `validationStatus` populated on every case document by a stub that always returns SKIPPED.
+The audit's most dangerous items are places where the system *claims* a control that does not run. Status as at the 31 July 2026 re-audit — **6 of 10 closed**:
+
+| # | Finding | Status |
+|---|---|---|
+| 1 | Global `AuditLogInterceptor` registered app-wide but persists nothing | ✅ **closed** — writes rows; and the deeper gap it hid (guards run before interceptors, so refusals reached it at all) is closed via the exception filter |
+| 2 | `AuditTrail.oldValues/newValues` never populated — pre-image fetched then discarded | ✅ **closed** — field-scoped diff, pre-image captured before the write |
+| 3 | `nricHash`/`nricEncrypted` imply encryption that never runs; plaintext NRIC live and logged | ✅ **closed** — encryption real, plaintext columns dropped, NRIC out of logs, ciphertext omitted from responses by default |
+| 4 | "PDPA Consented" badge asserted by frontend hardcode | ⬜ **open** — `isPdpaCompliant` still gates nothing; blocked on consent wording |
+| 5 | `redactClaim` masks less than it appears; absent from the Cases module | ✅ **closed** — coverage extended and fail-closed, asserted by 8 tests |
+| 6 | Adjuster credential fields with zero enforcement | ◐ **partly** — authorship and sign-off now genuinely require an `Adjuster` record, but `licenseVerifiedAt` and `bcillaCertified` remain inert |
+| 7 | `slaDeadline` column implies turnaround tracking; nothing evaluates it | ✅ **closed** — real `SlaClock` with a sweep that marks breaches; the dead column should be dropped |
+| 8 | Evidence checklist UI implies gating ("3 of 5 documents") that doesn't exist | ⬜ **open** |
+| 9 | Signature completion endpoint forgeable (stub provider, no role restriction) | ✅ **closed** in Phase 0 — restricted to firm admins; the provider is still a stub |
+| 10 | `validationStatus` populated by a stub that always returns SKIPPED | ⬜ **open** |
+
+The pattern worth carrying forward: every one of these was found by running the system and looking at what it actually produced, not by reading the code and reasoning about it. The NRIC that reached the audit trail through a framework error message (§8) is the same lesson learned again.
 
 ### 3.7 When each obligation actually bites
 
@@ -313,7 +318,7 @@ The question asked was "is the system design properly done?" — answer: **not y
 |---|---|---|---|
 | **A1** | **No authentication between services.** `InternalAuthGuard` (`apps/case-service/src/common/guards/internal-auth.guard.ts:27`) trusts three plain HTTP headers with no credential. Its own comment says production needs an API key or mTLS; that was never done | Sending `X-User-Id: forged`, an arbitrary `X-Tenant-Id` and `X-User-Role: FIRM_ADMIN` directly to `:3001` returned real claim records. `main.ts:112` binds `0.0.0.0`, and no Kubernetes network policy exists to contain it. **Blast radius: full cross-tenant read/write of claimant PII** | Shared internal secret validated on every service-to-service call (~half a day), mTLS when infrastructure exists |
 | **A2** | **Four services share one database with no data ownership.** `video-service/rooms.service.ts:54,85` writes `Claim`; `video-service/uploads.service.ts` and two `risk-engine` files write `Document`; `api-gateway` writes four domains directly (otp, claimants, master-data, users). A distributed monolith: microservice cost (four deploy units, network hops, **no cross-service transactions**) with monolith coupling (any service can corrupt any table) | grep of `prisma.<table>.create/update` per service | Enforce ownership at the API boundary — see recommendation below |
-| **A3** | **No segregation of duties.** The 20-permission × 8-role matrix in `adjuster-portal/src/lib/permissions.ts` is frontend-only, and the same role holds `claims:assign` and `claims:approve` | A plain `ADJUSTER` token moved a claim to `APPROVED` through the API with no authority check | `AuthorityLimit` + server-side status guards — already scoped in Phase 1a |
+| **A3** | ✅ **CLOSED** (31 July 2026). Was: no segregation of duties — the 20-permission × 8-role matrix in `adjuster-portal/src/lib/permissions.ts` is frontend-only, and a plain `ADJUSTER` token moved a claim to `APPROVED` through the API with no authority check | Re-verified live: the assigned adjuster is now refused `APPROVED` and still permitted `SCHEDULED`; a firm admin who did not assess it approves, with `FIRM_ADMIN authorised for APPROVED (ceiling 50000)` written to the audit row | `AuthorityLimit` + server-side checks in `ClaimsService`, not the controller — a role decorator cannot know whether this person assessed this claim. An absent limit means no authority, not unlimited. **18 tests** |
 
 #### Material
 
@@ -486,9 +491,9 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 ## 7. Verification
 
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
-- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current **1 PASS / 7 PARTIAL / 23 FAIL**, recounted from the table (never carried forward by hand) — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
+- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current **4 PASS / 11 PARTIAL / 16 FAIL**, recounted from the table (never carried forward by hand) — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
 - **Feasibility gates:** the §9.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §9.2 funding decision before Phase 3.
-- **Architecture gate:** the three blocking defects in §4.3 (A1 service auth, A2 data ownership, A3 segregation of duties) must be closed before the platform holds real claimant data in any shared environment. A1 and A2 are Phase 0b; A3 is Phase 1a.
+- **Architecture gate:** the three blocking defects in §4.3 must be closed before the platform holds real claimant data in any shared environment. **A1 (service auth) and A3 (segregation of duties) are closed; A2 (data ownership) has its foundation in place with six declared exceptions on a shrink-only ratchet.**
 - **Execution order:** Phase 0 hotfixes (done — `e404fc5`), Phase 1a foundations batch (done — `939ac39`), then **Phase 0b architecture hardening**, then the remainder of Phase 1a (audit interceptor + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
 
 ---
@@ -539,7 +544,8 @@ A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain trac
 | Report PDF | ✅ Renders with the author's name and licence number on its face, every PD 12.6 section printed with the paragraph it satisfies, AI-assisted sections marked in the body and summarised up front, the sign-off basis, and an "the settlement decision rests with the insurer" notice. Drafts render watermarked. This closes the §3.1 12.6 finding that the only PDF in the system was a machine printout with no author, methodology or sources |
 | `licensedMode` flag | ✅ The licence flip is real, not aspirational. `Tenant.settings.licensedMode` (default false — claiming registration the firm lacks is the worse error) decides whether the PD 12.7(b) countersign requirement **blocks** or is merely recorded. Demonstrated live: the same adjuster self-signing the same report is permitted as a TPA and refused once the flag is on. The countersign basis is persisted either way, so a signature is never silently assumed |
 | Notifications (email transport, templates, delivery log) | ⬜ **blocked on SMTP provider**. Breaches currently log and persist; they do not yet notify anyone — the escalation is recorded evidence, not an alert |
-| Server-side status guards + `AuthorityLimit` | ⬜ |
+| Server-side status guards + `AuthorityLimit` | ✅ closes **A3**. Role gate (an outcome is not the assessor's to decide), segregation of duties (the assessor cannot decide their own claim unless a limit expressly permits it), and a monetary ceiling — all enforced in the service, since a role decorator cannot know who assessed what. An absent limit means *no* authority rather than unlimited, because a missing row is far more likely an oversight than a decision. The basis is written onto the audit row. **18 tests**, verified live |
+| CI runs every compliance suite | ✅ the re-audit found the CI job ran only `@tci/case-service`, so the gateway's audit tests and crypto's encryption tests supported no matrix verdict. Now `pnpm test` across all packages — possible only because the aggregate was made green earlier |
 
 ### Shared crypto infrastructure (supports both encryption items)
 `@tci/crypto` is a package, not case-service-local code, because the gateway encrypts too. It holds `EncryptionService`, the `KeyProvider` (master-key custody) and `KeyStore` (data-key persistence) interfaces, and `EnvKeyProvider`. It deliberately does **not** depend on Prisma. The Prisma-backed key store lives once in `@tci/prisma-client` (`PrismaKeyStore`) — it was duplicated byte-for-byte in two services, and since the queries encode *which key version is active*, two copies drifting would produce undecryptable data rather than a clean failure. The seed uses the same class and the same master key, so seeded personal data is encrypted exactly as the application writes it; verified by decrypting seeded ciphertext from a separate process.
@@ -549,6 +555,15 @@ A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain trac
 2. ~~**BullMQ now or in 1b**~~ — **decided: now** (30 July 2026). It gates five of the six remaining Phase 1 matrix rows, so deferring it would mean building the CSP clocks twice.
 3. **Consent wording (EN + BM)** and an SMTP provider account.
 4. **Gazetted public holidays for 2026 (and 2027 when published)** — needed before any CSP deadline is trustworthy. `MALAYSIAN_HOLIDAYS` in `apps/case-service/src/sla/working-days.ts` has the fixed-date national holidays; the lunar ones (Aidilfitri, Aidiladha, CNY, Deepavali, Thaipusam, Wesak, Awal Muharram, Maulidur Rasul), the Agong's birthday and each state's holidays must be pasted from the Prime Minister's Department gazette, then `verifiedAgainstGazette` set to true. Roughly a five-minute data-entry task per year, deliberately not guessed.
+
+### Compliance re-audit, 31 July 2026
+Every row re-checked against the running system rather than against intent. **0/7/20 (first audit) → 1/7/23 (recount) → 4 PASS / 11 PARTIAL / 16 FAIL.**
+
+Four rows reached PASS: PD 12.6 report disclosure, CSP records-readily-available, FSA s.146 examination readiness, and PDPA NRIC/bank protection. Seven moved FAIL → PARTIAL.
+
+Two findings from the re-audit itself, both fixed:
+- **The CI job ran only `@tci/case-service`.** The gateway's 24 audit tests and crypto's 15 encryption tests passed locally and never executed in CI, so under §3.5's own rule they supported no verdict. CI now runs `pnpm test` across every package — which only became possible after the aggregate was made green.
+- Rows that *looked* ready were held back on evidence: PD 12.7 stays PARTIAL because the countersign keys off unknown seniority rather than real seniority; 12.5 and the CSP report clocks stay PARTIAL because the engine refuses to run without gazetted holidays. Built is not the same as operating.
 
 ### A real leak the audit work found, and closed
 Wiring the exception filter surfaced an NRIC in the trail: Nest's 404 message quotes the request, so `Cannot GET /api/v1/claimants?nric=880101-14-5555` was recorded verbatim — into the one table deliberately made impossible to correct. Found by grepping the live trail for NRIC-shaped strings rather than by reasoning about it. Exception messages are now passed through `redactMessage`, which strips sensitive `key=value` pairs and masks anything NRIC-shaped; the leaked row was purged using the maintenance flag, which is precisely the case that hatch exists for. The lesson generalises: **any free text copied into an append-only table needs redacting, not just fields we chose to store.**
