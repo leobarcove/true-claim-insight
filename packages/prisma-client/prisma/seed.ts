@@ -529,6 +529,27 @@ async function main() {
 
   console.log('⏱️  SLA policies seeded (CSP defaults).');
 
+  // Approval authority (§4.3 A3). ADJUSTER is deliberately absent: an adjuster
+  // assesses and recommends, and does not decide the outcome of their own work.
+  // An absent row means no authority, not unlimited authority.
+  for (const tenantId of [adjusterTenant.id, insurerTenant.id]) {
+    for (const limit of [
+      { role: UserRole.FIRM_ADMIN, maxApprovalAmount: 50000 },
+      { role: UserRole.SUPER_ADMIN, maxApprovalAmount: null },
+    ]) {
+      const existing = await prisma.authorityLimit.findFirst({
+        where: { tenantId, role: limit.role, adjusterId: null, category: null },
+      });
+      if (existing) {
+        await prisma.authorityLimit.update({ where: { id: existing.id }, data: limit });
+      } else {
+        await prisma.authorityLimit.create({ data: { tenantId, ...limit } });
+      }
+    }
+  }
+
+  console.log('🔐 Authority limits seeded (adjusters cannot approve).');
+
   console.log('✅ Seeding completed.');
 }
 
