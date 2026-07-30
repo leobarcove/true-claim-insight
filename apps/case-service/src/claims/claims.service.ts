@@ -6,6 +6,7 @@ import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { DocumentStatus } from '@tci/shared-types';
+import { ClaimCategory } from '@prisma/client';
 
 @Injectable()
 export class ClaimsService {
@@ -332,6 +333,10 @@ export class ClaimsService {
   async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
     const existingClaim = await this.findOne(id, tenantContext);
 
+    // Unredacted pre-image, captured BEFORE the write so the audit trail records
+    // true previous values (findOne's result is redacted by role).
+    const preImage = await this.prisma.claim.findUnique({ where: { id } });
+
     // RESTRICTION: Non-admins cannot edit APPROVED or CLOSED claims
     const isFinalStatus = ['APPROVED', 'REJECTED', 'CLOSED'].includes(existingClaim.status);
     const hasAdminPrivilege =
@@ -386,10 +391,9 @@ export class ClaimsService {
     await this.createAuditTrail(
       id,
       'CLAIM_UPDATED',
-      {
-        changes: updateClaimDto,
-      },
-      tenantContext
+      { fields: Object.keys(updateClaimDto) },
+      tenantContext,
+      this.diffFields(preImage ?? {}, updateClaimDto as Record<string, any>)
     );
 
     return this.findOne(id, tenantContext);
@@ -419,7 +423,8 @@ export class ClaimsService {
         from: existingClaim.status,
         to: status,
       },
-      tenantContext
+      tenantContext,
+      { oldValues: { status: existingClaim.status }, newValues: { status } }
     );
 
     this.logger.log(
@@ -480,7 +485,11 @@ export class ClaimsService {
         adjusterId,
         adjusterName: adjuster.user.fullName,
       },
-      tenantContext
+      tenantContext,
+      {
+        oldValues: { adjusterId: claim.adjusterId ?? null, status: claim.status },
+        newValues: { adjusterId, status: 'ASSIGNED' },
+      }
     );
 
     this.logger.log(`Adjuster ${adjuster.user.fullName} assigned to claim ${claim.claimNumber}`);
@@ -519,23 +528,45 @@ export class ClaimsService {
    * the claim's category (from EvidenceRequirement config), each annotated
    * with whether the claimant has uploaded one yet.
    *
-   * Resolution order for requirements:
-   *   1. Tenant-specific rows (tenantId = claim.tenantId)
-   *   2. Global default rows (tenantId IS NULL)
-   * Tenant-specific overrides global for the same documentType.
+   * Resolution order for requirements (most specific wins for a documentType):
+   *   1. Tenant-specific + subtype-specific
+   *   2. Tenant-specific + subtype-generic (travelClaimType IS NULL)
+   *   3. Global + subtype-specific
+   *   4. Global + subtype-generic
+   *
+   * Subtype scoping matters for TRAVEL: each travel claim type has its own
+   * checklist, so a flight-delay claim must not be asked for a Property
+   * Irregularity Report. Rows with travelClaimType IS NULL apply to every
+   * subtype of that category.
    */
   async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {
     const claim = await this.findOne(id, tenantContext);
 
+    // The travel subtype lives on the TravelClaim sub-table, not on Claim.
+    const travelClaim =
+      claim.category === ClaimCategory.TRAVEL
+        ? await this.prisma.travelClaim.findUnique({
+            where: { claimId: id },
+            select: { travelClaimType: true },
+          })
+        : null;
+    const subtype = travelClaim?.travelClaimType ?? null;
+
+    // Match rows for this subtype plus the subtype-generic rows. For non-travel
+    // categories only the generic rows exist, so this collapses to travelClaimType IS NULL.
+    const subtypeFilter = subtype
+      ? { OR: [{ travelClaimType: subtype }, { travelClaimType: null }] }
+      : { travelClaimType: null };
+
     const [tenantReqs, globalReqs, uploadedDocs] = await Promise.all([
       claim.tenantId
         ? this.prisma.evidenceRequirement.findMany({
-            where: { tenantId: claim.tenantId, category: claim.category },
+            where: { tenantId: claim.tenantId, category: claim.category, ...subtypeFilter },
             orderBy: { sortOrder: 'asc' },
           })
         : Promise.resolve([]),
       this.prisma.evidenceRequirement.findMany({
-        where: { tenantId: null, category: claim.category },
+        where: { tenantId: null, category: claim.category, ...subtypeFilter },
         orderBy: { sortOrder: 'asc' },
       }),
       this.prisma.document.findMany({
@@ -544,9 +575,15 @@ export class ClaimsService {
       }),
     ]);
 
+    // Least specific first so the more specific row overwrites it.
+    const bySpecificity = <T extends { travelClaimType: unknown }>(rows: T[]) => [
+      ...rows.filter(r => r.travelClaimType === null),
+      ...rows.filter(r => r.travelClaimType !== null),
+    ];
+
     const byType = new Map<string, (typeof globalReqs)[number]>();
-    for (const r of globalReqs) byType.set(r.documentType, r);
-    for (const r of tenantReqs) byType.set(r.documentType, r); // override
+    for (const r of bySpecificity(globalReqs)) byType.set(r.documentType, r);
+    for (const r of bySpecificity(tenantReqs)) byType.set(r.documentType, r); // tenant overrides global
 
     const uploadedByType = new Map<string, typeof uploadedDocs>();
     for (const d of uploadedDocs) {
@@ -749,13 +786,51 @@ export class ClaimsService {
   }
 
   /**
+   * JSON-safe value for audit storage (Prisma Json rejects Date/Decimal).
+   */
+  private auditSafe(value: unknown): any {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object' && 'toNumber' in (value as any)) {
+      return Number((value as any).toNumber());
+    }
+    if (Array.isArray(value)) return value.map(v => this.auditSafe(v));
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, this.auditSafe(v)])
+      );
+    }
+    return value;
+  }
+
+  /**
+   * Before/after pair scoped to the fields actually being changed. Recording
+   * the whole row would bloat the trail and copy PII; recording only the
+   * changed fields is what makes the trail evidential (PD 12.8, FSA s.146).
+   */
+  private diffFields(before: Record<string, any>, after: Record<string, any>) {
+    const oldValues: Record<string, any> = {};
+    const newValues: Record<string, any> = {};
+    for (const key of Object.keys(after)) {
+      if (after[key] === undefined) continue;
+      const from = this.auditSafe(before?.[key]);
+      const to = this.auditSafe(after[key]);
+      if (JSON.stringify(from) === JSON.stringify(to)) continue; // unchanged
+      oldValues[key] = from;
+      newValues[key] = to;
+    }
+    return { oldValues, newValues };
+  }
+
+  /**
    * Create audit trail entry
    */
   private async createAuditTrail(
     entityId: string,
     action: string,
     metadata: any,
-    tenantContext?: TenantContext
+    tenantContext?: TenantContext,
+    changes?: { oldValues?: Record<string, any>; newValues?: Record<string, any> }
   ) {
     let actorType:
       | 'CLAIMANT'
@@ -778,6 +853,8 @@ export class ClaimsService {
         entityType: 'CLAIM',
         action,
         metadata,
+        oldValues: changes?.oldValues ?? undefined,
+        newValues: changes?.newValues ?? undefined,
         tenantId: tenantContext?.tenantId,
         userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
         actorId: tenantContext?.userId,

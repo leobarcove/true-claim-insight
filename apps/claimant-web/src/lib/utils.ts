@@ -42,7 +42,10 @@ export function isValidMalaysianPhone(phone: string): boolean {
  * Convert string to Title Case nicely handling underscores
  * e.g. "THIRD_PARTY_BODILY_INJURY" -> "Third Party Bodily Injury"
  */
-export function convertToTitleCase(input: string): string {
+// Accepts null/undefined because callers pass optional fields such as
+// Claim.claimType, which is null for every non-motor category. The runtime
+// guard below already handled it; only the type was wrong.
+export function convertToTitleCase(input: string | null | undefined): string {
   if (!input) return '';
   return input
     .toLowerCase()

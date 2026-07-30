@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   ForbiddenException,
@@ -76,7 +77,8 @@ export class CasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
-    private readonly documentValidation: DocumentValidationService
+    private readonly documentValidation: DocumentValidationService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -124,7 +126,6 @@ export class CasesService {
       dto.initiatedBy ?? (isClaimant ? CaseInitiator.CLAIMANT : CaseInitiator.STAFF);
 
     const claimantId = await this.resolveClaimantId(dto, tenantContext);
-    const tenantId = await this.resolveCaseTenant(tenantContext);
     const caseNumber = await this.generateCaseNumber();
 
     const flow = getFlow(dto.travelClaimType);
@@ -140,7 +141,10 @@ export class CasesService {
       }
     }
 
+    // Promote answers first: a matched policy identifies the insurer, which is
+    // what nominates the handling firm for self-service intake.
     const promoted = await this.promoteAnswers(answers);
+    const tenantId = await this.resolveCaseTenant(tenantContext, promoted.policyId as string | null);
     const currentStepId =
       answers[flow.entryStepId] === undefined
         ? flow.entryStepId
@@ -759,26 +763,60 @@ export class CasesService {
   }
 
   /**
-   * Which tenant "owns" (handles) the case. Staff cases belong to the staff
-   * member's organisation. Claimant self-serve cases are routed to the
-   * operating TPA firm — with a single TPA deployment that is the first
-   * ADJUSTING_FIRM tenant. Multi-TPA panel routing is a later phase.
+   * Which tenant handles (owns) the case.
+   *
+   * Staff cases belong to the staff member's organisation. Claimant self-serve
+   * cases must be routed to a handling firm **explicitly** — resolved from the
+   * matched policy's insurer panel where known, otherwise from configuration.
+   *
+   * Deliberately does NOT pick "the first ADJUSTING_FIRM found": that shortcut
+   * silently assumes a single adjusting firm per deployment, which forecloses
+   * multi-firm operation and produces arbitrary routing the moment a second
+   * firm exists. Panel mapping moves into per-tenant config in Phase 2 (see
+   * docs/MASTER_PLAN.md §4.2, §6.5).
    */
-  private async resolveCaseTenant(tenantContext: TenantContext): Promise<string> {
+  private async resolveCaseTenant(
+    tenantContext: TenantContext,
+    policyId?: string | null
+  ): Promise<string> {
     if (tenantContext.userRole !== 'CLAIMANT') return tenantContext.tenantId;
 
-    const firm = await this.prisma.tenant.findFirst({
-      where: { type: TenantType.ADJUSTING_FIRM },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (firm) return firm.id;
+    // 1. Panel routing: the insurer that issued the policy nominates the
+    //    handling firm via its tenant settings.
+    if (policyId) {
+      const policy = await this.prisma.policy.findUnique({
+        where: { id: policyId },
+        include: { tenant: { select: { settings: true } } },
+      });
+      const nominated = (policy?.tenant?.settings as { handlingFirmTenantId?: string } | null)
+        ?.handlingFirmTenantId;
+      if (nominated && (await this.isAdjustingFirm(nominated))) return nominated;
+    }
 
-    // Fall back to the claimant's own tenant context if it is a real tenant.
+    // 2. Configured default handling firm for this deployment.
+    const configured = this.configService.get<string>('HANDLING_FIRM_TENANT_ID');
+    if (configured && (await this.isAdjustingFirm(configured))) return configured;
+
+    throw new BadRequestException(
+      'No handling organisation is configured for self-service intake. Set HANDLING_FIRM_TENANT_ID, ' +
+        "or nominate a handling firm in the insurer tenant's settings."
+    );
+  }
+
+  private async isAdjustingFirm(tenantId: string): Promise<boolean> {
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantContext.tenantId },
+      where: { id: tenantId },
+      select: { type: true },
     });
-    if (tenant) return tenant.id;
-    throw new BadRequestException('No handling organisation available for this case');
+    if (!tenant) {
+      this.logger.warn(`Handling firm ${tenantId} does not exist`);
+      return false;
+    }
+    if (tenant.type !== TenantType.ADJUSTING_FIRM) {
+      this.logger.warn(`Handling firm ${tenantId} is not an ADJUSTING_FIRM tenant`);
+      return false;
+    }
+    return true;
   }
 
   /** CSE-YYYY-NNNNNN from a dedicated Postgres sequence — race-safe. */
@@ -849,3 +887,4 @@ export class CasesService {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 }
+
