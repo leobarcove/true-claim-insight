@@ -11,6 +11,9 @@ import { DashboardPage } from '@/pages/dashboard';
 import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
 import { NewClaimPage } from '@/pages/claims/new';
+import { CasesListPage } from '@/pages/cases';
+import { CaseDetailPage } from '@/pages/cases/details';
+import { NewCasePage } from '@/pages/cases/new';
 import { UploadVideoPage } from '@/pages/claims/upload-video';
 import { VideoReviewPage } from '@/pages/claims/video-review';
 import { VideoCallPage } from '@/pages/video/call';
@@ -95,6 +98,16 @@ export default function App() {
               }
             >
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/cases" element={<CasesListPage />} />
+              <Route
+                path="/cases/new"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
+                    <NewCasePage />
+                  </RoleRoute>
+                }
+              />
+              <Route path="/cases/:id" element={<CaseDetailPage />} />
               <Route path="/claims" element={<ClaimsListPage />} />
               <Route
                 path="/claims/new"

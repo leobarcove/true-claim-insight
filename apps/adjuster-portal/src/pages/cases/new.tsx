@@ -1,0 +1,337 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Luggage, Mail, Phone, PlaneTakeoff, Stethoscope, XCircle, PackageX } from 'lucide-react';
+import { Header } from '@/components/layout/header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import {
+  CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_LABELS,
+  TravelClaimType,
+  validateAnswer,
+  type FlowStep,
+} from '@tci/shared-types';
+import { useCreateCase } from '@/hooks/use-cases';
+import { cn } from '@/lib/utils';
+
+const TYPE_ICONS: Record<TravelClaimType, any> = {
+  [TravelClaimType.FLIGHT_DELAY]: PlaneTakeoff,
+  [TravelClaimType.LUGGAGE_DAMAGE]: Luggage,
+  [TravelClaimType.LUGGAGE_LOSS]: PackageX,
+  [TravelClaimType.TRIP_CANCELLATION]: XCircle,
+  [TravelClaimType.MEDICAL]: Stethoscope,
+};
+
+/**
+ * Staff capture form. Same flow definitions as the claimant chat, rendered as
+ * a single page for phone/walk-in captures and manual logging of FNOL emails.
+ * Documents are uploaded afterwards on the case detail page.
+ */
+export function NewCasePage() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const createCase = useCreateCase();
+
+  const [intakeSource, setIntakeSource] = useState<'STAFF' | 'EMAIL'>('STAFF');
+  const [claimType, setClaimType] = useState<TravelClaimType | null>(null);
+  const [claimantPhone, setClaimantPhone] = useState('');
+  const [claimantFullName, setClaimantFullName] = useState('');
+  const [claimantNric, setClaimantNric] = useState('');
+  const [emailFrom, setEmailFrom] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const formSteps = useMemo(() => {
+    if (!claimType) return [];
+    // Document + confirmation steps are completed on the detail page.
+    return CASE_FLOWS[claimType].steps.filter(
+      step => step.answerType !== 'document' && step.answerType !== 'confirm'
+    );
+  }, [claimType]);
+
+  const setAnswer = (stepId: string, value: string) => {
+    setAnswers(current => ({ ...current, [stepId]: value }));
+    setErrors(current => ({ ...current, [stepId]: '' }));
+  };
+
+  const handleSave = async () => {
+    if (!claimType) return;
+    if (!claimantPhone.trim()) {
+      toast({ title: 'Claimant phone number is required', variant: 'destructive' });
+      return;
+    }
+
+    const cleaned: Record<string, string> = {};
+    const nextErrors: Record<string, string> = {};
+    for (const step of formSteps) {
+      const raw = (answers[step.id] ?? '').trim();
+      if (!raw) {
+        if (!step.optional) nextErrors[step.id] = 'Required';
+        continue;
+      }
+      const result = validateAnswer(step, raw);
+      if (!result.valid) {
+        nextErrors[step.id] = result.error || 'Invalid value';
+        continue;
+      }
+      cleaned[step.id] = raw;
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      toast({ title: 'Please fix the highlighted fields', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const created = await createCase.mutateAsync({
+        travelClaimType: claimType,
+        channel: intakeSource,
+        claimantPhone: claimantPhone.trim(),
+        claimantFullName: claimantFullName.trim() || undefined,
+        claimantNric: claimantNric.trim() || undefined,
+        answers: cleaned,
+        sourceMeta:
+          intakeSource === 'EMAIL'
+            ? { from: emailFrom.trim(), subject: emailSubject.trim(), receivedAt: new Date().toISOString() }
+            : undefined,
+      });
+      toast({
+        title: `Case ${created.caseNumber} created`,
+        description: 'Upload the supporting documents, then submit it for vetting.',
+      });
+      navigate(`/cases/${created.id}`);
+    } catch (error: any) {
+      toast({
+        title: 'Failed to create case',
+        description: error?.response?.data?.error?.message || error?.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const renderField = (step: FlowStep) => {
+    const value = answers[step.id] ?? '';
+    const error = errors[step.id];
+    const common = { id: step.id, value, className: cn(error && 'border-destructive') };
+
+    let control: React.ReactNode;
+    switch (step.answerType) {
+      case 'choice':
+        control = (
+          <Select value={value} onValueChange={selected => setAnswer(step.id, selected)}>
+            <SelectTrigger className={cn(error && 'border-destructive')}>
+              <SelectValue placeholder="Select..." />
+            </SelectTrigger>
+            <SelectContent>
+              {step.choices?.map(choice => (
+                <SelectItem key={choice.value} value={choice.value}>
+                  {choice.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+        break;
+      case 'date':
+        control = (
+          <Input {...common} type="date" onChange={e => setAnswer(step.id, e.target.value)} />
+        );
+        break;
+      case 'datetime':
+        control = (
+          <Input
+            {...common}
+            type="datetime-local"
+            onChange={e => setAnswer(step.id, e.target.value)}
+          />
+        );
+        break;
+      case 'number':
+        control = (
+          <Input {...common} type="number" onChange={e => setAnswer(step.id, e.target.value)} />
+        );
+        break;
+      default:
+        control = <Input {...common} onChange={e => setAnswer(step.id, e.target.value)} />;
+    }
+
+    return (
+      <div key={step.id} className="space-y-1.5">
+        <Label htmlFor={step.id}>
+          {step.label}
+          {!step.optional && <span className="text-destructive ml-0.5">*</span>}
+        </Label>
+        {control}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <Header
+        title="New Case"
+        description="Capture a travel claim request on behalf of a claimant"
+      />
+      <div className="flex-1 overflow-auto p-6 space-y-6 max-w-3xl">
+        {/* Intake source */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Intake source</CardTitle>
+          </CardHeader>
+          <CardContent className="flex gap-3">
+            {(
+              [
+                { value: 'STAFF', label: 'Phone call / walk-in', icon: Phone },
+                { value: 'EMAIL', label: 'Log an email (FNOL inbox)', icon: Mail },
+              ] as const
+            ).map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setIntakeSource(option.value)}
+                className={cn(
+                  'flex items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors',
+                  intakeSource === option.value
+                    ? 'border-primary bg-primary/5 text-primary font-medium'
+                    : 'border-border text-muted-foreground hover:border-primary/40'
+                )}
+              >
+                <option.icon className="h-4 w-4" />
+                {option.label}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        {intakeSource === 'EMAIL' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Email details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email-from">Sender address</Label>
+                <Input
+                  id="email-from"
+                  type="email"
+                  placeholder="claimant@example.com"
+                  value={emailFrom}
+                  onChange={e => setEmailFrom(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email-subject">Subject</Label>
+                <Input
+                  id="email-subject"
+                  placeholder="Travel claim — flight delay"
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Claim type */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Claim type</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Object.values(TravelClaimType).map(type => {
+              const Icon = TYPE_ICONS[type];
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setClaimType(type)}
+                  className={cn(
+                    'flex flex-col items-center gap-2 rounded-lg border p-4 text-xs text-center transition-colors',
+                    claimType === type
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-border text-muted-foreground hover:border-primary/40'
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  {TRAVEL_CLAIM_TYPE_LABELS[type]}
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        {/* Claimant */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Claimant</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="claimant-phone">
+                Phone number<span className="text-destructive ml-0.5">*</span>
+              </Label>
+              <Input
+                id="claimant-phone"
+                placeholder="+60123456789"
+                value={claimantPhone}
+                onChange={e => setClaimantPhone(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="claimant-name">Full name</Label>
+              <Input
+                id="claimant-name"
+                value={claimantFullName}
+                onChange={e => setClaimantFullName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="claimant-nric">NRIC</Label>
+              <Input
+                id="claimant-nric"
+                placeholder="880101-14-5555"
+                value={claimantNric}
+                onChange={e => setClaimantNric(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Flow-driven fields */}
+        {claimType && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {TRAVEL_CLAIM_TYPE_LABELS[claimType]} details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {formSteps.map(renderField)}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex justify-end gap-3 pb-6">
+          <Button variant="outline" onClick={() => navigate('/cases')}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={!claimType || createCase.isPending}>
+            {createCase.isPending ? 'Creating…' : 'Create case'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

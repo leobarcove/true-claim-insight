@@ -1,4 +1,14 @@
-import { PrismaClient, UserRole, TenantType, ClaimType, ClaimStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  TenantType,
+  ClaimType,
+  ClaimStatus,
+  ClaimCategory,
+  TravelClaimType,
+  DocumentType,
+  PolicySource,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const MALAYSIA_CARS: Record<string, string[]> = {
@@ -349,6 +359,118 @@ async function main() {
       });
     }
   }
+
+  // 7. TPA setup — MSIG insurer tenant + sample travel policies (MANUAL source,
+  // mirroring policy data keyed in from MSIG emails until API/scraper adapters ship)
+  const MSIG_ID = '5b1f6f3e-9d2a-4f7c-8a3b-1c9e7d5a2b40';
+  const msigTenant = await prisma.tenant.upsert({
+    where: { id: MSIG_ID },
+    update: {},
+    create: {
+      id: MSIG_ID,
+      name: 'MSIG Insurance (Malaysia) Bhd',
+      type: TenantType.INSURER,
+      settings: {},
+    },
+  });
+
+  const samplePolicies = [
+    {
+      policyNumber: 'MSIG-TRV-2026-0001',
+      insuredName: 'Kumar Claimant',
+      insuredNric: '880101-14-5555',
+      insuredPhone: '+60123456789',
+      planTier: 'TravelRight Plus Gold',
+      tripStartDate: new Date('2026-07-20'),
+      tripEndDate: new Date('2026-08-05'),
+      destination: 'Japan',
+    },
+    {
+      policyNumber: 'MSIG-TRV-2026-0002',
+      insuredName: 'Siti Aminah binti Rahman',
+      insuredNric: '920315-10-2244',
+      insuredPhone: '+60198765432',
+      planTier: 'TravelRight Plus Silver',
+      tripStartDate: new Date('2026-08-01'),
+      tripEndDate: new Date('2026-08-10'),
+      destination: 'United Kingdom',
+    },
+    {
+      policyNumber: 'MSIG-TRV-2026-0003',
+      insuredName: 'Tan Wei Ming',
+      insuredPhone: '+60171112222',
+      planTier: 'TravelRight Plus Platinum',
+      tripStartDate: new Date('2026-07-25'),
+      tripEndDate: new Date('2026-09-01'),
+      destination: 'Australia',
+    },
+  ];
+
+  for (const policy of samplePolicies) {
+    await prisma.policy.upsert({
+      where: {
+        tenantId_policyNumber: { tenantId: msigTenant.id, policyNumber: policy.policyNumber },
+      },
+      update: {},
+      create: {
+        ...policy,
+        tenantId: msigTenant.id,
+        source: PolicySource.MANUAL,
+        coverageSnapshot: { currency: 'MYR', asSuppliedBy: 'MSIG email' },
+      },
+    });
+  }
+
+  console.log('🏢 MSIG tenant + sample travel policies created.');
+
+  // 8. Travel evidence requirements — global defaults (tenantId null), one
+  // checklist per travel claim subtype. Upsert-by-delete because the compound
+  // unique key contains nullable tenantId, which Prisma upsert cannot target.
+  const travelEvidence: Array<{
+    travelClaimType: TravelClaimType;
+    documentType: DocumentType;
+    isMandatory: boolean;
+    description: string;
+  }> = [
+    // Flight delay
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.AIRLINE_DELAY_CONFIRMATION, isMandatory: true, description: 'Airline letter or notice confirming the delay or cancellation' },
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.BOARDING_PASS, isMandatory: true, description: 'Boarding pass for the delayed flight' },
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.FLIGHT_ITINERARY, isMandatory: true, description: 'E-ticket or booking confirmation' },
+    // Luggage damage
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.PROPERTY_IRREGULARITY_REPORT, isMandatory: true, description: 'Property Irregularity Report (PIR) issued by the airline' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.BAGGAGE_TAG, isMandatory: true, description: 'Baggage tag for the affected luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.DAMAGE_PHOTO, isMandatory: true, description: 'Photographs of the damaged luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.PROOF_OF_OWNERSHIP, isMandatory: false, description: 'Receipts or proof of purchase for the luggage' },
+    // Luggage loss
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.PROPERTY_IRREGULARITY_REPORT, isMandatory: true, description: 'Property Irregularity Report (PIR) issued by the airline' },
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.BAGGAGE_TAG, isMandatory: true, description: 'Baggage tag for the lost luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.PROOF_OF_OWNERSHIP, isMandatory: true, description: 'Receipts or proof of ownership for the contents claimed' },
+    // Trip cancellation
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.TRAVEL_BOOKING_INVOICE, isMandatory: true, description: 'Booking invoices and any cancellation or refund correspondence' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.FLIGHT_ITINERARY, isMandatory: true, description: 'E-ticket or booking confirmation for the cancelled trip' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.MEDICAL_REPORT, isMandatory: false, description: 'Medical report where cancellation is due to illness or death' },
+    // Medical (form + expert routing — never auto-assessed)
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.OVERSEAS_MEDICAL_BILL, isMandatory: true, description: 'Itemised overseas medical bills and receipts' },
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.MEDICAL_REPORT, isMandatory: true, description: 'Medical report or discharge summary from the treating hospital' },
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.PASSPORT, isMandatory: true, description: 'Passport pages showing identity and travel dates' },
+  ];
+
+  await prisma.evidenceRequirement.deleteMany({
+    where: { tenantId: null, category: ClaimCategory.TRAVEL },
+  });
+  await prisma.evidenceRequirement.createMany({
+    data: travelEvidence.map((req, index) => ({
+      tenantId: null,
+      category: ClaimCategory.TRAVEL,
+      travelClaimType: req.travelClaimType,
+      documentType: req.documentType,
+      isMandatory: req.isMandatory,
+      description: req.description,
+      sortOrder: index,
+    })),
+  });
+
+  console.log('🧳 Travel evidence requirements seeded.');
 
   console.log('✅ Seeding completed.');
 }

@@ -16,6 +16,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Inbox,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -40,6 +41,16 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  {
+    name: 'Cases',
+    href: '/cases',
+    icon: Inbox,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
   {
     name: 'Claims',
     href: '/claims',

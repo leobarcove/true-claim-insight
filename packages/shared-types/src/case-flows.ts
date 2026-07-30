@@ -1,0 +1,642 @@
+/**
+ * Travel claim intake flows — the single source of truth for the guided
+ * "Case" intake conversation (Etiqa TripCare-style bot experience).
+ *
+ * Consumed by:
+ *  - case-service: server-side validation of each PATCH /cases/:id/answers
+ *  - claimant-web: chat-style renderer (bot bubbles + typed inputs)
+ *  - adjuster-portal: staff capture form + transcript/completeness display
+ *
+ * Channel-agnostic by design: a future WhatsApp or email adapter maps
+ * `answerType` to channel-native prompts and drives the same step engine.
+ */
+import type { DocumentType, TravelClaimType } from './index';
+
+/*
+ * IMPORTANT: type-only import above. index.ts re-exports this module, so a
+ * runtime value import of the enums would create an index ⇄ case-flows
+ * circular evaluation — harmless under CJS (backend), but under native ESM
+ * (Vite dev serving the source) this module evaluates first and the enum
+ * objects are still undefined. The literal mirrors below carry the runtime
+ * values; the casts keep them typed exactly as the enums.
+ */
+const TravelType = {
+  FLIGHT_DELAY: 'FLIGHT_DELAY',
+  LUGGAGE_DAMAGE: 'LUGGAGE_DAMAGE',
+  LUGGAGE_LOSS: 'LUGGAGE_LOSS',
+  TRIP_CANCELLATION: 'TRIP_CANCELLATION',
+  MEDICAL: 'MEDICAL',
+} as unknown as typeof import('./index').TravelClaimType;
+
+const Doc = {
+  AIRLINE_DELAY_CONFIRMATION: 'AIRLINE_DELAY_CONFIRMATION',
+  BOARDING_PASS: 'BOARDING_PASS',
+  FLIGHT_ITINERARY: 'FLIGHT_ITINERARY',
+  PROPERTY_IRREGULARITY_REPORT: 'PROPERTY_IRREGULARITY_REPORT',
+  BAGGAGE_TAG: 'BAGGAGE_TAG',
+  DAMAGE_PHOTO: 'DAMAGE_PHOTO',
+  PROOF_OF_OWNERSHIP: 'PROOF_OF_OWNERSHIP',
+  MEDICAL_REPORT: 'MEDICAL_REPORT',
+  TRAVEL_BOOKING_INVOICE: 'TRAVEL_BOOKING_INVOICE',
+  OVERSEAS_MEDICAL_BILL: 'OVERSEAS_MEDICAL_BILL',
+  PASSPORT: 'PASSPORT',
+} as unknown as typeof import('./index').DocumentType;
+
+export type AnswerValue = string | number | boolean;
+export type CaseAnswers = Record<string, AnswerValue>;
+
+/**
+ * Prisma generates string-literal unions rather than TS enums, so helper
+ * signatures accept either form ("FLIGHT_DELAY" literal or the enum member).
+ */
+export type TravelClaimTypeLike = TravelClaimType | `${TravelClaimType}`;
+export type DocumentTypeLike = DocumentType | `${DocumentType}`;
+
+export type AnswerType =
+  | 'text'
+  | 'date'
+  | 'datetime'
+  | 'number'
+  | 'choice'
+  | 'phone'
+  | 'document'
+  | 'confirm';
+
+export interface FlowStep {
+  id: string;
+  /** Bot bubble copy shown to the claimant (British English). */
+  prompt: string;
+  /** Shorter label used by the staff form and the review summary. */
+  label: string;
+  answerType: AnswerType;
+  choices?: Array<{ value: string; label: string }>;
+  /** Present when answerType === 'document'. */
+  documentType?: DocumentType;
+  optional?: boolean;
+  validation?: { min?: number; max?: number; pattern?: string };
+  /** Next step id, a branching function, or null when this is the final step. */
+  next: string | null | ((answers: CaseAnswers) => string | null);
+}
+
+export interface CaseFlow {
+  travelClaimType: TravelClaimType;
+  entryStepId: string;
+  steps: FlowStep[];
+}
+
+export const TRAVEL_CLAIM_TYPE_LABELS: Record<TravelClaimType, string> = {
+  [TravelType.FLIGHT_DELAY]: 'Flight delay',
+  [TravelType.LUGGAGE_DAMAGE]: 'Luggage damage',
+  [TravelType.LUGGAGE_LOSS]: 'Luggage loss',
+  [TravelType.TRIP_CANCELLATION]: 'Trip cancellation',
+  [TravelType.MEDICAL]: 'Medical expenses',
+};
+
+/** Notification deadlines mirrored from typical Malaysian travel policy terms. */
+export const NOTIFY_WITHIN_HOURS = 24;
+export const CLAIM_WINDOW_DAYS = 30;
+
+// ---------------------------------------------------------------------------
+// Shared step fragments
+// ---------------------------------------------------------------------------
+
+/** Steps every flow starts with, in order. `next` is wired by buildFlow(). */
+const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
+  {
+    id: 'policy-number',
+    prompt:
+      'Let us begin with your policy. What is your travel policy number? You can find it on your policy schedule or confirmation email. If you are not sure, type "skip".',
+    label: 'Policy number',
+    answerType: 'text',
+    optional: true,
+  },
+  {
+    id: 'trip-start',
+    prompt: 'When did your trip begin?',
+    label: 'Trip start date',
+    answerType: 'date',
+  },
+  {
+    id: 'trip-end',
+    prompt: 'And when does (or did) your trip end?',
+    label: 'Trip end date',
+    answerType: 'date',
+  },
+  {
+    id: 'destination',
+    prompt: 'Which country or destination were you travelling to?',
+    label: 'Destination',
+    answerType: 'text',
+  },
+  {
+    id: 'incident-date',
+    prompt: 'When did the incident happen? Please give the date and approximate time.',
+    label: 'Incident date and time',
+    answerType: 'datetime',
+  },
+];
+
+/** Steps every flow ends with (payout details + review), in order. */
+const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
+  {
+    id: 'bank-name',
+    prompt:
+      'Nearly done. For your payout, which bank is your account with? (e.g. Maybank, CIMB, Public Bank)',
+    label: 'Bank name',
+    answerType: 'text',
+  },
+  {
+    id: 'bank-account-number',
+    prompt: 'What is your bank account number?',
+    label: 'Bank account number',
+    answerType: 'text',
+    validation: { pattern: '^[0-9]{6,20}$' },
+  },
+  {
+    id: 'bank-account-holder',
+    prompt: 'And the account holder name, exactly as registered with the bank?',
+    label: 'Account holder name',
+    answerType: 'text',
+  },
+  {
+    id: 'review',
+    prompt:
+      'Thank you. Please review your details in the summary below, then confirm to submit your claim request.',
+    label: 'Review and confirm',
+    answerType: 'confirm',
+  },
+];
+
+const documentStep = (
+  id: string,
+  documentType: DocumentType,
+  prompt: string,
+  label: string,
+  optional = false
+): Omit<FlowStep, 'next'> => ({
+  id,
+  prompt,
+  label,
+  answerType: 'document',
+  documentType,
+  optional,
+});
+
+/**
+ * Wire steps into a linear flow (each step's `next` points to the following
+ * step), allowing individual overrides for branching.
+ */
+const buildFlow = (
+  travelClaimType: TravelClaimType,
+  middle: Array<Omit<FlowStep, 'next'>>,
+  overrides: Record<string, FlowStep['next']> = {}
+): CaseFlow => {
+  const ordered = [...commonPrefix, ...middle, ...commonSuffix];
+  const steps: FlowStep[] = ordered.map((step, index) => ({
+    ...step,
+    next:
+      step.id in overrides ? overrides[step.id] : (ordered[index + 1]?.id ?? null),
+  }));
+  return { travelClaimType, entryStepId: steps[0].id, steps };
+};
+
+// ---------------------------------------------------------------------------
+// The five MSIG TPA travel flows
+// ---------------------------------------------------------------------------
+
+const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
+  {
+    id: 'airline',
+    prompt: 'Which airline were you flying with?',
+    label: 'Airline',
+    answerType: 'text',
+  },
+  {
+    id: 'flight-number',
+    prompt: 'What was your flight number? (e.g. MH370, AK6042)',
+    label: 'Flight number',
+    answerType: 'text',
+    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+  },
+  {
+    id: 'scheduled-departure',
+    prompt: 'What was the scheduled departure date and time?',
+    label: 'Scheduled departure',
+    answerType: 'datetime',
+  },
+  {
+    id: 'actual-departure',
+    prompt:
+      'And when did the flight actually depart? If it was cancelled, give the departure time of the replacement flight.',
+    label: 'Actual departure',
+    answerType: 'datetime',
+  },
+  documentStep(
+    'doc-airline-delay-confirmation',
+    Doc.AIRLINE_DELAY_CONFIRMATION,
+    'Please upload the airline’s written confirmation of the delay or cancellation.',
+    'Airline delay confirmation'
+  ),
+  documentStep(
+    'doc-boarding-pass',
+    Doc.BOARDING_PASS,
+    'Please upload your boarding pass for the delayed flight.',
+    'Boarding pass'
+  ),
+  documentStep(
+    'doc-flight-itinerary',
+    Doc.FLIGHT_ITINERARY,
+    'Please upload your e-ticket or booking confirmation.',
+    'Flight itinerary'
+  ),
+]);
+
+const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
+  {
+    id: 'airline',
+    prompt: 'Which airline were you flying with when the damage occurred?',
+    label: 'Airline',
+    answerType: 'text',
+  },
+  {
+    id: 'flight-number',
+    prompt: 'What was your flight number?',
+    label: 'Flight number',
+    answerType: 'text',
+    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+  },
+  {
+    id: 'baggage-tag',
+    prompt: 'What is the baggage tag number for the affected luggage?',
+    label: 'Baggage tag number',
+    answerType: 'text',
+  },
+  {
+    id: 'damage-description',
+    prompt: 'Please describe the damage to your luggage.',
+    label: 'Damage description',
+    answerType: 'text',
+  },
+  {
+    id: 'estimated-amount',
+    prompt: 'What is your estimated claim amount in Ringgit Malaysia (RM)?',
+    label: 'Estimated amount (RM)',
+    answerType: 'number',
+    validation: { min: 0, max: 1000000 },
+  },
+  documentStep(
+    'doc-pir',
+    Doc.PROPERTY_IRREGULARITY_REPORT,
+    'Please upload the Property Irregularity Report (PIR) issued by the airline. You can request it at the airline’s baggage services counter.',
+    'Property Irregularity Report (PIR)'
+  ),
+  documentStep(
+    'doc-baggage-tag',
+    Doc.BAGGAGE_TAG,
+    'Please upload a photo of the baggage tag.',
+    'Baggage tag'
+  ),
+  documentStep(
+    'doc-damage-photo',
+    Doc.DAMAGE_PHOTO,
+    'Please upload clear photographs of the damaged luggage.',
+    'Damage photographs'
+  ),
+  documentStep(
+    'doc-proof-of-ownership',
+    Doc.PROOF_OF_OWNERSHIP,
+    'If you have a receipt or proof of purchase for the luggage, please upload it. Otherwise type "skip".',
+    'Proof of ownership',
+    true
+  ),
+]);
+
+const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
+  {
+    id: 'airline',
+    prompt: 'Which airline were you flying with when your luggage was lost?',
+    label: 'Airline',
+    answerType: 'text',
+  },
+  {
+    id: 'flight-number',
+    prompt: 'What was your flight number?',
+    label: 'Flight number',
+    answerType: 'text',
+    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+  },
+  {
+    id: 'baggage-tag',
+    prompt: 'What is the baggage tag number for the lost luggage?',
+    label: 'Baggage tag number',
+    answerType: 'text',
+  },
+  {
+    id: 'contents-description',
+    prompt: 'Please list the main contents of the lost luggage and their approximate values.',
+    label: 'Contents description',
+    answerType: 'text',
+  },
+  {
+    id: 'estimated-amount',
+    prompt: 'What is your estimated claim amount in Ringgit Malaysia (RM)?',
+    label: 'Estimated amount (RM)',
+    answerType: 'number',
+    validation: { min: 0, max: 1000000 },
+  },
+  documentStep(
+    'doc-pir',
+    Doc.PROPERTY_IRREGULARITY_REPORT,
+    'Please upload the Property Irregularity Report (PIR) issued by the airline.',
+    'Property Irregularity Report (PIR)'
+  ),
+  documentStep(
+    'doc-baggage-tag',
+    Doc.BAGGAGE_TAG,
+    'Please upload a photo of the baggage tag or check-in receipt.',
+    'Baggage tag'
+  ),
+  documentStep(
+    'doc-proof-of-ownership',
+    Doc.PROOF_OF_OWNERSHIP,
+    'Please upload receipts or proof of ownership for the items you are claiming.',
+    'Proof of ownership'
+  ),
+]);
+
+const tripCancellationFlow = buildFlow(
+  TravelType.TRIP_CANCELLATION,
+  [
+    {
+      id: 'cancellation-reason',
+      prompt: 'Why was your trip cancelled?',
+      label: 'Cancellation reason',
+      answerType: 'choice',
+      choices: [
+        { value: 'ILLNESS', label: 'Serious illness or injury' },
+        { value: 'DEATH_OF_RELATIVE', label: 'Death of a close family member' },
+        { value: 'NATURAL_DISASTER', label: 'Natural disaster at the destination' },
+        { value: 'OTHER', label: 'Other reason' },
+      ],
+    },
+    {
+      id: 'estimated-amount',
+      prompt:
+        'What is the total non-refundable amount you are claiming, in Ringgit Malaysia (RM)?',
+      label: 'Estimated amount (RM)',
+      answerType: 'number',
+      validation: { min: 0, max: 1000000 },
+    },
+    documentStep(
+      'doc-medical-report',
+      Doc.MEDICAL_REPORT,
+      'As the cancellation was for medical reasons, please upload the medical report or certificate.',
+      'Medical report'
+    ),
+    documentStep(
+      'doc-booking-invoice',
+      Doc.TRAVEL_BOOKING_INVOICE,
+      'Please upload your booking invoices and any cancellation or refund correspondence.',
+      'Booking invoices'
+    ),
+    documentStep(
+      'doc-flight-itinerary',
+      Doc.FLIGHT_ITINERARY,
+      'Please upload the e-ticket or booking confirmation for the cancelled trip.',
+      'Flight itinerary'
+    ),
+  ],
+  {
+    // Medical evidence is only requested when the reason is illness or death.
+    'estimated-amount': answers =>
+      answers['cancellation-reason'] === 'ILLNESS' ||
+      answers['cancellation-reason'] === 'DEATH_OF_RELATIVE'
+        ? 'doc-medical-report'
+        : 'doc-booking-invoice',
+  }
+);
+
+const medicalFlow = buildFlow(TravelType.MEDICAL, [
+  {
+    id: 'treatment-country',
+    prompt: 'In which country did you receive treatment?',
+    label: 'Treatment country',
+    answerType: 'text',
+  },
+  {
+    id: 'hospital-name',
+    prompt: 'What is the name of the hospital or clinic that treated you?',
+    label: 'Hospital / clinic',
+    answerType: 'text',
+  },
+  {
+    id: 'diagnosis-description',
+    prompt: 'Please describe the illness or injury and the treatment you received.',
+    label: 'Condition and treatment',
+    answerType: 'text',
+  },
+  {
+    id: 'estimated-amount',
+    prompt: 'What is the total amount of your medical bills, in Ringgit Malaysia (RM)?',
+    label: 'Estimated amount (RM)',
+    answerType: 'number',
+    validation: { min: 0, max: 5000000 },
+  },
+  documentStep(
+    'doc-overseas-medical-bill',
+    Doc.OVERSEAS_MEDICAL_BILL,
+    'Please upload your itemised medical bills and receipts.',
+    'Overseas medical bills'
+  ),
+  documentStep(
+    'doc-medical-report',
+    Doc.MEDICAL_REPORT,
+    'Please upload the medical report or discharge summary from the treating hospital.',
+    'Medical report'
+  ),
+  documentStep(
+    'doc-passport',
+    Doc.PASSPORT,
+    'Please upload the passport pages showing your identity and travel entry/exit stamps.',
+    'Passport'
+  ),
+  {
+    id: 'medical-review-note',
+    prompt:
+      'Thank you. Please note that medical claims are reviewed personally by our claims specialists before being passed to your insurer — a member of the team may contact you for further details.',
+    label: 'Specialist review notice',
+    answerType: 'confirm',
+  },
+]);
+
+export const CASE_FLOWS: Record<TravelClaimType, CaseFlow> = {
+  [TravelType.FLIGHT_DELAY]: flightDelayFlow,
+  [TravelType.LUGGAGE_DAMAGE]: luggageDamageFlow,
+  [TravelType.LUGGAGE_LOSS]: luggageLossFlow,
+  [TravelType.TRIP_CANCELLATION]: tripCancellationFlow,
+  [TravelType.MEDICAL]: medicalFlow,
+};
+
+// ---------------------------------------------------------------------------
+// Helpers — used identically by case-service and both frontends
+// ---------------------------------------------------------------------------
+
+export const getFlow = (type: TravelClaimTypeLike): CaseFlow =>
+  CASE_FLOWS[type as TravelClaimType];
+
+export const getStep = (flow: CaseFlow, stepId: string): FlowStep | undefined =>
+  flow.steps.find(step => step.id === stepId);
+
+/**
+ * Resolve the next unanswered step after `stepId`. Steps whose answers are
+ * already present (e.g. pre-filled by a SYSTEM-initiated case) are skipped.
+ * Returns null when the flow is complete.
+ */
+export const resolveNextStep = (
+  flow: CaseFlow,
+  stepId: string,
+  answers: CaseAnswers
+): string | null => {
+  let current = getStep(flow, stepId);
+  const visited = new Set<string>();
+  while (current) {
+    if (visited.has(current.id)) return null; // guard against miswired cycles
+    visited.add(current.id);
+    const nextId =
+      typeof current.next === 'function' ? current.next(answers) : current.next;
+    if (!nextId) return null;
+    const nextStep = getStep(flow, nextId);
+    if (!nextStep) return null;
+    const answered = answers[nextStep.id] !== undefined && nextStep.id !== 'review';
+    if (!answered) return nextStep.id;
+    current = nextStep;
+  }
+  return null;
+};
+
+export interface AnswerValidation {
+  valid: boolean;
+  error?: string;
+}
+
+const SKIP_VALUE = 'skip';
+
+export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValidation => {
+  if (step.optional && typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
+    return { valid: true };
+  }
+  switch (step.answerType) {
+    case 'text':
+    case 'phone': {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        return { valid: false, error: 'Please provide an answer.' };
+      }
+      if (step.validation?.pattern && !new RegExp(step.validation.pattern).test(value.trim())) {
+        return { valid: false, error: 'That does not look right — please check the format and try again.' };
+      }
+      return { valid: true };
+    }
+    case 'number': {
+      const num = typeof value === 'number' ? value : Number(value);
+      if (Number.isNaN(num)) return { valid: false, error: 'Please enter a number.' };
+      if (step.validation?.min !== undefined && num < step.validation.min) {
+        return { valid: false, error: `Please enter a value of at least ${step.validation.min}.` };
+      }
+      if (step.validation?.max !== undefined && num > step.validation.max) {
+        return { valid: false, error: `Please enter a value no greater than ${step.validation.max}.` };
+      }
+      return { valid: true };
+    }
+    case 'date':
+    case 'datetime': {
+      const date = new Date(String(value));
+      if (Number.isNaN(date.getTime())) {
+        return { valid: false, error: 'Please provide a valid date.' };
+      }
+      return { valid: true };
+    }
+    case 'choice': {
+      if (!step.choices?.some(choice => choice.value === value)) {
+        return { valid: false, error: 'Please choose one of the options.' };
+      }
+      return { valid: true };
+    }
+    case 'document': {
+      // Value is the uploaded CaseDocument id (or "skip" for optional docs).
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        return { valid: false, error: 'Please upload the requested document.' };
+      }
+      return { valid: true };
+    }
+    case 'confirm': {
+      if (value !== true && value !== 'true') {
+        return { valid: false, error: 'Please confirm to continue.' };
+      }
+      return { valid: true };
+    }
+    default:
+      return { valid: false, error: 'Unsupported answer type.' };
+  }
+};
+
+export interface DeadlineFlags {
+  notifiedLate: boolean;
+  outOfWindow: boolean;
+  warnings: string[];
+}
+
+/**
+ * 24-hour notification / 30-day claim-window rules, surfaced as warnings
+ * (never blockers — rejection stays a human decision).
+ */
+export const computeDeadlineFlags = (
+  incidentDate: Date | string,
+  now: Date = new Date()
+): DeadlineFlags => {
+  const incident = new Date(incidentDate);
+  const hoursSince = (now.getTime() - incident.getTime()) / (1000 * 60 * 60);
+  const notifiedLate = hoursSince > NOTIFY_WITHIN_HOURS;
+  const outOfWindow = hoursSince > CLAIM_WINDOW_DAYS * 24;
+  const warnings: string[] = [];
+  if (outOfWindow) {
+    warnings.push(
+      `This incident happened more than ${CLAIM_WINDOW_DAYS} days ago. Claims should be submitted within ${CLAIM_WINDOW_DAYS} days — your request will still be recorded, but it may be declined by the insurer.`
+    );
+  } else if (notifiedLate) {
+    warnings.push(
+      `Please note that incidents should be reported within ${NOTIFY_WITHIN_HOURS} hours. Your request will still be recorded, but late notification may affect the outcome.`
+    );
+  }
+  return { notifiedLate, outOfWindow, warnings };
+};
+
+export interface CompletenessSummary {
+  mandatoryTotal: number;
+  mandatoryUploaded: number;
+  optionalTotal: number;
+  optionalUploaded: number;
+  percent: number;
+  missingMandatory: DocumentTypeLike[];
+}
+
+/** Document completeness vs the EvidenceRequirement checklist for a subtype. */
+export const computeCompleteness = (
+  uploadedTypes: DocumentTypeLike[],
+  requirements: Array<{ documentType: DocumentTypeLike; isMandatory: boolean }>
+): CompletenessSummary => {
+  const uploaded = new Set(uploadedTypes);
+  const mandatory = requirements.filter(req => req.isMandatory);
+  const optional = requirements.filter(req => !req.isMandatory);
+  const mandatoryUploaded = mandatory.filter(req => uploaded.has(req.documentType));
+  const missingMandatory = mandatory
+    .filter(req => !uploaded.has(req.documentType))
+    .map(req => req.documentType);
+  return {
+    mandatoryTotal: mandatory.length,
+    mandatoryUploaded: mandatoryUploaded.length,
+    optionalTotal: optional.length,
+    optionalUploaded: optional.filter(req => uploaded.has(req.documentType)).length,
+    percent: mandatory.length === 0 ? 100 : Math.round((mandatoryUploaded.length / mandatory.length) * 100),
+    missingMandatory,
+  };
+};
