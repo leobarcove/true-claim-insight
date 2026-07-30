@@ -41,6 +41,9 @@ export type { WrappedDataKey } from './key-store';
 
 // Ciphertext and blind indexes are omitted from query results by default; the
 // decrypting paths opt back in explicitly.
+// One audit-row writer for every service, so the trail has a consistent shape.
+export { AuditWriter } from './audit-writer';
+export type { AuditRecord } from './audit-writer';
 export { SENSITIVE_FIELD_OMIT } from './sensitive-fields';
 export type { TciPrismaOptions } from './sensitive-fields';
 export default prisma;
