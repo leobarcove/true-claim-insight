@@ -6,8 +6,11 @@ import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { DocumentStatus } from '@tci/shared-types';
-import { ClaimCategory } from '@prisma/client';
+import { ClaimCategory, ClaimStatus, SlaStage } from '@prisma/client';
 import { EncryptionService } from '@tci/crypto';
+import { SlaService } from '../sla/sla.service';
+import { SLA_TRANSITIONS } from '../sla/sla-transitions';
+import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
 
 @Injectable()
 export class ClaimsService {
@@ -16,8 +19,45 @@ export class ClaimsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantService: TenantService,
-    private readonly encryption: EncryptionService
+    private readonly encryption: EncryptionService,
+    private readonly sla: SlaService
   ) {}
+
+  /**
+   * Start, pause, resume and stop the SLA clocks a status change implies.
+   *
+   * The mapping lives in SLA_TRANSITIONS so it is reviewable as a whole. Every
+   * call is fail-soft: a clock that cannot be written is logged, never raised,
+   * because refusing a legitimate claim transition over a missing deadline row
+   * would be the worse failure.
+   */
+  private async applySlaTransition(
+    claimId: string,
+    status: ClaimStatus,
+    tenantId?: string | null
+  ): Promise<void> {
+    const transition = SLA_TRANSITIONS[status];
+    if (!transition) return;
+
+    for (const stage of transition.start ?? []) {
+      await this.sla.startQuietly(claimId, stage, tenantId);
+    }
+    for (const { stage, reason } of transition.pause ?? []) {
+      await this.sla.runQuietly(`pause ${stage} on ${claimId}`, () =>
+        this.sla.pause(claimId, stage, reason)
+      );
+    }
+    for (const stage of transition.resume ?? []) {
+      await this.sla.runQuietly(`resume ${stage} on ${claimId}`, () =>
+        this.sla.resume(claimId, stage)
+      );
+    }
+    for (const stage of transition.stop ?? []) {
+      await this.sla.runQuietly(`stop ${stage} on ${claimId}`, () =>
+        this.sla.stop(claimId, stage)
+      );
+    }
+  }
 
   /**
    * Create a new claim
@@ -429,6 +469,11 @@ export class ClaimsService {
       { oldValues: { status: existingClaim.status }, newValues: { status } }
     );
 
+    // SLA clocks follow the status. Fail-soft on purpose: a deadline that could
+    // not be recorded must not block an adjuster from progressing the claim, and
+    // the gap is visible in the claim's SLA history.
+    await this.applySlaTransition(id, status as ClaimStatus, existingClaim.tenantId);
+
     this.logger.log(
       `Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`
     );
@@ -493,6 +538,10 @@ export class ClaimsService {
         newValues: { adjusterId, status: 'ASSIGNED' },
       }
     );
+
+    // Assignment sets the claim to ASSIGNED directly rather than through
+    // updateStatus, so the clocks for that status are applied here too.
+    await this.applySlaTransition(claimId, ClaimStatus.ASSIGNED, claim.tenantId);
 
     this.logger.log(`Adjuster ${adjuster.user.fullName} assigned to claim ${claim.claimNumber}`);
 
@@ -869,19 +918,7 @@ export class ClaimsService {
    * Validate status transitions
    */
   private validateStatusTransition(currentStatus: string, newStatus: string) {
-    const validTransitions: Record<string, string[]> = {
-      SUBMITTED: ['ASSIGNED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      ASSIGNED: ['SCHEDULED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      SCHEDULED: ['IN_ASSESSMENT', 'CANCELLED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      IN_ASSESSMENT: ['REPORT_PENDING', 'ESCALATED_SIU', 'CLOSED', 'APPROVED', 'REJECTED'],
-      REPORT_PENDING: ['APPROVED', 'REJECTED', 'ESCALATED_SIU'],
-      APPROVED: ['CLOSED'],
-      REJECTED: ['CLOSED'],
-      ESCALATED_SIU: ['APPROVED', 'REJECTED', 'CLOSED'],
-      CANCELLED: ['CLOSED'],
-    };
-
-    const allowed = validTransitions[currentStatus] || [];
+    const allowed = CLAIM_STATUS_TRANSITIONS[currentStatus] || [];
     if (!allowed.includes(newStatus)) {
       throw new BadRequestException(
         `Invalid status transition from ${currentStatus} to ${newStatus}`

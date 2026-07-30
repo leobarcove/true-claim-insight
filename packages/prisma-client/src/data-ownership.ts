@@ -40,6 +40,10 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // claims — the regulated engagement and its evidence
   claim: 'claims',
   case: 'claims',
+  // SLA clocks measure the firm's own turnaround on a claim, so they belong to
+  // the claims context alongside the engagement they time.
+  slaPolicy: 'claims',
+  slaClock: 'claims',
   caseDocument: 'claims',
   document: 'claims',
   policy: 'claims',

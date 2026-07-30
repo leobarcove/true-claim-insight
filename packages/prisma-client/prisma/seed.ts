@@ -500,6 +500,35 @@ async function main() {
 
   console.log('🧳 Travel evidence requirements seeded.');
 
+  // Platform-default SLA policies — the BNM CSP timelines. A panel insurer that
+  // negotiates different targets gets its own row with a tenantId, which
+  // overrides these without a code change.
+  //
+  // `monitorOnly` marks the insurer's own obligations: the firm measures them so
+  // it can evidence where a delay originated, but a breach there is not the
+  // firm's failing and must never escalate against it.
+  const slaPolicies = [
+    { stage: 'ACK_TO_INSURER' as const, workingDays: 1, warnWorkingDaysBefore: 1 },
+    { stage: 'PRELIMINARY_REPORT' as const, workingDays: 7, warnWorkingDaysBefore: 2 },
+    { stage: 'FINAL_REPORT' as const, workingDays: 10, warnWorkingDaysBefore: 2 },
+    { stage: 'SUPPLEMENTARY_CLAIM' as const, workingDays: 5, warnWorkingDaysBefore: 1 },
+    { stage: 'INSURER_DECISION' as const, workingDays: 7, warnWorkingDaysBefore: 2, monitorOnly: true },
+    { stage: 'INSURER_PAYMENT' as const, workingDays: 14, warnWorkingDaysBefore: 3, monitorOnly: true },
+  ];
+
+  for (const policy of slaPolicies) {
+    const existing = await prisma.slaPolicy.findFirst({
+      where: { tenantId: null, stage: policy.stage },
+    });
+    if (existing) {
+      await prisma.slaPolicy.update({ where: { id: existing.id }, data: policy });
+    } else {
+      await prisma.slaPolicy.create({ data: policy });
+    }
+  }
+
+  console.log('⏱️  SLA policies seeded (CSP defaults).');
+
   console.log('✅ Seeding completed.');
 }
 
