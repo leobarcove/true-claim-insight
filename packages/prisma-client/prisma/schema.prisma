@@ -161,6 +161,7 @@ model Adjuster {
   competencies      AdjusterCompetency[]
   conflictDeclarations ConflictDeclaration[]
   conflictAttestations ConflictAttestation[]
+  cpdRecords           CpdRecord[]
 }
 
 model Claimant {
@@ -1755,4 +1756,43 @@ model ConflictAttestation {
 
   @@unique([claimId, adjusterId])
   @@map("conflict_attestations")
+}
+
+// ============================================================================
+// CPD LEDGER — PD 12.9–12.11: 15 hours per adjusting employee per year
+// ============================================================================
+
+/// One CPD activity attended by an adjusting employee.
+///
+/// PD 12.11 directs the firm to the Association of Malaysian Loss Adjusters (or
+/// institutions BNM specifies) on which programmes *qualify* — so recognition
+/// is recorded per entry, and only recognised hours count toward the 12.10
+/// floor. Unrecognised attendance is still recorded: it is true, it is just not
+/// the currency the floor is denominated in.
+model CpdRecord {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  /// Calendar year the hours count toward.
+  year  Int
+  hours Decimal @db.Decimal(5, 1)
+
+  programmeName String
+  provider      String
+  /// Qualifies per PD 12.11 (AMLA-the-association or a BNM-specified institution).
+  providerRecognised Boolean @default(false)
+
+  completedAt DateTime
+  /// Certificate or attendance evidence, when held.
+  evidenceUrl String?
+  notes       String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, year])
+  @@map("cpd_records")
 }

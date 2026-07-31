@@ -21,6 +21,7 @@ import {
 import { AdjustersService } from './adjusters.service';
 import { CompetencyService } from './competency.service';
 import { ConflictsService } from './conflicts.service';
+import { CpdService } from './cpd.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import {
@@ -47,7 +48,8 @@ export class AdjustersController {
   constructor(
     private readonly adjustersService: AdjustersService,
     private readonly competency: CompetencyService,
-    private readonly conflicts: ConflictsService
+    private readonly conflicts: ConflictsService,
+    private readonly cpd: CpdService
   ) {}
 
   @Get(':id/queue')
@@ -188,5 +190,47 @@ export class AdjustersController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.conflicts.resolve(declarationId, note, tenantContext);
+  }
+
+  // ==== CPD ledger (PD 12.9–12.11) ====
+
+  @Get('cpd-standing')
+  @ApiOperation({ summary: 'Firm-wide CPD standing for a year — the 12.10 floor dashboard' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  firmCpdStanding(@Query('year') year: string, @TenantId() tenantId: string) {
+    return this.cpd.firmStanding(tenantId, Number(year) || new Date().getUTCFullYear());
+  }
+
+  @Get(':id/cpd')
+  @ApiOperation({ summary: 'CPD records, optionally for one year' })
+  listCpd(@Param('id') id: string, @Query('year') year?: string) {
+    return this.cpd.list(id, year ? Number(year) : undefined);
+  }
+
+  @Get(':id/cpd/standing')
+  @ApiOperation({ summary: 'Standing against the 15-hour floor for a year' })
+  cpdStanding(@Param('id') id: string, @Query('year') year?: string) {
+    return this.cpd.standing(id, Number(year) || new Date().getUTCFullYear());
+  }
+
+  @Post(':id/cpd')
+  @ApiOperation({ summary: 'Record CPD attendance; only recognised providers count toward the floor' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  recordCpd(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      year: number;
+      hours: number;
+      programmeName: string;
+      provider: string;
+      providerRecognised?: boolean;
+      completedAt: string;
+      evidenceUrl?: string;
+      notes?: string;
+    },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.cpd.record(id, body, tenantContext);
   }
 }
