@@ -98,7 +98,8 @@ true-claim-insight/
 ├── packages/
 │   ├── shared-types/         # TypeScript interfaces + intake flow definitions (@tci/shared-types)
 │   ├── ui-components/        # Shared React components (@tci/ui-components)
-│   └── prisma-client/        # Prisma schema + client (@tci/prisma-client)
+│   ├── crypto/               # Envelope encryption: KeyProvider/KeyStore (@tci/crypto)
+│   └── prisma-client/        # Prisma schema + client, shared writers, ownership map (@tci/prisma-client)
 ├── .github/workflows/        # CI: typecheck + compliance tests
 └── docs/
     ├── MASTER_PLAN.md        # Regulatory + build plan — read this first
