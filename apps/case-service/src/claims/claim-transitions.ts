@@ -21,6 +21,11 @@ export const CLAIM_STATUS_TRANSITIONS: Record<string, string[]> = {
   REJECTED: ['CLOSED'],
   ESCALATED_SIU: ['APPROVED', 'REJECTED', 'CLOSED'],
   CANCELLED: ['CLOSED'],
+  // Supplementary claims (CSP: respond within 5 working days). Reopening is a
+  // deliberate act through the supplementary endpoint — which starts the
+  // 5-working-day clock — not an ordinary status change; the edge exists so the
+  // state machine tells the truth about what the endpoint does.
+  CLOSED: ['IN_ASSESSMENT'],
 };
 
 /** The status every claim starts in. */

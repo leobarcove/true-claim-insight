@@ -163,6 +163,7 @@ model Adjuster {
   conflictAttestations ConflictAttestation[]
   cpdRecords           CpdRecord[]
   backgroundScreenings BackgroundScreening[]
+  qualityReviews       WorkQualityReview[]
 }
 
 model Claimant {
@@ -1346,6 +1347,7 @@ model AdjusterReport {
   @@index([status])
   @@index([authorAdjusterId])
   @@map("adjuster_reports")
+  qualityReviews WorkQualityReview[]
 }
 
 // ============================================================================
@@ -1977,4 +1979,84 @@ model FitProperAttestation {
 
   @@index([keyPersonId, attestedAt])
   @@map("fit_proper_attestations")
+}
+
+// ============================================================================
+// WORK-QUALITY REVIEWS — PD 11.2(b): adequate reviews of practices and quality
+// ============================================================================
+
+enum QualityRating {
+  SATISFACTORY
+  NEEDS_IMPROVEMENT
+  UNSATISFACTORY
+}
+
+/// A review of one adjuster's work on one issued report.
+///
+/// This is the evidence behind `AdjusterCompetency.performanceSatisfactory`
+/// (PD 12.4(b)(ii)): recognition attests performance, and these rows are what
+/// the attestation stands on.
+model WorkQualityReview {
+  id         String @id @default(uuid())
+  reportId   String
+  adjusterId String
+
+  rating QualityRating
+  /// Required for any rating below SATISFACTORY — the finding is the value.
+  findings String?
+  notes    String?
+
+  reviewerUserId String
+  reviewedAt     DateTime @default(now())
+
+  report   AdjusterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  adjuster Adjuster       @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, reviewerUserId])
+  @@index([adjusterId, reviewedAt])
+  @@map("work_quality_reviews")
+}
+
+// ============================================================================
+// BNM NOTIFICATIONS — PD 13.1: notify within 7 working days of the change
+// ============================================================================
+
+enum BnmChangeType {
+  PAID_UP_CAPITAL
+  HEAD_OFFICE_RELOCATION
+  BRANCH_CHANGE
+  DIRECTOR_CEO_SHAREHOLDER_CHANGE
+}
+
+/// One notifiable change and whether BNM has been told.
+///
+/// The obligation binds a *registered* adjuster, so as a TPA the register runs
+/// inert — due dates computed, nothing escalated — and the licence flip makes
+/// an overdue notification a Board matter. Rows for director/CEO/shareholder
+/// changes are drafted automatically from the KeyPerson register; capital and
+/// office changes are raised by hand.
+model BnmNotification {
+  id String @id @default(uuid())
+
+  changeType  BnmChangeType
+  description String
+
+  /// When the change occurred — the 7-working-day clock runs from here.
+  occurredAt DateTime
+  /// occurredAt + 7 working days (KL calendar).
+  dueAt DateTime
+
+  /// When BNM was actually notified, with the submission reference.
+  notifiedAt       DateTime?
+  notifiedByUserId String?
+  reference        String?
+
+  /// The KeyPerson change that drafted this row, when automatic.
+  keyPersonId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([notifiedAt, dueAt])
+  @@map("bnm_notifications")
 }

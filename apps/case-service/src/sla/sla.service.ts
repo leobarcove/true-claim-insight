@@ -303,6 +303,42 @@ export class SlaService {
     }
   }
 
+  /**
+   * Insurer-side MI: how each panel insurer performs against the CSP windows
+   * the firm measures but does not own (decision 7wd, payment 14wd).
+   *
+   * This is the evidence that a delay originated with the insurer — measured,
+   * never escalated against the firm (the monitorOnly design), and now
+   * reportable per insurer.
+   */
+  async insurerMi() {
+    const clocks = await this.prisma.slaClock.findMany({
+      where: { policy: { monitorOnly: true } },
+      include: {
+        policy: { select: { stage: true } },
+        claim: { select: { insurerTenantId: true, insurerTenant: { select: { name: true } } } },
+      },
+    });
+
+    const byInsurer = new Map<string, { name: string; stages: Record<string, { met: number; breached: number; running: number }> }>();
+    for (const clock of clocks) {
+      const insurerId = clock.claim?.insurerTenantId ?? 'unattributed';
+      const name = clock.claim?.insurerTenant?.name ?? '(no insurer on claim)';
+      const entry = byInsurer.get(insurerId) ?? { name, stages: {} };
+      const stage = (entry.stages[clock.policy.stage] ??= { met: 0, breached: 0, running: 0 });
+      if (clock.state === 'MET') stage.met += 1;
+      else if (clock.state === 'BREACHED') stage.breached += 1;
+      else stage.running += 1;
+      byInsurer.set(insurerId, entry);
+    }
+
+    return [...byInsurer.entries()].map(([insurerTenantId, entry]) => ({
+      insurerTenantId,
+      insurerName: entry.name,
+      stages: entry.stages,
+    }));
+  }
+
   /** Schedule the recurring sweep. Idempotent — BullMQ dedupes by job key. */
   async scheduleSweep() {
     await this.slaQueue.add(

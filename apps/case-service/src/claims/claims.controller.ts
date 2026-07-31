@@ -211,6 +211,17 @@ export class ClaimsController {
     return this.claimsService.getEvidenceChecklist(id, tenantContext);
   }
 
+  @Post(':id/supplementary')
+  @ApiOperation({ summary: 'Reopen a closed claim for a supplementary claim (CSP: 5 working days)' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  reopenSupplementary(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.reopenSupplementary(id, reason, tenantContext);
+  }
+
   @Post(':id/coi-attestation')
   @ApiOperation({ summary: 'Assigned adjuster attests no undeclared conflict for this claim (PD 12.1(d))' })
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)

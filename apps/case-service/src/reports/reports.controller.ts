@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Post, Patch, Query, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AdjusterReportType } from '@prisma/client';
+import { AdjusterReportType, QualityRating } from '@prisma/client';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
+import { QualityReviewService } from './quality-review.service';
 import { ReportsService } from './reports.service';
 import type { ReportSections } from './report-templates';
 
@@ -24,7 +25,10 @@ import type { ReportSections } from './report-templates';
 @UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ReportsController {
-  constructor(private readonly service: ReportsService) {}
+  constructor(
+    private readonly service: ReportsService,
+    private readonly quality: QualityReviewService
+  ) {}
 
   @Get('template')
   @ApiOperation({ summary: 'Section template for a report type (headings, guidance, PD basis)' })
@@ -107,6 +111,16 @@ export class ReportsController {
   @ApiOperation({ summary: 'Open a correction that supersedes an issued report' })
   supersede(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
     return this.service.supersede(id, tenantContext);
+  }
+
+  @Post(':id/quality-review')
+  @ApiOperation({ summary: 'Work-quality review of an issued report (PD 11.2(b))' })
+  qualityReview(
+    @Param('id') id: string,
+    @Body() body: { rating: QualityRating; findings?: string; notes?: string },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.quality.review(id, body, tenantContext);
   }
 
   @Post(':id/withdraw')

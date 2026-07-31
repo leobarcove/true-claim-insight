@@ -19,6 +19,7 @@ import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
 import { assignmentEligibility } from '../adjusters/adjuster-competency';
 import { screeningStanding } from '../adjusters/background-screening';
+import { rotationAdvisory } from '../adjusters/rotation';
 import { conflictRefusalReason, screenConflicts } from '../adjusters/conflict-screening';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
 import { ConsentService } from '../consent/consent.service';
@@ -114,6 +115,50 @@ export class ClaimsService {
     }
 
     return decision;
+  }
+
+  /**
+   * Reopen a closed claim for a supplementary claim (CSP: 5 working days).
+   *
+   * The one legal exit from CLOSED, and a deliberate act rather than a status
+   * edit: it starts the SUPPLEMENTARY_CLAIM clock, so the five-working-day
+   * response obligation is measured from the moment the supplementary arrived.
+   * Retention note: reopening does not disturb `closedAt` history — the clock
+   * anchor becomes the *new* closure when the claim closes again.
+   */
+  async reopenSupplementary(id: string, reason: string, tenantContext: TenantContext) {
+    if (!reason?.trim()) {
+      throw new BadRequestException('The supplementary claim must be described.');
+    }
+    const claim = await this.prisma.claim.findUnique({ where: { id } });
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.status !== 'CLOSED') {
+      throw new BadRequestException(
+        `Only a CLOSED claim can take a supplementary claim; this one is ${claim.status}.`
+      );
+    }
+    if (claim.legalHoldAt) {
+      // A held claim can still be reopened — the hold protects records, not work.
+      this.logger.log(`Reopening claim ${id} under legal hold; records remain protected`);
+    }
+
+    await this.prisma.claim.update({
+      where: { id },
+      data: { status: 'IN_ASSESSMENT', closedAt: null, updatedAt: new Date() },
+    });
+
+    await this.sla.startQuietly(id, SlaStage.SUPPLEMENTARY_CLAIM, claim.tenantId);
+
+    await this.createAuditTrail(
+      id,
+      'SUPPLEMENTARY_REOPENED',
+      { reason },
+      tenantContext,
+      { oldValues: { status: 'CLOSED' }, newValues: { status: 'IN_ASSESSMENT' } }
+    );
+
+    this.logger.log(`Claim ${claim.claimNumber} reopened for a supplementary claim`);
+    return this.findOne(id, tenantContext);
   }
 
   /**
@@ -630,6 +675,19 @@ export class ClaimsService {
     if (!eligibility.allowed) {
       throw new BadRequestException(eligibility.reason);
     }
+    // PD 11.2(b): rotation is monitored, never blocked — a hard rule would
+    // regularly force the less qualified adjuster onto a claim.
+    if (claim.insurerTenantId) {
+      const recent = await this.prisma.claim.findMany({
+        where: { insurerTenantId: claim.insurerTenantId, adjusterId: { not: null }, id: { not: claimId } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { adjusterId: true },
+      });
+      const rotation = rotationAdvisory(recent.map(c => c.adjusterId), adjusterId);
+      if (rotation) eligibility.advisories.push(rotation);
+    }
+
     if (eligibility.advisories.length) {
       this.logger.warn(
         `Assignment advisories for adjuster ${adjusterId} on claim ${claimId}: ` +
