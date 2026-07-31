@@ -42,9 +42,6 @@ export class CreateFloodClaimDto {
   @IsNotEmpty()
   description!: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isPdpaCompliant?: boolean;
 
   // --- Flood-specific (FloodClaim sub-table) ---
   @IsDateString()

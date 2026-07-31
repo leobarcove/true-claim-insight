@@ -12,12 +12,13 @@ import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { DocumentStatus } from '@tci/shared-types';
-import { ClaimCategory, ClaimStatus, SlaStage } from '@prisma/client';
+import { ClaimCategory, ClaimStatus, ConsentPurpose, SlaStage } from '@prisma/client';
 import { EncryptionService } from '@tci/crypto';
 import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
+import { ConsentService } from '../consent/consent.service';
 
 @Injectable()
 export class ClaimsService {
@@ -27,8 +28,28 @@ export class ClaimsService {
     private readonly prisma: PrismaService,
     private readonly tenantService: TenantService,
     private readonly encryption: EncryptionService,
-    private readonly sla: SlaService
+    private readonly sla: SlaService,
+    private readonly consent: ConsentService
   ) {}
+
+  /**
+   * Real consent standing for a claim, for display and for gating.
+   *
+   * Replaces the `isPdpaCompliant` boolean, which the client set and nothing
+   * verified — a claimant ticking a box in a browser is not evidence that a
+   * lawful basis exists. This reads the actual consent records instead, so the
+   * portal badge reports what is true rather than what was asserted.
+   */
+  private async consentStanding(claimantId: string | null | undefined) {
+    if (!claimantId) return { claimProcessing: false, biometric: false, crossBorder: false };
+
+    const [claimProcessing, biometric, crossBorder] = await Promise.all([
+      this.consent.hasConsent(claimantId, ConsentPurpose.CLAIM_PROCESSING),
+      this.consent.hasConsent(claimantId, ConsentPurpose.BIOMETRIC_ANALYSIS),
+      this.consent.hasConsent(claimantId, ConsentPurpose.CROSS_BORDER_TRANSFER),
+    ]);
+    return { claimProcessing, biometric, crossBorder };
+  }
 
   /**
    * Refuse a transition the actor is not authorised to make.
@@ -151,7 +172,6 @@ export class ClaimsService {
         policeReportDate: createClaimDto.policeReportDate
           ? new Date(createClaimDto.policeReportDate)
           : null,
-        isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
         createdById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
         updatedById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
       },
@@ -426,6 +446,9 @@ export class ClaimsService {
     const result = {
       ...claim,
       sessions,
+      // Real consent standing, read from the consent records rather than the
+      // self-declared `isPdpaCompliant` flag the client used to set.
+      consent: await this.consentStanding(claim.claimantId),
     };
 
     return tenantContext ? this.tenantService.redactClaim(result, tenantContext) : result;
@@ -471,7 +494,6 @@ export class ClaimsService {
           : undefined,
         workshopName: updateClaimDto.workshopName,
         estimatedRepairCost: updateClaimDto.estimatedRepairCost,
-        isPdpaCompliant: updateClaimDto.isPdpaCompliant,
         slaDeadline: updateClaimDto.slaDeadline ? new Date(updateClaimDto.slaDeadline) : undefined,
         updatedById: tenantContext?.userId,
         updatedAt: new Date(),

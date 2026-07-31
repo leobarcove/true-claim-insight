@@ -382,7 +382,17 @@ export interface Claim {
   sstAmount?: number;
   excessAmount?: number;
   approvedAmount?: number;
-  isPdpaCompliant: boolean;
+  /**
+   * Consent standing, read from the consent records.
+   *
+   * Replaces `isPdpaCompliant`, a boolean the client set and nothing verified —
+   * a claimant ticking a box is not evidence that a lawful basis exists.
+   */
+  consent?: {
+    claimProcessing: boolean;
+    biometric: boolean;
+    crossBorder: boolean;
+  };
   slaDeadline?: string;
   complianceNotes?: Record<string, any>;
   siuInvestigatorId?: string;
