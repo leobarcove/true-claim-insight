@@ -9,7 +9,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import { ClaimCategory, ConflictInterestType, ConflictPartyType } from '@prisma/client';
+import { ClaimCategory, ConflictInterestType, ConflictPartyType, ScreeningCheckType, ScreeningOutcome } from '@prisma/client';
 import {
   ApiTags,
   ApiOperation,
@@ -22,6 +22,7 @@ import { AdjustersService } from './adjusters.service';
 import { CompetencyService } from './competency.service';
 import { ConflictsService } from './conflicts.service';
 import { CpdService } from './cpd.service';
+import { ScreeningService } from './screening.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import {
@@ -49,7 +50,8 @@ export class AdjustersController {
     private readonly adjustersService: AdjustersService,
     private readonly competency: CompetencyService,
     private readonly conflicts: ConflictsService,
-    private readonly cpd: CpdService
+    private readonly cpd: CpdService,
+    private readonly screening: ScreeningService
   ) {}
 
   @Get(':id/queue')
@@ -232,5 +234,40 @@ export class AdjustersController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.cpd.record(id, body, tenantContext);
+  }
+
+  // ==== Background screening (PD 11.2(e)) ====
+
+  @Get(':id/screenings')
+  @ApiOperation({ summary: 'Background checks on record' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  listScreenings(@Param('id') id: string) {
+    return this.screening.list(id);
+  }
+
+  @Get(':id/screenings/standing')
+  @ApiOperation({ summary: 'Standing against the 11.2(e) minimum check set' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  screeningStanding(@Param('id') id: string) {
+    return this.screening.standing(id);
+  }
+
+  @Post(':id/screenings')
+  @ApiOperation({ summary: 'Record a background check; FINDINGS requires the finding described' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  recordScreening(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      checkType: ScreeningCheckType;
+      outcome: ScreeningOutcome;
+      findingsNote?: string;
+      screenedAt: string;
+      conductedBy: string;
+      evidenceUrl?: string;
+    },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.screening.record(id, body, tenantContext);
   }
 }

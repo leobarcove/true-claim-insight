@@ -80,6 +80,8 @@ export interface AssignmentEligibilityInput {
   licenseVerifiedAt: Date | null;
   /** Competency in the claim's category, if any. */
   competency: CompetencyRecord | null;
+  /** PD 11.2(e): is the minimum background-check set on record? */
+  screeningComplete?: boolean;
   licensedMode: boolean;
 }
 
@@ -115,6 +117,9 @@ export function assignmentEligibility(input: AssignmentEligibilityInput): Assign
   }
   if (!competency) {
     advisories.push('no recorded competency in this claim category (PD 12.2(b))');
+  }
+  if (input.screeningComplete === false) {
+    advisories.push('pre-employment screening incomplete (PD 11.2(e) minimum)');
   }
 
   if (licensedMode && advisories.length) {
