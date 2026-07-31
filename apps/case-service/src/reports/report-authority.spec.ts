@@ -60,7 +60,7 @@ describe('Report authority (PD 12.7)', () => {
     });
   });
 
-  describe('countersign (PD 12.3 / 12.7(b))', () => {
+  describe('countersign (PD 12.4(a) / 12.7(b))', () => {
     it('does not require a countersign for a senior author', () => {
       const decision = countersignDecision({
         type: AdjusterReportType.FINAL,
@@ -71,7 +71,7 @@ describe('Report authority (PD 12.7)', () => {
 
       expect(decision.required).toBe(false);
       expect(decision.satisfied).toBe(true);
-      expect(decision.basis).toMatch(/senior/i);
+      expect(decision.basis).toMatch(/senior per PD 12\.4/i);
     });
 
     it('requires a senior countersign for a junior author', () => {
