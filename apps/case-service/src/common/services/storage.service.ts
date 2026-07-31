@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { join, dirname } from 'path';
-import { mkdirSync, unlinkSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 
 @Injectable()
 export class StorageService {
@@ -82,6 +82,33 @@ export class StorageService {
       this.logger.error(`Error uploading file: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Read a stored file's bytes.
+   *
+   * Exists for the s.143 archive export: an examiner's bundle must contain the
+   * documents themselves, not pointers into a system the examiner cannot open.
+   * Handles both storage forms in use — bucket-relative paths (local disk or
+   * Supabase) and absolute URLs (e.g. analyzer-hosted consent PDFs).
+   */
+  async readFile(storageUrl: string): Promise<Buffer> {
+    if (/^https?:\/\//.test(storageUrl)) {
+      const response = await fetch(storageUrl);
+      if (!response.ok) throw new Error(`Fetch failed (${response.status}) for ${storageUrl}`);
+      return Buffer.from(await response.arrayBuffer());
+    }
+
+    if (this.localStorageEnabled) {
+      return readFileSync(join(this.localStorageRoot, this.bucketName, storageUrl));
+    }
+
+    const baseUrl = this.supabaseUrl.replace(/\/$/, '');
+    const response = await fetch(`${baseUrl}/storage/v1/object/${this.bucketName}/${storageUrl}`, {
+      headers: { Authorization: `Bearer ${this.serviceRoleKey}` },
+    });
+    if (!response.ok) throw new Error(`Storage read failed (${response.status}) for ${storageUrl}`);
+    return Buffer.from(await response.arrayBuffer());
   }
 
   /**
