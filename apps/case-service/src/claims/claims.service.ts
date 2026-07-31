@@ -543,6 +543,9 @@ export class ClaimsService {
       where: { id },
       data: {
         status: status as any,
+        // Closure anchors the PD 12.8 retention period; nothing belonging to
+        // this claim may be purged before closedAt + the retention years.
+        ...(status === 'CLOSED' ? { closedAt: new Date() } : {}),
         updatedAt: new Date(),
       },
     });

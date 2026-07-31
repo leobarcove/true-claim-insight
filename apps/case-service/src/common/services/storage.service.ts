@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { join, dirname } from 'path';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, unlinkSync, writeFileSync } from 'fs';
 
 @Injectable()
 export class StorageService {
@@ -82,6 +82,40 @@ export class StorageService {
       this.logger.error(`Error uploading file: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Delete a stored file.
+   *
+   * Exists for exactly one caller: the retention sweep, after `canPurge` has
+   * said yes. Nothing user-triggered reaches this — "delete" in the UI is a soft
+   * delete, because PD 12.8 retention outranks anyone's tidy-up instinct. The
+   * previous absence of this method was itself a finding: hard-deleted rows
+   * orphaned their files, so even the non-compliant path did not clean up.
+   */
+  async deleteFile(storagePath: string): Promise<void> {
+    if (this.localStorageEnabled) {
+      const dest = join(this.localStorageRoot, this.bucketName, storagePath);
+      try {
+        unlinkSync(dest);
+        this.logger.log(`(local) File purged: ${dest}`);
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') throw error;
+        // Already gone is the outcome we wanted; a purge must be idempotent.
+      }
+      return;
+    }
+
+    const baseUrl = this.supabaseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/storage/v1/object/${this.bucketName}/${storagePath}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${this.serviceRoleKey}` },
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Failed to purge file ${storagePath}: ${response.statusText}`);
+    }
+    this.logger.log(`File purged from storage: ${storagePath}`);
   }
 
   /**

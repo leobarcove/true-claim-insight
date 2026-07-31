@@ -253,6 +253,15 @@ model Claim {
   excessAmount            Decimal?
   vehicleEngineNumber     String?
   vehicleYear             Int?
+  /// When the claim reached CLOSED — the anchor the 7-year retention period
+  /// runs from. Nothing belonging to a claim may be purged before this + the
+  /// retention period.
+  closedAt                DateTime?
+  /// Legal hold: suspends purging regardless of retention arithmetic. Litigation
+  /// or a regulator's request outranks the calendar.
+  legalHoldAt             DateTime?
+  legalHoldReason         String?
+  legalHoldByUserId       String?
   tenantId                String?     // Standardized tenant ownership
   userId                  String?     // Standardized creator/owner
   createdById             String?     // Keeping for backward compatibility
@@ -681,6 +690,12 @@ model Document {
   signedAt             DateTime?       // When the claimant completed signing
   signedStorageUrl     String?         // URL of the countersigned PDF (signed PDF stored separately)
   documentHash         String?
+  /// Soft delete (PD 12.8). A "deleted" document is hidden from ordinary use but
+  /// retained — row and stored file — until the retention sweep purges it after
+  /// the claim's retention period, and never while a legal hold stands.
+  deletedAt       DateTime?
+  deletedByUserId String?
+  deleteReason    String?
   createdAt    DateTime     @default(now())
   tenantId     String?      // Organization ownership
   userId       String?      // Uploader ID
@@ -1038,6 +1053,9 @@ model VideoUpload {
   duration       Float?            // in seconds
   processedUntil Float             @default(0) // seconds processed so far
   status         VideoUploadStatus @default(PENDING)
+  /// Soft delete (PD 12.8): recordings are claim evidence, so "delete" hides
+  /// rather than destroys until the retention sweep is entitled to purge.
+  deletedAt      DateTime?
   uploadedBy     String?           // user ID (deprecated, use userId)
   userId         String?           // Who uploaded
   createdAt      DateTime          @default(now())
@@ -1546,4 +1564,27 @@ model Assignment {
   @@index([status, receivedAt])
   @@map("assignments")
   slaClocks     SlaClock[]
+}
+
+// ============================================================================
+// RETENTION — PD 12.8: records kept ≥7 years; purge is scheduled, never manual
+// ============================================================================
+
+/// How long each kind of record is kept after its claim closes.
+///
+/// A table rather than a constant so a panel insurer's contract can demand
+/// longer — but never shorter: the PD 12.8 seven-year floor is enforced in code
+/// and asserted by test, so no row can quietly undercut it.
+model RetentionPolicy {
+  id         String  @id @default(uuid())
+  /// e.g. DOCUMENT, VIDEO_UPLOAD. One row per kind.
+  entityType String  @unique
+  /// Years after claim closure before a purge becomes permissible.
+  retainYears Int    @default(7)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("retention_policies")
 }

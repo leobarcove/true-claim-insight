@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { AuditService } from '../common/audit/audit.service';
 import { StorageService } from '../common/services/storage.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +19,8 @@ export class DocumentsService {
     private readonly storageService: StorageService,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly audit: AuditService
   ) {}
 
   /**
@@ -151,7 +153,7 @@ export class DocumentsService {
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
 
     const docs = await this.prisma.document.findMany({
-      where: { claimId },
+      where: { claimId, deletedAt: null },
     });
 
     if (docs.length === 0) {
@@ -234,7 +236,7 @@ export class DocumentsService {
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
 
     const documents = await this.prisma.document.findMany({
-      where: { claimId },
+      where: { claimId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -252,7 +254,7 @@ export class DocumentsService {
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
 
     const document = await this.prisma.document.findFirst({
-      where: { id, claimId },
+      where: { id, claimId, deletedAt: null },
     });
 
     if (!document) {
@@ -290,37 +292,41 @@ export class DocumentsService {
   }
 
   /**
-   * Delete a document
+   * "Delete" a document — a soft delete, by design.
+   *
+   * PD 12.8 requires adjusting records and supporting documents to be retained
+   * for at least seven years, so nothing a user can trigger destroys one. The
+   * row and the stored file both remain; the document simply disappears from
+   * ordinary listings. Actual destruction is the retention sweep's alone, after
+   * the claim's retention period and never under a legal hold.
    */
-  async remove(claimId: string, id: string, tenantContext: TenantContext) {
+  async remove(claimId: string, id: string, tenantContext: TenantContext, reason?: string) {
     const document = await this.findOne(claimId, id, tenantContext);
 
-    // WARNING: this is a hard delete and it is not compliant. BNM Adjuster PD
-    // 12.8 requires adjusting records and supporting documents to be retained
-    // for at least 7 years, and StorageService has no delete method — so the
-    // stored file is orphaned while the DB row and its extracted OCR text are
-    // destroyed. Soft delete + RetentionPolicy is Phase 2 of
-    // docs/MASTER_PLAN.md; until then this route is restricted to firm admins.
-    await this.prisma.document.delete({
+    await this.prisma.document.update({
       where: { id },
+      data: {
+        deletedAt: new Date(),
+        deletedByUserId: tenantContext.userId,
+        deleteReason: reason ?? null,
+      },
     });
 
-    const actorUserId = tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId;
-
-    // Create audit trail
-    await this.prisma.auditTrail.create({
-      data: {
-        entityId: claimId,
-        entityType: 'CLAIM',
-        action: 'DOCUMENT_DELETED',
-        tenantId: tenantContext.tenantId,
-        userId: actorUserId,
-        actorId: tenantContext.userId,
-        actorType: (tenantContext.userRole as any) || 'SYSTEM',
-        metadata: {
-          documentId: document.id,
-          filename: document.filename,
-        },
+    // Fail-soft shared writer, not a bespoke prisma.auditTrail.create: the
+    // bespoke write threw on a foreign-key mismatch *after* the soft delete had
+    // been applied, failing the request over its own bookkeeping. Found live.
+    await this.audit.record({
+      entityType: 'CLAIM',
+      entityId: claimId,
+      action: 'DOCUMENT_SOFT_DELETED',
+      tenantId: tenantContext.tenantId,
+      userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+      actorId: tenantContext.userId,
+      actorType: tenantContext.userRole,
+      metadata: {
+        documentId: document.id,
+        filename: document.filename,
+        reason: reason ?? null,
       },
     });
   }
