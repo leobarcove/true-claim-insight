@@ -507,6 +507,9 @@ async function main() {
   // `monitorOnly` marks the insurer's own obligations: the firm measures them so
   // it can evidence where a delay originated, but a breach there is not the
   // firm's failing and must never escalate against it.
+  // calendarState drives both the weekend pattern and which state holidays
+  // apply. The firm operates from Kuala Lumpur; a panel insurer in a
+  // Friday–Saturday state would get its own policy rows.
   const slaPolicies = [
     { stage: 'ACK_TO_INSURER' as const, workingDays: 1, warnWorkingDaysBefore: 1 },
     { stage: 'PRELIMINARY_REPORT' as const, workingDays: 7, warnWorkingDaysBefore: 2 },
@@ -520,14 +523,15 @@ async function main() {
     const existing = await prisma.slaPolicy.findFirst({
       where: { tenantId: null, stage: policy.stage },
     });
+    const withCalendar = { ...policy, calendarState: 'KUALA_LUMPUR' };
     if (existing) {
-      await prisma.slaPolicy.update({ where: { id: existing.id }, data: policy });
+      await prisma.slaPolicy.update({ where: { id: existing.id }, data: withCalendar });
     } else {
-      await prisma.slaPolicy.create({ data: policy });
+      await prisma.slaPolicy.create({ data: withCalendar });
     }
   }
 
-  console.log('⏱️  SLA policies seeded (CSP defaults).');
+  console.log('⏱️  SLA policies seeded (CSP defaults, Kuala Lumpur calendar).');
 
   // Approval authority (§4.3 A3). ADJUSTER is deliberately absent: an adjuster
   // assesses and recommends, and does not decide the outcome of their own work.

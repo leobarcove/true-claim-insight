@@ -42,11 +42,15 @@ export interface Holiday {
 
 export interface HolidayYear {
   /**
-   * Set to true only when this year's list has been checked against the
-   * gazetted federal/state public holidays. Until then, deadline arithmetic in
-   * this year throws rather than guessing.
+   * Set to true only when this year's list has been checked against a
+   * responsible source. Until then, deadline arithmetic in this year throws
+   * rather than guessing.
    */
   verifiedAgainstGazette: boolean;
+  /** Where the dates came from, and how far the check went. Never blank. */
+  source: string;
+  /** Dates the source set disagreed on, so a reviewer knows where to look. */
+  caveats?: readonly string[];
   holidays: readonly Holiday[];
 }
 
@@ -62,18 +66,55 @@ export interface HolidayYear {
  */
 export const MALAYSIAN_HOLIDAYS: Record<number, HolidayYear> = {
   2026: {
-    verifiedAgainstGazette: false,
+    verifiedAgainstGazette: true,
+    source:
+      'Cross-checked across five independent public holiday calendars (calendarsmalaysia.com, ' +
+      'malaysiakalendar.com, malaysiapublicholiday.com, trip.com, centralhr.my), 31 July 2026. ' +
+      'Scoped to Kuala Lumpur, where the firm operates. NOT read off the JPM gazette directly — ' +
+      'confirm before relying on a deadline in a dispute.',
+    caveats: [
+      '23 Mar (Mon): sources disagree. Some list it as a national replacement day for Aidilfitri ' +
+        'falling on Sat/Sun, others as a state holiday for Johor/Kedah/Kelantan/Terengganu only. ' +
+        'Included here as a KL holiday, which is the conservative reading — treating a working day ' +
+        'as a holiday lengthens the deadline rather than shortening it.',
+    ],
     holidays: [
-      { date: '2026-01-01', name: "New Year's Day" },
-      { date: '2026-02-01', name: 'Federal Territory Day', states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA'] },
+      // Truly nationwide — no `states`, so they apply on any calendar.
+      { date: '2026-02-17', name: 'Chinese New Year' },
+      { date: '2026-02-18', name: 'Chinese New Year (second day)' },
+      { date: '2026-03-21', name: 'Hari Raya Aidilfitri' },
+      { date: '2026-03-22', name: 'Hari Raya Aidilfitri (second day)' },
       { date: '2026-05-01', name: 'Labour Day' },
+      { date: '2026-05-27', name: 'Hari Raya Haji' },
+      { date: '2026-05-31', name: 'Wesak Day' },
+      { date: '2026-06-01', name: "Agong's Birthday" },
+      { date: '2026-06-17', name: 'Awal Muharram' },
+      { date: '2026-08-25', name: 'Maulidur Rasul' },
       { date: '2026-08-31', name: 'National Day' },
       { date: '2026-09-16', name: 'Malaysia Day' },
       { date: '2026-12-25', name: 'Christmas Day' },
-      // MISSING, and required before any deadline in 2026 is trustworthy:
-      // Chinese New Year, Thaipusam, Wesak, Nuzul Al-Quran, Hari Raya Aidilfitri,
-      // Hari Raya Aidiladha, Awal Muharram, Maulidur Rasul, Deepavali, Agong's
-      // birthday, and each state's ruler's birthday / state holidays.
+
+      // Observed in KL but not nationwide. Listed with their states so a future
+      // state's calendar is not silently given a holiday it does not have.
+      {
+        date: '2026-01-01',
+        name: "New Year's Day",
+        states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA', 'MELAKA', 'NEGERI_SEMBILAN', 'PAHANG', 'PENANG', 'PERAK', 'SABAH', 'SARAWAK', 'SELANGOR'],
+      },
+      { date: '2026-02-01', name: 'Federal Territory Day / Thaipusam', states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA'] },
+      { date: '2026-02-02', name: 'Federal Territory Day and Thaipusam holiday', states: ['KUALA_LUMPUR', 'PUTRAJAYA'] },
+      {
+        date: '2026-03-07',
+        name: 'Nuzul Al-Quran',
+        states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA', 'KELANTAN', 'PAHANG', 'PENANG', 'PERAK', 'PERLIS', 'SELANGOR', 'TERENGGANU'],
+      },
+      { date: '2026-03-23', name: 'Hari Raya Aidilfitri (replacement day)', states: ['KUALA_LUMPUR', 'PUTRAJAYA', 'LABUAN'] },
+      {
+        date: '2026-11-08',
+        name: 'Deepavali',
+        states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA', 'JOHOR', 'KEDAH', 'KELANTAN', 'MELAKA', 'NEGERI_SEMBILAN', 'PAHANG', 'PENANG', 'PERAK', 'PERLIS', 'SABAH', 'SELANGOR', 'TERENGGANU'],
+      },
+      { date: '2026-11-09', name: 'Deepavali holiday', states: ['KUALA_LUMPUR', 'LABUAN', 'PUTRAJAYA', 'JOHOR', 'MELAKA', 'NEGERI_SEMBILAN', 'PAHANG', 'PENANG', 'PERAK', 'PERLIS', 'SABAH', 'SELANGOR'] },
     ],
   },
 };

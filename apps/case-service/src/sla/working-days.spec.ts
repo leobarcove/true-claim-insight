@@ -17,10 +17,22 @@ describe('Malaysian working days', () => {
   const d = (isoDate: string) => new Date(`${isoDate}T00:00:00Z`);
 
   describe('refusing to guess', () => {
-    it('throws rather than computing a deadline in an unverified year', () => {
-      // 2026 ships unverified on purpose: the lunar holidays are not entered.
-      expect(MALAYSIAN_HOLIDAYS[2026].verifiedAgainstGazette).toBe(false);
-      expect(() => addWorkingDays(d('2026-03-02'), 10)).toThrow(UnverifiedHolidayYearError);
+    it('throws rather than computing a deadline in a year with no data', () => {
+      // 2027 has no entry until its gazette is published, so the engine refuses
+      // rather than treating unlisted lunar holidays as working days.
+      expect(MALAYSIAN_HOLIDAYS[2027]).toBeUndefined();
+      expect(() => addWorkingDays(d('2027-03-02'), 10)).toThrow(UnverifiedHolidayYearError);
+    });
+
+    it('records the provenance of every year it will compute in', () => {
+      // A year marked verified with no stated source is how a guessed list gets
+      // laundered into an authoritative one.
+      for (const [year, entry] of Object.entries(MALAYSIAN_HOLIDAYS)) {
+        if (!entry.verifiedAgainstGazette) continue;
+        expect(entry.source.trim().length).toBeGreaterThan(30);
+        expect(`${year} has holidays`).toBeTruthy();
+        expect(entry.holidays.length).toBeGreaterThan(10);
+      }
     });
 
     it('throws for a year with no holiday data at all', () => {
@@ -28,8 +40,16 @@ describe('Malaysian working days', () => {
     });
 
     it('names the year and tells the reader how to fix it', () => {
-      expect(() => addWorkingDays(d('2026-03-02'), 1)).toThrow(/2026/);
-      expect(() => addWorkingDays(d('2026-03-02'), 1)).toThrow(/gazette/i);
+      expect(() => addWorkingDays(d('2027-03-02'), 1)).toThrow(/2027/);
+      expect(() => addWorkingDays(d('2027-03-02'), 1)).toThrow(/gazette/i);
+    });
+
+    it('now computes real 2026 deadlines, and skips a gazetted holiday', () => {
+      // Merdeka falls on Monday 31 August 2026, so a one-day deadline from
+      // Friday 28 August lands on Tuesday 1 September rather than the Monday.
+      expect(addWorkingDays(d('2026-08-28'), 1, { state: 'KUALA_LUMPUR' }).toISOString().slice(0, 10)).toBe(
+        '2026-09-01'
+      );
     });
   });
 
