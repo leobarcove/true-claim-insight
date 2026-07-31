@@ -22,6 +22,7 @@ export const AUDITED_READ_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\/cases\/[^/]+\/payout-details/, reason: 'decrypts bank account details' },
   { pattern: /\/claimants\/[^/]+$/, reason: 'claimant personal data' },
   { pattern: /\/reports\/[^/]+\/pdf/, reason: 'full report content leaving the system' },
+  { pattern: /\/claims\/[^/]+\/export/, reason: 'complete claim file incl. decrypted NRIC (s.143)' },
 ];
 
 /** Noise with no evidential value; recording it only makes the trail harder to read. */

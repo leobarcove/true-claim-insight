@@ -163,6 +163,30 @@ export class ClaimsController {
       );
   }
 
+  @Get(':id/export')
+  @ApiOperation({ summary: 'Complete claim file (FSA s.143) — compliance roles, audited' })
+  exportFile(@Param('id') id: string, @Req() req: any) {
+    // Role enforcement lives in case-service; the gateway only forwards
+    // identity. The audit interceptor records this read by pattern.
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/export`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to export claim file',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a claim by ID' })
   findOne(@Param('id') id: string, @Req() req: any) {
