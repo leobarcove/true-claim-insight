@@ -141,6 +141,11 @@ model Adjuster {
   amlaMember        Boolean        @default(false)
   status            AdjusterStatus @default(ACTIVE)
   licenseVerifiedAt DateTime?
+  /// When this person began adjusting employment with the firm. PD 12.3: a new
+  /// adjusting employee is closely supervised by a senior for at least one year
+  /// before conducting adjusting work independently — supervision status is
+  /// derived from this date, so it cannot silently be forgotten.
+  adjustingSince    DateTime?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   tenant            Tenant         @relation(fields: [tenantId], references: [id])
@@ -153,6 +158,7 @@ model Adjuster {
   reviewedReports   AdjusterReport[] @relation("ReportReviewer")
   signedReports     AdjusterReport[] @relation("ReportSigner")
   authorityLimits   AuthorityLimit[]
+  competencies      AdjusterCompetency[]
 }
 
 model Claimant {
@@ -1630,4 +1636,43 @@ model TransferRecord {
   @@index([provider, transferredAt])
   @@index([claimId])
   @@map("transfer_records")
+}
+
+// ============================================================================
+// ADJUSTER COMPETENCY — PD 12.2(b), 12.3, 12.4: who may do which adjusting work
+// ============================================================================
+
+/// An adjusting employee's standing in one subject matter.
+///
+/// PD 12.4 makes seniority a *recognition*, not an arithmetic: five years in the
+/// subject (12.4(a)) is the floor, and the firm must also weigh case volume and
+/// performance (12.4(b)) before recognising someone as senior. So the model
+/// records the inputs and the recognition act separately — `yearsInSubject`
+/// alone never makes anyone senior.
+model AdjusterCompetency {
+  id         String        @id @default(uuid())
+  adjusterId String
+  category   ClaimCategory
+
+  /// Years of adjusting experience in this subject matter (12.4(a)).
+  yearsInSubject Int
+  /// Relevant cases handled (12.4(b)(i)) — an input to recognition, kept current.
+  casesHandled   Int @default(0)
+  /// 12.4(b)(ii): satisfactory performance across relevant cases.
+  performanceSatisfactory Boolean @default(false)
+
+  /// The recognition act (12.4): a named person, on a date, decided this
+  /// adjuster is senior in this subject. Absent = not senior, whatever the years.
+  seniorRecognisedAt       DateTime?
+  seniorRecognisedByUserId String?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([adjusterId, category])
+  @@index([category])
+  @@map("adjuster_competencies")
 }

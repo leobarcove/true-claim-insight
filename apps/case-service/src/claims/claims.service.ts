@@ -17,8 +17,10 @@ import { EncryptionService } from '@tci/crypto';
 import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
+import { assignmentEligibility } from '../adjusters/adjuster-competency';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
 import { ConsentService } from '../consent/consent.service';
+import { isLicensedMode } from '../tenant/tenant-settings';
 
 @Injectable()
 export class ClaimsService {
@@ -49,6 +51,12 @@ export class ClaimsService {
       this.consent.hasConsent(claimantId, ConsentPurpose.CROSS_BORDER_TRANSFER),
     ]);
     return { claimProcessing, biometric, crossBorder };
+  }
+
+  private async isLicensedMode(tenantId: string | null | undefined): Promise<boolean> {
+    if (!tenantId) return false;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    return isLicensedMode(tenant?.settings);
   }
 
   /**
@@ -598,6 +606,31 @@ export class ClaimsService {
       this.tenantService.validateTenantAccess(adjuster.tenantId, tenantContext, 'Adjuster');
     }
 
+    // PD 12.1 / 12.2(b): a suspended adjuster is refused in every mode; licence
+    // verification and category competency block once registered and are
+    // recorded advisories while a TPA — the licence flip, applied to people.
+    const competency = claim.category
+      ? await this.prisma.adjusterCompetency.findUnique({
+          where: { adjusterId_category: { adjusterId, category: claim.category } },
+        })
+      : null;
+    const licensedMode = await this.isLicensedMode(claim.tenantId);
+    const eligibility = assignmentEligibility({
+      adjusterStatus: adjuster.status,
+      licenseVerifiedAt: adjuster.licenseVerifiedAt,
+      competency,
+      licensedMode,
+    });
+    if (!eligibility.allowed) {
+      throw new BadRequestException(eligibility.reason);
+    }
+    if (eligibility.advisories.length) {
+      this.logger.warn(
+        `Assignment advisories for adjuster ${adjusterId} on claim ${claimId}: ` +
+          eligibility.advisories.join('; ')
+      );
+    }
+
     const updatedClaim = await this.prisma.claim.update({
       where: { id: claimId },
       data: {
@@ -626,6 +659,9 @@ export class ClaimsService {
       {
         adjusterId,
         adjusterName: adjuster.user.fullName,
+        // Advisories are part of the record: when registration turns these into
+        // hard gates, the firm can show how long it operated clean before.
+        ...(eligibility.advisories.length ? { eligibilityAdvisories: eligibility.advisories } : {}),
       },
       tenantContext,
       {

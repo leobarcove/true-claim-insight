@@ -16,6 +16,7 @@ import {
   templateFor,
   type ReportSections,
 } from './report-templates';
+import { underSupervision } from '../adjusters/adjuster-competency';
 import { canSign, canTransition, countersignDecision, type AdjusterStanding } from './report-authority';
 import { ReportPdfGenerator } from './report-pdf.generator';
 
@@ -49,10 +50,29 @@ export class ReportsService {
     return this.prisma.adjuster.findFirst({ where: { userId } });
   }
 
-  private standing(adjuster: { id: string; status: string }): AdjusterStanding {
-    // yearsInSubject is deliberately absent: AdjusterCompetency is Phase 3, and
-    // inventing a value here would silently decide a PD 12.3 seniority question.
-    return { id: adjuster.id, status: adjuster.status };
+  /**
+   * Real standing from the competency model: years and recognition in the
+   * claim's own category (PD 12.4 is subject-specific), plus the PD 12.3
+   * supervision window. An adjuster with no competency record in this category
+   * reads as junior — the same safe default as before the model existed.
+   */
+  private async standing(
+    adjuster: { id: string; status: string; adjustingSince: Date | null },
+    category: string | null | undefined
+  ): Promise<AdjusterStanding> {
+    const competency = category
+      ? await this.prisma.adjusterCompetency.findUnique({
+          where: { adjusterId_category: { adjusterId: adjuster.id, category: category as never } },
+        })
+      : null;
+
+    return {
+      id: adjuster.id,
+      status: adjuster.status,
+      yearsInSubject: competency?.yearsInSubject,
+      seniorRecognised: competency ? Boolean(competency.seniorRecognisedAt) : undefined,
+      underSupervision: underSupervision(adjuster.adjustingSince, new Date()),
+    };
   }
 
   private async licensedModeFor(tenantId: string | null | undefined): Promise<boolean> {
@@ -251,8 +271,8 @@ export class ReportsService {
 
     const params = {
       type: report.type,
-      author: this.standing(author),
-      signer: this.standing(signer),
+      author: await this.standing(author, claim.category),
+      signer: await this.standing(signer, claim.category),
       licensedMode,
       missingSections,
     };
