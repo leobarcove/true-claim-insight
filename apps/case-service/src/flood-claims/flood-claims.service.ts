@@ -42,7 +42,6 @@ export class FloodClaimsService {
           incidentDate: new Date(dto.incidentDate),
           incidentLocation: dto.incidentLocation as Prisma.InputJsonValue,
           description: dto.description,
-          isPdpaCompliant: dto.isPdpaCompliant ?? false,
           tenantId: tenantContext.tenantId,
           insurerTenantId: tenantContext.tenantId,
           userId,

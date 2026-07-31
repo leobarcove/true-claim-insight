@@ -18,7 +18,10 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 - **Firm Admins** - Manage adjusting firm operations
 - **Support Desk** - Handle customer enquiries
 
-**MVP scope:** Motor insurance claims (Own Damage, Third-Party Property) in Malaysia
+**MVP scope:** **Non-motor** claims in Malaysia — travel first (written under the
+PA class), then fire, flood and other property lines. Motor code in the repo is
+legacy and must not be extended; see "Standing decisions" below and
+`docs/MASTER_PLAN.md` §1.
 
 ## Tech Stack Rules
 
@@ -140,7 +143,11 @@ deployment manifests**; local development runs on the host with
 1. **Do not run `php artisan migrate` on remote server**
 2. **Always perform cleanup for unused files after verification**
 3. **Use British English** (colour, behaviour, organisation)
-4. **Data sovereignty** - All data must stay in Malaysia region
+4. **Data sovereignty is a target, not a fact.** Gemini, Hume and Daily.co
+   process claimant personal data offshore today and no cross-border basis is
+   established — see the caveat above. Do not write code or copy that asserts
+   in-country processing until it is true. AWS Malaysia (`ap-southeast-5`) is
+   the destination, not the current state.
 5. **Multi-tenant isolation** - Adjusting firms and insurers are separate tenants
 
 ## Multi-Tenant Architecture
@@ -271,16 +278,18 @@ pnpm build
 
 ## API Ports (Development)
 
-| Service          | Port |
-| ---------------- | ---- |
-| API Gateway      | 3000 |
-| Case Service     | 3001 |
-| Video Service    | 3002 |
-| Identity Service | 3003 |
-| Risk Engine      | 3004 |
-| Document Service | 3005 |
-| Adjuster Portal  | 4000 |
-| Claimant Web     | 4001 |
+| Service         | Port | Notes |
+| --------------- | ---- | ----- |
+| API Gateway     | 3000 | |
+| Case Service    | 3001 | |
+| Video Service   | 3002 | |
+| Risk Engine     | 3004 | |
+| Risk Analyzer   | 3005 | Python / FastAPI (uvicorn) |
+| Adjuster Portal | 4000 | |
+| Claimant Web    | 4001 | |
+
+There is no service on 3003. `identity-service` and `document-service` do not
+exist — see the "Not built" note above. Port 3005 belongs to `risk-analyzer`.
 
 ## Test Credentials (Local Development)
 

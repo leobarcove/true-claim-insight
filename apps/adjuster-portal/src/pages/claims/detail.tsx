@@ -1313,7 +1313,7 @@ export function ClaimDetailPage() {
                           KYC {claim.claimant?.kycStatus || 'PENDING'}
                         </Badge>
                       )}
-                      {claim.isPdpaCompliant ? (
+                      {claim.consent?.claimProcessing ? (
                         <Badge
                           variant="info"
                           className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"

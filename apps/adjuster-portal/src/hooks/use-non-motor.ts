@@ -22,7 +22,11 @@ export interface CreateFloodClaimInput {
   incidentDate: string;
   incidentLocation: { address: string; latitude?: number; longitude?: number };
   description: string;
-  isPdpaCompliant?: boolean;
+  /**
+   * Real consent standing, from the consent records. Replaces the old
+   * `isPdpaCompliant` boolean, which the client set and nothing verified.
+   */
+  consent?: { claimProcessing: boolean; biometric: boolean; crossBorder: boolean };
   // Flood-specific
   incidentStart: string;
   incidentEnd?: string;
