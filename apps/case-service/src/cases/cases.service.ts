@@ -27,6 +27,7 @@ import {
   TRAVEL_CLAIM_TYPE_LABELS,
 } from '@tci/shared-types';
 import { PrismaService } from '../config/prisma.service';
+import { AuditService } from '../common/audit/audit.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
@@ -91,7 +92,8 @@ export class CasesService {
     private readonly storageService: StorageService,
     private readonly documentValidation: DocumentValidationService,
     private readonly configService: ConfigService,
-    private readonly encryption: EncryptionService
+    private readonly encryption: EncryptionService,
+    private readonly auditService: AuditService
   ) {}
 
   /**
@@ -121,26 +123,20 @@ export class CasesService {
     tenantContext: TenantContext,
     options: { oldValues?: unknown; newValues?: unknown; metadata?: unknown } = {}
   ) {
-    try {
-      await this.prisma.auditTrail.create({
-        data: {
-          entityId,
-          entityType: 'CASE',
-          action,
-          oldValues: (options.oldValues as Prisma.InputJsonValue) ?? undefined,
-          newValues: (options.newValues as Prisma.InputJsonValue) ?? undefined,
-          metadata: (options.metadata as Prisma.InputJsonValue) ?? undefined,
-          tenantId: tenantContext.tenantId,
-          userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
-          actorId: tenantContext.userId,
-          actorType: (tenantContext.userRole as any) ?? 'SYSTEM',
-        },
-      });
-    } catch (error) {
-      // An audit failure must be loud in logs but must not roll back the
-      // business operation that already succeeded.
-      this.logger.error(`Audit write failed for case ${entityId} (${action}): ${error}`);
-    }
+    // Shared fail-soft writer (its own try/catch logs failures loudly); one row
+    // shape across every service, so the trail stays queryable as a whole.
+    await this.auditService.record({
+      entityId,
+      entityType: 'CASE',
+      action,
+      oldValues: options.oldValues,
+      newValues: options.newValues,
+      metadata: options.metadata,
+      tenantId: tenantContext.tenantId,
+      userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+      actorId: tenantContext.userId,
+      actorType: tenantContext.userRole ?? 'SYSTEM',
+    });
   }
 
   // -------------------------------------------------------------------------

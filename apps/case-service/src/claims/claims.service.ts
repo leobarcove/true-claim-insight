@@ -22,6 +22,7 @@ import { screeningStanding } from '../adjusters/background-screening';
 import { rotationAdvisory } from '../adjusters/rotation';
 import { conflictRefusalReason, screenConflicts } from '../adjusters/conflict-screening';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
+import { AuditService } from '../common/audit/audit.service';
 import { ConsentService } from '../consent/consent.service';
 import { isLicensedMode } from '../tenant/tenant-settings';
 
@@ -34,7 +35,8 @@ export class ClaimsService {
     private readonly tenantService: TenantService,
     private readonly encryption: EncryptionService,
     private readonly sla: SlaService,
-    private readonly consent: ConsentService
+    private readonly consent: ConsentService,
+    private readonly audit: AuditService
   ) {}
 
   /**
@@ -1164,20 +1166,22 @@ export class ClaimsService {
       actorType = tenantContext.userRole as typeof actorType;
     }
 
-    await this.prisma.auditTrail.create({
-      data: {
-        entityId,
-        entityType: 'CLAIM',
-        action,
-        metadata,
-        oldValues: changes?.oldValues ?? undefined,
-        newValues: changes?.newValues ?? undefined,
-        tenantId: tenantContext?.tenantId,
-        userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
-        actorId: tenantContext?.userId,
-        actorType,
-      },
+    // Shared fail-soft writer: the bespoke create failed requests over its own
+    // bookkeeping (seen live on the document soft-delete) and produced rows in
+    // service-local shapes. One writer, one shape, failures loud but non-fatal.
+    await this.audit.record({
+      entityId,
+      entityType: 'CLAIM',
+      action,
+      metadata,
+      oldValues: changes?.oldValues,
+      newValues: changes?.newValues,
+      tenantId: tenantContext?.tenantId,
+      userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
+      actorId: tenantContext?.userId,
+      actorType,
     });
+
   }
 
   /**
