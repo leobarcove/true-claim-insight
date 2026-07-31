@@ -9,7 +9,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import { ClaimCategory } from '@prisma/client';
+import { ClaimCategory, ConflictInterestType, ConflictPartyType } from '@prisma/client';
 import {
   ApiTags,
   ApiOperation,
@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { AdjustersService } from './adjusters.service';
 import { CompetencyService } from './competency.service';
+import { ConflictsService } from './conflicts.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import {
@@ -45,7 +46,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 export class AdjustersController {
   constructor(
     private readonly adjustersService: AdjustersService,
-    private readonly competency: CompetencyService
+    private readonly competency: CompetencyService,
+    private readonly conflicts: ConflictsService
   ) {}
 
   @Get(':id/queue')
@@ -148,5 +150,43 @@ export class AdjustersController {
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   verifyLicence(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
     return this.competency.verifyLicence(id, tenantContext);
+  }
+
+  // ==== Conflicts of interest (PD 10.3, 12.1(d)) ====
+
+  @Get(':id/conflicts')
+  @ApiOperation({ summary: 'Conflict declarations (live by default; ?all=true for history)' })
+  listConflicts(@Param('id') id: string, @Query('all') all?: string) {
+    return this.conflicts.list(id, all === 'true');
+  }
+
+  @Post(':id/conflicts')
+  @ApiOperation({ summary: 'Declare a relation or interest — declaring is always welcome' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  declareConflict(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      partyType: ConflictPartyType;
+      interestType: ConflictInterestType;
+      partyName: string;
+      partyTenantId?: string;
+      relationship: string;
+      details?: string;
+    },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.conflicts.declare(id, body, tenantContext);
+  }
+
+  @Post('conflicts/:declarationId/resolve')
+  @ApiOperation({ summary: 'Resolve a declaration — a reason is required and audited' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  resolveConflict(
+    @Param('declarationId') declarationId: string,
+    @Body('note') note: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.conflicts.resolve(declarationId, note, tenantContext);
   }
 }

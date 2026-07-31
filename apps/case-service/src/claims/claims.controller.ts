@@ -20,6 +20,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { ConflictsService } from '../adjusters/conflicts.service';
 import { ClaimsService } from './claims.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
@@ -46,7 +47,8 @@ import { UserRole } from '../common/guards/roles.guard';
 @UseGuards(InternalAuthGuard, TenantGuard, RolesGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimsController {
-  constructor(private readonly claimsService: ClaimsService) {}
+  constructor(private readonly claimsService: ClaimsService,
+    private readonly conflictsService: ConflictsService) {}
 
   @Post()
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
@@ -207,6 +209,17 @@ export class ClaimsController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.getEvidenceChecklist(id, tenantContext);
+  }
+
+  @Post(':id/coi-attestation')
+  @ApiOperation({ summary: 'Assigned adjuster attests no undeclared conflict for this claim (PD 12.1(d))' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  attestCoi(
+    @Param('id') id: string,
+    @Body() body: { hasConflict?: boolean; note?: string },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.conflictsService.attest(id, Boolean(body.hasConflict), body.note, tenantContext);
   }
 
   @Post(':id/notes')

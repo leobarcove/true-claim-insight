@@ -159,6 +159,8 @@ model Adjuster {
   signedReports     AdjusterReport[] @relation("ReportSigner")
   authorityLimits   AuthorityLimit[]
   competencies      AdjusterCompetency[]
+  conflictDeclarations ConflictDeclaration[]
+  conflictAttestations ConflictAttestation[]
 }
 
 model Claimant {
@@ -304,6 +306,7 @@ model Claim {
   slaClocks               SlaClock[]
   reports                 AdjusterReport[]
   assignment              Assignment?
+  conflictAttestations    ConflictAttestation[]
 }
 
 // ============================================================================
@@ -1675,4 +1678,81 @@ model AdjusterCompetency {
   @@unique([adjusterId, category])
   @@index([category])
   @@map("adjuster_competencies")
+}
+
+// ============================================================================
+// CONFLICT OF INTEREST — PD 10.3, 11.2(c), 12.1(d)
+// ============================================================================
+
+enum ConflictPartyType {
+  INSURER
+  TAKAFUL_OPERATOR
+  WORKSHOP
+  CLAIMANT
+  OTHER
+}
+
+enum ConflictInterestType {
+  EMPLOYMENT
+  EQUITY
+  FAMILY
+  FINANCIAL
+  OTHER
+}
+
+/// A standing declaration of a relation or interest (PD 10.3).
+///
+/// The PD reaches spouses, children, parents, siblings and other immediate
+/// family — so `relationship` records *whose* interest it is, and a declaration
+/// is never deleted: it is resolved, with a reason, because "we knew and dealt
+/// with it" is the record that protects the firm, while a deleted row protects
+/// nobody.
+model ConflictDeclaration {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  partyType    ConflictPartyType
+  interestType ConflictInterestType
+  /// The party's name as declared (e.g. an insurer or workshop name).
+  partyName    String
+  /// When the party is a tenant on the platform, the id enables automatic
+  /// screening against a claim's insurer — a name match alone is weaker.
+  partyTenantId String?
+
+  /// Whose interest: SELF, SPOUSE, CHILD, PARENT, SIBLING, OTHER_FAMILY.
+  relationship String
+  details      String?
+
+  declaredAt       DateTime  @default(now())
+  declaredByUserId String
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  resolvedNote     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, resolvedAt])
+  @@index([partyTenantId])
+  @@map("conflict_declarations")
+}
+
+/// The per-claim attestation (PD 12.1(d)): the assigned adjuster confirms, for
+/// this specific claim, that no undeclared conflict exists — or declares one.
+model ConflictAttestation {
+  id         String  @id @default(uuid())
+  claimId    String
+  adjusterId String
+
+  hasConflict Boolean @default(false)
+  note        String?
+  attestedAt  DateTime @default(now())
+
+  claim    Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, adjusterId])
+  @@map("conflict_attestations")
 }

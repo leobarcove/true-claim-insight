@@ -17,6 +17,7 @@ import {
   type ReportSections,
 } from './report-templates';
 import { underSupervision } from '../adjusters/adjuster-competency';
+import { ConflictsService } from '../adjusters/conflicts.service';
 import { canSign, canTransition, countersignDecision, type AdjusterStanding } from './report-authority';
 import { ReportPdfGenerator } from './report-pdf.generator';
 
@@ -42,7 +43,8 @@ export class ReportsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sla: SlaService
+    private readonly sla: SlaService,
+    private readonly conflicts: ConflictsService
   ) {}
 
   /** The Adjuster record for a user, or null when they are not one. */
@@ -210,6 +212,23 @@ export class ReportsService {
       throw new BadRequestException(
         `Cannot submit while required sections are empty: ${missing.join(', ')}. ` +
           'PD 12.6 requires the facts, assumptions, methods and sources to be disclosed.'
+      );
+    }
+
+    // PD 12.1(d): the per-claim COI attestation. Registered mode requires it
+    // before a report leaves the author's hands; as a TPA the gap is logged so
+    // the habit forms before the flag flips.
+    const claim = await this.loadClaim(report.claimId);
+    const attested = await this.conflicts.hasClearAttestation(report.claimId, adjuster.id);
+    if (!attested) {
+      if (await this.licensedModeFor(claim.tenantId)) {
+        throw new BadRequestException(
+          'Submit refused: attest the conflict-of-interest position for this claim first ' +
+            '(PD 12.1(d)). POST /claims/:id/coi-attestation.'
+        );
+      }
+      this.logger.warn(
+        `Report ${reportId} submitted without a COI attestation (advisory while TPA)`
       );
     }
 
