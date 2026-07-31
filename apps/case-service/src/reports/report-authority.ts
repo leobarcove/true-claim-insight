@@ -37,9 +37,15 @@ export interface AdjusterStanding {
   /** Adjuster.status — only an ACTIVE adjuster may author or sign. */
   status: string;
   /**
-   * Years of experience in the subject matter. PD 12.3 treats under five years
-   * as junior, requiring supervision and a senior countersign. Undefined means
-   * the data does not exist yet (the competency model is Phase 3).
+   * Years of experience in the subject matter.
+   *
+   * PD 12.7(b) requires a report by an adjusting employee with under five
+   * years' experience to be signed off by a senior; PD 12.4(a) recognises a
+   * senior as having five years *in the subject matter being assessed*. This
+   * field uses the subject-specific reading — stricter than 12.7(b)'s literal
+   * "adjusting work experience", deliberately: a generalist with ten years but
+   * one in fire is not the senior 12.4(a) describes. Undefined means the data
+   * does not exist yet (the competency model is Phase 3).
    */
   yearsInSubject?: number;
 }
@@ -58,7 +64,7 @@ export interface CountersignDecision {
 /**
  * Decide whether a report needs a senior countersign, and whether it has one.
  *
- * The honest complication: PD 12.3/12.7(b) keys the requirement to the author's
+ * The honest complication: PD 12.7(b) keys the requirement to the author's
  * seniority, and the seniority model does not exist yet — `AdjusterCompetency`
  * is Phase 3. Rather than assume every author is senior (which would silently
  * pass a junior's unsigned report) or assume none are (which would block a
@@ -98,7 +104,7 @@ export function countersignDecision(params: {
       required: false,
       satisfied: true,
       blocking: false,
-      basis: `Author has ${author.yearsInSubject} years in subject; senior, self-signature permitted (PD 12.3)`,
+      basis: `Author has ${author.yearsInSubject} years in subject; senior per PD 12.4(a), self-signature permitted`,
     };
   }
 
@@ -107,7 +113,7 @@ export function countersignDecision(params: {
     required: true,
     satisfied: differentPerson && signerSenior,
     blocking: licensedMode,
-    basis: `Author has ${author.yearsInSubject} years in subject; junior under PD 12.3, senior countersign required for ${type} report`,
+    basis: `Author has ${author.yearsInSubject} years in subject; under the PD 12.4(a) senior threshold, so PD 12.7(b) requires a senior countersign for this ${type} report`,
   };
 }
 
