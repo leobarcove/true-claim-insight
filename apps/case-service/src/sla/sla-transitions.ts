@@ -17,11 +17,10 @@ export interface SlaTransition {
 }
 
 /**
- * Note on coverage: `ACK_TO_INSURER` is absent because the appointment it
- * measures has no representation yet — the `Assignment` entity is Phase 2. Until
- * then that clock can only be started explicitly, and the CSP one-working-day
- * acknowledgement remains unautomated rather than silently mismapped onto some
- * other event.
+ * Note on coverage: `ACK_TO_INSURER` is absent on purpose. It is started and
+ * stopped by the `Assignment` lifecycle, because the acknowledgement falls due
+ * before a claim exists — mapping it onto a claim status would measure it from
+ * the wrong moment.
  *
  * `REPORT_PENDING` stands in for "documents complete" for the same reason: the
  * evidence checklist computes completeness but emits no event yet. When

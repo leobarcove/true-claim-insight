@@ -169,7 +169,7 @@ Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, 
 
 ## 3. Compliance matrix (with current-state verdicts)
 
-Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 4 PASS, 11 PARTIAL, 16 FAIL** (re-audited 31 July 2026; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
+Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 5 PASS, 11 PARTIAL, 15 FAIL** (re-audited 31 July 2026; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
 
 ### 3.1 BNM Adjuster PD (binding "S" paragraphs)
 
@@ -178,7 +178,7 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 | 8.1/13.1 | Registration lifecycle; notify BNM ≤7 wkg days of capital/office/director/CEO/shareholder changes | **FAIL** — no directors/shareholders/capital entity, no notification tracking | `BnmNotification` register with own SLA clock (licensed mode) | 5 |
 | 10.1/10.2 | Fit & proper records for shareholders/KRPs | **FAIL** — no entity | Fit-and-proper attestation records + periodic re-attestation in compliance module | 3 |
 | 10.3, 12.1(d) | COI: staff/family ties to insurers/workshops; per-claim screening | **FAIL** — `assignAdjuster` performs no screening | `ConflictDeclaration` standing + per-assignment attestation; blocking gate | 3 |
-| 11.2(a) | End-to-end adjusting process embodied until report completion | **PARTIAL** — the chain now terminates in a work product: intake → assign → documents → assessment → report drafted, signed and issued, verified end to end through the gateway. What is still missing is the *start*: appointment receipt has no representation (`Assignment` is Phase 2), so the process is embodied from intake to report but not from the insurer's instruction | The claim-journey spine itself (§2) + report engine | 1–2 |
+| 11.2(a) | End-to-end adjusting process embodied until report completion | **PASS** — the adjusting process is embodied end to end: insurer appointment received and acknowledged → claim opened → adjuster assigned → documents → assessment → report drafted, signed and issued. `Assignment` closed the missing front end; verified live through both halves. **Tests:** 13 (assignment lifecycle) + the report suites | The claim-journey spine itself (§2) + report engine | 1–2 |
 | 11.2(b) | Rotation of assignments + work-quality reviews | **FAIL** — workload scoring exists but advisory and orphaned | Rotation counters; QA review sampling on reports | 3 |
 | 11.2(d) | Escalation processes to Board | **FAIL** | `ComplianceEvent` register → Board-report export | 3 |
 | 11.2(e) | Pre-employment background screening | **FAIL** | Screening checklist + document slots on adjuster onboarding | 3 |
@@ -195,7 +195,7 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 
 | Anchor | Current | Target control | Phase |
 |---|---|---|---|
-| Firm ack of appointment ≤1 wkg day | **FAIL** — no appointment entity, no ack timestamp, no working-day arithmetic anywhere | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
+| Firm ack of appointment ≤1 wkg day | **PARTIAL** — `Assignment` records the instruction and starts the clock from *when it arrived*, not when work began; acknowledging or declining stops it, since both answer the insurer. Verified live: received Fri 31 Jul → due Mon 3 Aug, and a claim cannot be opened on an unacknowledged appointment. Remains PARTIAL because the acknowledgement is recorded, not **sent** — that needs the notification layer, deferred with the hosting decision | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
 | Preliminary report ~7–14 days (market practice) | **FAIL** | **PARTIAL** — `SlaClock` starts on adjuster assignment and stops when the preliminary report is issued; per-insurer target with a platform default of 7 working days. Cannot operate until the gazetted holidays are entered | 1 |
 | Final report ≤10 wkg days from complete documents | **FAIL** — checklist computed but emits no completeness event; gates nothing | **PARTIAL** — clock wired, pauses on awaiting-documents and on SIU referral (banking the remaining days), stops when the final report is *issued* — the act CSP measures. Breach and escalation verified live. Cannot operate until the gazetted holidays are entered | 1 |
 | Supplementary claims 5 wkg days | **FAIL** — structurally precluded: CLOSED is terminal, `convertedClaimId @unique` blocks reopen | `SlaClock` SUPPLEMENTARY + reopen path | 2 |
@@ -491,7 +491,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 ## 7. Verification
 
 - **Per phase:** exit criteria above; each is demonstrable in the running system (portal :4000, claimant :4001).
-- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current **4 PASS / 11 PARTIAL / 16 FAIL**, recounted from the table (never carried forward by hand) — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
+- **Compliance:** matrix rows flip from FAIL/PARTIAL to PASS only with (a) server-side enforcement evidence and (b) a CI compliance test asserting the control. Current **5 PASS / 11 PARTIAL / 15 FAIL**, recounted from the table (never carried forward by hand) — the matrix is re-audited at each phase exit and the trend is the firm's readiness metric.
 - **Feasibility gates:** the §9.6 go/no-go questions are checked at the phase boundaries stated there. Engineering must not outrun validated economics — in particular G2/G3 before Phase 2, and the §9.2 funding decision before Phase 3.
 - **Architecture gate:** the three blocking defects in §4.3 must be closed before the platform holds real claimant data in any shared environment. **A1 (service auth) and A3 (segregation of duties) are closed; A2 (data ownership) has its foundation in place with six declared exceptions on a shrink-only ratchet.**
 - **Execution order:** Phase 0 hotfixes (done — `e404fc5`), Phase 1a foundations batch (done — `939ac39`), then **Phase 0b architecture hardening**, then the remainder of Phase 1a (audit interceptor + consent/encryption + notifications + status guards), 1b (SLA engine + assessment-mode router), 1c (report engine).
@@ -558,6 +558,18 @@ A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain trac
 3. **Legal review of the consent wording.** The machinery is built and the drafts are written in EN and BM, seeded **unapproved** so nothing can be recorded against them. What is needed: a Malaysian data-protection practitioner on the English, a native speaker on the Malay (a translation that drifts in meaning is worse than none — the subject would have agreed to something other than the English), and confirmation of the named offshore recipients. Approval is then one API call by a compliance officer.
 4. ~~**Gazetted 2026 holidays**~~ — installed 31 July 2026 for Kuala Lumpur from public calendars, cross-checked five ways, with the sources and one disputed date (23 March) recorded in the file. Still worth a gazette check before relying on a deadline in a dispute. **2027 will be needed when published.** Original note: gazetted public holidays — needed before any CSP deadline is trustworthy. `MALAYSIAN_HOLIDAYS` in `apps/case-service/src/sla/working-days.ts` has the fixed-date national holidays; the lunar ones (Aidilfitri, Aidiladha, CNY, Deepavali, Thaipusam, Wesak, Awal Muharram, Maulidur Rasul), the Agong's birthday and each state's holidays must be pasted from the Prime Minister's Department gazette, then `verifiedAgainstGazette` set to true. Roughly a five-minute data-entry task per year, deliberately not guessed.
 
+### `Assignment` — the journey now starts where it starts (31 July 2026)
+The claim journey began at `Claim`, which meant it began when the firm decided to start work rather than when the insurer asked. Consequences: no record of the appointment, and the CSP one-working-day acknowledgement measured from nothing — it could be neither met nor missed, only ignored.
+
+`Assignment` is that missing front end. Receiving an instruction starts the acknowledgement clock from `receivedAt` (which is not the same as when the row was written — an email logged late still runs from arrival). Acknowledging *or declining* stops it: both answer the insurer, and leaving the clock running on a correctly-refused appointment would manufacture a breach out of a conflict of interest properly declared.
+
+Three design points worth keeping:
+- **Idempotent on (insurer, externalRef).** A resent email, a retried API call or an overlapping Merimen poll returns the existing record. Duplicate appointments would each carry their own clock, and the firm would appear to have breached one of them.
+- **A claim cannot be opened on an unacknowledged appointment.** Starting work on an instruction the firm has not answered is precisely how the acknowledgement gets forgotten, and the breach that follows is silent until someone asks.
+- **SLA clocks now hang on a claim *or* an assignment**, enforced by a `num_nonnulls(...) = 1` check constraint. A clock with neither is orphaned; with both, ambiguous — and both states are invisible until the sweep reports a breach nobody can explain.
+
+Channel is captured from day one (EMAIL / PORTAL / MERIMEN / API / MANUAL) so Merimen is an ingestion adapter later, never a schema assumption (§6.4).
+
 ### Email provider: Amazon SES in Malaysia, not Resend — decision deferred to the hosting choice
 **Parked 31 July 2026.** The provider comparison below stands, but it is downstream of a decision not yet made: nothing is deployed anywhere and no hosting provider has been chosen. Settling on AWS Malaysia would make the email choice automatic, which is the argument for taking the decisions in that order rather than this one.
 
@@ -575,7 +587,7 @@ Two things the research turned up that change existing rows rather than adding n
 Neither has been reflected in the matrix verdicts yet — both want counsel's reading first.
 
 ### Compliance re-audit, 31 July 2026
-Every row re-checked against the running system rather than against intent. **0/7/20 (first audit) → 1/7/23 (recount) → 4 PASS / 11 PARTIAL / 16 FAIL.**
+Every row re-checked against the running system rather than against intent. **0/7/20 (first audit) → 1/7/23 (recount) → 4/11/16, then 5 PASS / 11 PARTIAL / 15 FAIL after `Assignment` closed PD 11.2(a).**
 
 Four rows reached PASS: PD 12.6 report disclosure, CSP records-readily-available, FSA s.146 examination readiness, and PDPA NRIC/bank protection. Seven moved FAIL → PARTIAL.
 

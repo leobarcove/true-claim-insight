@@ -70,10 +70,10 @@ describe('SLA transition map', () => {
     }
   });
 
-  it('does not yet map ACK_TO_INSURER, which has no appointment event to hang on', () => {
-    // Asserting a known gap rather than leaving it implicit: the Assignment
-    // entity is Phase 2, and mismapping the one-working-day acknowledgement onto
-    // some other status would be worse than leaving it unautomated.
+  it('leaves ACK_TO_INSURER to the assignment lifecycle', () => {
+    // Not a gap: the acknowledgement falls due before a claim exists, so it is
+    // started and stopped by Assignment. Mapping it onto a claim status would
+    // measure a regulatory deadline from the wrong moment.
     expect(stagesIn('start')).not.toContain(SlaStage.ACK_TO_INSURER);
   });
 

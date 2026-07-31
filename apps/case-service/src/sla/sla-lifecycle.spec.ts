@@ -97,6 +97,14 @@ describe('SLA clocks across the claim lifecycle', () => {
     expect([...live]).not.toContain(SlaStage.PRELIMINARY_REPORT);
   });
 
+  it('does not start the acknowledgement clock from a claim status', () => {
+    // ACK_TO_INSURER is started by the Assignment lifecycle, not by anything the
+    // claim does — the obligation falls due before a claim exists at all. This
+    // asserts the boundary rather than the old gap.
+    const started = Object.values(SLA_TRANSITIONS).flatMap(t => t?.start ?? []);
+    expect(started).not.toContain(SlaStage.ACK_TO_INSURER);
+  });
+
   it('flags any SLA transition keyed to a status the claim can never reach', () => {
     const reachable = new Set(
       walkPaths().flatMap(({ path }) => path)

@@ -41,6 +41,12 @@ export class SlaProcessor extends WorkerHost {
     let warned = 0;
 
     for (const clock of clocks) {
+      // A clock hangs on a claim or an assignment, never both. Label it by
+      // whichever it has, so an acknowledgement breach is as readable as a
+      // report breach rather than showing as "undefined".
+      const subject =
+        clock.claim?.claimNumber ?? `assignment ${clock.assignment?.externalRef ?? clock.id}`;
+
       try {
         const target = {
           workingDays: clock.policy.workingDays,
@@ -70,7 +76,7 @@ export class SlaProcessor extends WorkerHost {
             // failing of the adjusting firm.
             const owner = clock.policy.monitorOnly ? 'INSURER-SIDE' : 'FIRM';
             this.logger.warn(
-              `SLA BREACH [${owner}] ${clock.stage} on claim ${clock.claim.claimNumber}: ` +
+              `SLA BREACH [${owner}] ${clock.stage} on ${subject}: ` +
                 `${daysLate} working day(s) late, escalation level ${level}`
             );
           }
@@ -84,7 +90,7 @@ export class SlaProcessor extends WorkerHost {
           });
           warned += 1;
           this.logger.log(
-            `SLA due soon: ${clock.stage} on claim ${clock.claim.claimNumber}, ` +
+            `SLA due soon: ${clock.stage} on ${subject}, ` +
               `${remainingWorkingDays(now, clock.dueAt, target)} working day(s) remaining`
           );
         }
@@ -92,7 +98,7 @@ export class SlaProcessor extends WorkerHost {
         // Per-clock isolation. A claim in an unverified holiday year, or any
         // other bad row, must not prevent the rest of the sweep from running.
         this.logger.error(
-          `SLA sweep skipped clock ${clock.id} (${clock.stage}, claim ${clock.claim.claimNumber})`,
+          `SLA sweep skipped clock ${clock.id} (${clock.stage}, ${subject})`,
           error instanceof Error ? error.message : String(error)
         );
       }
