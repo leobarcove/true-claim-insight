@@ -8,6 +8,7 @@ import {
 import { Document, Prisma, SignatureStatus } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
+import { AuditService } from '../common/audit/audit.service';
 import {
   SIGNATURE_PROVIDER,
   SignatureProvider,
@@ -33,7 +34,8 @@ export class SignaturesService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(SIGNATURE_PROVIDER)
-    private readonly provider: SignatureProvider
+    private readonly provider: SignatureProvider,
+    private readonly auditService: AuditService
   ) {}
 
   async requestSignature(
@@ -171,21 +173,17 @@ export class SignaturesService {
     metadata: Record<string, unknown>,
     tenantContext: TenantContext
   ) {
-    try {
-      await this.prisma.auditTrail.create({
-        data: {
-          entityId: documentId,
-          entityType: 'DOCUMENT',
-          action,
-          metadata: metadata as Prisma.InputJsonValue,
-          tenantId: tenantContext.tenantId ?? null,
-          userId:
-            tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
-        },
-      });
-    } catch (e: any) {
-      // Non-fatal — losing one audit row should not block the lifecycle.
-      this.logger.warn(`Audit write failed for ${action} on ${documentId}: ${e.message}`);
-    }
+    // Shared fail-soft writer — one row shape across every service, and the
+    // actor is now attributed (the bespoke write dropped actorId entirely).
+    await this.auditService.record({
+      entityId: documentId,
+      entityType: 'DOCUMENT',
+      action,
+      metadata,
+      tenantId: tenantContext.tenantId ?? null,
+      userId: tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+      actorId: tenantContext.userId,
+      actorType: tenantContext.userRole ?? 'SYSTEM',
+    });
   }
 }

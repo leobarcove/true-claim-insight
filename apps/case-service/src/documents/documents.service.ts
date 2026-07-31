@@ -103,8 +103,7 @@ export class DocumentsService {
     const uploaderUserId = tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId;
 
     // Create audit trail
-    await this.prisma.auditTrail.create({
-      data: {
+    await this.audit.record({
         entityId: claimId,
         entityType: 'CLAIM',
         action: 'DOCUMENT_REPLACED',
@@ -117,8 +116,7 @@ export class DocumentsService {
           oldFilename: existingDoc.filename,
           newFilename: file.filename,
         },
-      },
-    });
+      });
 
     // Trigger Risk Engine Analysis
     this.triggerRiskAnalysis(updatedDoc.id, tenantContext).catch(err =>
@@ -222,8 +220,7 @@ export class DocumentsService {
     }
 
     // Create audit trail
-    await this.prisma.auditTrail.create({
-      data: {
+    await this.audit.record({
         entityId: claimId,
         entityType: 'CLAIM',
         action: 'DOCUMENT_UPLOADED',
@@ -236,8 +233,7 @@ export class DocumentsService {
           filename: document.filename,
           type: document.type,
         },
-      },
-    });
+      });
 
     return document;
   }

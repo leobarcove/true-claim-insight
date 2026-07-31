@@ -6,10 +6,9 @@ import { PrismaService } from '../../config/prisma.service';
  * NestJS provider around the shared AuditWriter — see @tci/prisma-client for why
  * the write itself is shared rather than reimplemented per service.
  *
- * The older bespoke writers in claims/cases/documents predate this and still
- * call prisma.auditTrail.create directly. They produce correct rows including
- * before/after values; migrating them onto this service is tidy-up, not a
- * correctness fix, and is tracked rather than done opportunistically.
+ * Every domain audit write in this service now flows through here. The one
+ * deliberate exception is ClaimExportService's export seal, which writes
+ * directly and fails CLOSED — the sealed row is part of that deliverable.
  */
 @Injectable()
 export class AuditService {

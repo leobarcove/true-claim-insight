@@ -137,6 +137,10 @@ export const OWNERSHIP_EXCEPTIONS: OwnershipException[] = [
     service: 'video-service',
     model: 'claim',
     reason: 'rooms.service.ts sets Claim.status = SCHEDULED and scheduledAssessmentTime directly',
+    // Design settled: a case-service internal endpoint "schedule assessment"
+    // (status via updateStatus semantics + the timestamp), called over the
+    // internal API. Not rewired yet because the rooms flow needs Daily.co
+    // credentials to run, and an unverifiable rewire ships nothing but risk.
     resolution: 'Call case-service PATCH /claims/:id/status over the internal channel',
   },
   {
@@ -161,6 +165,8 @@ export const OWNERSHIP_EXCEPTIONS: OwnershipException[] = [
     service: 'risk-engine',
     model: 'floodClaim',
     reason: 'MetMalaysia provider sets FloodClaim.parametricTriggerMet',
+    // Design settled: PATCH internal flood-claims/:id/parametric on
+    // case-service. Awaits a runnable fraud-orchestrator flow to verify against.
     resolution: 'Emit the FraudSignal only; case-service applies the parametric flag',
   },
   {
