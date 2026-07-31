@@ -1,6 +1,7 @@
 import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { ComplianceModule } from '../compliance/compliance.module';
 import { PrismaModule } from '../config/prisma.module';
+import { SlaController } from './sla.controller';
 import { SlaProcessor } from './sla.processor';
 import { SlaService } from './sla.service';
 
@@ -14,6 +15,7 @@ import { SlaService } from './sla.service';
  */
 @Module({
   imports: [PrismaModule, ComplianceModule],
+  controllers: [SlaController],
   providers: [SlaService, SlaProcessor],
   exports: [SlaService],
 })

@@ -3,6 +3,7 @@ import { KeyPersonType, Prisma } from '@prisma/client';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
+import { BnmNotificationsService } from './bnm-notifications.service';
 import { ComplianceEventsService } from './compliance-events.service';
 import {
   applicableCriteria,
@@ -28,7 +29,8 @@ export class KeyPersonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly compliance: ComplianceEventsService
+    private readonly compliance: ComplianceEventsService,
+    private readonly bnm: BnmNotificationsService
   ) {}
 
   async create(
@@ -54,6 +56,18 @@ export class KeyPersonsService {
       tenantId: tenantContext.tenantId,
       newValues: { fullName: data.fullName, type: data.type, appointedAt },
     });
+
+    // PD 13.1(d): a change to directors, CEO or shareholders is notifiable —
+    // drafted here because this act IS the change.
+    await this.bnm.draft(
+      {
+        changeType: 'DIRECTOR_CEO_SHAREHOLDER_CHANGE',
+        description: `Appointment: ${data.fullName} (${data.type}${data.position ? ', ' + data.position : ''})`,
+        occurredAt: appointedAt,
+        keyPersonId: person.id,
+      },
+      tenantContext.userId
+    );
     return person;
   }
 
@@ -75,6 +89,16 @@ export class KeyPersonsService {
       tenantId: tenantContext.tenantId,
       oldValues: { fullName: person.fullName, type: person.type },
     });
+
+    await this.bnm.draft(
+      {
+        changeType: 'DIRECTOR_CEO_SHAREHOLDER_CHANGE',
+        description: `Cessation: ${person.fullName} (${person.type})`,
+        occurredAt: ceased.ceasedAt!,
+        keyPersonId: person.id,
+      },
+      tenantContext.userId
+    );
     return ceased;
   }
 
