@@ -43,6 +43,9 @@ export type { WrappedDataKey } from './key-store';
 // decrypting paths opt back in explicitly.
 // One audit-row writer for every service, so the trail has a consistent shape.
 export { AuditWriter } from './audit-writer';
+// Cross-border transfer register (PDPA s.129) — one shape for every service.
+export { OFFSHORE_PROVIDERS, TransferRegister } from './transfer-register';
+export type { TransferEntry, OffshoreProviderKey } from './transfer-register';
 export type { AuditRecord } from './audit-writer';
 export { SENSITIVE_FIELD_OMIT } from './sensitive-fields';
 export type { TciPrismaOptions } from './sensitive-fields';

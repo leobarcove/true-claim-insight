@@ -20,6 +20,8 @@ import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { AuditService } from '../common/audit/audit.service';
+import { ConsentGateService } from '../common/consent/consent-gate.service';
+import { TransferRegister } from '@tci/prisma-client';
 
 const execAsync = promisify(exec);
 
@@ -37,6 +39,7 @@ const tempDir = path.resolve(process.cwd(), 'uploads/temp');
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
   private readonly analyzerUrl: string;
+  private transfers!: TransferRegister;
   private preparationPromises = new Map<string, Promise<any>>();
   private segmentProcessingMap = new Map<string, Promise<any>>();
   private signedUrlCache = new Map<string, { url: string; expires: number }>();
@@ -45,8 +48,16 @@ export class UploadsService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly tenantService: TenantService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly consentGate: ConsentGateService
   ) {
+    this.transfers = new TransferRegister(this.prisma, 'video-service', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for claim ${entry.claimId} — ` +
+          'the s.129 register is now incomplete',
+        error instanceof Error ? error.message : String(error)
+      )
+    );
     this.analyzerUrl = this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005');
     this.logger.log(`Local Storage initialized: ${uploadDir}`);
     this.logger.log(`Temp Storage initialized: ${tempDir}`);
@@ -439,6 +450,8 @@ export class UploadsService {
     const targetEnd = endTime && endTime > startTime ? endTime : startTime + defaultDuration;
     const cacheKey = `${uploadId}-${targetStart}-${targetEnd}`;
 
+    await this.assertAnalysisPermitted(uploadId);
+
     if (this.segmentProcessingMap.has(cacheKey)) {
       return this.segmentProcessingMap.get(cacheKey);
     }
@@ -490,7 +503,37 @@ export class UploadsService {
     return processPromise;
   }
 
+
+  /**
+   * Consent and transfer bookkeeping before any recording is analysed.
+   *
+   * The gate fails closed (sensitive data, offshore recipient); the transfer
+   * record is written after the gate passes, carrying the consent basis — the
+   * only s.129 basis the platform currently operates.
+   */
+  private async assertAnalysisPermitted(uploadId: string) {
+    const upload = await this.prisma.videoUpload.findUnique({
+      where: { id: uploadId },
+      include: { claim: { select: { id: true, claimantId: true } } },
+    });
+    if (!upload?.claim) {
+      throw new NotFoundException('Upload or its claim not found');
+    }
+
+    await this.consentGate.assertBiometricConsent(upload.claim.claimantId, upload.claim.id);
+
+    await this.transfers.record({
+      provider: 'HUME_AI',
+      purpose: 'Behavioural analysis of a video assessment recording',
+      lawfulBasis: 'CONSENT s.129(3)(a) — live BIOMETRIC_ANALYSIS consent verified',
+      claimId: upload.claim.id,
+      claimantId: upload.claim.claimantId,
+      metadata: { uploadId },
+    });
+  }
+
   async processVideo(uploadId: string, tenantContext: TenantContext) {
+    await this.assertAnalysisPermitted(uploadId);
     const upload = await this.getUpload(uploadId, tenantContext);
 
     if (upload.status === 'PROCESSING') {

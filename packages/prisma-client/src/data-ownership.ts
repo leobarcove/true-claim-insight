@@ -72,6 +72,7 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   auditTrail: 'claims',
 
   // assessment — how a loss was examined and scored
+  transferRecord: 'assessment',
   session: 'assessment',
   sessionClientInfo: 'assessment',
   videoUpload: 'assessment',

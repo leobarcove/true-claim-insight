@@ -12,12 +12,15 @@ import * as path from 'path';
 import { EventsGateway } from '../trinity/events.gateway';
 import { StorageService } from '../common/services/storage.service';
 import { TrinityReportGenerator } from '../trinity/trinity-report.generator';
+import { TransferRegister } from '@tci/prisma-client';
 
 const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 
 @Injectable()
 export class DocumentProcessorService {
   private readonly logger = new Logger(DocumentProcessorService.name);
+
+  private transfers!: TransferRegister;
 
   constructor(
     private prisma: PrismaService,
@@ -27,7 +30,13 @@ export class DocumentProcessorService {
     private extractionService: ExtractionService,
     private storage: StorageService,
     private reportGenerator: TrinityReportGenerator
-  ) {}
+  ) {
+    this.transfers = new TransferRegister(this.prisma, 'risk-engine', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for document extraction`,
+        error instanceof Error ? error.message : String(error)
+      )
+    );}
 
   async updateDocumentStatus(documentId: string, status: any, claimId?: string) {
     this.logger.log(`Updating document ${documentId} status to: ${status}`);
@@ -87,6 +96,18 @@ export class DocumentProcessorService {
 
       const normalizer = getNormalizer(docType);
       if (normalizer) {
+        // Gemini processes the document image offshore; the local (Ollama)
+        // provider does not leave the machine, so only the offshore path is a
+        // s.129 transfer. No consent gate here yet — the register records the
+        // honest state: no basis established for this path (see §3.4).
+        if (this.gpu.name === 'Gemini') {
+          await this.transfers.record({
+            provider: 'GOOGLE_GEMINI',
+            purpose: `Text extraction from a ${docType} document image`,
+            claimId: doc.claimId,
+            metadata: { documentId: doc.id, filename: doc.filename },
+          });
+        }
         // Let the active LLM provider pick its own model name. Hardcoding
         // ollama-specific identifiers (qwen2.5vl, qwen2.5, deepseek-r1)
         // breaks when the provider is Gemini. We record what the provider
