@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ConsentModule } from './consent/consent.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { RetentionModule } from './retention/retention.module';
+import { ExportModule } from './export/export.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
 import { AuditModule } from './common/audit/audit.module';
@@ -63,6 +64,7 @@ import { AuditModule } from './common/audit/audit.module';
     ConsentModule,
     AssignmentsModule,
     RetentionModule,
+    ExportModule,
 
     // Multi-tenancy
     TenantModule,
