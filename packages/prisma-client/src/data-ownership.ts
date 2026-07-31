@@ -59,6 +59,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   cpdRecord: 'claims',
   backgroundScreening: 'claims',
   complianceEvent: 'claims',
+  keyPerson: 'claims',
+  fitProperAttestation: 'claims',
   // Consent sits in `claims`, not `identity`, despite attaching to a person.
   // The distinction that matters is which context the fact serves: every purpose
   // captured here (claim processing, biometric analysis of an assessment, the

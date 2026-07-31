@@ -1917,3 +1917,64 @@ model ComplianceEvent {
   @@index([boardReportedAt])
   @@map("compliance_events")
 }
+
+// ============================================================================
+// FIT AND PROPER — PD 10.1/10.2: shareholders and key responsible persons
+// ============================================================================
+
+enum KeyPersonType {
+  SHAREHOLDER
+  KRP
+  SHAREHOLDER_AND_KRP
+}
+
+/// A shareholder or key responsible person of the firm.
+///
+/// Kept as a register with appointment and cessation dates because PD 13.1
+/// makes changes to directors, CEO and shareholders notifiable to BNM within
+/// seven working days — when `BnmNotification` is built, these dates are what
+/// it hangs on.
+model KeyPerson {
+  id String @id @default(uuid())
+
+  fullName String
+  type     KeyPersonType
+  /// e.g. Director, CEO, Head of Claims — free text; `type` drives the criteria.
+  position String?
+
+  appointedAt DateTime
+  ceasedAt    DateTime?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attestations FitProperAttestation[]
+
+  @@index([type, ceasedAt])
+  @@map("key_persons")
+}
+
+/// One fit-and-proper attestation for one person.
+///
+/// `responses` maps each applicable criterion code to its outcome and note.
+/// `allMet` is denormalised for the register listing; the truth stays in the
+/// responses. A NOT_MET outcome does not block recording — the honest record of
+/// an unfit finding is the whole point — it raises a compliance event instead.
+model FitProperAttestation {
+  id          String @id @default(uuid())
+  keyPersonId String
+
+  /// { [criterionCode]: { outcome: 'MET' | 'NOT_MET', note?: string } }
+  responses Json
+  allMet    Boolean
+
+  attestedAt       DateTime @default(now())
+  attestedByUserId String
+  notes            String?
+
+  keyPerson KeyPerson @relation(fields: [keyPersonId], references: [id], onDelete: Cascade)
+
+  @@index([keyPersonId, attestedAt])
+  @@map("fit_proper_attestations")
+}
