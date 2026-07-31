@@ -6,6 +6,7 @@ import {
   Body,
   Param,
   Req,
+  Res,
   Delete,
   UseGuards,
   HttpException,
@@ -14,6 +15,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { firstValueFrom } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -161,6 +163,35 @@ export class ClaimsController {
           );
         })
       );
+  }
+
+  @Get(':id/export/archive')
+  @ApiOperation({ summary: 'Claim file as ZIP (sealed bundle + binaries + report PDFs)' })
+  async exportArchive(@Param('id') id: string, @Req() req: any, @Res() reply: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.caseServiceUrl}/api/v1/claims/${id}/export/archive`, {
+          headers,
+          responseType: 'arraybuffer',
+        })
+      );
+      return reply
+        .header('Content-Type', 'application/zip')
+        .header('Content-Disposition', response.headers['content-disposition'] ?? 'attachment')
+        .header('X-Bundle-Sha256', response.headers['x-bundle-sha256'] ?? '')
+        .send(Buffer.from(response.data));
+    } catch (e: any) {
+      throw new HttpException(
+        e.response?.data ? JSON.parse(Buffer.from(e.response.data).toString() || '{}') : 'Failed to export archive',
+        e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get(':id/export')

@@ -40,6 +40,13 @@ export class ClaimExportService {
   ) {}
 
   async exportClaimFile(claimId: string, tenantContext: TenantContext): Promise<ClaimFileBundle> {
+    const bundle = await this.assembleBundle(claimId, tenantContext);
+    await this.recordExport(bundle, tenantContext, 'json');
+    return bundle;
+  }
+
+  /** Assemble without recording — the caller decides which export act to audit. */
+  async assembleBundle(claimId: string, tenantContext: TenantContext): Promise<ClaimFileBundle> {
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
       omit: { nricEncrypted: false },
@@ -143,27 +150,59 @@ export class ClaimExportService {
       sections,
     };
 
-    // The export itself becomes part of the record it exports — hash first,
-    // then the audit row, so the trail can prove what was produced.
+    return bundle;
+  }
+
+  /**
+   * The export itself becomes part of the record it exports — hash first, then
+   * the audit row, so the trail can prove what was produced.
+   */
+  async recordExport(
+    bundle: ClaimFileBundle,
+    tenantContext: TenantContext,
+    format: 'json' | 'archive',
+    extra: Record<string, unknown> = {}
+  ): Promise<string> {
     const hash = bundleHash(bundle);
-    await this.audit.record({
-      entityType: 'CLAIM',
-      entityId: claimId,
-      action: 'CLAIM_FILE_EXPORTED',
-      actorId: tenantContext.userId,
-      userId: tenantContext.userId,
-      tenantId: tenantContext.tenantId,
-      metadata: {
-        bundleSha256: hash,
-        sections: BUNDLE_SECTIONS,
-        counts: bundle.manifest.counts,
-      },
-    });
+    // Fail-CLOSED, unlike every other audit write. The sealed row is part of
+    // the deliverable: an export the trail cannot prove is the outcome the
+    // whole endpoint exists to prevent, so a failed seal fails the export.
+    // (Found live: a probe's FK-invalid user let the fail-soft writer swallow
+    // the row, and the archive shipped unsealed.)
+    try {
+      await this.prisma.auditTrail.create({
+        data: {
+          entityType: 'CLAIM',
+          entityId: bundle.manifest.claimId,
+          action: 'CLAIM_FILE_EXPORTED',
+          actorId: tenantContext.userId,
+          userId: tenantContext.userId,
+          tenantId: tenantContext.tenantId,
+          metadata: {
+            format,
+            bundleSha256: hash,
+            sections: [...BUNDLE_SECTIONS],
+            counts: bundle.manifest.counts,
+            ...extra,
+          } as never,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Export seal could not be written for ${bundle.manifest.claimNumber}; refusing the export`,
+        error instanceof Error ? error.message : String(error)
+      );
+      throw new Error(
+        'The export could not be recorded on the audit trail, so it has not been produced. ' +
+          'An unprovable production to the regulator is worse than a delayed one.'
+      );
+    }
 
     this.logger.log(
-      `Claim file exported for ${claim.claimNumber} by ${tenantContext.userId} (sha256 ${hash.slice(0, 12)}…)`
+      `Claim file exported (${format}) for ${bundle.manifest.claimNumber} by ` +
+        `${tenantContext.userId} (sha256 ${hash.slice(0, 12)}…)`
     );
-    return bundle;
+    return hash;
   }
 
   /** Replace ciphertext with the clear value; the export row audits the act. */
