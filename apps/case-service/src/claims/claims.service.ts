@@ -18,6 +18,7 @@ import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
 import { assignmentEligibility } from '../adjusters/adjuster-competency';
+import { conflictRefusalReason, screenConflicts } from '../adjusters/conflict-screening';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
 import { ConsentService } from '../consent/consent.service';
 import { isLicensedMode } from '../tenant/tenant-settings';
@@ -631,6 +632,26 @@ export class ClaimsService {
       );
     }
 
+    // PD 10.3 / 12.1(d): screen the standing declarations against this claim's
+    // parties. A matched, unresolved conflict blocks in EVERY mode — this is a
+    // conflict the firm has on record, and assigning through it is a choice
+    // 12.1(d) does not offer. The screen result is audited either way, so
+    // "clear" is distinguishable from "never screened".
+    const declarations = await this.prisma.conflictDeclaration.findMany({
+      where: { adjusterId, resolvedAt: null },
+    });
+    const screening = screenConflicts(declarations, {
+      insurerTenantId: claim.insurerTenantId ?? null,
+      workshopName: claim.workshopName ?? null,
+    });
+    if (!screening.clear) {
+      this.logger.warn(
+        `COI block: adjuster ${adjusterId} on claim ${claimId} — ` +
+          screening.matches.map(m => m.partyName).join(', ')
+      );
+      throw new BadRequestException(conflictRefusalReason(screening.matches));
+    }
+
     const updatedClaim = await this.prisma.claim.update({
       where: { id: claimId },
       data: {
@@ -662,6 +683,7 @@ export class ClaimsService {
         // Advisories are part of the record: when registration turns these into
         // hard gates, the firm can show how long it operated clean before.
         ...(eligibility.advisories.length ? { eligibilityAdvisories: eligibility.advisories } : {}),
+        coiScreen: { declarationsScreened: screening.screened, conflicts: 0 },
       },
       tenantContext,
       {

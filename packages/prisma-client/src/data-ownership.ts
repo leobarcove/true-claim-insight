@@ -54,6 +54,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.
   adjusterCompetency: 'claims',
+  conflictDeclaration: 'claims',
+  conflictAttestation: 'claims',
   // Consent sits in `claims`, not `identity`, despite attaching to a person.
   // The distinction that matters is which context the fact serves: every purpose
   // captured here (claim processing, biometric analysis of an assessment, the
