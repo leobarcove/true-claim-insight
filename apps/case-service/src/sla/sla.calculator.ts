@@ -82,7 +82,7 @@ export function isBreached(now: Date, dueAt: Date): boolean {
  * Deliberately coarse — 1 on breach, 2 after two working days, 3 after five —
  * because escalation exists to get a human's attention, and a level that
  * changes daily trains people to ignore it. Level 3 is where PD 11.2(d) Board
- * escalation attaches once `ComplianceEvent` exists.
+ * escalation attaches — the sweep raises a `ComplianceEvent` at this level.
  */
 export function escalationLevelFor(workingDaysLate: number): number {
   if (workingDaysLate >= 5) return 3;

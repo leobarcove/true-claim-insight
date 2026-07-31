@@ -4,6 +4,8 @@ import { SlaClockState } from '@prisma/client';
 import type { Job } from 'bullmq';
 import { PrismaService } from '../config/prisma.service';
 import { QUEUE } from '../queue/queue.constants';
+import { ComplianceEventsService } from '../compliance/compliance-events.service';
+import { slaBreachEvent } from '../compliance/compliance-triggers';
 import { escalationLevelFor, isBreached, remainingWorkingDays, shouldWarn } from './sla.calculator';
 import { SlaService } from './sla.service';
 
@@ -24,7 +26,8 @@ export class SlaProcessor extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sla: SlaService
+    private readonly sla: SlaService,
+    private readonly compliance: ComplianceEventsService
   ) {
     super();
   }
@@ -79,6 +82,23 @@ export class SlaProcessor extends WorkerHost {
               `SLA BREACH [${owner}] ${clock.stage} on ${subject}: ` +
                 `${daysLate} working day(s) late, escalation level ${level}`
             );
+
+            // Level 3 is where PD 11.2(d) Board escalation attaches. Idempotent
+            // by clock id, so repeat sweeps observe the same breach once.
+            const draft = slaBreachEvent({
+              id: clock.id,
+              stage: clock.stage,
+              escalationLevel: level,
+              monitorOnly: clock.policy.monitorOnly,
+              claimNumber: clock.claim?.claimNumber ?? null,
+            });
+            if (draft) {
+              await this.compliance.raiseQuietly({
+                ...draft,
+                claimId: clock.claimId ?? undefined,
+                source: 'sla-sweep',
+              });
+            }
           }
           continue;
         }
