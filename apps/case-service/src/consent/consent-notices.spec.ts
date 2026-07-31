@@ -96,6 +96,33 @@ describe('Consent notices (PDPA s.7)', () => {
     }
   });
 
+  it('gives contact particulars and a complaint avenue, in every notice and language', () => {
+    // s.7's substance: "contact us" without a route is not a right of access.
+    for (const notice of DRAFT_CONSENT_NOTICES) {
+      const hasRoute =
+        notice.locale === 'en'
+          ? /contact details published there/i.test(notice.body) &&
+            /Personal Data Protection Commissioner/.test(notice.body)
+          : /maklumat perhubungan yang diterbitkan/i.test(notice.body) &&
+            /Pesuruhjaya Perlindungan Data Peribadi/.test(notice.body);
+      expect(hasRoute).toBe(true);
+    }
+  });
+
+  it('names every offshore recipient and country in the cross-border notice', () => {
+    // The CBPDT Guidelines want the subject told the recipient and purpose —
+    // and the earlier draft pointed at a privacy notice that did not exist.
+    for (const locale of ['en', 'ms'] as const) {
+      const notice = DRAFT_CONSENT_NOTICES.find(
+        n => n.purpose === ConsentPurpose.CROSS_BORDER_TRANSFER && n.locale === locale
+      );
+      for (const name of ['Daily.co', 'Hume AI', 'Google Gemini', 'Supabase']) {
+        expect(notice?.body).toContain(name);
+      }
+      expect(notice?.body).not.toMatch(/privacy notice|notis privasi/i);
+    }
+  });
+
   it('uses one version per purpose in the drafts, so approval is unambiguous', () => {
     for (const purpose of purposes) {
       const versions = new Set(
