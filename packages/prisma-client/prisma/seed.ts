@@ -554,6 +554,31 @@ async function main() {
 
   console.log('🔐 Authority limits seeded (adjusters cannot approve).');
 
+  // Competency for the demo adjuster: seven recognised years in TRAVEL, plus a
+  // start date old enough to clear the PD 12.3 supervision window — so demo
+  // flows exercise the real seniority path rather than the unknown-data default.
+  const demoAdjuster = await prisma.adjuster.findFirst({ where: { userId: adjusterUser.id } });
+  if (demoAdjuster) {
+    await prisma.adjuster.update({
+      where: { id: demoAdjuster.id },
+      data: { adjustingSince: new Date('2019-03-01') },
+    });
+    await prisma.adjusterCompetency.upsert({
+      where: { adjusterId_category: { adjusterId: demoAdjuster.id, category: ClaimCategory.TRAVEL } },
+      update: {},
+      create: {
+        adjusterId: demoAdjuster.id,
+        category: ClaimCategory.TRAVEL,
+        yearsInSubject: 7,
+        casesHandled: 180,
+        performanceSatisfactory: true,
+        seniorRecognisedAt: new Date('2025-01-15'),
+        seniorRecognisedByUserId: firmAdmin.id,
+      },
+    });
+    console.log('🎓 Demo adjuster competency seeded (senior in TRAVEL).');
+  }
+
   console.log('✅ Seeding completed.');
 }
 

@@ -137,6 +137,59 @@ describe('Report authority (PD 12.7)', () => {
     });
   });
 
+  describe('supervision and recognition (PD 12.3 / 12.4)', () => {
+    it('requires a countersign for an author in the supervision year, whatever their experience', () => {
+      // A ten-year veteran newly hired is still 12.3-new: the firm has not yet
+      // seen their work, which is the point of the supervision.
+      const decision = countersignDecision({
+        type: AdjusterReportType.FINAL,
+        author: { id: 'vet', status: 'ACTIVE', yearsInSubject: 10, underSupervision: true },
+        signer: senior(),
+        licensedMode: true,
+      });
+
+      expect(decision.required).toBe(true);
+      expect(decision.basis).toMatch(/12\.3/);
+    });
+
+    it('does not count five unrecognised years as a senior countersigner', () => {
+      // 12.4 makes senior a recognition: volume and performance are the firm's
+      // judgement, not arithmetic's. When the model has an answer, it governs.
+      const decision = countersignDecision({
+        type: AdjusterReportType.FINAL,
+        author: junior(),
+        signer: { id: 's', status: 'ACTIVE', yearsInSubject: 8, seniorRecognised: false },
+        licensedMode: true,
+      });
+
+      expect(decision.satisfied).toBe(false);
+    });
+
+    it('accepts a recognised senior as the countersigner', () => {
+      const decision = countersignDecision({
+        type: AdjusterReportType.FINAL,
+        author: junior(),
+        signer: { id: 's', status: 'ACTIVE', yearsInSubject: 6, seniorRecognised: true },
+        licensedMode: true,
+      });
+
+      expect(decision.satisfied).toBe(true);
+    });
+
+    it('falls back to years only when the competency model has no record', () => {
+      // Pre-model records: seniorRecognised undefined. The fallback keeps old
+      // behaviour rather than retroactively invalidating past sign-offs.
+      const decision = countersignDecision({
+        type: AdjusterReportType.FINAL,
+        author: junior(),
+        signer: { id: 's', status: 'ACTIVE', yearsInSubject: 8 },
+        licensedMode: true,
+      });
+
+      expect(decision.satisfied).toBe(true);
+    });
+  });
+
   describe('the licence flip', () => {
     // §1: the regulated machinery ships now and runs inert as a TPA, becoming a
     // hard gate on registration. These two tests are that promise, verified.

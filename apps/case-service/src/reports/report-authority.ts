@@ -48,6 +48,13 @@ export interface AdjusterStanding {
    * does not exist yet (the competency model is Phase 3).
    */
   yearsInSubject?: number;
+  /**
+   * PD 12.4 recognition: senior is granted by a named person, not computed.
+   * Undefined means the competency model has no record — fall back to years.
+   */
+  seniorRecognised?: boolean;
+  /** PD 12.3: still within the first-year close-supervision window. */
+  underSupervision?: boolean;
 }
 
 export interface CountersignDecision {
@@ -98,6 +105,21 @@ export function countersignDecision(params: {
     };
   }
 
+  // 12.3 outranks experience: a new adjusting employee is supervised for a
+  // year regardless of what they did elsewhere — the firm has not yet seen
+  // their work, which is the point of the supervision.
+  if (author.underSupervision) {
+    const signerSenior = signerIsSenior(signer);
+    return {
+      required: true,
+      satisfied: differentPerson && signerSenior,
+      blocking: licensedMode,
+      basis:
+        `Author is within the PD 12.3 first-year supervision window; a senior countersign is ` +
+        `required for this ${type} report regardless of prior experience`,
+    };
+  }
+
   const junior = author.yearsInSubject < 5;
   if (!junior) {
     return {
@@ -108,13 +130,26 @@ export function countersignDecision(params: {
     };
   }
 
-  const signerSenior = (signer.yearsInSubject ?? 0) >= 5;
+  const signerSenior = signerIsSenior(signer);
   return {
     required: true,
     satisfied: differentPerson && signerSenior,
     blocking: licensedMode,
     basis: `Author has ${author.yearsInSubject} years in subject; under the PD 12.4(a) senior threshold, so PD 12.7(b) requires a senior countersign for this ${type} report`,
   };
+}
+
+/**
+ * Does this signer count as the senior PD 12.7(b) requires?
+ *
+ * When the competency model has an answer, recognition (12.4) is authoritative
+ * — five unrecognised years do not make a senior, because 12.4(b)'s volume and
+ * performance considerations belong to the firm, not to arithmetic. The
+ * years-only fallback exists solely for records predating the model.
+ */
+function signerIsSenior(signer: AdjusterStanding): boolean {
+  if (signer.seniorRecognised !== undefined) return signer.seniorRecognised;
+  return (signer.yearsInSubject ?? 0) >= 5;
 }
 
 export interface SignEligibility {
