@@ -810,7 +810,7 @@ export class UploadsService {
   async getClaimUploads(claimId: string, tenantContext: TenantContext) {
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
     const uploads = await this.prisma.videoUpload.findMany({
-      where: { claimId },
+      where: { claimId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     return Promise.all(
@@ -824,7 +824,7 @@ export class UploadsService {
 
     const [uploads, total] = await Promise.all([
       this.prisma.videoUpload.findMany({
-        where,
+        where: { ...where, deletedAt: null },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -879,49 +879,34 @@ export class UploadsService {
     }));
   }
 
+  /**
+   * "Delete" a recording — a soft delete, by design.
+   *
+   * Every VideoUpload belongs to a claim, so every recording is claim evidence
+   * and PD 12.8's seven-year retention applies. The file and the row both stay;
+   * the recording drops out of listings. Actual destruction belongs to
+   * case-service's retention sweep once the claim's retention period has run —
+   * this service holds no retention policy and must not improvise one.
+   */
   async deleteUpload(uploadId: string, tenantContext: TenantContext) {
     const upload = await this.getUpload(uploadId, tenantContext);
 
-    // Cleanup
-    const { apiUrl, key } = this.getSupabaseConfig();
-    const bucketName = 'tci-uploads';
-    const publicPathPart = `/storage/v1/object/public/${bucketName}/`;
-
-    if (upload.videoUrl.includes(publicPathPart)) {
-      const storagePath = upload.videoUrl.split(publicPathPart).pop();
-      if (storagePath) {
-        await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${key}` },
-        });
-      }
-    } else {
-      // Local file
-      try {
-        await fs.unlink(upload.videoUrl);
-      } catch (error: any) {
-        this.logger.error(`Failed to delete video file: ${error.message}`);
-      }
-    }
-
-    // PD 12.8 requires records — including recordings — to be retained for seven
-    // years. Deleting one is therefore the most consequential act in this
-    // service, and the row recording it is written *before* the delete so a
-    // failure cannot leave evidence destroyed with nothing to show for it.
     await this.audit.record({
       entityType: 'VIDEO_UPLOAD',
       entityId: uploadId,
-      action: 'RECORDING_DELETED',
+      action: 'RECORDING_SOFT_DELETED',
       oldValues: {
-        sessionId: upload.sessionId ?? null,
         claimId: upload.claimId ?? null,
         videoUrl: upload.videoUrl,
         createdAt: upload.createdAt,
       },
-      metadata: { note: 'video file and database row removed' },
+      metadata: { note: 'hidden from listings; file and row retained per PD 12.8' },
     });
 
-    await this.prisma.videoUpload.delete({ where: { id: uploadId } });
+    await this.prisma.videoUpload.update({
+      where: { id: uploadId },
+      data: { deletedAt: new Date() },
+    });
     return { success: true };
   }
 
