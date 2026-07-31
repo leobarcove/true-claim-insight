@@ -1847,3 +1847,73 @@ model BackgroundScreening {
   @@index([adjusterId, checkType])
   @@map("background_screenings")
 }
+
+// ============================================================================
+// COMPLIANCE EVENTS — PD 11.2(d): timely escalation of issues to the Board
+// ============================================================================
+
+enum ComplianceEventType {
+  SLA_BREACH_ESCALATED
+  COI_CONFLICT_ATTESTED
+  POLICY_BREACH
+  AUDIT_GAP
+  OTHER
+}
+
+enum ComplianceEventSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ComplianceEventStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+/// An issue on its way to the Board (PD 11.2(d)).
+///
+/// Events are raised by the system where the controls already are — a firm-side
+/// SLA breach reaching escalation level 3, an adjuster attesting a conflict —
+/// and by hand for everything else. `dedupeKey` makes system raising idempotent:
+/// the SLA sweep runs every fifteen minutes, and a breach that raised a fresh
+/// event per sweep would bury the register it exists to feed.
+model ComplianceEvent {
+  id String @id @default(uuid())
+
+  type     ComplianceEventType
+  severity ComplianceEventSeverity
+  status   ComplianceEventStatus @default(OPEN)
+
+  title   String
+  details String?
+
+  claimId    String?
+  adjusterId String?
+
+  /// Null for system-raised events; the raising control is named in `source`.
+  raisedByUserId String?
+  source         String
+
+  /// Unique per underlying fact, so the same breach raises one event however
+  /// many sweeps observe it.
+  dedupeKey String? @unique
+
+  acknowledgedAt       DateTime?
+  acknowledgedByUserId String?
+  resolvedAt           DateTime?
+  resolvedByUserId     String?
+  resolutionNote       String?
+
+  /// When this event was included in a Board report — the 11.2(d) act itself.
+  boardReportedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, severity])
+  @@index([boardReportedAt])
+  @@map("compliance_events")
+}

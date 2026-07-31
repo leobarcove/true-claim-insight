@@ -1,4 +1,5 @@
 import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
+import { ComplianceModule } from '../compliance/compliance.module';
 import { PrismaModule } from '../config/prisma.module';
 import { SlaProcessor } from './sla.processor';
 import { SlaService } from './sla.service';
@@ -12,7 +13,7 @@ import { SlaService } from './sla.service';
  * replica scheduling it is harmless.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, ComplianceModule],
   providers: [SlaService, SlaProcessor],
   exports: [SlaService],
 })

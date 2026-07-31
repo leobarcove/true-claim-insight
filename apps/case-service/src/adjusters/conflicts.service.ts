@@ -3,6 +3,8 @@ import { ConflictInterestType, ConflictPartyType } from '@prisma/client';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
+import { ComplianceEventsService } from '../compliance/compliance-events.service';
+import { coiConflictEvent } from '../compliance/compliance-triggers';
 
 /**
  * Conflict declarations and per-claim attestations (PD 10.3, 12.1(d)).
@@ -19,7 +21,8 @@ export class ConflictsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly compliance: ComplianceEventsService
   ) {}
 
   async list(adjusterId: string, includeResolved = false) {
@@ -148,6 +151,13 @@ export class ConflictsService {
       this.logger.warn(
         `COI attested WITH conflict on claim ${claimId} by adjuster ${adjuster.id}: ${note}`
       );
+      // Board-visible per PD 11.2(d); idempotent per claim + adjuster.
+      await this.compliance.raiseQuietly({
+        ...coiConflictEvent({ claimId, adjusterId: adjuster.id, note: note ?? null }),
+        claimId,
+        adjusterId: adjuster.id,
+        source: 'coi-attestation',
+      });
     }
     return attestation;
   }
