@@ -128,6 +128,8 @@ model Tenant {
   @@map("tenants")
   slaPolicies      SlaPolicy[]
   authorityLimits  AuthorityLimit[]
+  assignmentsAsInsurer  Assignment[] @relation("AssignmentInsurer")
+  assignmentsAsHandler  Assignment[] @relation("AssignmentHandlingFirm")
 }
 
 model Adjuster {
@@ -286,6 +288,7 @@ model Claim {
   @@map("claims")
   slaClocks               SlaClock[]
   reports                 AdjusterReport[]
+  assignment              Assignment?
 }
 
 // ============================================================================
@@ -1190,8 +1193,14 @@ model SlaPolicy {
 /// added in the migration guarantees at most one RUNNING or PAUSED clock per
 /// claim and stage, so the state cannot become ambiguous.
 model SlaClock {
-  id       String        @id @default(uuid())
-  claimId  String
+  id String @id @default(uuid())
+
+  /// A clock hangs on a claim *or* on an assignment. The acknowledgement
+  /// obligation falls due before any claim exists — that is why it could not be
+  /// measured until `Assignment` existed — so exactly one of these is set.
+  claimId      String?
+  assignmentId String?
+
   policyId String
   stage    SlaStage
   state    SlaClockState @default(RUNNING)
@@ -1217,10 +1226,12 @@ model SlaClock {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  claim  Claim     @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  policy SlaPolicy @relation(fields: [policyId], references: [id])
+  claim      Claim?      @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  policy     SlaPolicy   @relation(fields: [policyId], references: [id])
 
   @@index([claimId])
+  @@index([assignmentId])
   @@index([state, dueAt])
   @@index([stage])
   @@map("sla_clocks")
@@ -1443,4 +1454,96 @@ model Consent {
   @@index([claimantId, purpose])
   @@index([status])
   @@map("consents")
+}
+
+// ============================================================================
+// ASSIGNMENT — the insurer's appointment (CSP ack ≤1 working day; PD 11.2(a))
+// ============================================================================
+
+/// What the firm was appointed to do. Drives which gate set applies.
+enum AssignmentMode {
+  TPA_ADMIN /// claims administration on the insurer's behalf
+  ADJUSTING /// independent adjusting, issuing an adjuster's report
+}
+
+/// How the appointment reached the firm. Merimen is the market's rail; the
+/// others exist because access to it is insurer-sponsored and not guaranteed
+/// (docs/MASTER_PLAN.md §6.4), so no schema assumes it.
+enum AssignmentChannel {
+  EMAIL
+  PORTAL
+  MERIMEN
+  API
+  MANUAL
+}
+
+enum AssignmentStatus {
+  RECEIVED     /// logged, acknowledgement outstanding
+  ACKNOWLEDGED /// ack sent to the insurer — stops the CSP clock
+  ACCEPTED     /// work under way; a claim has been opened
+  DECLINED     /// refused, with a reason
+  COMPLETED    /// closed out
+}
+
+/// An insurer's instruction to handle a matter.
+///
+/// The claim journey previously began at `Claim`, which meant it began when the
+/// firm decided to start work rather than when the insurer asked — leaving no
+/// record of the appointment and nothing for the CSP one-working-day
+/// acknowledgement to be measured from. PD 11.2(a) expects the adjusting process
+/// to be embodied end to end; this is the missing front end.
+///
+/// A claim is opened *from* an assignment rather than the other way round. The
+/// relation is optional because an assignment can be declined before any claim
+/// exists, and that refusal is itself part of the record.
+model Assignment {
+  id String @id @default(uuid())
+
+  /// Who appointed the firm.
+  insurerTenantId String
+  /// The adjusting firm instructed.
+  handlingTenantId String
+
+  mode    AssignmentMode    @default(TPA_ADMIN)
+  channel AssignmentChannel @default(EMAIL)
+  status  AssignmentStatus  @default(RECEIVED)
+
+  /// The insurer's own reference — a Merimen number, an email subject ref, a
+  /// claim number in their system. Unique per insurer so the same appointment
+  /// ingested twice does not become two, which matters most for automated
+  /// channels where a retry is normal.
+  externalRef String
+
+  /// What the firm was asked to assess, in the insurer's words.
+  scope        String?
+  instructions String?
+
+  appointedByName  String?
+  appointedByEmail String?
+
+  /// When the instruction arrived — the moment the CSP clock starts from, which
+  /// is not the same as when the row was written.
+  receivedAt DateTime @default(now())
+  /// When the acknowledgement went back to the insurer.
+  acknowledgedAt DateTime?
+  declinedAt     DateTime?
+  declineReason  String?
+  completedAt    DateTime?
+
+  /// The claim opened for this appointment, once one exists.
+  claimId String? @unique
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insurer       Tenant @relation("AssignmentInsurer", fields: [insurerTenantId], references: [id])
+  handlingFirm  Tenant @relation("AssignmentHandlingFirm", fields: [handlingTenantId], references: [id])
+  claim         Claim? @relation(fields: [claimId], references: [id])
+
+  @@unique([insurerTenantId, externalRef])
+  @@index([handlingTenantId, status])
+  @@index([status, receivedAt])
+  @@map("assignments")
+  slaClocks     SlaClock[]
 }

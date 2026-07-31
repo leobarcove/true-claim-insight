@@ -73,6 +73,26 @@ export class SlaService {
   }
 
   /**
+   * Start a clock against an assignment.
+   *
+   * Separate entry point because the acknowledgement obligation falls due before
+   * any claim exists — the reason it could not be measured at all until
+   * `Assignment` was introduced.
+   */
+  async startForAssignment(
+    assignmentId: string,
+    stage: SlaStage,
+    options: { tenantId?: string | null; startedAt?: Date } = {}
+  ) {
+    return this.startFor({ assignmentId }, stage, options);
+  }
+
+  /** Stop an assignment's clock — acknowledged, or declined; both answer the insurer. */
+  async stopForAssignment(assignmentId: string, stage: SlaStage, at: Date = new Date()) {
+    return this.stopFor({ assignmentId }, stage, at);
+  }
+
+  /**
    * Start a clock for a claim and stage.
    *
    * Idempotent: if a live clock already exists for this stage it is returned
@@ -85,14 +105,24 @@ export class SlaService {
     stage: SlaStage,
     options: { tenantId?: string | null; startedAt?: Date } = {}
   ) {
+    return this.startFor({ claimId }, stage, options);
+  }
+
+  /** Shared implementation over whichever subject the clock hangs on. */
+  private async startFor(
+    subject: { claimId?: string; assignmentId?: string },
+    stage: SlaStage,
+    options: { tenantId?: string | null; startedAt?: Date } = {}
+  ) {
     const existing = await this.prisma.slaClock.findFirst({
-      where: { claimId, stage, state: { in: LIVE } },
+      where: { ...subject, stage, state: { in: LIVE } },
     });
     if (existing) return existing;
 
+    const label = subject.claimId ?? subject.assignmentId ?? 'unknown';
     const policy = await this.resolvePolicy(stage, options.tenantId);
     if (!policy) {
-      this.logger.warn(`No SLA policy for ${stage}; no clock started for claim ${claimId}`);
+      this.logger.warn(`No SLA policy for ${stage}; no clock started for ${label}`);
       return null;
     }
 
@@ -101,10 +131,10 @@ export class SlaService {
 
     try {
       const clock = await this.prisma.slaClock.create({
-        data: { claimId, stage, policyId: policy.id, startedAt, dueAt },
+        data: { ...subject, stage, policyId: policy.id, startedAt, dueAt },
       });
       this.logger.log(
-        `${stage} clock started for claim ${claimId}, due ${dueAt.toISOString().slice(0, 10)}`
+        `${stage} clock started for ${label}, due ${dueAt.toISOString().slice(0, 10)}`
       );
       return clock;
     } catch (error) {
@@ -114,7 +144,7 @@ export class SlaService {
         error.code === 'P2002'
       ) {
         return this.prisma.slaClock.findFirst({
-          where: { claimId, stage, state: { in: LIVE } },
+          where: { ...subject, stage, state: { in: LIVE } },
         });
       }
       throw error;
@@ -184,8 +214,16 @@ export class SlaService {
    * deadline is not erased by eventually doing the work.
    */
   async stop(claimId: string, stage: SlaStage, at: Date = new Date()) {
+    return this.stopFor({ claimId }, stage, at);
+  }
+
+  private async stopFor(
+    subject: { claimId?: string; assignmentId?: string },
+    stage: SlaStage,
+    at: Date
+  ) {
     const clock = await this.prisma.slaClock.findFirst({
-      where: { claimId, stage, state: { in: LIVE } },
+      where: { ...subject, stage, state: { in: LIVE } },
     });
     if (!clock) return null;
 
@@ -218,7 +256,11 @@ export class SlaService {
   async dueOrApproaching(now: Date = new Date()) {
     return this.prisma.slaClock.findMany({
       where: { state: SlaClockState.RUNNING },
-      include: { policy: true, claim: { select: { claimNumber: true, tenantId: true } } },
+      include: {
+        policy: true,
+        claim: { select: { claimNumber: true, tenantId: true } },
+        assignment: { select: { externalRef: true, handlingTenantId: true } },
+      },
       orderBy: { dueAt: 'asc' },
       take: 500,
     });

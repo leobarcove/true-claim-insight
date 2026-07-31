@@ -48,6 +48,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   adjusterReport: 'claims',
   // Who may decide a claim's outcome, and up to what value.
   authorityLimit: 'claims',
+  // The insurer's instruction — where the regulated engagement begins.
+  assignment: 'claims',
   // Consent sits in `claims`, not `identity`, despite attaching to a person.
   // The distinction that matters is which context the fact serves: every purpose
   // captured here (claim processing, biometric analysis of an assessment, the
