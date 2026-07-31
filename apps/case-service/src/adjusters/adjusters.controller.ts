@@ -149,6 +149,17 @@ export class AdjustersController {
     return this.competency.recogniseSenior(id, category, tenantContext);
   }
 
+  @Post(':id/employment')
+  @ApiOperation({ summary: 'Record employment type (PD 12.1(a)), start date and qualification' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  setEmployment(
+    @Param('id') id: string,
+    @Body() body: { employmentType: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT'; adjustingSince?: string; qualification?: string },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.competency.setEmployment(id, body, tenantContext);
+  }
+
   @Post(':id/verify-licence')
   @ApiOperation({ summary: 'Record that the firm verified this adjuster\'s licence' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)

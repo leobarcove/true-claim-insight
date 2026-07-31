@@ -63,6 +63,10 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   fitProperAttestation: 'claims',
   workQualityReview: 'claims',
   bnmNotification: 'claims',
+  feeScale: 'claims',
+  timeEntry: 'claims',
+  disbursement: 'claims',
+  feeNote: 'claims',
   // Consent sits in `claims`, not `identity`, despite attaching to a person.
   // The distinction that matters is which context the fact serves: every purpose
   // captured here (claim processing, biometric analysis of an assessment, the

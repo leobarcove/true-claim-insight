@@ -82,6 +82,8 @@ export interface AssignmentEligibilityInput {
   competency: CompetencyRecord | null;
   /** PD 11.2(e): is the minimum background-check set on record? */
   screeningComplete?: boolean;
+  /** PD 12.1(a): adjusting employees are employed full-time. */
+  employmentType?: string | null;
   licensedMode: boolean;
 }
 
@@ -120,6 +122,13 @@ export function assignmentEligibility(input: AssignmentEligibilityInput): Assign
   }
   if (input.screeningComplete === false) {
     advisories.push('pre-employment screening incomplete (PD 11.2(e) minimum)');
+  }
+  if (input.employmentType !== undefined && input.employmentType !== 'FULL_TIME') {
+    advisories.push(
+      input.employmentType
+        ? `not employed full-time (${input.employmentType}) — PD 12.1(a)`
+        : 'employment type not recorded (PD 12.1(a) requires full-time)'
+    );
   }
 
   if (licensedMode && advisories.length) {

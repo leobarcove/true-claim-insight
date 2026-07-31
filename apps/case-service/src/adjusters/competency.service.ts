@@ -146,6 +146,33 @@ export class CompetencyService {
     return recognised;
   }
 
+  /** PD 12.1(a): record the employment facts assignment gating reads. */
+  async setEmployment(
+    adjusterId: string,
+    data: { employmentType: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT'; adjustingSince?: string; qualification?: string },
+    tenantContext: TenantContext
+  ) {
+    await this.requireAdjuster(adjusterId);
+    const updated = await this.prisma.adjuster.update({
+      where: { id: adjusterId },
+      data: {
+        employmentType: data.employmentType,
+        ...(data.adjustingSince ? { adjustingSince: new Date(data.adjustingSince) } : {}),
+        ...(data.qualification !== undefined ? { qualification: data.qualification } : {}),
+      },
+    });
+    await this.audit.record({
+      entityType: 'ADJUSTER',
+      entityId: adjusterId,
+      action: 'EMPLOYMENT_RECORDED',
+      actorId: tenantContext.userId,
+      userId: tenantContext.userId,
+      tenantId: tenantContext.tenantId,
+      newValues: { employmentType: data.employmentType, qualification: data.qualification ?? null },
+    });
+    return updated;
+  }
+
   /**
    * Record that the firm verified this adjuster's licence.
    *

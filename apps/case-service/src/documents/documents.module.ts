@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
+import { ClaimsModule } from '../claims/claims.module';
 import { ConfigModule } from '@nestjs/config';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { StorageService } from '../common/services/storage.service';
 
 @Module({
-  imports: [HttpModule, ConfigModule],
+  imports: [HttpModule, ConfigModule, ClaimsModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, StorageService],
   exports: [DocumentsService],

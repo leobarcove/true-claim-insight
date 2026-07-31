@@ -594,6 +594,22 @@ export class ClaimsService {
     // person assessed this claim, or what they are authorised to approve.
     const authority = await this.assertAuthority(existingClaim, status as ClaimStatus, tenantContext);
 
+    // §3.6 #8: the checklist finally gates. Moving to REPORT_PENDING with
+    // mandatory evidence missing blocks in registered mode and is recorded as
+    // an advisory as a TPA — the same licence-flip shape as the people gates.
+    if (status === 'REPORT_PENDING') {
+      const complete = await this.refreshDocumentsComplete(id);
+      if (!complete) {
+        if (await this.isLicensedMode(existingClaim.tenantId)) {
+          throw new BadRequestException(
+            'Mandatory evidence is incomplete; the report stage cannot begin without it ' +
+              '(the CSP final-report window runs from complete documents).'
+          );
+        }
+        this.logger.warn(`Claim ${id} moved to REPORT_PENDING with incomplete mandatory evidence (advisory while TPA)`);
+      }
+    }
+
     await this.prisma.claim.update({
       where: { id },
       data: {
@@ -670,6 +686,7 @@ export class ClaimsService {
       licenseVerifiedAt: adjuster.licenseVerifiedAt,
       competency,
       screeningComplete: screeningStanding(screenings, adjuster.adjustingSince).complete,
+      employmentType: adjuster.employmentType,
       licensedMode,
     });
     if (!eligibility.allowed) {
@@ -806,6 +823,39 @@ export class ClaimsService {
    * Irregularity Report. Rows with travelClaimType IS NULL apply to every
    * subtype of that category.
    */
+  /**
+   * Recompute evidence completeness and, on the transition to complete, set
+   * `documentsCompleteAt` and start the FINAL_REPORT clock — CSP runs the
+   * ten-working-day window from *complete documents*, and until this event
+   * existed the clock could only anchor on REPORT_PENDING as a proxy.
+   *
+   * Set-once: a later upload does not move an anchor already set, and a
+   * deletion does not unset it — the documents *were* complete, and the clock
+   * that started from that fact stays honest.
+   */
+  async refreshDocumentsComplete(claimId: string): Promise<boolean> {
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!claim || claim.documentsCompleteAt) return Boolean(claim?.documentsCompleteAt);
+
+    const checklist = await this.getEvidenceChecklist(claimId);
+    const mandatory = checklist.filter(item => item.isMandatory);
+    const complete = mandatory.length > 0 && mandatory.every(item => item.uploaded.length > 0);
+    if (!complete) return false;
+
+    const completeAt = new Date();
+    await this.prisma.claim.update({
+      where: { id: claimId },
+      data: { documentsCompleteAt: completeAt },
+    });
+    await this.createAuditTrail(claimId, 'DOCUMENTS_COMPLETE', {
+      mandatoryTypes: mandatory.map(item => item.documentType),
+    });
+    // The CSP anchor: idempotent, so REPORT_PENDING's later start is a no-op.
+    await this.sla.startQuietly(claimId, SlaStage.FINAL_REPORT, claim.tenantId);
+    this.logger.log(`Claim ${claim.claimNumber}: mandatory evidence complete; final-report clock anchored`);
+    return true;
+  }
+
   async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {
     const claim = await this.findOne(id, tenantContext);
 

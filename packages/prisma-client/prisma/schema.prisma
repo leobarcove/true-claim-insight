@@ -130,6 +130,8 @@ model Tenant {
   authorityLimits  AuthorityLimit[]
   assignmentsAsInsurer  Assignment[] @relation("AssignmentInsurer")
   assignmentsAsHandler  Assignment[] @relation("AssignmentHandlingFirm")
+  feeScales        FeeScale[]
+  feeNotesAsInsurer FeeNote[] @relation("FeeNoteInsurer")
 }
 
 model Adjuster {
@@ -146,6 +148,12 @@ model Adjuster {
   /// before conducting adjusting work independently — supervision status is
   /// derived from this date, so it cannot silently be forgotten.
   adjustingSince    DateTime?
+  /// PD 12.1(a): full-time is the requirement; anything else blocks assignment
+  /// in registered mode. Null = not yet recorded, which reads as a gap.
+  employmentType    EmploymentType?
+  /// Schedule 2 minimum qualification, as held (free text until the Order's
+  /// schedule is transcribed).
+  qualification     String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   tenant            Tenant         @relation(fields: [tenantId], references: [id])
@@ -164,6 +172,7 @@ model Adjuster {
   cpdRecords           CpdRecord[]
   backgroundScreenings BackgroundScreening[]
   qualityReviews       WorkQualityReview[]
+  timeEntries          TimeEntry[]
 }
 
 model Claimant {
@@ -310,6 +319,10 @@ model Claim {
   reports                 AdjusterReport[]
   assignment              Assignment?
   conflictAttestations    ConflictAttestation[]
+  documentsCompleteAt     DateTime?
+  timeEntries             TimeEntry[]
+  disbursements           Disbursement[]
+  feeNotes                FeeNote[]
 }
 
 // ============================================================================
@@ -2059,4 +2072,137 @@ model BnmNotification {
 
   @@index([notifiedAt, dueAt])
   @@map("bnm_notifications")
+}
+
+// ============================================================================
+// BILLING — CSP 11.16–11.18: adjuster fees, and evidence the ITO settles them
+// ============================================================================
+
+enum FeeBasis {
+  SCALE /// banded on the assessed amount
+  TIME  /// hourly
+  FIXED /// flat per engagement
+}
+
+enum FeeNoteStatus {
+  DRAFT
+  ISSUED
+  PAID
+  DISPUTED
+}
+
+/// A panel insurer's fee terms. Rates are tenant configuration, never code —
+/// MSIG's actual terms arrive as a row, not a release (§6.8).
+model FeeScale {
+  id       String   @id @default(uuid())
+  tenantId String
+  basis    FeeBasis
+
+  /// SCALE: [{ upTo: number|null, pct?: number, fee?: number }] — null upTo = top band.
+  bands      Json?
+  hourlyRate Decimal? @db.Decimal(10, 2)
+  fixedFee   Decimal? @db.Decimal(10, 2)
+
+  /// Malaysian service tax on adjusting services. A rate, not a constant — it
+  /// has changed before and will again.
+  sstRate Decimal @default(0.08) @db.Decimal(4, 3)
+
+  paymentTermsDays Int     @default(30)
+  isActive         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isActive])
+  @@map("fee_scales")
+}
+
+/// Time spent on a claim — the TIME basis input, and the effort record besides.
+model TimeEntry {
+  id         String @id @default(uuid())
+  claimId    String
+  adjusterId String
+
+  workedOn    DateTime
+  hours       Decimal @db.Decimal(5, 2)
+  description String
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+
+  claim    Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id])
+
+  @@index([claimId])
+  @@map("time_entries")
+}
+
+/// An out-of-pocket cost recharged to the insurer.
+model Disbursement {
+  id      String @id @default(uuid())
+  claimId String
+
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  incurredAt  DateTime
+  evidenceUrl String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+  @@map("disbursements")
+}
+
+/// The fee note to the insurer, and whether it was settled.
+///
+/// CSP 11.16–11.18 obliges the ITO to settle adjusters' fees; the firm's side
+/// of that is an issued note with a due date and an ageing trail. An issued
+/// note is immutable — a correction is a new note, the same principle as
+/// reports.
+model FeeNote {
+  id              String        @id @default(uuid())
+  noteNumber      String        @unique
+  claimId         String
+  insurerTenantId String
+  status          FeeNoteStatus @default(DRAFT)
+
+  professionalFee    Decimal @db.Decimal(12, 2)
+  disbursementsTotal Decimal @db.Decimal(12, 2)
+  sstAmount          Decimal @db.Decimal(12, 2)
+  total              Decimal @db.Decimal(12, 2)
+
+  /// How the professional fee was computed — basis, inputs, band. The number
+  /// without its derivation is unanswerable in a dispute.
+  computation Json
+
+  issuedAt DateTime?
+  dueAt    DateTime?
+  paidAt   DateTime?
+  paymentReference String?
+  disputedAt    DateTime?
+  disputeReason String?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  claim   Claim  @relation(fields: [claimId], references: [id])
+  insurer Tenant @relation("FeeNoteInsurer", fields: [insurerTenantId], references: [id])
+
+  @@index([insurerTenantId, status])
+  @@index([status, dueAt])
+  @@map("fee_notes")
+}
+
+/// PD 12.1(a): adjusting employees are employed full-time (Employment Act
+/// contract of service, per the PD's footnote).
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
 }
