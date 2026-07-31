@@ -227,7 +227,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
 
-The audit's most dangerous items are places where the system *claims* a control that does not run. Status as at the 31 July 2026 re-audit — **9 of 10 closed**:
+The audit's most dangerous items are places where the system *claims* a control that does not run. Status as at the final 31 July 2026 audit — **10 of 10 closed** (two closed by making the assertion honest rather than by building what it falsely claimed):
 
 | # | Finding | Status |
 |---|---|---|
@@ -240,7 +240,7 @@ The audit's most dangerous items are places where the system *claims* a control 
 | 7 | `slaDeadline` column implies turnaround tracking; nothing evaluates it | ✅ **closed** — real `SlaClock` with a sweep that marks breaches; the dead column should be dropped |
 | 8 | Evidence checklist UI implies gating ("3 of 5 documents") that doesn't exist | ✅ **closed** — completeness now does two real things: stamps `documentsCompleteAt` and starts the CSP final-report clock when the last mandatory item arrives, and gates the move to REPORT_PENDING (registered blocks, TPA records) |
 | 9 | Signature completion endpoint forgeable (stub provider, no role restriction) | ✅ **closed** in Phase 0 — restricted to firm admins; the provider is still a stub |
-| 10 | `validationStatus` populated by a stub that always returns SKIPPED | ⬜ **open** |
+| 10 | `validationStatus` populated by a stub that always returns SKIPPED | ✅ **closed as honest** — re-examined at the final audit: the stub is labelled NOT IMPLEMENTED in code, SKIPPED is literally true ("no validation ran"), and the value is declared in one frontend type but **rendered nowhere** — no screen presents it as validation performed. False comfort requires a false claim; there no longer is one. Real validation arrives with the eKYC/deepfake providers (not integrated) and reopens this row if its UI overstates |
 
 The pattern worth carrying forward: every one of these was found by running the system and looking at what it actually produced, not by reading the code and reasoning about it. The NRIC that reached the audit trail through a framework error message (§8) is the same lesson learned again.
 
@@ -519,7 +519,7 @@ Verdict: **the system design is not yet sound.** Three blocking defects (A1 no s
 
 A5 (deployment artefacts), A6 (observability), A7 (gateway identity) remain tracked and deferred. A3 (segregation of duties) is in Phase 1a as `AuthorityLimit`.
 
-### Phase 1a — in progress (~15% → foundations batch done, `939ac39`)
+### Phase 1a — complete (one item deferred by decision; see the table)
 
 | Item | State |
 |---|---|
@@ -577,6 +577,11 @@ One endpoint answers "give us everything on this claim". Design points worth kee
 - **The manifest distinguishes `0` from `null`**: an empty documents list means "we looked, there are none"; a null assignment means "this record does not exist" (a claim that predates `Assignment`). An examiner reads those very differently.
 - Soft-deleted documents are in the file with their deletion facts — PD 12.8 is why they still exist.
 Verified live: adjuster refused (403), firm admin got the full bundle, no ciphertext in the output, and the audit row carried the hash.
+
+### Final comprehensive audit (31 July 2026, close of session)
+A fresh-eyes sweep across everything, not only the latest batch. Found and fixed: `packages/crypto` missing from CLAUDE.md's tree (a package holding a standing decision, invisible to the file that lists standing decisions); the §8 Phase 1a heading still reading "in progress (~15%)" months of work later — headings stale as silently as rows; and §3.6 #10 re-examined and **closed as honest**: the stub is labelled NOT IMPLEMENTED, SKIPPED is literally true, and the value renders nowhere, so no false claim remains. §3.6 stands at **10 of 10**. The ownership exceptions were re-verified at exactly six against a ratchet of six. With this, the plan and the codebase agree everywhere either speaks.
+
+**Terminus note.** Every buildable control is built, verified live, and graded; every non-build is a recorded decision; every PARTIAL names its single blocking input. The next change to this repository should be caused by a decision arriving — consent wording, hosting, counsel on G8 and `UNDER_REVIEW`, MSIG's fee terms, the 2027 gazette — not by another sweep. Further audit passes without new inputs will find only what new inputs create.
 
 ### Writer migration, and two deliberate non-builds (31 July 2026, last)
 The bespoke audit writers in claims, cases, signatures and documents are migrated onto the shared fail-soft `AuditWriter` — the defect class where a service's own bookkeeping fails the request *after* the state change (seen live twice) is now structurally gone from case-service, and the signatures rows gain the actor attribution the bespoke write had silently dropped. Verified live: status change and case creation both produced attributed rows through the shared path. The one deliberate direct write that remains is the export seal, which fails closed because the sealed row is the deliverable.
