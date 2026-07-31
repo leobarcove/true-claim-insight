@@ -17,7 +17,10 @@ import { AuditModule } from './common/audit/audit.module';
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '.env.local'],
+      // Root .env last, so a service-local file can override it. Without the
+      // root entry the internal-auth key was invisible here and the guard
+      // failed closed — every internal call to this service was refused.
+      envFilePath: ['.env', '.env.local', '../../.env'],
     }),
 
     // Rate limiting

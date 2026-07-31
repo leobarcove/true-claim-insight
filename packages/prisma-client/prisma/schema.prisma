@@ -1588,3 +1588,46 @@ model RetentionPolicy {
 
   @@map("retention_policies")
 }
+
+// ============================================================================
+// CROSS-BORDER TRANSFER REGISTER — PDPA s.129; CBPDT Guidelines (April 2025)
+// ============================================================================
+
+/// One transfer of personal data to a recipient outside Malaysia.
+///
+/// The CBPDT Guidelines require the data controller to keep records of each
+/// cross-border transfer: recipient, country, type of data, purpose, and
+/// evidence of the s.129 basis relied on. Until now every Gemini, Hume and
+/// Daily.co call moved claimant data offshore with no record at all.
+///
+/// `lawfulBasis` is nullable on purpose: where no basis has been established
+/// yet, the honest record says so — a register that invents a basis is worse
+/// than the gap it papers over.
+model TransferRecord {
+  id String @id @default(uuid())
+
+  /// Recipient service, from the provider registry (e.g. HUME_AI, GOOGLE_GEMINI).
+  provider String
+  /// Country the recipient processes in.
+  country  String
+
+  /// What was sent, in words a regulator can read.
+  dataDescription String
+  /// Why it was sent.
+  purpose String
+  /// s.129 basis relied on, e.g. "CONSENT s.129(3)(a)". Null = none established.
+  lawfulBasis String?
+
+  /// Which service initiated the transfer.
+  sourceService String
+
+  claimId    String?
+  claimantId String?
+
+  transferredAt DateTime @default(now())
+  metadata      Json?    @default("{}")
+
+  @@index([provider, transferredAt])
+  @@index([claimId])
+  @@map("transfer_records")
+}

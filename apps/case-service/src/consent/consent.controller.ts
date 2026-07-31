@@ -15,6 +15,24 @@ import { ConsentService } from './consent.service';
 export class ConsentController {
   constructor(private readonly service: ConsentService) {}
 
+  /**
+   * Service-to-service consent check.
+   *
+   * TenantScope.NONE because the caller is another internal service acting for
+   * the platform, not a tenant user — but still behind InternalAuthGuard, so
+   * the shared key is required. Returns only a boolean: the caller learns
+   * whether processing may proceed, nothing about the consent record itself.
+   */
+  @Get('check')
+  @ApiOperation({ summary: 'Internal: is there a live consent for this claimant and purpose?' })
+  @TenantIsolation(TenantScope.NONE)
+  async check(
+    @Query('claimantId') claimantId: string,
+    @Query('purpose') purpose: ConsentPurpose
+  ) {
+    return { granted: await this.service.hasConsent(claimantId, purpose) };
+  }
+
   @Get('notice')
   @ApiOperation({ summary: 'Current approved notice for a purpose and locale' })
   notice(@Query('purpose') purpose: ConsentPurpose, @Query('locale') locale = 'en') {

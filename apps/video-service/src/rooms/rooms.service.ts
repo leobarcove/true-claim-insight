@@ -5,16 +5,24 @@ import { DailyService } from '../daily/daily.service';
 import { CreateRoomDto, JoinRoomDto, SaveClientInfoDto } from './dto/room.dto';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
+import { TransferRegister } from '@tci/prisma-client';
 
 @Injectable()
 export class RoomsService {
+  private transfers!: TransferRegister;
   private readonly logger = new Logger(RoomsService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly dailyService: DailyService,
     private readonly tenantService: TenantService
-  ) {}
+  ) {
+    this.transfers = new TransferRegister(this.prisma, 'video-service', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for claim ${entry.claimId}`,
+        error instanceof Error ? error.message : String(error)
+      )
+    );}
 
   /**
    * Create a new video room for a claim assessment
@@ -67,6 +75,16 @@ export class RoomsService {
     // Create Daily.co room
     const roomName = `claim-${dto.claimId.slice(0, 8)}-${Date.now()}`;
     const dailyRoom = await this.dailyService.createRoom(roomName);
+
+    // The session video (claimant's image and voice) is hosted and recorded by
+    // Daily.co in the US — a cross-border transfer the s.129 register must show.
+    await this.transfers.record({
+      provider: 'DAILY_CO',
+      purpose: 'Hosting and recording the remote video assessment session',
+      claimId: dto.claimId,
+      claimantId: claim?.claimantId ?? null,
+      metadata: { roomName },
+    });
 
     // Create session record
     const session = await this.prisma.session.create({
