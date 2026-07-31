@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { AuditService } from '../common/audit/audit.service';
+import { ClaimsService } from '../claims/claims.service';
 import { StorageService } from '../common/services/storage.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -20,7 +21,8 @@ export class DocumentsService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly tenantService: TenantService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly claimsService: ClaimsService
   ) {}
 
   /**
@@ -206,6 +208,18 @@ export class DocumentsService {
         userId: uploaderUserId,
       },
     });
+
+    // CSP anchors the final-report window on complete documents; each upload
+    // may be the one that completes the set. Fail-soft: an upload must not fail
+    // over its own bookkeeping.
+    try {
+      await this.claimsService.refreshDocumentsComplete(claimId);
+    } catch (error) {
+      this.logger.error(
+        `documentsComplete refresh failed for claim ${claimId}`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
 
     // Create audit trail
     await this.prisma.auditTrail.create({

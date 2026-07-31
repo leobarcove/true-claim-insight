@@ -20,6 +20,7 @@ import { AssignmentsModule } from './assignments/assignments.module';
 import { RetentionModule } from './retention/retention.module';
 import { ExportModule } from './export/export.module';
 import { ComplianceModule } from './compliance/compliance.module';
+import { BillingModule } from './billing/billing.module';
 import { TenantModule } from './tenant/tenant.module';
 import configuration from './config/configuration';
 import { AuditModule } from './common/audit/audit.module';
@@ -67,6 +68,7 @@ import { AuditModule } from './common/audit/audit.module';
     RetentionModule,
     ExportModule,
     ComplianceModule,
+    BillingModule,
 
     // Multi-tenancy
     TenantModule,
