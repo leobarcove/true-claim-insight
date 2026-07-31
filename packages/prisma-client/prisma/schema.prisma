@@ -162,6 +162,7 @@ model Adjuster {
   conflictDeclarations ConflictDeclaration[]
   conflictAttestations ConflictAttestation[]
   cpdRecords           CpdRecord[]
+  backgroundScreenings BackgroundScreening[]
 }
 
 model Claimant {
@@ -1795,4 +1796,54 @@ model CpdRecord {
 
   @@index([adjusterId, year])
   @@map("cpd_records")
+}
+
+// ============================================================================
+// BACKGROUND SCREENING — PD 11.2(e): due diligence prior to employment
+// ============================================================================
+
+/// The check kinds 11.2(e) names as the minimum.
+enum ScreeningCheckType {
+  BANKRUPTCY_INSOLVENCY
+  EMPLOYMENT_HISTORY
+  ACADEMIC_HISTORY
+  CRIMINAL_SCREENING
+  OTHER
+}
+
+enum ScreeningOutcome {
+  CLEAR
+  FINDINGS
+}
+
+/// One background check on an adjusting employee.
+///
+/// 11.2(e) says *prior to employment* — so a check dated after `adjustingSince`
+/// is recorded (late screening beats none) but flagged as late rather than
+/// silently counted as compliant. FINDINGS is a legitimate outcome: the record
+/// of "we found it, considered it and hired anyway" is exactly what protects
+/// the firm; only an undescribed finding is refused.
+model BackgroundScreening {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  checkType ScreeningCheckType
+  outcome   ScreeningOutcome
+  /// Required when the outcome is FINDINGS.
+  findingsNote String?
+
+  /// When the check was performed — may predate the adjuster record.
+  screenedAt  DateTime
+  /// Who performed it (an agency, a registry search, a named person).
+  conductedBy String
+  evidenceUrl String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, checkType])
+  @@map("background_screenings")
 }

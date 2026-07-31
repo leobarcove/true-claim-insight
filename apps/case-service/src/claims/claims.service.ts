@@ -18,6 +18,7 @@ import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
 import { assignmentEligibility } from '../adjusters/adjuster-competency';
+import { screeningStanding } from '../adjusters/background-screening';
 import { conflictRefusalReason, screenConflicts } from '../adjusters/conflict-screening';
 import { checkAuthority, type AuthorityDecision } from './claim-authority';
 import { ConsentService } from '../consent/consent.service';
@@ -616,10 +617,14 @@ export class ClaimsService {
         })
       : null;
     const licensedMode = await this.isLicensedMode(claim.tenantId);
+    const screenings = await this.prisma.backgroundScreening.findMany({
+      where: { adjusterId },
+    });
     const eligibility = assignmentEligibility({
       adjusterStatus: adjuster.status,
       licenseVerifiedAt: adjuster.licenseVerifiedAt,
       competency,
+      screeningComplete: screeningStanding(screenings, adjuster.adjustingSince).complete,
       licensedMode,
     });
     if (!eligibility.allowed) {
