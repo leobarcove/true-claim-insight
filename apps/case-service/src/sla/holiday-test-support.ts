@@ -13,7 +13,11 @@ import { MALAYSIAN_HOLIDAYS, type Holiday } from './working-days';
  */
 export function withVerifiedYear(year: number, holidays: Holiday[], run: () => void): void {
   const original = MALAYSIAN_HOLIDAYS[year];
-  MALAYSIAN_HOLIDAYS[year] = { verifiedAgainstGazette: true, holidays };
+  MALAYSIAN_HOLIDAYS[year] = {
+    verifiedAgainstGazette: true,
+    source: 'test fixture',
+    holidays,
+  };
   try {
     run();
   } finally {

@@ -184,6 +184,7 @@ model Claimant {
   @@index([tenantId])
   @@index([userId])
   @@map("claimants")
+  consents         Consent[]
 }
 
 model OtpCode {
@@ -1351,4 +1352,95 @@ model AuthorityLimit {
   @@index([tenantId, role])
   @@index([adjusterId])
   @@map("authority_limits")
+}
+
+// ============================================================================
+// CONSENT — PDPA 2010 lawful basis, notice and withdrawal
+// ============================================================================
+
+enum ConsentPurpose {
+  CLAIM_PROCESSING     /// handling the claim itself
+  BIOMETRIC_ANALYSIS   /// voice and facial analysis — sensitive personal data
+  CROSS_BORDER_TRANSFER /// s.129(3)(a) basis for offshore processors
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum ConsentChannel {
+  WEB_FORM
+  VIDEO_SESSION
+  STAFF_CAPTURED
+  IMPORTED
+}
+
+/// The wording a data subject was shown, versioned and approved.
+///
+/// PDPA s.7 requires written notice in **both English and Bahasa Malaysia**, so
+/// a notice version is incomplete until both locales exist — enforced in the
+/// service, not left to whoever writes the seed.
+///
+/// A notice is immutable once approved. Consent is only meaningful if the exact
+/// wording the subject agreed to can be reproduced years later; editing it in
+/// place would make every prior consent unprovable.
+model ConsentNotice {
+  id      String         @id @default(uuid())
+  purpose ConsentPurpose
+  version Int
+  /// `en` or `ms`.
+  locale  String
+
+  title String
+  body  String
+
+  /// Null means draft. An unapproved notice can never be shown to a data
+  /// subject or recorded against — the gate is in the service.
+  approvedByUserId String?
+  approvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consents Consent[]
+
+  @@unique([purpose, version, locale])
+  @@index([purpose, approvedAt])
+  @@map("consent_notices")
+}
+
+/// One data subject's consent to one purpose.
+///
+/// Withdrawal does not delete the record — PDPA gives a right to withdraw, and
+/// evidencing *when* processing became unlawful requires the original grant to
+/// survive alongside the withdrawal.
+model Consent {
+  id         String         @id @default(uuid())
+  claimantId String
+  purpose    ConsentPurpose
+  status     ConsentStatus  @default(GRANTED)
+
+  /// Exactly which wording, in which language, the subject agreed to.
+  noticeId String
+
+  grantedAt   DateTime  @default(now())
+  withdrawnAt DateTime?
+  withdrawalReason String?
+
+  capturedVia ConsentChannel @default(WEB_FORM)
+  ipAddress   String?
+  /// Staff member who captured it, when not self-served.
+  capturedByUserId String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claimant Claimant      @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+  notice   ConsentNotice @relation(fields: [noticeId], references: [id])
+
+  @@index([claimantId, purpose])
+  @@index([status])
+  @@map("consents")
 }

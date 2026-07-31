@@ -48,6 +48,15 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   adjusterReport: 'claims',
   // Who may decide a claim's outcome, and up to what value.
   authorityLimit: 'claims',
+  // Consent sits in `claims`, not `identity`, despite attaching to a person.
+  // The distinction that matters is which context the fact serves: every purpose
+  // captured here (claim processing, biometric analysis of an assessment, the
+  // cross-border basis for assessing offshore) exists because a claim is being
+  // handled, and the case-service is what must refuse to proceed without it.
+  // If consent later spans purposes unrelated to a claim — marketing, say — it
+  // becomes an identity concern and moves, along with its write path.
+  consent: 'claims',
+  consentNotice: 'claims',
   caseDocument: 'claims',
   document: 'claims',
   policy: 'claims',
