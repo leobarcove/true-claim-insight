@@ -77,3 +77,4 @@ claim-detail-*.png
 *.test.png
 docker-compose.override.yml
 .gstack/
+deploy/staging/.env.staging

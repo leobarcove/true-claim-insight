@@ -580,6 +580,10 @@ async function main() {
   }
 
   console.log('✅ Seeding completed.');
+  console.log(
+    `   Handling firm (ADJUSTING_FIRM) tenant id: ${adjusterTenant.id}` +
+      ' — set HANDLING_FIRM_TENANT_ID to this value in the environment.'
+  );
 }
 
 main()

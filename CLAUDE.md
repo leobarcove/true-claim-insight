@@ -49,7 +49,7 @@ legacy and must not be extended; see "Standing decisions" below and
 ### Infrastructure
 
 - **Turborepo 2.3.x** monorepo structure (actual)
-- **Target, not yet built:** AWS Malaysia (ap-southeast-5) for data sovereignty; Docker + Kubernetes (EKS) for deployment. `AWS_REGION` is currently read by no code, and there are no Dockerfiles or manifests — treat data residency as an open commitment, not a property of the system (`docs/MASTER_PLAN.md` §3.4, §4.3 A5)
+- **Target:** AWS Malaysia (ap-southeast-5) for data sovereignty. **Staging** is decided and artefacted: a single EC2 instance in ap-southeast-5 running `deploy/staging/` (Docker Compose + Caddy; synthetic data only). Production remains a target — no Kubernetes/Terraform exists, `AWS_REGION` is still read by no code — so treat *production* data residency as an open commitment, not a property of the system (`docs/MASTER_PLAN.md` §3.4, §4.3 A5, §8)
 
 ### Third-Party Integrations
 
@@ -112,9 +112,12 @@ true-claim-insight/
 **Not built (previously documented as if they existed):** `identity-service`
 (eKYC), `document-service` (reports/signing — reports are planned for
 case-service instead), `insurer-dashboard`, and the `infrastructure/`
-terraform + kubernetes tree. There are currently **no Dockerfiles and no
-deployment manifests**; local development runs on the host with
-`docker-compose` providing Postgres, Redis and Mailhog only.
+terraform + kubernetes tree. Deployment artefacts exist for **staging only**:
+`deploy/staging/` (multi-target Dockerfile, Compose stack, Caddy edge, secrets
+bootstrap) targeting one EC2 instance in ap-southeast-5. There is still no
+production deployment (no Kubernetes, no Terraform, no CI deploy); local
+development runs on the host with `docker-compose` providing Postgres, Redis
+and Mailhog only.
 
 ### Code Guidelines
 
