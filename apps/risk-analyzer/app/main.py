@@ -45,14 +45,20 @@ if LOCAL_STORAGE_ENABLED:
     LOCAL_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
     app.mount("/storage", StaticFiles(directory=str(LOCAL_STORAGE_ROOT)), name="storage")
 
-# Singleton client
-hume_analyzer = HumeAnalyzer()
+# Singleton client — None when HUME_API_KEY is not configured. The service
+# must still boot without it (an environment may deliberately carry no
+# offshore provider keys); only the Hume-backed endpoint refuses, with a
+# clear 503, instead of the whole analyzer crash-looping on import.
+hume_analyzer = HumeAnalyzer() if config.HUME_API_KEY else None
+if hume_analyzer is None:
+    print("Warning: HUME_API_KEY not configured — Hume analysis endpoints disabled")
 
 @app.on_event("startup")
 async def startup_event():
     """Connect to Hume AI Stream on startup."""
+    if hume_analyzer is None:
+        return
     try:
-        global hume_analyzer
         await hume_analyzer._connect()
     except Exception as e:
         print(f"Warning: Failed to connect to Hume on startup: {e}")
@@ -413,6 +419,11 @@ async def analyze_expression_endpoint(
 
     try:
         # Analyze using Hume
+        if hume_analyzer is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Hume analysis unavailable: HUME_API_KEY not configured",
+            )
         metrics = await hume_analyzer.analyze_video(tmp_path, has_audio=not noAudio)
         
         # Calculate risk score specifically for Hume metrics
@@ -425,6 +436,10 @@ async def analyze_expression_endpoint(
             metrics=metrics,
             details="Expression analysis complete using HumeAI."
         )
+    except HTTPException:
+        # Deliberate statuses (e.g. 503 when Hume is unconfigured) pass
+        # through instead of being flattened into a 500.
+        raise
     except Exception as e:
         print(f"[AnalyzeExpression] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
