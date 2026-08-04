@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './sidebar';
+import { useCurrentUser } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 
 export interface LayoutContextType {
@@ -26,6 +27,12 @@ export function useLayout() {
 }
 
 export function AppLayout() {
+  // Re-verify the session's tenant membership against `/auth/me` for every
+  // authenticated route. Previously this ran only on the Settings page, so a
+  // session that lost its tenant list had no way to recover from any other
+  // screen. This also repairs storage already corrupted by the old setAuth.
+  useCurrentUser();
+
   const [currentWidth, setCurrentWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= currentBreakpoint);
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth <= currentBreakpoint);

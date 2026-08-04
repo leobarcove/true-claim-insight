@@ -124,7 +124,7 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProps) {
   const location = useLocation();
-  const { user, userTenants } = useAuthStore();
+  const { user, userTenants, tenantsKnown } = useAuthStore();
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
@@ -148,7 +148,10 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
     setIsLogoutDialogOpen(false);
   };
 
-  const isAwaitingActivation = userTenants.length === 0 && user?.role !== 'SUPER_ADMIN';
+  // Mirrors dashboard.tsx: only collapse the navigation once the empty tenant
+  // list is confirmed, never on a merely-unknown one.
+  const isAwaitingActivation =
+    tenantsKnown && userTenants.length === 0 && user?.role !== 'SUPER_ADMIN';
 
   const filterNavItems = (
     items: NavItem[],
