@@ -72,9 +72,16 @@ export function DashboardPage() {
     PERMISSIONS.VIDEO_VIEW_RECORDINGS,
   ]);
 
-  const { userTenants } = useAuthStore();
+  const { userTenants, tenantsKnown } = useAuthStore();
+  // Require positive evidence before claiming the account is unactivated: an
+  // empty list we have not confirmed with the server means "unknown", and
+  // showing the activation screen to a legitimate user locks them out of the
+  // whole dashboard.
   const isAwaitingActivation =
-    userTenants.length === 0 && user?.role !== 'SUPER_ADMIN' && user?.role !== 'SUPPORT_DESK';
+    tenantsKnown &&
+    userTenants.length === 0 &&
+    user?.role !== 'SUPER_ADMIN' &&
+    user?.role !== 'SUPPORT_DESK';
 
   const createdById = userFilter === 'my' ? user?.id : undefined;
 
