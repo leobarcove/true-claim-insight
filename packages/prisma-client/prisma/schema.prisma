@@ -518,6 +518,7 @@ model Case {
   policy                Policy?          @relation(fields: [policyId], references: [id])
   convertedClaim        Claim?           @relation(fields: [convertedClaimId], references: [id])
   documents             CaseDocument[]
+  inboundMessage        InboundMessage?
 
   @@index([tenantId, status])
   @@index([claimantId])
@@ -544,6 +545,67 @@ model CaseDocument {
 
   @@index([caseId])
   @@map("case_documents")
+}
+
+// ============================================================================
+// FNOL email intake (MASTER_PLAN §5 Phase 2).
+//
+// One row per email received at the dedicated FNOL mailbox. The row exists
+// before any Case does, for two reasons:
+//
+//  1. Idempotency. A mailbox re-poll, a connection dropped mid-fetch, or a
+//     provider redelivery must never produce a second Case for the same
+//     email. `messageId` (RFC 5322 Message-ID) carries a unique constraint,
+//     so the guarantee is the database's rather than the worker's — a retry
+//     racing itself loses on insert instead of duplicating a claim.
+//  2. Evidence. "Why does this claim exist, and who told us?" is a question
+//     an examiner asks. An email that failed to parse must still leave a
+//     trace; silently dropping intake is the failure mode that ends pilots.
+//
+// Deliberately NOT stored: the raw MIME body. It carries NRIC and bank
+// details in the clear, and this platform encrypts both at rest (§8). Those
+// values reach the database only through the Claimant/Case writers that
+// encrypt them. `parsed` holds non-identifying extraction only.
+// ============================================================================
+model InboundMessage {
+  id           String               @id @default(uuid())
+  /// RFC 5322 Message-ID — the idempotency key.
+  messageId    String               @unique
+  /// Resolved from the recipient mailbox. Null when the mailbox maps to no
+  /// known tenant: the message is still recorded, for the operator queue.
+  tenantId     String?
+  fromAddress  String
+  toAddress    String?
+  subject      String?
+  receivedAt   DateTime
+  status       InboundMessageStatus @default(PENDING)
+  caseId       String?              @unique
+  /// Operator-facing reason for NEEDS_REVIEW or FAILED.
+  error        String?
+  attempts     Int                  @default(0)
+  /// Deterministic extraction output — policy number, dates, flight number,
+  /// destination. Never personal identifiers; see the note above.
+  parsed       Json?
+  processedAt  DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  case         Case?                @relation(fields: [caseId], references: [id])
+
+  @@index([status, receivedAt])
+  @@index([tenantId])
+  @@map("inbound_messages")
+}
+
+enum InboundMessageStatus {
+  PENDING
+  PROCESSED
+  /// Parsed, but a human must act: no policy matched, or a mandatory field
+  /// could not be extracted. This is the operator queue.
+  NEEDS_REVIEW
+  FAILED
+  /// Operator dismissed it — not an FNOL (spam, an out-of-office, a reply).
+  IGNORED
 }
 
 // ============================================================================

@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ConsentModule } from './consent/consent.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { RetentionModule } from './retention/retention.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 import { ExportModule } from './export/export.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { BillingModule } from './billing/billing.module';
@@ -66,6 +67,7 @@ import { AuditModule } from './common/audit/audit.module';
     ConsentModule,
     AssignmentsModule,
     RetentionModule,
+    IngestionModule,
     ExportModule,
     ComplianceModule,
     BillingModule,

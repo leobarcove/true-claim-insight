@@ -12,6 +12,8 @@ export const QUEUE = {
   NOTIFICATIONS: 'notifications',
   /** Retention and anonymisation sweeps (PD 12.8 seven-year floor). */
   RETENTION: 'retention',
+  /** FNOL email intake: poll the dedicated mailbox, parse, create Cases. */
+  INGESTION: 'ingestion',
 } as const;
 
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
