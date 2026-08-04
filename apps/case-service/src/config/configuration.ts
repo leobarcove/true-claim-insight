@@ -34,4 +34,30 @@ export default () => ({
   cors: {
     origins: process.env.CORS_ORIGINS || '*',
   },
+
+  /**
+   * FNOL email intake (MASTER_PLAN §5 Phase 2).
+   *
+   * No defaults for host/user/password on purpose: a default would let the
+   * poller start against nothing and report success, and intake that silently
+   * receives no mail is indistinguishable from a quiet week. `isConfigured()`
+   * on the source checks these and the scheduler skips when absent.
+   */
+  fnolIntake: {
+    enabled: process.env.FNOL_INTAKE_ENABLED === 'true',
+    imap: {
+      host: process.env.FNOL_IMAP_HOST,
+      port: parseInt(process.env.FNOL_IMAP_PORT || '993', 10),
+      secure: process.env.FNOL_IMAP_SECURE !== 'false',
+      user: process.env.FNOL_IMAP_USER,
+      password: process.env.FNOL_IMAP_PASSWORD,
+      mailbox: process.env.FNOL_IMAP_MAILBOX || 'INBOX',
+    },
+    /** Messages fetched per poll. Keeps a backlog from monopolising a worker. */
+    batchSize: parseInt(process.env.FNOL_INTAKE_BATCH_SIZE || '25', 10),
+    /** Poll interval in milliseconds. */
+    pollIntervalMs: parseInt(process.env.FNOL_INTAKE_POLL_MS || '300000', 10),
+    /** Tenant that owns the mailbox, until per-tenant mailboxes exist. */
+    tenantId: process.env.FNOL_INTAKE_TENANT_ID,
+  },
 });

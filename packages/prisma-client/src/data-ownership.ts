@@ -50,6 +50,10 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   authorityLimit: 'claims',
   // The insurer's instruction — where the regulated engagement begins.
   assignment: 'claims',
+  // FNOL email intake. Owned by claims because it exists only to become a
+  // Case, and the same service must own both or ingestion could create a
+  // claim record it does not own.
+  inboundMessage: 'claims',
   // How long claim records live; platform-wide but written by case-service.
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.
