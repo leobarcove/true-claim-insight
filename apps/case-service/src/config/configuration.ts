@@ -36,6 +36,30 @@ export default () => ({
   },
 
   /**
+   * Outbound notifications (MASTER_PLAN §5 Phase 2).
+   *
+   * Off unless explicitly enabled. A default-on sender would mean any
+   * developer machine or CI run with SMTP reachable could email a real
+   * claimant from seeded data — and the addresses in the seed are the ones a
+   * demo uses. When disabled, messages are recorded SUPPRESSED rather than
+   * dropped, so the intent is still visible.
+   */
+  notifications: {
+    enabled: process.env.NOTIFICATIONS_ENABLED === 'true',
+    from: process.env.SMTP_FROM || 'noreply@trueclaiminsight.local',
+    smtp: {
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '1025', 10),
+      // SES on 465 needs TLS; Mailhog on 1025 does not.
+      secure: process.env.SMTP_SECURE === 'true',
+      user: process.env.SMTP_USER || undefined,
+      pass: process.env.SMTP_PASS || undefined,
+    },
+    /** Where SLA breaches and other firm-facing alerts go. */
+    opsRecipient: process.env.NOTIFICATIONS_OPS_RECIPIENT,
+  },
+
+  /**
    * FNOL email intake (MASTER_PLAN §5 Phase 2).
    *
    * No defaults for host/user/password on purpose: a default would let the

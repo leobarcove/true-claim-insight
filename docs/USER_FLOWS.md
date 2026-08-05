@@ -220,7 +220,7 @@ complete?`"}
     REQ["`**INFO_REQUESTED**
 reviewNote carries the ask`"]
     REQ --> NOTIFY["`Notify claimant
-**(planned — notifications)**`"]
+by email`"]
     NOTIFY --> AMEND["`Claimant reopens intake,
 adds the missing item`"]
     AMEND --> RESUB["Resubmit → SUBMITTED"]
@@ -286,9 +286,10 @@ stateDiagram-v2
     end note
 ```
 
-> ⚠️ **"Ack sent" is a state change, not a message.** The transition and its CSP
-> clock are real; the acknowledgement itself is sent by hand until the
-> notifications engine exists.
+> **The acknowledgement is now sent, not just recorded.** Acknowledging emails
+> the appointing contact and stops the CSP clock in the same act, so the
+> one-working-day obligation is discharged by the system rather than by
+> remembering.
 
 ---
 
@@ -464,8 +465,9 @@ PD 11.2(d) Board escalation`"]
 `monitorOnly` stages are the insurer's delay, not the firm's: measured so the
 firm can evidence where a delay originated, never escalated against it.
 
-**Today the escalation reaches no human** — it persists a row and logs a
-warning. The notifications engine that would page someone is built next.
+**The escalation now reaches a person** — a firm-owned breach emails the
+operations address, deduplicated per clock and per level so a breach left open
+over a weekend sends once rather than every fifteen minutes.
 
 ---
 
@@ -611,11 +613,8 @@ not merely an access check.
 
 | Flow step | Status |
 |---|---|
-| Notify claimant on `INFO_REQUESTED` | Notifications engine not built |
-| SLA breach reaching a person | Same — escalation is a row and a log line |
 | Assessment-mode router (§1 step 4) | **Not built** — specified in MASTER_PLAN §2.4 only |
 | Small-claims fast-track (§10, in full) | **Not built** — depends on the mode router |
-| Assignment acknowledgement sent (§5) | Manual until the notifications engine exists |
 | Quantum worksheet | Planned, Phase 2 |
 | Policy file feed from the insurer | Planned, gated on **G9** |
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |

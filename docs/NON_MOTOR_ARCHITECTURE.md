@@ -99,6 +99,26 @@ and returns `satisfied: true/false`.
 
 ## FraudSignalProvider plugin pattern
 
+> **The pattern generalised.** `FraudSignalProvider` was the first instance of
+> a shape now used wherever the platform meets something it does not control:
+> an interface plus an injection token, with the concrete implementation bound
+> in one module and every consumer depending on the interface. As at 5 Aug 2026
+> the platform carries five —
+>
+> | Token | Implementations | Swaps without touching a caller |
+> |---|---|---|
+> | `FraudSignalProvider` | rainfall, repeat-claimant, behavioural | a new detector |
+> | `LlmProvider` | Gemini, Ollama | offshore → in-country (§6.15) |
+> | `SignatureProvider` | stub | SigningCloud |
+> | `InboundMailSource` | IMAP | SES inbound, provider webhook |
+> | `NotificationTransport` | SMTP (Mailhog / SES `ap-southeast-5`) | SMS, WhatsApp |
+>
+> The rule that makes it worth the indirection: the interface is drawn where a
+> **vendor or regulatory decision** could change, not wherever a seam is
+> convenient. Each of the five names a decision the plan expects to revisit —
+> which is why the local-LLM switch and the SES region are configuration
+> changes rather than rewrites.
+
 ### Interface
 
 ```ts

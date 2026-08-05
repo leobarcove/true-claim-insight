@@ -54,6 +54,10 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // Case, and the same service must own both or ingestion could create a
   // claim record it does not own.
   inboundMessage: 'claims',
+  // Outbound notification delivery log. Platform-wide in subject but written
+  // by case-service, which owns every event that currently triggers one —
+  // same reasoning as retentionPolicy above.
+  notificationLog: 'claims',
   // How long claim records live; platform-wide but written by case-service.
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.

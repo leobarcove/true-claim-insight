@@ -19,6 +19,7 @@ import { ConsentModule } from './consent/consent.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { RetentionModule } from './retention/retention.module';
 import { IngestionModule } from './ingestion/ingestion.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ExportModule } from './export/export.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { BillingModule } from './billing/billing.module';
@@ -68,6 +69,7 @@ import { AuditModule } from './common/audit/audit.module';
     AssignmentsModule,
     RetentionModule,
     IngestionModule,
+    NotificationsModule,
     ExportModule,
     ComplianceModule,
     BillingModule,

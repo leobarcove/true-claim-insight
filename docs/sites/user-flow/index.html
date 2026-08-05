@@ -487,7 +487,7 @@ complete?`"}
     REQ["`**INFO_REQUESTED**
 reviewNote carries the ask`"]
     REQ --> NOTIFY["`Notify claimant
-planned, not built`"]
+by email`"]
     NOTIFY --> AMEND["`Claimant reopens intake,
 adds the missing item`"]
     AMEND --> RESUB["Resubmit → SUBMITTED"]
@@ -508,7 +508,7 @@ reason recorded`"]
     Q4 -->|yes| CONVERT["`**convert to Claim**`"]
 
     style REQ stroke:#C77A2E,stroke-width:2.5px
-    style NOTIFY stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
+    style NOTIFY stroke:#17966A,stroke-width:2.5px
     style EXPERT stroke:#C77A2E,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
@@ -555,10 +555,10 @@ stateDiagram-v2
         rotation checked.
     end note
         </pre></div>
-        <p class="note warn">
-          <strong>"Ack sent" is a state change, not a message.</strong> The transition and its
-          CSP clock are real; the acknowledgement itself is sent by hand until the
-          notifications engine exists.
+        <p class="note">
+          <strong>The acknowledgement is now sent, not just recorded.</strong> Acknowledging
+          emails the appointing contact and stops the CSP clock in the same act, so the
+          one-working-day obligation is discharged by the system rather than by remembering.
         </p>
       </section>
 
@@ -748,10 +748,11 @@ PD 11.2 d — Board escalation`"]
     style Y stroke:#5C7FCB,stroke-width:2.5px
     style CE stroke:#17966A,stroke-width:2.5px
         </pre></div>
-        <p class="note warn">
-          <strong>Today the escalation reaches no human.</strong> It persists a
-          <code>ComplianceEvent</code> row and logs a warning — recorded evidence, not an
-          alert. The notifications engine that would page someone is the next build.
+        <p class="note">
+          <strong>The escalation now reaches a person.</strong> A firm-owned breach emails the
+          operations address, deduplicated per clock and per level so a breach left open over
+          a weekend sends once rather than every fifteen minutes. Insurer-side stages are
+          measured and never escalated against the firm, so they send nothing.
         </p>
       </section>
 
@@ -926,11 +927,8 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
-              <tr><td>Notify claimant on <code>INFO_REQUESTED</code></td><td><span class="chip plan">Planned</span></td><td>Notifications engine</td></tr>
-              <tr><td>SLA breach reaching a person</td><td><span class="chip plan">Planned</span></td><td>Same — today it is a row and a log line</td></tr>
               <tr><td>Assessment-mode router (diagram 01, step 4)</td><td><span class="chip plan">Planned</span></td><td>Nothing — scheduled work</td></tr>
               <tr><td>Small-claims fast-track (diagram 10, in full)</td><td><span class="chip plan">Planned</span></td><td>Depends on the mode router</td></tr>
-              <tr><td>Assignment acknowledgement sent (diagram 05)</td><td><span class="chip plan">Manual</span></td><td>Notifications engine</td></tr>
               <tr><td>Quantum worksheet</td><td><span class="chip plan">Planned</span></td><td>Nothing — scheduled work</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
