@@ -332,6 +332,8 @@ TPA schedule or adjuster fee scale`"]
     style CASE stroke:#17966A,stroke-width:2.5px
     style CONV stroke:#17966A,stroke-width:2.5px
     style ING stroke:#17966A,stroke-width:2.5px
+    style MODE stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
+    style DESK stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
     style INFO stroke:#C77A2E,stroke-width:2.5px
     style EXP stroke:#C77A2E,stroke-width:2.5px
@@ -340,6 +342,12 @@ TPA schedule or adjuster fee scale`"]
         <p class="note">
           <strong>The firm recommends; the insurer decides.</strong> Nothing in this system
           settles a claim. Step 7 is a handback, and the adjuster report says so on its face.
+        </p>
+        <p class="note warn">
+          <strong>Step 4 is not built.</strong> The assessment-mode router and its
+          desk-review fast-track are specified in <code>MASTER_PLAN.md</code> §2.4 but exist
+          nowhere in the codebase — no <code>AssessmentMode</code> field, no routing logic.
+          Today a claim proceeds to assessment without a mode being selected for it.
         </p>
       </section>
 
@@ -547,6 +555,11 @@ stateDiagram-v2
         rotation checked.
     end note
         </pre></div>
+        <p class="note warn">
+          <strong>"Ack sent" is a state change, not a message.</strong> The transition and its
+          CSP clock are real; the acknowledgement itself is sent by hand until the
+          notifications engine exists.
+        </p>
       </section>
 
       <section id="s6">
@@ -573,13 +586,15 @@ stateDiagram-v2
     ESCALATED_SIU --> REJECTED
     ESCALATED_SIU --> CLOSED
 
-    SCHEDULED --> CANCELLED
-    CANCELLED --> CLOSED
 
     APPROVED --> CLOSED
     REJECTED --> CLOSED
 
     CLOSED --> IN_ASSESSMENT: supplementary claim
+
+    DOCUMENTS_PENDING
+    PENDING_ASSIGNMENT
+    UNDER_REVIEW
 
     note right of CLOSED
         The reopen edge exists because the
@@ -595,6 +610,13 @@ stateDiagram-v2
         move. TPA mode records it.
     end note
         </pre></div>
+        <p class="note warn">
+          <strong>Three statuses exist but nothing reaches them.</strong>
+          <code>DOCUMENTS_PENDING</code>, <code>PENDING_ASSIGNMENT</code> and
+          <code>UNDER_REVIEW</code> are defined in <code>ClaimStatus</code> and shown above
+          detached, because no transition leads to any of them. A recorded Phase 1 lifecycle
+          gap, pinned by a test so it cannot be quietly forgotten.
+        </p>
       </section>
 
       <section id="s7">
@@ -794,6 +816,12 @@ never deleted`"]
           Four conditions must all hold before a claim takes the desk-review route, and any
           one of three triggers pulls it back out mid-flight.
         </p>
+        <p class="note warn">
+          <strong>None of this is built.</strong> This is the design recorded in
+          <code>MASTER_PLAN.md</code> §2.4, drawn so the intended rules are reviewable — not a
+          description of current behaviour. There is no fast-track logic, no tenant limit
+          configuration and no mode field in the schema.
+        </p>
         <div class="plate"><pre class="mermaid">
 flowchart TD
     IN["Claim opened"] --> C1{"`Category in the tenant's
@@ -820,8 +848,8 @@ video → site → expert`"]
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
 
-    style FAST stroke:#17966A,stroke-width:2.5px
-    style OUT stroke:#17966A,stroke-width:2.5px
+    style FAST stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
+    style OUT stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
         </pre></div>
         <p class="note">
           Mode changes are audited and disclosed in the report's methodology section. The
@@ -900,6 +928,9 @@ legal holds`"]
             <tbody>
               <tr><td>Notify claimant on <code>INFO_REQUESTED</code></td><td><span class="chip plan">Planned</span></td><td>Notifications engine</td></tr>
               <tr><td>SLA breach reaching a person</td><td><span class="chip plan">Planned</span></td><td>Same — today it is a row and a log line</td></tr>
+              <tr><td>Assessment-mode router (diagram 01, step 4)</td><td><span class="chip plan">Planned</span></td><td>Nothing — scheduled work</td></tr>
+              <tr><td>Small-claims fast-track (diagram 10, in full)</td><td><span class="chip plan">Planned</span></td><td>Depends on the mode router</td></tr>
+              <tr><td>Assignment acknowledgement sent (diagram 05)</td><td><span class="chip plan">Manual</span></td><td>Notifications engine</td></tr>
               <tr><td>Quantum worksheet</td><td><span class="chip plan">Planned</span></td><td>Nothing — scheduled work</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>

@@ -58,12 +58,19 @@ flowchart TD
 
     style CASE fill:#e8f4ea,stroke:#2d6a4f
     style CONV fill:#e8f4ea,stroke:#2d6a4f
+    style MODE fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
+    style DESK fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
     style HANDBACK fill:#fdf0e3,stroke:#b5651d
     style ING fill:#eef2fb,stroke:#3b5bA9
 ```
 
 > **The firm recommends; the insurer decides.** Nothing in this system settles a
 > claim. Step 7 is a handback, and the adjuster report says so on its face.
+
+> ⚠️ **Step 4 is not built.** The assessment-mode router and its desk-review
+> fast-track are specified in `MASTER_PLAN.md` §2.4 but exist nowhere in the
+> codebase — no `AssessmentMode` field, no routing logic. Today a claim
+> proceeds to assessment without a mode being selected for it.
 
 ---
 
@@ -166,7 +173,7 @@ sequenceDiagram
 
     CL->>PWA: Review and submit
     PWA->>CS: POST /cases/:id/submit
-    CS->>CS: policy auto-match; CSP 24h / 30-day flags
+    CS->>CS: policy auto-match, then CSP 24h / 30-day flags
     CS-->>CL: Case SUBMITTED — reference number
 ```
 
@@ -253,6 +260,10 @@ stateDiagram-v2
     end note
 ```
 
+> ⚠️ **"Ack sent" is a state change, not a message.** The transition and its CSP
+> clock are real; the acknowledgement itself is sent by hand until the
+> notifications engine exists.
+
 ---
 
 ## 6. Claim lifecycle — the exact state machine
@@ -274,13 +285,15 @@ stateDiagram-v2
     ESCALATED_SIU --> REJECTED
     ESCALATED_SIU --> CLOSED
 
-    SCHEDULED --> CANCELLED
-    CANCELLED --> CLOSED
 
     APPROVED --> CLOSED
     REJECTED --> CLOSED
 
     CLOSED --> IN_ASSESSMENT: supplementary claim
+
+    DOCUMENTS_PENDING
+    PENDING_ASSIGNMENT
+    UNDER_REVIEW
 
     note right of CLOSED
         The reopen edge exists because the
@@ -293,12 +306,17 @@ stateDiagram-v2
     note left of REPORT_PENDING
         Reached only once the evidence checklist
         is complete. Registered mode blocks the
-        move; TPA mode records it.
+        move. TPA mode records it.
     end note
 ```
 
 Every claim state may also go straight to `CLOSED`, `APPROVED` or `REJECTED`
 from the early states — an insurer can withdraw at any point.
+
+> ⚠️ **Three statuses exist but nothing reaches them.** `DOCUMENTS_PENDING`,
+> `PENDING_ASSIGNMENT` and `UNDER_REVIEW` are defined in `ClaimStatus` and shown
+> above detached, because no transition leads to any of them. A recorded Phase 1
+> lifecycle gap, pinned by a test so it cannot be quietly forgotten.
 
 ---
 
@@ -453,8 +471,13 @@ flowchart TD
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
 
-    style FAST fill:#e8f4ea,stroke:#2d6a4f
+    style FAST fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
 ```
+
+> ⚠️ **None of this is built.** This is the design recorded in
+> `MASTER_PLAN.md` §2.4, drawn so the intended rules are reviewable — not a
+> description of current behaviour. There is no fast-track logic, no tenant
+> limit configuration and no mode field in the schema.
 
 Mode changes are audited and disclosed in the report's methodology section
 (PD 12.6) — the assessment mode is a *method*, and a reader is entitled to know
@@ -508,6 +531,9 @@ not merely an access check.
 |---|---|
 | Notify claimant on `INFO_REQUESTED` | Notifications engine not built |
 | SLA breach reaching a person | Same — escalation is a row and a log line |
+| Assessment-mode router (§1 step 4) | **Not built** — specified in MASTER_PLAN §2.4 only |
+| Small-claims fast-track (§10, in full) | **Not built** — depends on the mode router |
+| Assignment acknowledgement sent (§5) | Manual until the notifications engine exists |
 | Quantum worksheet | Planned, Phase 2 |
 | Policy file feed from the insurer | Planned, gated on **G9** |
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
