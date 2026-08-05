@@ -89,7 +89,7 @@ services misled an architecture review).
 true-claim-insight/
 ├── apps/
 │   ├── api-gateway/          # NestJS - edge: auth, proxying; also owns otp/claimants/master-data/users
-│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters
+│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters + FNOL email ingestion
 │   ├── video-service/        # NestJS - Daily.co rooms, recordings, uploads
 │   ├── risk-engine/          # NestJS - Trinity rules, fraud signals, LLM extraction
 │   ├── risk-analyzer/        # Python FastAPI - Hume / Parselmouth / MediaPipe analysis
