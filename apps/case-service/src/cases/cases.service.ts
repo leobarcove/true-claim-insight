@@ -32,6 +32,8 @@ import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
 import { EncryptionService } from '@tci/crypto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { render } from '../notifications/templates';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto } from './dto/review-case.dto';
@@ -93,7 +95,8 @@ export class CasesService {
     private readonly documentValidation: DocumentValidationService,
     private readonly configService: ConfigService,
     private readonly encryption: EncryptionService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly notifications: NotificationsService
   ) {}
 
   /**
@@ -481,7 +484,40 @@ export class CasesService {
   // -------------------------------------------------------------------------
 
   async requestInfo(id: string, note: string, tenantContext: TenantContext) {
-    return this.transitionWithNote(id, CaseStatus.INFO_REQUESTED, note, tenantContext);
+    const updated = await this.transitionWithNote(
+      id,
+      CaseStatus.INFO_REQUESTED,
+      note,
+      tenantContext
+    );
+
+    // Until this existed, an operator could ask for a document and the claimant
+    // was never told — the case simply stopped, and the SLA clock kept running
+    // against the firm for a wait it had not communicated.
+    //
+    // No dedupeKey: each request is a distinct ask, and an operator returning a
+    // case to the claimant twice means two different things were needed.
+    const claimant = updated.claimantId
+      ? await this.prisma.claimant.findUnique({
+          where: { id: updated.claimantId },
+          select: { email: true, fullName: true },
+        })
+      : null;
+
+    await this.notifications.enqueue({
+      tenantId: updated.tenantId,
+      template: 'case.information-requested',
+      recipient: claimant?.email,
+      entityType: 'CASE',
+      entityId: updated.id,
+      message: render('case.information-requested', {
+        caseNumber: updated.caseNumber,
+        request: note,
+        claimantName: claimant?.fullName ?? undefined,
+      }),
+    });
+
+    return updated;
   }
 
   async referToExpert(id: string, note: string, tenantContext: TenantContext) {

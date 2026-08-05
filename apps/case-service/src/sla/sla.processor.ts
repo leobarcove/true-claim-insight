@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SlaClockState } from '@prisma/client';
 import type { Job } from 'bullmq';
 import { PrismaService } from '../config/prisma.service';
@@ -8,6 +9,8 @@ import { ComplianceEventsService } from '../compliance/compliance-events.service
 import { slaBreachEvent } from '../compliance/compliance-triggers';
 import { escalationLevelFor, isBreached, remainingWorkingDays, shouldWarn } from './sla.calculator';
 import { SlaService } from './sla.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { render } from '../notifications/templates';
 
 /**
  * The sweep that makes deadlines real.
@@ -27,7 +30,9 @@ export class SlaProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sla: SlaService,
-    private readonly compliance: ComplianceEventsService
+    private readonly compliance: ComplianceEventsService,
+    private readonly notifications: NotificationsService,
+    private readonly config: ConfigService
   ) {
     super();
   }
@@ -97,6 +102,36 @@ export class SlaProcessor extends WorkerHost {
                 ...draft,
                 claimId: clock.claimId ?? undefined,
                 source: 'sla-sweep',
+              });
+            }
+
+            // Until this existed the sweep's only output was this log line and
+            // a database row — recorded evidence that a deadline was missed,
+            // reaching nobody who could act on it. Firm-owned stages only:
+            // an insurer-side delay is measured, never escalated against us.
+            // A clock hangs on a claim or an assignment, so the owning tenant
+            // comes from whichever it has. The platform-default policy carries
+            // no tenant, so it cannot stand in for one.
+            const owningTenantId =
+              clock.claim?.tenantId ?? clock.assignment?.handlingTenantId ?? clock.policy.tenantId;
+
+            if (!clock.policy.monitorOnly && owningTenantId) {
+              await this.notifications.enqueue({
+                tenantId: owningTenantId,
+                template: 'sla.breach-escalated',
+                recipient: this.config.get<string>('notifications.opsRecipient'),
+                // One message per clock per level. The sweep re-evaluates every
+                // fifteen minutes, so without this a breach left open over a
+                // weekend would send hundreds.
+                dedupeKey: `sla-breach:${clock.id}:${level}`,
+                entityType: 'SLA_CLOCK',
+                entityId: clock.id,
+                message: render('sla.breach-escalated', {
+                  stage: clock.stage,
+                  subject,
+                  workingDaysLate: daysLate,
+                  escalationLevel: level,
+                }),
               });
             }
           }

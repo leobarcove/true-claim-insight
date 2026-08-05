@@ -609,6 +609,70 @@ enum InboundMessageStatus {
 }
 
 // ============================================================================
+// Outbound notifications (MASTER_PLAN §5 Phase 2).
+//
+// The delivery log is the point of the table, not a convenience. Three of the
+// obligations this platform carries are discharged by telling someone
+// something — the CSP one-working-day acknowledgement to the insurer, a
+// request for information to a claimant, an SLA breach reaching a person — and
+// "we notified them" is a claim that needs evidence with a timestamp against
+// it.
+//
+// Deliberately NOT stored: the rendered body. Templates live in code and are
+// keyed here, so what was said is reconstructable from the template and the
+// entity; keeping a second copy of claimant-facing prose in a plain column
+// would put personal data somewhere the encryption work did not reach.
+// ============================================================================
+model NotificationLog {
+  id        String              @id @default(uuid())
+  tenantId  String
+  channel   NotificationChannel @default(EMAIL)
+  /// Template identifier from the code registry in notifications/templates.ts.
+  template  String
+  /// Where it was sent. Personal data, held in the clear exactly as
+  /// `Claimant.email` is: evidencing that a person was told requires knowing
+  /// which person.
+  recipient String
+  subject   String
+  status    NotificationStatus  @default(QUEUED)
+  /// Stops one event notifying twice. The SLA sweep re-evaluates every 15
+  /// minutes and a worker restart replays jobs, so "already sent" has to be a
+  /// database fact rather than something the producer remembers.
+  dedupeKey String?             @unique
+  attempts  Int                 @default(0)
+  error     String?
+  /// What it was about, so an operator can answer "was the claimant told?"
+  /// from the claim rather than by searching a mailbox.
+  entityType String?
+  entityId   String?
+  queuedAt  DateTime            @default(now())
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([tenantId, status])
+  @@index([entityType, entityId])
+  @@index([queuedAt(sort: Desc)])
+  @@map("notification_logs")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  /// Deliberately not sent — no address on file, or notifications switched
+  /// off in this environment. Recorded rather than skipped, because "nothing
+  /// happened" and "we chose not to" look identical afterwards otherwise.
+  SUPPRESSED
+}
+
+// ============================================================================
 // Fraud signal records — Shift Technology pattern.
 // Each detector (parametric weather check, document forgery, repeat claimant,
 // behavioural Hume score, etc.) writes one row per signal it produces.

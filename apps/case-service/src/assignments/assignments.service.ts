@@ -16,6 +16,8 @@ import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
 import { SlaService } from '../sla/sla.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { render } from '../notifications/templates';
 import { acknowledgementOutstanding, canOpenClaim, canTransition } from './assignment-lifecycle';
 
 export interface ReceiveAssignmentInput {
@@ -51,7 +53,8 @@ export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sla: SlaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService
   ) {}
 
   /**
@@ -144,6 +147,22 @@ export class AssignmentsService {
     }
   }
 
+  /**
+   * The handling firm's registered name, for a message going to the insurer.
+   *
+   * Read from the tenant rather than the request context: under white-label
+   * operation the firm acknowledging is not necessarily the tenant the user is
+   * acting in, and an acknowledgement signed by the wrong organisation is worse
+   * than an unsigned one.
+   */
+  private async handlingFirmName(handlingTenantId: string): Promise<string> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: handlingTenantId },
+      select: { name: true },
+    });
+    return tenant?.name ?? 'Your appointed adjusting firm';
+  }
+
   /** Acknowledge to the insurer. Stops the CSP clock. */
   async acknowledge(id: string, tenantContext: TenantContext) {
     const assignment = await this.load(id, tenantContext);
@@ -165,6 +184,24 @@ export class AssignmentsService {
       tenantId: tenantContext.tenantId,
       oldValues: { status: assignment.status },
       newValues: { status: AssignmentStatus.ACKNOWLEDGED, acknowledgedAt },
+    });
+
+    // The acknowledgement the CSP one-working-day clock is actually measuring.
+    // Enqueued after the write and the audit row: the transition is the record
+    // of record, and a mail failure must not undo it.
+    await this.notifications.enqueue({
+      tenantId: tenantContext.tenantId,
+      template: 'assignment.acknowledged',
+      recipient: assignment.appointedByEmail,
+      dedupeKey: `assignment-ack:${assignment.id}`,
+      entityType: 'ASSIGNMENT',
+      entityId: assignment.id,
+      message: render('assignment.acknowledged', {
+        externalRef: assignment.externalRef,
+        firmName: await this.handlingFirmName(assignment.handlingTenantId),
+        acknowledgedAt,
+        scope: assignment.scope ?? undefined,
+      }),
     });
 
     return updated;
