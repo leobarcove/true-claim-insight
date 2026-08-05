@@ -1,0 +1,515 @@
+# User flows — True Claim Insight as a TPA
+
+Every diagram here is drawn from the code, not from intent. State machines
+mirror `CASE_STATUS_TRANSITIONS` (`apps/case-service/src/cases/cases.service.ts`),
+`CLAIM_STATUS_TRANSITIONS` (`apps/case-service/src/claims/claim-transitions.ts`)
+and the Prisma enums. Where a step is planned rather than built it is marked
+**(planned)**, so this document cannot become the false comfort §3.6 warns about.
+
+Read `MASTER_PLAN.md` §2 for the narrative these diagrams formalise.
+
+---
+
+## 1. The whole journey, end to end
+
+Four intake channels converge on one Case funnel; a vetted Case converts to a
+Claim, which is the regulated engagement.
+
+```mermaid
+flowchart TD
+    subgraph INTAKE["1 · Notification of loss"]
+        C1["Claimant<br/>PWA :4001"]
+        C2["Agent or broker<br/>email"]
+        C3["Insurer forwards<br/>FNOL"]
+        C4["Staff capture<br/>portal :4000"]
+    end
+
+    C1 --> CASE
+    C2 --> ING["FNOL email ingestion<br/>deterministic parse + policy match"]
+    C3 --> ING
+    C4 --> CASE
+    ING --> CASE
+
+    CASE["<b>Case</b> — pre-claim intake funnel<br/>channel · answers · documents · consent"]
+
+    CASE --> VET{"2 · Operator vets"}
+    VET -->|"detail missing"| INFO["INFO_REQUESTED<br/>claimant amends"]
+    INFO --> CASE
+    VET -->|"medical"| EXP["REFERRED_TO_EXPERT<br/>never auto-assessed"]
+    VET -->|"not covered"| REJ["REJECTED"]
+    VET -->|"vetted"| CONV
+    EXP --> CONV
+
+    CONV["3 · convert() → <b>Claim</b><br/>the insurer-facing handback record"]
+
+    CONV --> MODE{"4 · Assessment-mode router"}
+    MODE -->|"small claim,<br/>no fraud signal"| DESK["DESK_REVIEW fast-track<br/>final report 3 wkg days"]
+    MODE -->|"standard"| VIDEO["Video assessment<br/>Daily.co + risk-analyzer"]
+    MODE -->|"escalated"| SITE["Site visit or expert"]
+
+    DESK --> ASSESS
+    VIDEO --> ASSESS
+    SITE --> ASSESS
+
+    ASSESS["5 · Assessment<br/>evidence checklist · quantum · fraud signals"]
+    ASSESS --> REPORT["6 · Adjuster report<br/>PD 12.6 disclosure · sign-off"]
+    REPORT --> HANDBACK["7 · Handback to insurer<br/>the insurer decides the claim"]
+    HANDBACK --> BILL["8 · Fee note<br/>TPA schedule or adjuster fee scale"]
+
+    style CASE fill:#e8f4ea,stroke:#2d6a4f
+    style CONV fill:#e8f4ea,stroke:#2d6a4f
+    style HANDBACK fill:#fdf0e3,stroke:#b5651d
+    style ING fill:#eef2fb,stroke:#3b5bA9
+```
+
+> **The firm recommends; the insurer decides.** Nothing in this system settles a
+> claim. Step 7 is a handback, and the adjuster report says so on its face.
+
+---
+
+## 2. Case intake — the exact state machine
+
+Transitions below are the whole of `CASE_STATUS_TRANSITIONS`. Anything not drawn
+is refused server-side.
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: case created
+
+    DRAFT --> IN_PROGRESS: first answer captured
+    DRAFT --> SUBMITTED: one-page staff form
+    DRAFT --> ABANDONED
+
+    IN_PROGRESS --> SUBMITTED: claimant reviews and submits
+    IN_PROGRESS --> ABANDONED
+
+    SUBMITTED --> UNDER_REVIEW: operator opens it
+    SUBMITTED --> INFO_REQUESTED
+    SUBMITTED --> REFERRED_TO_EXPERT
+    SUBMITTED --> CONVERTED
+    SUBMITTED --> REJECTED
+
+    UNDER_REVIEW --> INFO_REQUESTED: detail missing
+    UNDER_REVIEW --> REFERRED_TO_EXPERT: medical
+    UNDER_REVIEW --> CONVERTED: vetted
+    UNDER_REVIEW --> REJECTED
+
+    INFO_REQUESTED --> SUBMITTED: claimant amends and resubmits
+    INFO_REQUESTED --> ABANDONED
+
+    REFERRED_TO_EXPERT --> CONVERTED: expert outcome received
+    REFERRED_TO_EXPERT --> REJECTED
+
+    CONVERTED --> [*]
+    REJECTED --> [*]
+    ABANDONED --> [*]
+
+    note right of REFERRED_TO_EXPERT
+        MEDICAL cases cannot reach CONVERTED
+        by any other route. Conversion refuses.
+    end note
+
+    note right of INFO_REQUESTED
+        The only backward edge in the machine.
+        Answers are editable only here and in
+        DRAFT / IN_PROGRESS.
+    end note
+```
+
+---
+
+## 3. Claimant submits a case
+
+The conversational intake: one question at a time, resumable via
+`currentStepId`, with the flow chosen by travel claim type.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor CL as Claimant
+    participant PWA as Claimant PWA
+    participant GW as API Gateway
+    participant CS as case-service
+    participant ST as Storage
+
+    CL->>PWA: Start a claim
+    PWA->>GW: POST /auth/claimant/send-otp
+    GW-->>CL: OTP by SMS
+    CL->>PWA: Enter OTP
+    PWA->>GW: POST /auth/claimant/verify-otp
+    GW-->>PWA: JWT — sub IS the claimant id
+
+    PWA->>CL: Show PDPA notice (EN / BM)
+    CL->>PWA: Consent
+    PWA->>CS: POST /consent — recorded against approved wording v1
+
+    PWA->>CS: POST /cases {travelClaimType}
+    CS-->>PWA: Case DRAFT + first step
+
+    loop One step at a time
+        PWA->>CL: Ask step prompt
+        CL->>PWA: Answer
+        PWA->>CS: PATCH /cases/:id/answers
+        CS->>CS: validateAnswer against the flow rule
+        alt bank account number
+            CS->>CS: encrypt; store mask in answers, last4 in the clear
+        end
+        CS-->>PWA: next step + completeness
+    end
+
+    loop Required documents
+        CL->>PWA: Upload evidence
+        PWA->>CS: POST /cases/:id/documents
+        CS->>ST: store file
+        CS->>CS: stamp documentsCompleteAt when last mandatory item lands
+    end
+
+    CL->>PWA: Review and submit
+    PWA->>CS: POST /cases/:id/submit
+    CS->>CS: policy auto-match; CSP 24h / 30-day flags
+    CS-->>CL: Case SUBMITTED — reference number
+```
+
+**Two flags computed at submission, both advisory at intake:** `notifiedLate`
+(notified more than 24 hours after the incident) and `outOfWindow` (more than 30
+days). They surface as warnings to the operator; they never auto-reject.
+
+---
+
+## 4. Operator vetting, and the request-for-information loop
+
+```mermaid
+flowchart TD
+    S["Case SUBMITTED"] --> OPEN["Operator opens it<br/>→ UNDER_REVIEW"]
+    OPEN --> CHK{"Checks"}
+
+    CHK --> Q1{"Policy matched?"}
+    Q1 -->|no| LINK["needsPolicyReview = true<br/>operator links policy by hand"]
+    LINK --> Q2
+    Q1 -->|yes| Q2{"Evidence checklist<br/>complete?"}
+
+    Q2 -->|no| REQ
+    Q2 -->|yes| Q3{"Claim type?"}
+
+    REQ["<b>INFO_REQUESTED</b><br/>reviewNote carries the ask"]
+    REQ --> NOTIFY["Notify claimant<br/><b>(planned — notifications)</b>"]
+    NOTIFY --> AMEND["Claimant reopens intake,<br/>adds the missing item"]
+    AMEND --> RESUB["Resubmit → SUBMITTED"]
+    RESUB --> OPEN
+
+    Q3 -->|MEDICAL| EXPERT["<b>REFERRED_TO_EXPERT</b><br/>form + routing only,<br/>no automated assessment"]
+    Q3 -->|other| Q4{"Covered under<br/>the policy?"}
+
+    EXPERT --> EOUT{"Expert outcome"}
+    EOUT -->|proceed| CONVERT
+    EOUT -->|decline| REJECT
+
+    Q4 -->|no| REJECT["<b>REJECTED</b><br/>reason recorded"]
+    Q4 -->|yes| CONVERT["<b>convert()</b> → Claim created"]
+
+    style REQ fill:#fdf0e3,stroke:#b5651d
+    style EXPERT fill:#fdf0e3,stroke:#b5651d
+    style CONVERT fill:#e8f4ea,stroke:#2d6a4f
+```
+
+The loop `INFO_REQUESTED → SUBMITTED → UNDER_REVIEW` may run any number of
+times. Every pass writes an audit row with before/after values.
+
+---
+
+## 5. Insurer-appointed entry — the Assignment
+
+Where the regulated engagement actually begins. Under TPA operation a Case
+converts to a Claim; under insurer appointment the Assignment comes first and
+the Case is optional.
+
+```mermaid
+stateDiagram-v2
+    [*] --> RECEIVED: insurer instructs the firm
+
+    RECEIVED --> ACKNOWLEDGED: ack sent
+    RECEIVED --> DECLINED: conflict or capacity
+
+    ACKNOWLEDGED --> ACCEPTED: claim opened
+    ACKNOWLEDGED --> DECLINED
+
+    ACCEPTED --> COMPLETED: closed out
+
+    DECLINED --> [*]
+    COMPLETED --> [*]
+
+    note right of RECEIVED
+        Starts the ACK_TO_INSURER clock:
+        1 working day (CSP).
+        Before Assignment existed the clock
+        measured from nothing and could be
+        neither met nor missed.
+    end note
+
+    note right of ACCEPTED
+        Registered mode gates here:
+        COI declared, competency matched,
+        rotation checked.
+    end note
+```
+
+---
+
+## 6. Claim lifecycle — the exact state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> SUBMITTED: converted case or accepted assignment
+
+    SUBMITTED --> ASSIGNED: adjuster assigned
+    ASSIGNED --> SCHEDULED: assessment booked
+    SCHEDULED --> IN_ASSESSMENT: assessment starts
+    IN_ASSESSMENT --> REPORT_PENDING: evidence complete
+    REPORT_PENDING --> APPROVED
+    REPORT_PENDING --> REJECTED
+
+    IN_ASSESSMENT --> ESCALATED_SIU: fraud signal
+    REPORT_PENDING --> ESCALATED_SIU
+    ESCALATED_SIU --> APPROVED
+    ESCALATED_SIU --> REJECTED
+    ESCALATED_SIU --> CLOSED
+
+    SCHEDULED --> CANCELLED
+    CANCELLED --> CLOSED
+
+    APPROVED --> CLOSED
+    REJECTED --> CLOSED
+
+    CLOSED --> IN_ASSESSMENT: supplementary claim
+
+    note right of CLOSED
+        The reopen edge exists because the
+        supplementary endpoint really does
+        reopen — and starts a 5-working-day
+        CSP clock. The machine tells the truth
+        about what the endpoint does.
+    end note
+
+    note left of REPORT_PENDING
+        Reached only once the evidence checklist
+        is complete. Registered mode blocks the
+        move; TPA mode records it.
+    end note
+```
+
+Every claim state may also go straight to `CLOSED`, `APPROVED` or `REJECTED`
+from the early states — an insurer can withdraw at any point.
+
+---
+
+## 7. Adjuster assessment and report sign-off
+
+```mermaid
+flowchart TD
+    A["Claim ASSIGNED"] --> AUTH{"Authority check"}
+    AUTH -->|"no AuthorityLimit row"| BLOCK["Refused — an absent limit<br/>means no authority, not unlimited"]
+    AUTH -->|"limit present"| SCHED["Schedule assessment"]
+
+    SCHED --> MODE{"Assessment mode"}
+    MODE -->|desk review| DESK["Documents only"]
+    MODE -->|video| VID["Daily.co room"]
+    MODE -->|site| SITE["Physical inspection"]
+
+    VID --> CONSENT{"Biometric consent<br/>on record?"}
+    CONSENT -->|no| NOANALYSIS["No prosody or attention analysis.<br/>Fails closed — including when<br/>case-service is unreachable"]
+    CONSENT -->|yes| ANALYSE["risk-analyzer:<br/>Hume · MediaPipe · Parselmouth"]
+    ANALYSE --> XFER["TransferRecord written<br/>recipient · country · basis"]
+
+    DESK --> EV
+    NOANALYSIS --> EV
+    XFER --> EV
+    SITE --> EV
+
+    EV["Evidence checklist"] --> COMPLETE{"All mandatory<br/>items in?"}
+    COMPLETE -->|no| CHASE["Chase claimant"]
+    CHASE --> EV
+    COMPLETE -->|yes| STAMP["documentsCompleteAt stamped<br/>→ FINAL_REPORT clock starts<br/>10 working days"]
+
+    STAMP --> QUANT["Quantum worksheet<br/><b>(planned)</b>"]
+    QUANT --> DRAFT["Report DRAFT"]
+
+    DRAFT --> SECTIONS{"PD 12.6 sections<br/>all present?"}
+    SECTIONS -->|"any blank"| REFUSE["Cannot submit —<br/>facts, assumptions,<br/>methodology, sources"]
+    REFUSE --> DRAFT
+    SECTIONS -->|complete| REVIEW["IN_REVIEW"]
+
+    REVIEW --> SIGN{"Signer is an<br/>adjusting employee?"}
+    SIGN -->|"no — e.g. firm admin"| REFUSE2["Refused: PD 12.7"]
+    SIGN -->|yes| MODEQ{"licensedMode?"}
+
+    MODEQ -->|"on — registered"| COUNTER["Countersign required<br/>self-sign refused"]
+    MODEQ -->|"off — TPA"| RECORD["Countersign basis recorded,<br/>not enforced"]
+
+    COUNTER --> SIGNED["SIGNED"]
+    RECORD --> SIGNED
+    SIGNED --> ISSUED["ISSUED — immutable.<br/>Stops the SLA clock.<br/>Corrections supersede via supersedesId"]
+
+    style BLOCK fill:#fbeaea,stroke:#a33
+    style REFUSE fill:#fbeaea,stroke:#a33
+    style REFUSE2 fill:#fbeaea,stroke:#a33
+    style NOANALYSIS fill:#fdf0e3,stroke:#b5651d
+    style ISSUED fill:#e8f4ea,stroke:#2d6a4f
+```
+
+**Segregation of duties (A3):** the assessor cannot decide their own claim
+unless an `AuthorityLimit` expressly permits it, and never above its monetary
+ceiling. The basis is written onto the audit row.
+
+---
+
+## 8. CSP clocks running underneath
+
+```mermaid
+flowchart LR
+    subgraph FIRM["The firm's own turnaround — escalated"]
+        A["ACK_TO_INSURER<br/>1 working day"]
+        P["PRELIMINARY_REPORT<br/>per-insurer target"]
+        F["FINAL_REPORT<br/>10 wkg days from<br/>complete documents"]
+        S["SUPPLEMENTARY_CLAIM<br/>5 working days"]
+    end
+
+    subgraph INSURER["Insurer side — measured, never escalated"]
+        D["INSURER_DECISION<br/>7 working days"]
+        Y["INSURER_PAYMENT<br/>14 working days"]
+    end
+
+    A --> P --> F --> D --> Y
+    F -.-> S
+
+    SWEEP["Sweep every 15 min"] --> BR{"Past due?"}
+    BR -->|yes| ESC["BREACHED<br/>level 1 → 2 at 2 wkg days<br/>→ 3 at 5"]
+    ESC --> CE["Level 3 raises a ComplianceEvent<br/>PD 11.2(d) Board escalation"]
+    BR -->|"due soon"| WARN["One warning per clock"]
+
+    style INSURER fill:#eef2fb,stroke:#3b5bA9
+```
+
+`monitorOnly` stages are the insurer's delay, not the firm's: measured so the
+firm can evidence where a delay originated, never escalated against it.
+
+**Today the escalation reaches no human** — it persists a row and logs a
+warning. The notifications engine that would page someone is built next.
+
+---
+
+## 9. FNOL email ingestion
+
+```mermaid
+flowchart TD
+    POLL["Poll mailbox every 5 min<br/>only when FNOL_INTAKE_ENABLED"] --> FETCH["Fetch messages without<br/>the TciIngested keyword"]
+    FETCH --> INS{"Insert InboundMessage<br/>by RFC Message-ID"}
+
+    INS -->|"unique violation"| DUP["Already seen — acknowledge, skip.<br/>The database is the arbiter,<br/>not the worker"]
+    INS -->|"inserted"| PARSE["Deterministic parse<br/><b>no LLM</b> — §6.3"]
+
+    PARSE --> GAP{"Claim type and<br/>mandatory facts found?"}
+    GAP -->|no| REVIEW["<b>NEEDS_REVIEW</b><br/>operator queue"]
+    GAP -->|yes| CREATE["CasesService.create()<br/>channel EMAIL · initiatedBy SYSTEM"]
+
+    CREATE --> MATCH{"Policy number<br/>matches?"}
+    MATCH -->|yes| LINKED["policyId set"]
+    MATCH -->|no| FLAG["needsPolicyReview = true"]
+
+    LINKED --> ATT["Attach email documents"]
+    FLAG --> ATT
+    ATT --> DONE["<b>PROCESSED</b> → Case in the funnel"]
+
+    REVIEW --> OPS{"Operator"}
+    OPS -->|"fixed the cause"| RETRY["Retry — re-reads the email<br/>from the mailbox"]
+    RETRY --> PARSE
+    OPS -->|"not an FNOL"| IGN["IGNORED — audited,<br/>never deleted"]
+
+    style DUP fill:#eef2fb,stroke:#3b5bA9
+    style REVIEW fill:#fdf0e3,stroke:#b5651d
+    style DONE fill:#e8f4ea,stroke:#2d6a4f
+```
+
+The row is written **before** parsing, so an email nobody could understand still
+leaves a trace. A claimant who emailed you believes they have notified you.
+
+---
+
+## 10. Small-claims fast-track
+
+```mermaid
+flowchart TD
+    IN["Claim opened"] --> C1{"Category in the tenant's<br/>fast-track list?"}
+    C1 -->|no| STD["Standard mode"]
+    C1 -->|yes| C2{"Estimated amount ≤<br/>tenant fast-track limit?"}
+    C2 -->|no| STD
+    C2 -->|yes| C3{"Any open fraud signal<br/>at MEDIUM or above?"}
+    C3 -->|yes| STD
+    C3 -->|no| C4{"Evidence checklist<br/>complete?"}
+    C4 -->|no| STD
+    C4 -->|yes| FAST["<b>DESK_REVIEW</b><br/>fast-track SLA · single adjuster<br/>short-form report"]
+
+    FAST --> TRIG{"Any escalation trigger<br/>mid-flight?"}
+    TRIG -->|"fraud flag · amount revised up ·<br/>extraction inconsistency"| UP["Escalate one level:<br/>video → site → expert"]
+    TRIG -->|none| OUT["Complete on fast-track"]
+    UP --> STD
+
+    style FAST fill:#e8f4ea,stroke:#2d6a4f
+```
+
+Mode changes are audited and disclosed in the report's methodology section
+(PD 12.6) — the assessment mode is a *method*, and a reader is entitled to know
+which one produced the figure.
+
+---
+
+## 11. Who may do what
+
+```mermaid
+flowchart LR
+    subgraph EXT["Outside the firm"]
+        CLM["CLAIMANT<br/>own case only"]
+    end
+
+    subgraph FIRM["Adjusting firm — tenant scoped"]
+        SUP["SUPPORT_DESK<br/>vet · request info<br/>no fraud or behavioural data"]
+        ADJ["ADJUSTER<br/>assess · author reports"]
+        FA["FIRM_ADMIN<br/>config · audited reveals<br/>cannot sign reports"]
+    end
+
+    subgraph INS["Insurer tenant"]
+        SIU["SIU_INVESTIGATOR"]
+        CO["COMPLIANCE_OFFICER<br/>legal holds"]
+        SR["SHARIAH_REVIEWER"]
+    end
+
+    SA["SUPER_ADMIN"]
+
+    CLM -->|"submit · amend · upload"| CASE["Case"]
+    SUP -->|"vet"| CASE
+    ADJ -->|"assess"| CLAIM["Claim"]
+    FA -->|"link policy · reveal payout"| CASE
+    SIU -->|"escalated only"| CLAIM
+    CO -->|"hold · compliance events"| CLAIM
+    SA -->|"cross-tenant"| CLAIM
+
+    style EXT fill:#fdf0e3,stroke:#b5651d
+    style INS fill:#eef2fb,stroke:#3b5bA9
+```
+
+Cross-tenant access raises `ForbiddenException`. A record belonging to another
+tenant is indistinguishable from one that does not exist — an existence check,
+not merely an access check.
+
+---
+
+## What is drawn here but not yet built
+
+| Flow step | Status |
+|---|---|
+| Notify claimant on `INFO_REQUESTED` | Notifications engine not built |
+| SLA breach reaching a person | Same — escalation is a row and a log line |
+| Quantum worksheet | Planned, Phase 2 |
+| Policy file feed from the insurer | Planned, gated on **G9** |
+| Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
+| Local-LLM document validation | `validationStatus` is a labelled stub |
+| AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3 |
