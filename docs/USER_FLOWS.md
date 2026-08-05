@@ -18,43 +18,59 @@ Claim, which is the regulated engagement.
 ```mermaid
 flowchart TD
     subgraph INTAKE["1 · Notification of loss"]
-        C1["Claimant<br/>PWA :4001"]
-        C2["Agent or broker<br/>email"]
-        C3["Insurer forwards<br/>FNOL"]
-        C4["Staff capture<br/>portal :4000"]
+        C1["`Claimant
+PWA :4001`"]
+        C2["`Agent or broker
+email`"]
+        C3["`Insurer forwards
+FNOL`"]
+        C4["`Staff capture
+portal :4000`"]
     end
 
     C1 --> CASE
-    C2 --> ING["FNOL email ingestion<br/>deterministic parse + policy match"]
+    C2 --> ING["`FNOL email ingestion
+deterministic parse + policy match`"]
     C3 --> ING
     C4 --> CASE
     ING --> CASE
 
-    CASE["<b>Case</b> — pre-claim intake funnel<br/>channel · answers · documents · consent"]
+    CASE["`**Case** — pre-claim intake funnel
+channel · answers · documents · consent`"]
 
     CASE --> VET{"2 · Operator vets"}
-    VET -->|"detail missing"| INFO["INFO_REQUESTED<br/>claimant amends"]
+    VET -->|"detail missing"| INFO["`INFO_REQUESTED
+claimant amends`"]
     INFO --> CASE
-    VET -->|"medical"| EXP["REFERRED_TO_EXPERT<br/>never auto-assessed"]
+    VET -->|"medical"| EXP["`REFERRED_TO_EXPERT
+never auto-assessed`"]
     VET -->|"not covered"| REJ["REJECTED"]
     VET -->|"vetted"| CONV
     EXP --> CONV
 
-    CONV["3 · convert() → <b>Claim</b><br/>the insurer-facing handback record"]
+    CONV["`3 · convert() → **Claim**
+the insurer-facing handback record`"]
 
     CONV --> MODE{"4 · Assessment-mode router"}
-    MODE -->|"small claim,<br/>no fraud signal"| DESK["DESK_REVIEW fast-track<br/>final report 3 wkg days"]
-    MODE -->|"standard"| VIDEO["Video assessment<br/>Daily.co + risk-analyzer"]
+    MODE -->|"`small claim,
+no fraud signal`"| DESK["`DESK_REVIEW fast-track
+final report 3 wkg days`"]
+    MODE -->|"standard"| VIDEO["`Video assessment
+Daily.co + risk-analyzer`"]
     MODE -->|"escalated"| SITE["Site visit or expert"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
     SITE --> ASSESS
 
-    ASSESS["5 · Assessment<br/>evidence checklist · quantum · fraud signals"]
-    ASSESS --> REPORT["6 · Adjuster report<br/>PD 12.6 disclosure · sign-off"]
-    REPORT --> HANDBACK["7 · Handback to insurer<br/>the insurer decides the claim"]
-    HANDBACK --> BILL["8 · Fee note<br/>TPA schedule or adjuster fee scale"]
+    ASSESS["`5 · Assessment
+evidence checklist · quantum · fraud signals`"]
+    ASSESS --> REPORT["`6 · Adjuster report
+PD 12.6 disclosure · sign-off`"]
+    REPORT --> HANDBACK["`7 · Handback to insurer
+the insurer decides the claim`"]
+    HANDBACK --> BILL["`8 · Fee note
+TPA schedule or adjuster fee scale`"]
 
     style CASE fill:#e8f4ea,stroke:#2d6a4f
     style CONV fill:#e8f4ea,stroke:#2d6a4f
@@ -159,7 +175,7 @@ sequenceDiagram
         PWA->>CS: PATCH /cases/:id/answers
         CS->>CS: validateAnswer against the flow rule
         alt bank account number
-            CS->>CS: encrypt; store mask in answers, last4 in the clear
+            CS->>CS: encrypt, store mask in answers, last4 in the clear
         end
         CS-->>PWA: next step + completeness
     end
@@ -187,32 +203,42 @@ days). They surface as warnings to the operator; they never auto-reject.
 
 ```mermaid
 flowchart TD
-    S["Case SUBMITTED"] --> OPEN["Operator opens it<br/>→ UNDER_REVIEW"]
+    S["Case SUBMITTED"] --> OPEN["`Operator opens it
+→ UNDER_REVIEW`"]
     OPEN --> CHK{"Checks"}
 
     CHK --> Q1{"Policy matched?"}
-    Q1 -->|no| LINK["needsPolicyReview = true<br/>operator links policy by hand"]
+    Q1 -->|no| LINK["`needsPolicyReview = true
+operator links policy by hand`"]
     LINK --> Q2
-    Q1 -->|yes| Q2{"Evidence checklist<br/>complete?"}
+    Q1 -->|yes| Q2{"`Evidence checklist
+complete?`"}
 
     Q2 -->|no| REQ
     Q2 -->|yes| Q3{"Claim type?"}
 
-    REQ["<b>INFO_REQUESTED</b><br/>reviewNote carries the ask"]
-    REQ --> NOTIFY["Notify claimant<br/><b>(planned — notifications)</b>"]
-    NOTIFY --> AMEND["Claimant reopens intake,<br/>adds the missing item"]
+    REQ["`**INFO_REQUESTED**
+reviewNote carries the ask`"]
+    REQ --> NOTIFY["`Notify claimant
+**(planned — notifications)**`"]
+    NOTIFY --> AMEND["`Claimant reopens intake,
+adds the missing item`"]
     AMEND --> RESUB["Resubmit → SUBMITTED"]
     RESUB --> OPEN
 
-    Q3 -->|MEDICAL| EXPERT["<b>REFERRED_TO_EXPERT</b><br/>form + routing only,<br/>no automated assessment"]
-    Q3 -->|other| Q4{"Covered under<br/>the policy?"}
+    Q3 -->|MEDICAL| EXPERT["`**REFERRED_TO_EXPERT**
+form + routing only,
+no automated assessment`"]
+    Q3 -->|other| Q4{"`Covered under
+the policy?`"}
 
     EXPERT --> EOUT{"Expert outcome"}
     EOUT -->|proceed| CONVERT
     EOUT -->|decline| REJECT
 
-    Q4 -->|no| REJECT["<b>REJECTED</b><br/>reason recorded"]
-    Q4 -->|yes| CONVERT["<b>convert()</b> → Claim created"]
+    Q4 -->|no| REJECT["`**REJECTED**
+reason recorded`"]
+    Q4 -->|yes| CONVERT["`**convert()** → Claim created`"]
 
     style REQ fill:#fdf0e3,stroke:#b5651d
     style EXPERT fill:#fdf0e3,stroke:#b5651d
@@ -325,7 +351,8 @@ from the early states — an insurer can withdraw at any point.
 ```mermaid
 flowchart TD
     A["Claim ASSIGNED"] --> AUTH{"Authority check"}
-    AUTH -->|"no AuthorityLimit row"| BLOCK["Refused — an absent limit<br/>means no authority, not unlimited"]
+    AUTH -->|"no AuthorityLimit row"| BLOCK["`Refused — an absent limit
+means no authority, not unlimited`"]
     AUTH -->|"limit present"| SCHED["Schedule assessment"]
 
     SCHED --> MODE{"Assessment mode"}
@@ -333,39 +360,56 @@ flowchart TD
     MODE -->|video| VID["Daily.co room"]
     MODE -->|site| SITE["Physical inspection"]
 
-    VID --> CONSENT{"Biometric consent<br/>on record?"}
-    CONSENT -->|no| NOANALYSIS["No prosody or attention analysis.<br/>Fails closed — including when<br/>case-service is unreachable"]
-    CONSENT -->|yes| ANALYSE["risk-analyzer:<br/>Hume · MediaPipe · Parselmouth"]
-    ANALYSE --> XFER["TransferRecord written<br/>recipient · country · basis"]
+    VID --> CONSENT{"`Biometric consent
+on record?`"}
+    CONSENT -->|no| NOANALYSIS["`No prosody or attention analysis.
+Fails closed — including when
+case-service is unreachable`"]
+    CONSENT -->|yes| ANALYSE["`risk-analyzer:
+Hume · MediaPipe · Parselmouth`"]
+    ANALYSE --> XFER["`TransferRecord written
+recipient · country · basis`"]
 
     DESK --> EV
     NOANALYSIS --> EV
     XFER --> EV
     SITE --> EV
 
-    EV["Evidence checklist"] --> COMPLETE{"All mandatory<br/>items in?"}
+    EV["Evidence checklist"] --> COMPLETE{"`All mandatory
+items in?`"}
     COMPLETE -->|no| CHASE["Chase claimant"]
     CHASE --> EV
-    COMPLETE -->|yes| STAMP["documentsCompleteAt stamped<br/>→ FINAL_REPORT clock starts<br/>10 working days"]
+    COMPLETE -->|yes| STAMP["`documentsCompleteAt stamped
+→ FINAL_REPORT clock starts
+10 working days`"]
 
-    STAMP --> QUANT["Quantum worksheet<br/><b>(planned)</b>"]
+    STAMP --> QUANT["`Quantum worksheet
+**(planned)**`"]
     QUANT --> DRAFT["Report DRAFT"]
 
-    DRAFT --> SECTIONS{"PD 12.6 sections<br/>all present?"}
-    SECTIONS -->|"any blank"| REFUSE["Cannot submit —<br/>facts, assumptions,<br/>methodology, sources"]
+    DRAFT --> SECTIONS{"`PD 12.6 sections
+all present?`"}
+    SECTIONS -->|"any blank"| REFUSE["`Cannot submit —
+facts, assumptions,
+methodology, sources`"]
     REFUSE --> DRAFT
     SECTIONS -->|complete| REVIEW["IN_REVIEW"]
 
-    REVIEW --> SIGN{"Signer is an<br/>adjusting employee?"}
+    REVIEW --> SIGN{"`Signer is an
+adjusting employee?`"}
     SIGN -->|"no — e.g. firm admin"| REFUSE2["Refused: PD 12.7"]
     SIGN -->|yes| MODEQ{"licensedMode?"}
 
-    MODEQ -->|"on — registered"| COUNTER["Countersign required<br/>self-sign refused"]
-    MODEQ -->|"off — TPA"| RECORD["Countersign basis recorded,<br/>not enforced"]
+    MODEQ -->|"on — registered"| COUNTER["`Countersign required
+self-sign refused`"]
+    MODEQ -->|"off — TPA"| RECORD["`Countersign basis recorded,
+not enforced`"]
 
     COUNTER --> SIGNED["SIGNED"]
     RECORD --> SIGNED
-    SIGNED --> ISSUED["ISSUED — immutable.<br/>Stops the SLA clock.<br/>Corrections supersede via supersedesId"]
+    SIGNED --> ISSUED["`ISSUED — immutable.
+Stops the SLA clock.
+Corrections supersede via supersedesId`"]
 
     style BLOCK fill:#fbeaea,stroke:#a33
     style REFUSE fill:#fbeaea,stroke:#a33
@@ -385,23 +429,33 @@ ceiling. The basis is written onto the audit row.
 ```mermaid
 flowchart LR
     subgraph FIRM["The firm's own turnaround — escalated"]
-        A["ACK_TO_INSURER<br/>1 working day"]
-        P["PRELIMINARY_REPORT<br/>per-insurer target"]
-        F["FINAL_REPORT<br/>10 wkg days from<br/>complete documents"]
-        S["SUPPLEMENTARY_CLAIM<br/>5 working days"]
+        A["`ACK_TO_INSURER
+1 working day`"]
+        P["`PRELIMINARY_REPORT
+per-insurer target`"]
+        F["`FINAL_REPORT
+10 wkg days from
+complete documents`"]
+        S["`SUPPLEMENTARY_CLAIM
+5 working days`"]
     end
 
     subgraph INSURER["Insurer side — measured, never escalated"]
-        D["INSURER_DECISION<br/>7 working days"]
-        Y["INSURER_PAYMENT<br/>14 working days"]
+        D["`INSURER_DECISION
+7 working days`"]
+        Y["`INSURER_PAYMENT
+14 working days`"]
     end
 
     A --> P --> F --> D --> Y
     F -.-> S
 
     SWEEP["Sweep every 15 min"] --> BR{"Past due?"}
-    BR -->|yes| ESC["BREACHED<br/>level 1 → 2 at 2 wkg days<br/>→ 3 at 5"]
-    ESC --> CE["Level 3 raises a ComplianceEvent<br/>PD 11.2(d) Board escalation"]
+    BR -->|yes| ESC["`BREACHED
+level 1 → 2 at 2 wkg days
+→ 3 at 5`"]
+    ESC --> CE["`Level 3 raises a ComplianceEvent
+PD 11.2(d) Board escalation`"]
     BR -->|"due soon"| WARN["One warning per clock"]
 
     style INSURER fill:#eef2fb,stroke:#3b5bA9
@@ -419,28 +473,40 @@ warning. The notifications engine that would page someone is built next.
 
 ```mermaid
 flowchart TD
-    POLL["Poll mailbox every 5 min<br/>only when FNOL_INTAKE_ENABLED"] --> FETCH["Fetch messages without<br/>the TciIngested keyword"]
-    FETCH --> INS{"Insert InboundMessage<br/>by RFC Message-ID"}
+    POLL["`Poll mailbox every 5 min
+only when FNOL_INTAKE_ENABLED`"] --> FETCH["`Fetch messages without
+the TciIngested keyword`"]
+    FETCH --> INS{"`Insert InboundMessage
+by RFC Message-ID`"}
 
-    INS -->|"unique violation"| DUP["Already seen — acknowledge, skip.<br/>The database is the arbiter,<br/>not the worker"]
-    INS -->|"inserted"| PARSE["Deterministic parse<br/><b>no LLM</b> — §6.3"]
+    INS -->|"unique violation"| DUP["`Already seen — acknowledge, skip.
+The database is the arbiter,
+not the worker`"]
+    INS -->|"inserted"| PARSE["`Deterministic parse
+**no LLM** — §6.3`"]
 
-    PARSE --> GAP{"Claim type and<br/>mandatory facts found?"}
-    GAP -->|no| REVIEW["<b>NEEDS_REVIEW</b><br/>operator queue"]
-    GAP -->|yes| CREATE["CasesService.create()<br/>channel EMAIL · initiatedBy SYSTEM"]
+    PARSE --> GAP{"`Claim type and
+mandatory facts found?`"}
+    GAP -->|no| REVIEW["`**NEEDS_REVIEW**
+operator queue`"]
+    GAP -->|yes| CREATE["`CasesService.create()
+channel EMAIL · initiatedBy SYSTEM`"]
 
-    CREATE --> MATCH{"Policy number<br/>matches?"}
+    CREATE --> MATCH{"`Policy number
+matches?`"}
     MATCH -->|yes| LINKED["policyId set"]
     MATCH -->|no| FLAG["needsPolicyReview = true"]
 
     LINKED --> ATT["Attach email documents"]
     FLAG --> ATT
-    ATT --> DONE["<b>PROCESSED</b> → Case in the funnel"]
+    ATT --> DONE["`**PROCESSED** → Case in the funnel`"]
 
     REVIEW --> OPS{"Operator"}
-    OPS -->|"fixed the cause"| RETRY["Retry — re-reads the email<br/>from the mailbox"]
+    OPS -->|"fixed the cause"| RETRY["`Retry — re-reads the email
+from the mailbox`"]
     RETRY --> PARSE
-    OPS -->|"not an FNOL"| IGN["IGNORED — audited,<br/>never deleted"]
+    OPS -->|"not an FNOL"| IGN["`IGNORED — audited,
+never deleted`"]
 
     style DUP fill:#eef2fb,stroke:#3b5bA9
     style REVIEW fill:#fdf0e3,stroke:#b5651d
@@ -456,18 +522,27 @@ leaves a trace. A claimant who emailed you believes they have notified you.
 
 ```mermaid
 flowchart TD
-    IN["Claim opened"] --> C1{"Category in the tenant's<br/>fast-track list?"}
+    IN["Claim opened"] --> C1{"`Category in the tenant's
+fast-track list?`"}
     C1 -->|no| STD["Standard mode"]
-    C1 -->|yes| C2{"Estimated amount ≤<br/>tenant fast-track limit?"}
+    C1 -->|yes| C2{"`Estimated amount ≤
+tenant fast-track limit?`"}
     C2 -->|no| STD
-    C2 -->|yes| C3{"Any open fraud signal<br/>at MEDIUM or above?"}
+    C2 -->|yes| C3{"`Any open fraud signal
+at MEDIUM or above?`"}
     C3 -->|yes| STD
-    C3 -->|no| C4{"Evidence checklist<br/>complete?"}
+    C3 -->|no| C4{"`Evidence checklist
+complete?`"}
     C4 -->|no| STD
-    C4 -->|yes| FAST["<b>DESK_REVIEW</b><br/>fast-track SLA · single adjuster<br/>short-form report"]
+    C4 -->|yes| FAST["`**DESK_REVIEW**
+fast-track SLA · single adjuster
+short-form report`"]
 
-    FAST --> TRIG{"Any escalation trigger<br/>mid-flight?"}
-    TRIG -->|"fraud flag · amount revised up ·<br/>extraction inconsistency"| UP["Escalate one level:<br/>video → site → expert"]
+    FAST --> TRIG{"`Any escalation trigger
+mid-flight?`"}
+    TRIG -->|"`fraud flag · amount revised up ·
+extraction inconsistency`"| UP["`Escalate one level:
+video → site → expert`"]
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
 
@@ -490,18 +565,25 @@ which one produced the figure.
 ```mermaid
 flowchart LR
     subgraph EXT["Outside the firm"]
-        CLM["CLAIMANT<br/>own case only"]
+        CLM["`CLAIMANT
+own case only`"]
     end
 
     subgraph FIRM["Adjusting firm — tenant scoped"]
-        SUP["SUPPORT_DESK<br/>vet · request info<br/>no fraud or behavioural data"]
-        ADJ["ADJUSTER<br/>assess · author reports"]
-        FA["FIRM_ADMIN<br/>config · audited reveals<br/>cannot sign reports"]
+        SUP["`SUPPORT_DESK
+vet · request info
+no fraud or behavioural data`"]
+        ADJ["`ADJUSTER
+assess · author reports`"]
+        FA["`FIRM_ADMIN
+config · audited reveals
+cannot sign reports`"]
     end
 
     subgraph INS["Insurer tenant"]
         SIU["SIU_INVESTIGATOR"]
-        CO["COMPLIANCE_OFFICER<br/>legal holds"]
+        CO["`COMPLIANCE_OFFICER
+legal holds`"]
         SR["SHARIAH_REVIEWER"]
     end
 
