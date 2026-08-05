@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 import { ClaimantsService } from '../claimants/claimants.service';
+import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 
 @ApiTags('Claims')
 @ApiBearerAuth()
@@ -264,7 +265,7 @@ export class ClaimsController {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update claim status' })
-  updateStatus(@Param('id') id: string, @Body('status') status: string, @Req() req: any) {
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateClaimStatusDto, @Req() req: any) {
     const headers = {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
@@ -273,7 +274,7 @@ export class ClaimsController {
     };
 
     return this.httpService
-      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/status`, { status }, { headers })
+      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/status`, { status: dto.status }, { headers })
       .pipe(
         map(response => response.data.data),
         catchError(e => {

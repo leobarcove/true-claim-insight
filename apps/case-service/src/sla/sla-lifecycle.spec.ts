@@ -45,10 +45,10 @@ describe('SLA clocks across the claim lifecycle', () => {
    * Every path from the initial status to a terminal one, as (path, liveClocks).
    * Cycles are cut by refusing to revisit a status already on the current path.
    */
-  const walkPaths = (): { path: string[]; live: Set<SlaStage> }[] => {
-    const results: { path: string[]; live: Set<SlaStage> }[] = [];
+  const walkPaths = (): { path: ClaimStatus[]; live: Set<SlaStage> }[] => {
+    const results: { path: ClaimStatus[]; live: Set<SlaStage> }[] = [];
 
-    const visit = (status: string, path: string[], live: Set<SlaStage>) => {
+    const visit = (status: ClaimStatus, path: ClaimStatus[], live: Set<SlaStage>) => {
       const nextLive = applyTo(live, status);
       const nextPath = [...path, status];
       const onwards = (CLAIM_STATUS_TRANSITIONS[status] ?? []).filter(
@@ -106,7 +106,7 @@ describe('SLA clocks across the claim lifecycle', () => {
   });
 
   it('flags any SLA transition keyed to a status the claim can never reach', () => {
-    const reachable = new Set(
+    const reachable = new Set<string>(
       walkPaths().flatMap(({ path }) => path)
     );
     const unreachable = Object.keys(SLA_TRANSITIONS).filter(status => !reachable.has(status));
