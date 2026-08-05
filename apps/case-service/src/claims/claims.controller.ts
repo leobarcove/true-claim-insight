@@ -25,6 +25,7 @@ import { ClaimsService } from './claims.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
@@ -137,10 +138,10 @@ export class ClaimsController {
   })
   async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('status') status: string,
+    @Body() dto: UpdateClaimStatusDto,
     @Tenant() tenantContext: TenantContext
   ) {
-    return this.claimsService.updateStatus(id, status, tenantContext);
+    return this.claimsService.updateStatus(id, dto.status, tenantContext);
   }
 
   @Post(':id/assign')

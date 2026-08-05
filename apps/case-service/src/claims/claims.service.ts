@@ -585,7 +585,7 @@ export class ClaimsService {
   /**
    * Update claim status with tenant validation
    */
-  async updateStatus(id: string, status: string, tenantContext?: TenantContext) {
+  async updateStatus(id: string, status: ClaimStatus, tenantContext?: TenantContext) {
     const existingClaim = await this.findOne(id, tenantContext);
 
     // Validate status transition
@@ -1187,8 +1187,11 @@ export class ClaimsService {
   /**
    * Validate status transitions
    */
-  private validateStatusTransition(currentStatus: string, newStatus: string) {
-    const allowed = CLAIM_STATUS_TRANSITIONS[currentStatus] || [];
+  private validateStatusTransition(currentStatus: ClaimStatus, newStatus: ClaimStatus) {
+    // No `|| []` fallback: every ClaimStatus now has an explicit entry, so a
+    // missing key is a compile error rather than a silent "no transitions
+    // allowed" that reads identically to a deliberately terminal state.
+    const allowed = CLAIM_STATUS_TRANSITIONS[currentStatus];
     if (!allowed.includes(newStatus)) {
       throw new BadRequestException(
         `Invalid status transition from ${currentStatus} to ${newStatus}`
