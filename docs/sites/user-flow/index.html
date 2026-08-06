@@ -220,6 +220,8 @@
         <h2>Supporting flows</h2>
         <ol>
           <li><a href="#s9"><span>09</span><span>FNOL email intake</span></a></li>
+          <li><a href="#s9b"><span>9b</span><span>Telegram intake</span></a></li>
+          <li><a href="#s9c"><span>9c</span><span>How a flow is authored</span></a></li>
           <li><a href="#s10"><span>10</span><span>Small-claims fast-track</span></a></li>
         </ol>
       </div>
@@ -268,7 +270,7 @@
       <section id="s1">
         <div class="head"><span class="num">01</span><h3>The whole journey, end to end</h3></div>
         <p class="lede">
-          Four intake channels converge on a single Case funnel. A vetted Case converts into a
+          Five intake channels converge on a single Case funnel. A vetted Case converts into a
           Claim, which is the regulated engagement — and where the firm's professional
           obligations attach.
         </p>
@@ -277,6 +279,8 @@ flowchart TD
     subgraph INTAKE["1 · Notification of loss"]
         C1["`Claimant
 PWA`"]
+        C5["`Claimant
+Telegram`"]
         C2["`Agent or broker
 email`"]
         C3["`Insurer forwards
@@ -286,6 +290,9 @@ portal`"]
     end
 
     C1 --> CASE
+    C5 --> BIND["`Verify the sender
+phone share + OTP`"]
+    BIND --> CASE
     C2 --> ING["`FNOL email ingestion
 deterministic parse + policy match`"]
     C3 --> ING
@@ -827,6 +834,115 @@ never deleted`"]
         </p>
       </section>
 
+      <section id="s9b">
+        <div class="head"><span class="num">9b</span><h3>Telegram intake</h3></div>
+        <p class="lede">
+          The same flow, the same Case, a different surface. Nothing about a claim is said
+          until the sender proves who they are.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    MSG["`Message arrives
+long-polling · no public surface`"] --> INS{"`Insert InboundTurn
+by platform message id`"}
+
+    INS -->|"unique violation"| DUP["`Already seen — skip.
+Platforms retry delivery;
+the database arbitrates`"]
+    INS -->|"inserted"| BIND{"`Binding verified?`"}
+
+    BIND -->|no| ONB["`Ask for the number
+Telegram request_contact`"]
+    ONB --> OTP{"`One-time code`"}
+    OTP -->|"wrong · 5 strikes"| LOCK["`Paused —
+contact support`"]
+    OTP -->|correct| VER["`Bound to Claimant`"]
+    VER --> BIND
+
+    BIND -->|yes| CASE{"`Claim in progress?`"}
+    CASE -->|no| PICK["`Choose a claim type
+inline keyboard`"]
+    PICK --> NEW["`Case created
+channel TELEGRAM`"]
+    NEW --> ASK
+    CASE -->|yes| ANS["`patchAnswer — the same
+method the PWA calls`"]
+    ANS --> ASK["`Ask the next step
+from the pinned flow`"]
+
+    style DUP stroke:#5C7FCB,stroke-width:2.5px
+    style LOCK stroke:#C77A2E,stroke-width:2.5px
+    style ASK stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          The answer goes through <code>CasesService.patchAnswer</code> rather than a second
+          write path. That is what keeps the masking of the bank account number, the policy
+          match, the deadline warnings and the audit row — and it is why a Telegram sender
+          provably cannot reach another claimant's case: the same <code>assertAccess</code>
+          check runs as in the browser.
+        </p>
+        <p class="note">
+          Telegram vouches for a shared number, and the code is still sent. Platform
+          verification happened at signup; it says nothing about who holds the handset today.
+        </p>
+        <p class="note">
+          <strong>Not yet built.</strong> Outbound messages are not persisted, so there is no
+          transcript an operator can read and no way for a human to take over a conversation.
+          Both are required before the channel meets real claimants.
+        </p>
+      </section>
+
+      <section id="s9c">
+        <div class="head"><span class="num">9c</span><h3>How a flow is authored</h3></div>
+        <p class="lede">
+          One structure, many channels and languages. What can differ per channel is wording —
+          and only wording, by the shape of the data rather than by a rule.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart LR
+    DEF["`**FlowDefinition**
+step ids · order · branching
+validation · system steps`"]
+    OV["`**FlowOverlay** — sparse
+prompt · label · choice labels
+per channel, per locale`"]
+
+    DEF --> RES["`Resolve
+base ← channel ← locale
+← channel+locale`"]
+    OV --> RES
+    RES --> ASK["`What the claimant reads`"]
+
+    DEF --> GATE{"`Publish gate`"}
+    GATE -->|"unknown target · cycle
+unreachable · missing system step"| NO["Refused"]
+    GATE -->|clean| PUB["`PUBLISHED — immutable`"]
+    PUB --> PIN["`Case pins the version
+at creation`"]
+
+    style NO stroke:#C77A2E,stroke-width:2.5px
+    style PUB stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          An overlay has no <code>next</code> and no <code>answerType</code>. A channel
+          therefore <em>cannot</em> diverge into asking different questions — the guarantee is
+          in the type, not in a convention a later import tool could bypass. A channel that
+          genuinely needs a shorter conversation gets its own definition and is pointed at it;
+          it does not get a clone that drifts.
+        </p>
+        <p class="note">
+          Locale outranks channel when both overlay the same step. Wrong tone is cosmetic;
+          wrong language is a comprehension failure, and PDPA s.7 treats the language of a
+          claimant-facing notice as substantive.
+        </p>
+        <p class="note">
+          Overlays are deliberately unversioned. Because they carry only copy, they cannot move
+          the conversational cursor or invalidate a stored answer — so a typo can be corrected
+          live, with conversations in flight. Only structure needs pinning, which is why the
+          pin sits on the definition and the Case.
+        </p>
+      </section>
+
       <section id="s10">
         <div class="head"><span class="num">10</span><h3>Small-claims fast-track</h3></div>
         <p class="lede">
@@ -942,7 +1058,8 @@ legal holds`"]
         <p class="lede">
           A flow diagram is persuasive precisely because it looks like a specification, and an
           unmarked planned step reads exactly like a shipped one. These are the steps above
-          that do not yet run.
+          that do not yet run — or, in three cases, run on the server with no way for anyone
+          to reach them.
         </p>
         <div class="tablewrap">
           <table>
@@ -950,6 +1067,11 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
+              <tr><td>Report composer <em>(step 6)</em></td><td><span class="chip fail">No screen</span></td><td>The engine and its gateway routes exist; nothing in the portal reaches them. A claim at <code>REPORT_PENDING</code> offers an adjuster no way to draft, sign off or issue a report, and no report or template is seeded</td></tr>
+              <tr><td>Handback to the insurer <em>(step 7)</em></td><td><span class="chip fail">No screen</span></td><td>No surface at all. The status change exists; the act the diagram names — sending the work product to the insurer — has nowhere to happen</td></tr>
+              <tr><td>Fee note <em>(step 8)</em></td><td><span class="chip fail">Unreachable</span></td><td>The billing engine is complete in case-service, but there is <strong>no billing module at the gateway</strong> — <code>/api/v1/billing/…</code> returns 404 — and no screen. The platform's revenue step cannot be exercised from outside case-service</td></tr>
+              <tr><td>SLA clocks on screen</td><td><span class="chip plan">Invisible</span></td><td>Clocks run, pause on SIU referral and record breaches, and none of it is exposed: no gateway module and nothing on the claim page. An adjuster cannot see a deadline or a breach</td></tr>
+              <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
               <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip plan">Planned</span></td><td>Every claim runs the one CSP target of 14 working days. A shorter promise on fast-tracked claims is a commercial commitment per insurer, not a regulatory one</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
