@@ -12,6 +12,8 @@ import {
   Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { TRAVEL_CLAIM_TYPE_LABELS, type Claim } from '@tci/shared-types';
+import { getCategoryConfig } from '@/lib/category-config';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
@@ -61,6 +63,28 @@ const typeLabels: Record<string, string> = {
   THEFT: 'Theft',
   WINDSCREEN: 'Windscreen',
 };
+
+/**
+ * What kind of claim this is, in one cell.
+ *
+ * `Claim.claimType` is a MOTOR field and is null for everything in scope, so
+ * reading it alone rendered an em dash on every row — the known §8 defect,
+ * which only became conspicuous at volume. The real subtype for travel lives
+ * on the TravelClaim child; property lines have no subtype at all and are
+ * named by their category.
+ */
+function claimTypeLabel(claim: Claim): string {
+  if (claim.category === 'MOTOR') {
+    return claim.claimType ? typeLabels[claim.claimType] || claim.claimType : 'Motor';
+  }
+
+  const travelType = claim.travelClaim?.travelClaimType;
+  if (travelType) {
+    return TRAVEL_CLAIM_TYPE_LABELS[travelType] ?? travelType;
+  }
+
+  return getCategoryConfig(claim.category).label;
+}
 
 export function ClaimsListPage() {
   const navigate = useNavigate();
@@ -382,7 +406,7 @@ export function ClaimsListPage() {
                           {claim.claimant?.fullName || claim.claimantId}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          {claim.claimType ? typeLabels[claim.claimType] || claim.claimType : '—'}
+                          {claimTypeLabel(claim)}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
@@ -451,7 +475,7 @@ export function ClaimsListPage() {
                           <p className="font-medium">{claim.claimant?.fullName}</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <Badge variant="secondary" className="text-[10px]">
-                              {claim.claimType ? typeLabels[claim.claimType] || claim.claimType : '—'}
+                              {claimTypeLabel(claim)}
                             </Badge>
                           </p>
                         </div>

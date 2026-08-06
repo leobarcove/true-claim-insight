@@ -61,6 +61,7 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { useLayout } from '@/components/layout';
+import { AssessmentMode, ASSESSMENT_MODE_LABELS } from '@tci/shared-types';
 import { getCategoryConfig } from '@/lib/category-config';
 import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
@@ -1235,51 +1236,86 @@ export function ClaimDetailPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Session button */}
-            {canManageSessions && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Session</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <Button
-                      className="w-full"
-                      onClick={handleStartVideoAssessment}
-                      disabled={
-                        !canManageSessions ||
-                        createVideoRoom.isPending ||
-                        isNotifying ||
-                        claim.status === 'APPROVED' ||
-                        claim.status === 'REJECTED'
-                      }
-                    >
-                      <Video className="h-4 w-4 mr-2" />
-                      {createVideoRoom.isPending || isNotifying
-                        ? 'Starting...'
-                        : 'Start Live Session'}
-                    </Button>
+            {canManageSessions &&
+              (() => {
+                /* The assessment-mode router decides how this claim is
+                   examined (MASTER_PLAN §2.4). Leading with a video CTA on a
+                   claim routed to a site visit invites the adjuster to do the
+                   wrong thing, and on a settled claim it invites them to do
+                   anything at all. */
+                const mode = claim.assessmentMode ?? null;
+                const settled =
+                  claim.status === 'APPROVED' ||
+                  claim.status === 'REJECTED' ||
+                  claim.status === 'CLOSED';
+                const videoIsTheMethod = !mode || mode === AssessmentMode.VIDEO;
 
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => navigate(`/claims/${claimId}/upload-video`)}
-                      disabled={
-                        !canManageSessions ||
-                        claim.status === 'APPROVED' ||
-                        claim.status === 'REJECTED'
-                      }
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Manual Upload
-                    </Button>
+                const explanation: Record<string, string> = {
+                  [AssessmentMode.DESK_REVIEW]:
+                    'Assessed on the documents submitted. No interview required.',
+                  [AssessmentMode.SITE_VISIT]:
+                    'Assessed by physical inspection at the risk address.',
+                  [AssessmentMode.EXPERT_REFERRAL]:
+                    'Referred to a claims expert for assessment.',
+                };
 
-                    <p className="text-xs text-muted-foreground text-center mt-5">
-                      Creates room and notifies claimant via SMS
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Assessment</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {mode && (
+                          <Badge variant="outline" className="w-fit">
+                            {ASSESSMENT_MODE_LABELS[mode]}
+                          </Badge>
+                        )}
+
+                        {videoIsTheMethod && !settled && (
+                          <>
+                            <Button
+                              className="w-full"
+                              onClick={handleStartVideoAssessment}
+                              disabled={createVideoRoom.isPending || isNotifying}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              {createVideoRoom.isPending || isNotifying
+                                ? 'Starting...'
+                                : 'Start Live Session'}
+                            </Button>
+
+                            <Button
+                              className="w-full"
+                              variant="outline"
+                              onClick={() => navigate(`/claims/${claimId}/upload-video`)}
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Manual Upload
+                            </Button>
+
+                            <p className="text-xs text-muted-foreground text-center mt-5">
+                              Creates room and notifies claimant via SMS
+                            </p>
+                          </>
+                        )}
+
+                        {!videoIsTheMethod && !settled && (
+                          <p className="text-sm text-muted-foreground">
+                            {explanation[mode!] ?? 'No interview required for this assessment mode.'}
+                          </p>
+                        )}
+
+                        {settled && (
+                          <p className="text-sm text-muted-foreground">
+                            This claim is {claim.status.toLowerCase()}. The assessment is complete.
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
             {/* Claimant Info */}
             <Card>

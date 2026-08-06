@@ -290,7 +290,13 @@ orderings drift apart and the figures stop being comparable.
 ## What's deferred (intentionally)
 
 - **Site visit scheduling** — would extend `Session` with a `mode` enum
-  (REMOTE | SITE_VISIT | HYBRID) or add a `SiteVisit` table.
+  (REMOTE | SITE_VISIT | HYBRID) or add a `SiteVisit` table. *Note (6 Aug
+  2026): `AssessmentMode.SITE_VISIT` exists in the schema, in the report's
+  method disclosure and in the portal's assessment panel, but
+  `resolveAssessmentMode()` never returns it — the escalation ladder in
+  MASTER_PLAN §2.4 is one rung. Property lines are the ones that need
+  inspection, so scheduling and routing want deciding together; a site
+  visit's COGS is an order above a video call (§2.5).*
 - **Inventory itemisation** — `InventoryItem` model linked to `Claim`,
   with photo, brand, model, purchase date, claimed value, validated
   value. Critical for fire/burglary; defer until UI lands.

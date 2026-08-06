@@ -389,6 +389,11 @@ export class ClaimsService {
               riskFactors: true,
             },
           },
+          /* The subtype is what an adjuster scans a travel book by — a trip
+             cancellation and a medical expense claim need different evidence
+             and different reserves. `Claim.claimType` is motor-only, so
+             without this the list column has nothing to show. */
+          travelClaim: { select: { travelClaimType: true } },
         },
       }),
       this.prisma.claim.count({ where }),

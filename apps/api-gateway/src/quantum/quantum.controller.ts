@@ -7,6 +7,7 @@ import { catchError, map } from 'rxjs/operators';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { unwrapEnvelope } from '../common/unwrap-envelope';
 
 /**
  * Edge proxy for quantum worksheets.
@@ -51,7 +52,7 @@ export class QuantumProxyController {
   create(@Param('claimId') claimId: string, @Body() body: unknown, @Req() req: any) {
     return firstValueFrom(
       this.httpService.post(this.base(claimId), body, { headers: this.forward(req) }).pipe(
-        map(response => response.data?.data ?? response.data),
+        map(response => unwrapEnvelope(response.data)),
         catchError(error => {
           throw error;
         })
@@ -65,7 +66,7 @@ export class QuantumProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base(claimId), { headers: this.forward(req) })
-        .pipe(map(response => response.data?.data ?? response.data))
+        .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
 
@@ -75,7 +76,7 @@ export class QuantumProxyController {
     return firstValueFrom(
       this.httpService
         .get(`${this.base(claimId)}/history`, { headers: this.forward(req) })
-        .pipe(map(response => response.data?.data ?? response.data))
+        .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
 }

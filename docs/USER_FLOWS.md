@@ -57,7 +57,9 @@ no fraud signal`"| DESK["`DESK_REVIEW fast-track
 final report 3 wkg days`"]
     MODE -->|"standard"| VIDEO["`Video assessment
 Daily.co + risk-analyzer`"]
-    MODE -->|"escalated"| SITE["Site visit or expert"]
+    MODE -.->|"`escalated
+*medical only today*`"| SITE["`Site visit or expert
+**router emits neither**`"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
@@ -76,6 +78,7 @@ TPA schedule or adjuster fee scale`"]
     style CONV fill:#e8f4ea,stroke:#2d6a4f
     style MODE fill:#e8f4ea,stroke:#2d6a4f
     style DESK fill:#e8f4ea,stroke:#2d6a4f
+    style SITE fill:#fdf0e3,stroke:#b5651d
     style HANDBACK fill:#fdf0e3,stroke:#b5651d
     style ING fill:#eef2fb,stroke:#3b5bA9
 ```
@@ -632,3 +635,4 @@ not merely an access check.
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
 | Local-LLM document validation | `validationStatus` is a labelled stub |
 | AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3 |
+| Site-visit routing (the escalation ladder in diagram 1) | `resolveAssessmentMode()` returns only `DESK_REVIEW`, `VIDEO` and — for medical — `EXPERT_REFERRAL`. A pricing decision as much as a routing one (MASTER_PLAN §2.4, §2.5) |

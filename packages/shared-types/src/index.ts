@@ -204,6 +204,28 @@ export enum ClaimStatus {
   CLOSED = 'CLOSED',
 }
 
+/**
+ * How a claim is examined. Chosen by the assessment-mode router from value,
+ * complexity and fraud signal (MASTER_PLAN §2.4) — the per-claim COGS ceiling
+ * in §2.5 depends on most claims landing on DESK_REVIEW.
+ *
+ * Mirrors the `AssessmentMode` enum in the Prisma schema.
+ */
+export enum AssessmentMode {
+  /** Documents only, no interview — the fast track. */
+  DESK_REVIEW = 'DESK_REVIEW',
+  VIDEO = 'VIDEO',
+  SITE_VISIT = 'SITE_VISIT',
+  EXPERT_REFERRAL = 'EXPERT_REFERRAL',
+}
+
+export const ASSESSMENT_MODE_LABELS: Record<AssessmentMode, string> = {
+  [AssessmentMode.DESK_REVIEW]: 'Desk review',
+  [AssessmentMode.VIDEO]: 'Video assessment',
+  [AssessmentMode.SITE_VISIT]: 'Site visit',
+  [AssessmentMode.EXPERT_REFERRAL]: 'Expert referral',
+};
+
 export enum Priority {
   LOW = 'LOW',
   NORMAL = 'NORMAL',
@@ -354,10 +376,18 @@ export interface Claim {
   insurerTenantId?: string;
   policyNumber: string;
   category: ClaimCategory;
+  /** Motor only. Non-motor lines carry their subtype on the sub-table. */
   claimType?: ClaimType | null;
   status: ClaimStatus;
+  /**
+   * How this claim is being examined, chosen by the assessment-mode router
+   * (MASTER_PLAN §2.4). Null on claims created before routing existed.
+   */
+  assessmentMode?: AssessmentMode | null;
   // Non-motor polymorphic sub-table (populated when category=FLOOD)
   floodClaim?: FloodClaim | null;
+  /** Populated when category=TRAVEL; the list query selects the subtype only. */
+  travelClaim?: { travelClaimType?: TravelClaimType | null } | null;
   // Fraud signals attached to this claim, newest/highest severity first
   fraudSignals?: FraudSignal[];
   incidentDate: string;

@@ -151,6 +151,19 @@ ELSE escalate one level (video → site → expert) on any trigger:
 
 Mode changes are audited and disclosed in the report (PD 12.6 methodology disclosure).
 
+**Gap, recorded 6 Aug 2026 — the escalation ladder is one rung, not three.**
+`resolveAssessmentMode()` returns `EXPERT_REFERRAL` for medical, `DESK_REVIEW`
+when every fast-track condition holds, and `VIDEO` in every other case. The
+"escalate one level (video → site → expert)" above is not implemented: **no code
+path emits `SITE_VISIT`**, and `EXPERT_REFERRAL` is reachable only through the
+medical rule. The enum, the report's disclosure text and the portal's assessment
+panel all carry `SITE_VISIT`, so it reads as a live capability — the §4.3 A8
+failure mode, found this time by seeded data showing a mode the router cannot
+produce. Property lines are exactly the ones that need physical inspection, so
+this is the rung that matters most. Deciding it is a pricing decision as much as
+a routing one (a site visit's COGS is an order above a video call, per §2.5), so
+it is recorded here rather than guessed at in code.
+
 ### 2.5 The assessment mode is also the cost control
 
 Travel/Group PA revenue is **RM8–12 per claim** (research §5, Path C), against an insurer's internal handling cost of ~RM20–80. At that price the platform's per-claim COGS decides whether the line makes money — and the expensive components already exist in the codebase and will silently run on everything unless the router stops them.
@@ -859,6 +872,51 @@ That tightening exposed a second gap: `PATCH /claims/:id/status` took `@Body('st
 **A diagram audit against the code found the reverse problem too** — flows drawn as live that do not exist. The **assessment-mode router and small-claims fast-track (§2.4)** appeared in diagram 1 as step 4 of the journey and in diagram 10 in full, unmarked; there is no `AssessmentMode` field, no routing logic, no tenant fast-track configuration anywhere in the repository. Both are now dashed with explicit warnings and listed in the document's own "not yet built" table, alongside assignment acknowledgement (a real state change, but sent by hand until notifications exist).
 
 The lesson is the §3.6 one again, from the other direction: a flow diagram is persuasive **because** it reads as a specification, so an unmarked planned step is more dangerous there than in prose. Both copies were verified by rendering them in a browser — including a harness built from the markdown's own diagram source — after two earlier attempts were shipped on inspection alone and both were wrong.
+
+### Screenshot audit fixes, and the crash hiding behind a nullish check (6 Aug 2026)
+
+Reading the seeded book as an insurer would, rather than as its author, found four
+defects on one screen.
+
+**The claim page offered the wrong action.** "Start Live Session — notifies
+claimant via SMS" sat on every claim an adjuster could touch, including a
+*closed* fire claim routed to a site visit. The Session card is now an Assessment
+card: it names the mode the router chose and offers the video controls only where
+video is the method, saying what will happen instead where it is not, and
+treating `CLOSED` as settled alongside `APPROVED`/`REJECTED`. `AssessmentMode`
+and its labels moved into `@tci/shared-types`, since the portal was reading a
+field the shared `Claim` interface did not declare.
+
+**The claims-list `Type` column read `—` on every row.** `Claim.claimType` is a
+motor enum and the book is non-motor, so the column had nothing to render. It now
+shows the travel subtype where there is one and the category otherwise; the list
+query selects `travelClaim.travelClaimType`, which it previously did not fetch at
+all.
+
+**Every claim without a quantum worksheet crashed its own page.** The gateway
+proxies unwrapped downstream responses with `response.data?.data ?? response.data`
+— correct until the payload is legitimately `null`, when `??` treats "no
+worksheet" as "no payload" and returns the envelope. `QuantumWorksheetPanel` then
+read `.lines` off `{success, data, meta}` and took the whole claim page down
+through the error boundary. Replaced by `unwrapEnvelope()`, which decides on the
+envelope's *shape* rather than its contents, applied at all six proxy call sites
+and covered by ten tests. The failing case is the common one: most claims have no
+worksheet.
+
+**Two seeded-data contradictions.** 76 travel claims were routed to `SITE_VISIT`
+— a travel loss happens overseas and has no risk address to inspect. And the
+policy excess was drawn twice, once for the claim and again for the worksheet, so
+125 worksheets deducted an excess the Policy Information panel beside them
+reported as nil; 617 worksheets were rebuilt from the claim's excess with their
+recommended figures and approved amounts recomputed. Both are fixed in
+`seed-volume.ts` and backfilled, so no re-seed was needed.
+
+Found but **not** fixed, and recorded rather than guessed at: the router cannot
+emit `SITE_VISIT` at all (see §2.4); Approve/Reject remain live on a closed
+claim, the same defect class as the session CTA; travel claims are seeded the
+flight-delay document set whatever their subtype, which is why the evidence
+checklist reads 0/3 on a luggage claim; and travel `incidentLocation` carries a
+destination but no address, so the Location field renders blank on all 614.
 
 ---
 

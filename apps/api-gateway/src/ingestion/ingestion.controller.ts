@@ -7,6 +7,7 @@ import { map } from 'rxjs/operators';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { unwrapEnvelope } from '../common/unwrap-envelope';
 
 /**
  * Edge proxy for the FNOL inbound queue.
@@ -47,7 +48,7 @@ export class IngestionProxyController {
           headers: this.forward(req),
           params: query,
         })
-        .pipe(map(response => response.data?.data ?? response.data))
+        .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
 
@@ -61,7 +62,7 @@ export class IngestionProxyController {
           {},
           { headers: this.forward(req) }
         )
-        .pipe(map(response => response.data?.data ?? response.data))
+        .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
 
@@ -75,7 +76,7 @@ export class IngestionProxyController {
           {},
           { headers: this.forward(req) }
         )
-        .pipe(map(response => response.data?.data ?? response.data))
+        .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
 }
