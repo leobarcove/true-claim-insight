@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { FeeNoteStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -198,6 +198,42 @@ export class BillingService {
       newValues: { noteNumber, claimId, total: amounts.total },
     });
     return note;
+  }
+
+  /**
+   * The fee note on a claim, with everything it was derived from.
+   *
+   * Drafting was reachable and reading was not, so a note could be raised and
+   * then never seen. The time entries and disbursements come back alongside it
+   * because the number without its working is unanswerable in a dispute — the
+   * same reason the note stores its own derivation.
+   */
+  async forClaim(claimId: string, tenantContext: TenantContext) {
+    const claim = await this.prisma.claim.findUnique({
+      where: { id: claimId },
+      select: { id: true, tenantId: true, status: true, insurerTenantId: true },
+    });
+    // Existence check, not an access check: confirming a claim exists in
+    // another tenant is itself a disclosure.
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('This claim does not belong to your organisation');
+    }
+
+    const [note, timeEntries, disbursements] = await Promise.all([
+      this.prisma.feeNote.findFirst({ where: { claimId }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.timeEntry.findMany({ where: { claimId }, orderBy: { workedOn: 'asc' } }),
+      this.prisma.disbursement.findMany({ where: { claimId }, orderBy: { incurredAt: 'asc' } }),
+    ]);
+
+    // Why the firm cannot bill yet, in the words the drafting rule uses.
+    const blockedReason = !claim.insurerTenantId
+      ? 'The claim has no insurer to bill.'
+      : !['APPROVED', 'REJECTED', 'CLOSED'].includes(claim.status)
+        ? `A fee note is drafted once the claim is decided; this one is ${claim.status}.`
+        : null;
+
+    return { note, timeEntries, disbursements, blockedReason };
   }
 
   async issue(noteId: string, tenantContext: TenantContext) {

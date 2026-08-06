@@ -18,6 +18,7 @@ import { CasesModule } from './cases/cases.module';
 import { ReportsModule } from './reports/reports.module';
 import { ClaimsModule } from './claims/claims.module';
 import { QuantumProxyModule } from './quantum/quantum.module';
+import { BillingProxyModule } from './billing/billing.module';
 import { SlaProxyModule } from './sla/sla.module';
 import { IngestionProxyModule } from './ingestion/ingestion.module';
 import { TenantConfigModule } from './tenant-config/tenant-config.module';
@@ -73,6 +74,7 @@ import configuration from './config/configuration';
     ClaimsModule,
     QuantumProxyModule,
     SlaProxyModule,
+    BillingProxyModule,
     IngestionProxyModule,
     TenantConfigModule,
     RetentionModule,

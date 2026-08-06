@@ -647,7 +647,17 @@ async function main() {
   if (!pepper) throw new Error('NRIC_INDEX_PEPPER is not set — seeded NRICs could not be indexed');
 
   const firm = await prisma.tenant.findFirst({ where: { type: 'ADJUSTING_FIRM' } });
-  const insurer = await prisma.tenant.findFirst({ where: { type: 'INSURER' } });
+  /*
+   * The panel insurer these policies belong to.
+   *
+   * Picked by name, not by "first insurer found". Every policy number this
+   * seed writes is MSIG-prefixed, and taking whichever insurer row came back
+   * first put 867 MSIG-numbered policies under Allianz — so the fee note was
+   * addressed to a company that had never appointed the firm.
+   */
+  const insurer =
+    (await prisma.tenant.findFirst({ where: { type: 'INSURER', name: { contains: 'MSIG' } } })) ??
+    (await prisma.tenant.findFirst({ where: { type: 'INSURER' } }));
   const adjuster = await prisma.adjuster.findFirst();
   const staff = await prisma.user.findFirst({ where: { role: 'ADJUSTER' } });
 
@@ -1220,6 +1230,8 @@ async function main() {
               ? money(amount * between(0.55, 1))
               : null,
           scheduledAssessmentTime: appointmentAt,
+          // Who the firm bills when the claim is decided.
+          insurerTenantId: insurer.id,
           excessAmount: money(excessAmount),
           sumInsured: money((isTravel ? AMOUNT_BAND[type!][1] : PROPERTY_BAND[category]![1]) * 2),
           closedAt,

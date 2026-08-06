@@ -54,6 +54,13 @@ export class BillingController {
     return this.service.draftFeeNote(claimId, tenantContext);
   }
 
+  @Get('claims/:claimId/fee-note')
+  @ApiOperation({ summary: 'The fee note on a claim, with the time and disbursements behind it' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SUPER_ADMIN)
+  forClaim(@Param('claimId') claimId: string, @Tenant() tenantContext: TenantContext) {
+    return this.service.forClaim(claimId, tenantContext);
+  }
+
   @Post('fee-notes/:id/issue')
   @ApiOperation({ summary: 'Issue to the insurer; due per the scale\'s payment terms' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
