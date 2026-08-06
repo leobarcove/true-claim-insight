@@ -1719,6 +1719,12 @@ enum ConsentChannel {
   VIDEO_SESSION
   STAFF_CAPTURED
   IMPORTED
+  /// Agreed in a messaging thread (Telegram today; WhatsApp/Messenger later).
+  /// Its own value rather than WEB_FORM: the record has to say where consent
+  /// was actually given, and a chat thread is not a web form. It also matters
+  /// evidentially — the wording shown, and the reply agreeing to it, are both
+  /// in the conversation transcript.
+  MESSAGING
 }
 
 /// The wording a data subject was shown, versioned and approved.

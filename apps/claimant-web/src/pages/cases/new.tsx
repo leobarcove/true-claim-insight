@@ -28,6 +28,7 @@ import {
   usePatchCaseAnswer,
   useSubmitClaimantCase,
 } from '@/hooks/use-cases';
+import { useConsentNotice, useConsentStanding, useGrantConsent } from '@/hooks/use-consent';
 import { cn } from '@/lib/utils';
 
 const TYPE_OPTIONS: Array<{ type: TravelClaimType; icon: any; hint: string }> = [
@@ -68,6 +69,17 @@ export function CaseIntakePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: serverFlow } = useCaseFlow(caseId);
+
+  // Consent is a precondition for processing, so it is asked before any claim
+  // question — and case-service refuses to open a Case without it, on every
+  // channel, so this screen is the claimant's chance to agree rather than the
+  // thing that enforces it.
+  const { data: consentNotice } = useConsentNotice();
+  const { data: consentStanding, isLoading: consentLoading } = useConsentStanding();
+  const grantConsent = useGrantConsent();
+  const hasClaimConsent = (consentStanding ?? []).some(
+    record => record.purpose === 'CLAIM_PROCESSING' && record.status === 'GRANTED'
+  );
 
   // The server's resolved flow is authoritative — it is the version pinned on
   // this case. CASE_FLOWS is the fallback for the moment before the fetch
@@ -182,6 +194,35 @@ export function CaseIntakePage() {
   // ------------------------------------------------------------------
   // Screens
   // ------------------------------------------------------------------
+
+  if (!caseId && !consentLoading && !hasClaimConsent) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        <PageHeader onBack={() => navigate('/tracker')} title="Before we begin" />
+        <main className="flex-1 px-5 py-6 space-y-4">
+          <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 space-y-2">
+            <h2 className="font-medium">{consentNotice?.title ?? 'How we use your information'}</h2>
+            {/* The approved wording, fetched rather than bundled: a grant has to
+                be tied to exactly what was shown, and app copy is not versioned. */}
+            <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+              {consentNotice?.body ?? 'Loading…'}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={!consentNotice || grantConsent.isPending}
+            onClick={() => void grantConsent.mutateAsync('CLAIM_PROCESSING')}
+            className="w-full rounded-2xl bg-primary text-primary-foreground py-3 font-medium disabled:opacity-50"
+          >
+            I agree — continue
+          </button>
+          <p className="text-xs text-muted-foreground text-center">
+            You can withdraw this at any time by contacting us.
+          </p>
+        </main>
+      </div>
+    );
+  }
 
   if (!caseId) {
     return (

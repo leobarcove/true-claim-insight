@@ -52,6 +52,14 @@ export interface ChannelCapabilities {
   /** Hard cap on a single outbound message body. */
   readonly maxMessageChars: number;
   /**
+   * Whether the channel has somewhere to render a review summary beside the
+   * conversation. The PWA does — a panel under the chat. A messaging thread
+   * has nothing but the thread, so a confirm step there must carry the answers
+   * in the message body or the claimant is asked to confirm details they
+   * cannot see.
+   */
+  readonly summaryPanel: boolean;
+  /**
    * Whether a value typed here stays under our control. False for every
    * third-party messaging platform: the plaintext persists in the platform's
    * own message history, outside our retention and anonymisation jobs.
@@ -70,6 +78,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     document: 'native',
     dateEntry: 'picker',
     maxMessageChars: Number.POSITIVE_INFINITY,
+    summaryPanel: true,
     retainsPlaintext: false,
   },
   [Channel.TELEGRAM]: {
@@ -79,6 +88,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     document: 'native',
     dateEntry: 'text',
     maxMessageChars: 4096,
+    summaryPanel: false,
     retainsPlaintext: true,
   },
   [Channel.WHATSAPP]: {
@@ -89,6 +99,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     document: 'native',
     dateEntry: 'text',
     maxMessageChars: 1024, // interactive message body limit, not the 4096 text limit
+    summaryPanel: false,
     retainsPlaintext: true,
   },
   [Channel.MESSENGER]: {
@@ -98,6 +109,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     document: 'native',
     dateEntry: 'text',
     maxMessageChars: 2000,
+    summaryPanel: false,
     retainsPlaintext: true,
   },
 };
@@ -227,6 +239,53 @@ export const parseTextDate = (
   }
 
   return parsed.toISOString();
+};
+
+/**
+ * Render the answers so far as a plain-text review summary.
+ *
+ * For channels with no summary panel: a confirm step that says "review your
+ * details" while showing none is asking a claimant to agree to something they
+ * cannot see — and the thing they are agreeing to is a claim submission.
+ *
+ * Values are rendered through the step's own labels, so a choice reads as the
+ * claimant saw it rather than as the stored enum. Sensitive answers are already
+ * masked in the answer bag before they reach here (`SENSITIVE_ANSWER_STEPS` in
+ * case-service), so the bank account shows as its tail — the masking is not
+ * repeated here, deliberately, because two places doing it is how one of them
+ * drifts.
+ */
+export const summariseAnswers = (
+  steps: ReadonlyArray<{
+    id: string;
+    label: string;
+    answerType: AnswerType;
+    choices?: Array<{ value: string; label: string }>;
+  }>,
+  answers: Record<string, string | number | boolean>
+): string => {
+  const lines: string[] = [];
+
+  for (const step of steps) {
+    if (step.answerType === 'confirm') continue;
+    const value = answers[step.id];
+    if (value === undefined || value === null || value === '') continue;
+
+    let display: string;
+    if (step.answerType === 'document') {
+      // The stored answer is a CaseDocument id, which means nothing to a
+      // claimant reading it back.
+      display = 'provided';
+    } else if (step.answerType === 'choice') {
+      display = step.choices?.find(choice => choice.value === value)?.label ?? String(value);
+    } else {
+      display = String(value);
+    }
+
+    lines.push(`• ${step.label}: ${display}`);
+  }
+
+  return lines.join('\n');
 };
 
 /**
