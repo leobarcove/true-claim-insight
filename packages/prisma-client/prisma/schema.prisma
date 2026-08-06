@@ -307,6 +307,8 @@ model Claim {
   sourceCase              Case?
   fraudSignals            FraudSignal[]
 
+  quantumWorksheets QuantumWorksheet[]
+
   @@index([claimantId])
   @@index([adjusterId])
   @@index([status])
@@ -606,6 +608,78 @@ enum InboundMessageStatus {
   FAILED
   /// Operator dismissed it — not an FNOL (spam, an out-of-office, a reply).
   IGNORED
+}
+
+// ============================================================================
+// Quantum worksheet (MASTER_PLAN §5 Phase 2).
+//
+// How a loss became a figure. Both the inputs and the computed lines are
+// stored, which looks redundant and is not:
+//
+//  - The **inputs** let the figure be re-derived, which is what makes it
+//    defensible when an insured disputes it.
+//  - The **outputs and lines** record what was actually recommended at the
+//    time. A later change to the calculator — a corrected order of deductions,
+//    a new rounding rule — must not silently restate a figure already issued
+//    to an insurer under PD 12.6.
+//
+// Worksheets are superseded rather than edited, for the same reason an issued
+// report is immutable: a revised quantum is a new opinion, and the one it
+// replaced is part of the record.
+// ============================================================================
+model QuantumWorksheet {
+  id       String @id @default(uuid())
+  claimId  String
+  tenantId String
+
+  revision     Int     @default(1)
+  supersedesId String? @unique
+
+  // ---- inputs, as assessed -------------------------------------------------
+  basis            SettlementBasis
+  assessedLoss     Decimal  @db.Decimal(12, 2)
+  /// Rate, not an amount — 0.2500 is 25%. Indemnity basis only.
+  depreciationRate Decimal? @db.Decimal(5, 4)
+  betterment       Decimal? @db.Decimal(12, 2)
+  sumInsured       Decimal  @db.Decimal(12, 2)
+  /// Without this, underinsurance is unknown rather than absent.
+  valueAtRisk      Decimal? @db.Decimal(12, 2)
+  averageCondition Boolean  @default(false)
+  salvage          Decimal? @db.Decimal(12, 2)
+  excess           Decimal? @db.Decimal(12, 2)
+
+  // ---- what the calculator produced ---------------------------------------
+  adjustedLoss       Decimal  @db.Decimal(12, 2)
+  underinsured       Boolean  @default(false)
+  averageRatio       Decimal? @db.Decimal(6, 5)
+  averageApplied     Boolean  @default(false)
+  recommended        Decimal  @db.Decimal(12, 2)
+  cappedAtSumInsured Boolean  @default(false)
+  /// Every line in order: key, label, amount, basis. The workings an insured
+  /// argues with, kept verbatim rather than recomputed on read.
+  lines              Json
+  /// Unresolved questions an adjuster must answer before relying on this.
+  warnings           String[]
+
+  /// Who prepared it. PD 12.6 disclosure names the method and its author.
+  preparedByAdjusterId String?
+  notes                String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, revision(sort: Desc)])
+  @@index([tenantId])
+  @@map("quantum_worksheets")
+}
+
+enum SettlementBasis {
+  /// New for old — no depreciation.
+  REINSTATEMENT
+  /// Value at the time of loss — depreciation applies.
+  INDEMNITY
 }
 
 // ============================================================================
