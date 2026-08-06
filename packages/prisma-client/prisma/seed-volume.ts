@@ -874,6 +874,16 @@ async function main() {
           ? addDays(reportAt ?? assessedAt ?? convertedAt, intBetween(2, 14))
           : null;
 
+      /**
+       * The policy excess, drawn once and used everywhere.
+       *
+       * It is a term of the policy, so the Policy Information panel and the
+       * quantum worksheet must show the same figure. Drawing it separately in
+       * each place put 125 worksheets in visible contradiction with the panel
+       * beside them on the claim page.
+       */
+      const excessAmount = pick([0, 100, 250, 500]);
+
       const claim = await prisma.claim.create({
         data: {
           claimNumber,
@@ -900,7 +910,7 @@ async function main() {
             status === ClaimStatus.APPROVED || status === ClaimStatus.CLOSED
               ? money(amount * between(0.55, 1))
               : null,
-          excessAmount: money(pick([0, 100, 250, 500])),
+          excessAmount: money(excessAmount),
           sumInsured: money((isTravel ? AMOUNT_BAND[type!][1] : PROPERTY_BAND[category]![1]) * 2),
           closedAt,
           createdAt: convertedAt,
@@ -950,10 +960,10 @@ async function main() {
           ? AssessmentMode.EXPERT_REFERRAL
           : fastTrackable && chance(0.55)
             ? AssessmentMode.DESK_REVIEW
-            : weighted<AssessmentMode>([
-                [AssessmentMode.VIDEO, 72],
-                [AssessmentMode.SITE_VISIT, 28],
-              ]);
+            : // Never SITE_VISIT. The loss happened overseas — there is no risk
+              // address in Malaysia to inspect, so a travel claim that misses
+              // the fast track is interviewed, exactly as the router decides.
+              AssessmentMode.VIDEO;
 
       if (assignedAt) {
         await prisma.assessmentModeDecision.create({
@@ -1011,7 +1021,10 @@ async function main() {
       // --- quantum + report -------------------------------------------------
       if (reportAt) {
         const assessed = amount * between(0.7, 1.05);
-        const excess = pick([0, 100, 250, 500]);
+        // The excess is a policy term, not a per-worksheet choice. Drawing it
+        // again here once put 125 worksheets in contradiction with the
+        // Policy Information panel on the same screen.
+        const excess = excessAmount;
         // Property is usually reinstatement; contents and older risks settle on
         // indemnity, where depreciation for age and wear applies.
         const settlementBasis = chance(0.75)

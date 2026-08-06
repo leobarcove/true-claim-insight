@@ -314,7 +314,9 @@ no fraud signal`"| DESK["`DESK_REVIEW fast-track
 final report 3 working days`"]
     MODE -->|"standard"| VIDEO["`Video assessment
 Daily.co + risk-analyzer`"]
-    MODE -->|"escalated"| SITE["Site visit or expert"]
+    MODE -.->|"`escalated
+*medical only today*`"| SITE["`Site visit or expert
+**router emits neither**`"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
@@ -337,6 +339,7 @@ TPA schedule or adjuster fee scale`"]
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
     style INFO stroke:#C77A2E,stroke-width:2.5px
     style EXP stroke:#C77A2E,stroke-width:2.5px
+    style SITE stroke:#C77A2E,stroke-width:2.5px
     style REJ stroke:#C05A50,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -951,6 +954,7 @@ legal holds`"]
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
+              <tr><td>Site-visit routing (the escalation ladder above)</td><td><span class="chip plan">Partial</span></td><td>A pricing decision — a site visit's COGS is an order above a video call</td></tr>
             </tbody>
           </table>
         </div>
