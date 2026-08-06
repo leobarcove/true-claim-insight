@@ -309,14 +309,14 @@ never auto-assessed`"]
 the insurer-facing handback record`"]
 
     CONV --> MODE{"4 · Assessment-mode router"}
-    MODE -->|"`small claim,
+    MODE -->|"`small claim, evidence in,
 no fraud signal`"| DESK["`DESK_REVIEW fast-track
-final report 3 working days`"]
+documents only, no interview`"]
     MODE -->|"standard"| VIDEO["`Video assessment
 Daily.co + risk-analyzer`"]
-    MODE -->|"`property loss
-over the threshold`"| SITE["`Site visit or expert
-*visit is not yet scheduled*`"]
+    MODE -->|"`property loss at or over
+the firm's threshold`"| SITE["`Site visit or expert
+*appointment held, claimant not told*`"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
@@ -655,7 +655,8 @@ recipient · country · basis`"]
     XFER --> EV
     SITE --> EV
 
-    EV["Evidence checklist"] --> COMPLETE{"`All mandatory
+    EV["`Evidence checklist
+per line; travel by subtype`"] --> COMPLETE{"`All mandatory
 items in?`"}
     COMPLETE -->|no| CHASE["Chase claimant"]
     CHASE --> EV
@@ -949,12 +950,13 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
+              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip plan">Planned</span></td><td>Every claim runs the one CSP target of 14 working days. A shorter promise on fast-tracked claims is a commercial commitment per insurer, not a regulatory one</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
-              <tr><td>Site-visit <em>scheduling</em></td><td><span class="chip plan">Partial</span></td><td>Routing to <code>SITE_VISIT</code> is live; no appointment is held and the claimant is not told when someone is coming</td></tr>
+              <tr><td>Site-visit <em>notification</em></td><td><span class="chip plan">Partial</span></td><td>Routing and the appointment are live — weekday business hours, on the claim and in the schedule. What is missing is telling the claimant when someone is coming, and a <code>SiteVisit</code> record of what was found</td></tr>
             </tbody>
           </table>
         </div>
