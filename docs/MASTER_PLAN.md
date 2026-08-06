@@ -751,7 +751,23 @@ The MSIG pilot's primary intake, and the first Phase 2 exit criterion. **MSIG AP
 - **Verified:** 282 tests pass (20 new), typecheck clean, routes live, duplicate Message-ID rejected by Postgres. The new tests caught two real parser defects before review — "cancel the trip" failing to classify, and "Delay **of 8** hours" parsing as flight "OF 8".
 - **Operational note:** the migration was applied by `db execute` + `migrate resolve --applied` because the local development database carries pre-existing drift (`20260729162228_add_cases_travel_policies` modified after being applied) and `migrate dev` wanted a full reset. The migration file is ordinary and applies cleanly to a fresh database, so staging is unaffected — but the drift remains and the next `migrate dev` meets the same wall. `pnpm prisma:clean` squashes it.
 
-**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); **assessment-mode router and the small-claims fast-track of §2.4 — specified there but not built, see below**; structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+
+### Assessment-mode router and the small-claims fast-track (6 Aug 2026)
+
+The §2.4 design, built. It was the largest gap between what the flow diagrams promised and what ran — and the one the diagram audit caught being drawn as live when it did not exist at all.
+
+**The mode is a disclosable method, not an internal optimisation.** PD 12.6 requires the report to disclose the *methods* behind an assessment, and "desk review on documents alone" and "site inspection" reach the same figure by different means. Every decision therefore returns its **reasons**, they are stored on the decision row rather than recomputed, and the report's methodology section is pre-filled from them. A firm that raises its fast-track ceiling next year must not thereby restate why a claim was fast-tracked last year.
+
+**Four conditions, each necessary.** Category on the firm's list; estimated amount within the per-category ceiling; no open fraud signal at MEDIUM or above; evidence checklist complete. All four are tested independently, and the router returns *every* failing reason rather than the first — an adjuster clearing one blocker should not discover the next only after fixing it.
+
+**Configuration gaps fail closed.** A category listed with no limit is not fast-tracked, an unknown estimated amount is not treated as a small one, and a malformed ceiling is dropped rather than defaulted. Each would otherwise let a claim skip an interview by passing a test against nothing. **Medical is excluded ahead of the economic checks**, so a small medical claim cannot slip through on value — the §1 rule holds regardless of size.
+
+**Escalation moves one level.** A fraud signal on a desk review goes to video, not straight to a site visit: the §2.5 COGS ceiling is what makes attempting the cheaper step worth it, and jumping levels spends the budget the ladder exists to protect. At the top it returns `changed: false` rather than writing an audit row describing a decision nobody made.
+
+Re-deciding with the same result records nothing, so the history stays informative rather than merely long.
+
+**Verified live**, not only in tests: the router run against a real travel claim correctly identified it as medical and returned `EXPERT_REFERRAL` with its reason, persisted the decision, updated the claim cursor and wrote the audit row; a second identical decide left the history at one row; and escalation at the top of the ladder refused to manufacture a change. 22 router tests, 336 across the service.
 
 ### The operator slice — three backends acquire a user (6 Aug 2026)
 

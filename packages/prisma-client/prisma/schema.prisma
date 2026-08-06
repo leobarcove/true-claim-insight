@@ -307,7 +307,12 @@ model Claim {
   sourceCase              Case?
   fraudSignals            FraudSignal[]
 
+  /// The level at which this claim is currently being assessed. The decision
+  /// history is in AssessmentModeDecision; this is the cursor.
+  assessmentMode AssessmentMode?
+
   quantumWorksheets QuantumWorksheet[]
+  assessmentModeDecisions AssessmentModeDecision[]
 
   @@index([claimantId])
   @@index([adjusterId])
@@ -608,6 +613,54 @@ enum InboundMessageStatus {
   FAILED
   /// Operator dismissed it — not an FNOL (spam, an out-of-office, a reply).
   IGNORED
+}
+
+// ============================================================================
+// Assessment mode (MASTER_PLAN §2.4).
+//
+// How a claim was examined, and why. A row per decision rather than a column
+// that changes: PD 12.6 makes the assessment mode a disclosable **method**, so
+// "this claim was desk-reviewed" needs the reasons that held at the time, not
+// the ones today's thresholds would produce. A firm that raises its fast-track
+// ceiling next year must not thereby restate why a claim was fast-tracked last
+// year.
+// ============================================================================
+model AssessmentModeDecision {
+  id      String @id @default(uuid())
+  claimId String
+  tenantId String
+
+  mode AssessmentMode
+  /// Absent on the opening decision; set when a trigger escalated the claim.
+  trigger EscalationTrigger?
+  /// True only where all four §2.4 fast-track conditions held.
+  fastTracked Boolean @default(false)
+  /// Why, in an adjuster's terms — carried verbatim into the report.
+  reasons String[]
+
+  decidedByUserId String?
+  createdAt       DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, createdAt(sort: Desc)])
+  @@index([tenantId])
+  @@map("assessment_mode_decisions")
+}
+
+enum AssessmentMode {
+  /// Documents only, no interview — the fast track.
+  DESK_REVIEW
+  VIDEO
+  SITE_VISIT
+  EXPERT_REFERRAL
+}
+
+enum EscalationTrigger {
+  FRAUD_SIGNAL
+  AMOUNT_REVISED_UP
+  EXTRACTION_INCONSISTENCY
+  ADJUSTER_JUDGEMENT
 }
 
 // ============================================================================

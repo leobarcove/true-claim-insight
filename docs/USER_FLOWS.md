@@ -74,8 +74,8 @@ TPA schedule or adjuster fee scale`"]
 
     style CASE fill:#e8f4ea,stroke:#2d6a4f
     style CONV fill:#e8f4ea,stroke:#2d6a4f
-    style MODE fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
-    style DESK fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
+    style MODE fill:#e8f4ea,stroke:#2d6a4f
+    style DESK fill:#e8f4ea,stroke:#2d6a4f
     style HANDBACK fill:#fdf0e3,stroke:#b5651d
     style ING fill:#eef2fb,stroke:#3b5bA9
 ```
@@ -83,10 +83,10 @@ TPA schedule or adjuster fee scale`"]
 > **The firm recommends; the insurer decides.** Nothing in this system settles a
 > claim. Step 7 is a handback, and the adjuster report says so on its face.
 
-> ⚠️ **Step 4 is not built.** The assessment-mode router and its desk-review
-> fast-track are specified in `MASTER_PLAN.md` §2.4 but exist nowhere in the
-> codebase — no `AssessmentMode` field, no routing logic. Today a claim
-> proceeds to assessment without a mode being selected for it.
+> **Step 4 decides how the claim is examined.** Four conditions must all hold
+> for desk review, and the mode is disclosed in the report as a PD 12.6
+> *method* — "desk review on documents alone" and "site inspection" reach the
+> same figure by different means.
 
 ---
 
@@ -558,13 +558,13 @@ video → site → expert`"]
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
 
-    style FAST fill:#fdf0e3,stroke:#b5651d,stroke-dasharray:5 4
+    style FAST fill:#e8f4ea,stroke:#2d6a4f
 ```
 
-> ⚠️ **None of this is built.** This is the design recorded in
-> `MASTER_PLAN.md` §2.4, drawn so the intended rules are reviewable — not a
-> description of current behaviour. There is no fast-track logic, no tenant
-> limit configuration and no mode field in the schema.
+> **Configuration gaps fail closed.** A category with no limit configured is not
+> fast-tracked, and an unknown estimated amount is not treated as a small one.
+> Medical is excluded ahead of the economic checks, so a small medical claim
+> cannot slip through on value.
 
 Mode changes are audited and disclosed in the report's methodology section
 (PD 12.6) — the assessment mode is a *method*, and a reader is entitled to know
@@ -623,8 +623,6 @@ not merely an access check.
 
 | Flow step | Status |
 |---|---|
-| Assessment-mode router (§1 step 4) | **Not built** — specified in MASTER_PLAN §2.4 only |
-| Small-claims fast-track (§10, in full) | **Not built** — depends on the mode router |
 | Policy file feed from the insurer | Planned, gated on **G9** |
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
 | Local-LLM document validation | `validationStatus` is a labelled stub |
