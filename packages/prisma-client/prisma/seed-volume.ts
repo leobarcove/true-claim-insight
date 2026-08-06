@@ -268,6 +268,141 @@ const EVIDENCE_BY_CATEGORY: Partial<Record<ClaimCategory | 'DEFAULT', [DocumentT
   DEFAULT: [['DAMAGE_PHOTO', 'damage-01.jpg'], ['OTHER_DOCUMENT', 'supporting.pdf']],
 };
 
+/**
+ * Filenames for evidence resolved from `evidence_requirements`.
+ *
+ * A document type alone would give `PROPERTY_IRREGULARITY_REPORT.pdf`, which
+ * no claimant ever uploaded. Anything absent falls back to a derived name.
+ */
+const EVIDENCE_FILENAMES: Partial<Record<DocumentType, string>> = {
+  AIRLINE_DELAY_CONFIRMATION: 'airline-delay-confirmation.pdf',
+  BAGGAGE_TAG: 'baggage-tag.jpg',
+  BOARDING_PASS: 'boarding-pass.pdf',
+  DAMAGE_PHOTO: 'damage-01.jpg',
+  FLIGHT_ITINERARY: 'itinerary.pdf',
+  MEDICAL_REPORT: 'medical-report.pdf',
+  OVERSEAS_MEDICAL_BILL: 'hospital-invoice.pdf',
+  PASSPORT: 'passport.jpg',
+  PROOF_OF_OWNERSHIP: 'purchase-receipts.pdf',
+  PROPERTY_IRREGULARITY_REPORT: 'pir-form.pdf',
+  TRAVEL_BOOKING_INVOICE: 'booking-invoice.pdf',
+};
+
+const filenameFor = (docType: DocumentType): string =>
+  EVIDENCE_FILENAMES[docType] ?? `${docType.toLowerCase().replace(/_/g, '-')}.pdf`;
+
+/**
+ * The evidence a claim of this shape should carry.
+ *
+ * Travel resolves from `evidence_requirements` — the table the claim page's
+ * checklist reads — so a luggage claim is seeded a PIR and a baggage tag
+ * rather than the flight-delay set. Seeding a list written out separately here
+ * is what left every travel checklist reading 0/3 while its Documents panel
+ * showed three files: both were plausible, and they were about different
+ * claims.
+ *
+ * Property lines have no rows in that table yet, so they keep the hand-written
+ * lists above. Optional requirements are included two times in three — a book
+ * where every optional item is always present is not one an adjuster would
+ * recognise.
+ */
+/**
+ * The firm's assessment policy, written to `Tenant.settings` and then applied
+ * here so the seeded modes are the ones the router would actually choose.
+ *
+ * Thresholds are a business decision, recorded here rather than implied: a
+ * RM20,000 floor for attending a property loss sends an adjuster to essentially
+ * every fire (band starts at RM25,000) and to the larger floods and burglaries,
+ * while leaving small contents losses to a video call. The fast-track ceiling
+ * of RM5,000 on travel is the Path C default in MASTER_PLAN §2.5.
+ */
+const FAST_TRACK_LIMIT_TRAVEL = 5_000;
+const SITE_VISIT_THRESHOLD = 20_000;
+const INSPECTABLE: ClaimCategory[] = [
+  ClaimCategory.FIRE,
+  ClaimCategory.FLOOD,
+  ClaimCategory.BURGLARY,
+  ClaimCategory.LIGHTNING,
+  ClaimCategory.HOH,
+];
+
+const ASSESSMENT_SETTINGS = {
+  fastTrackCategories: [ClaimCategory.TRAVEL],
+  fastTrackLimits: { [ClaimCategory.TRAVEL]: FAST_TRACK_LIMIT_TRAVEL.toFixed(2) },
+  siteVisitCategories: INSPECTABLE,
+  siteVisitThresholds: Object.fromEntries(
+    INSPECTABLE.map(category => [category, SITE_VISIT_THRESHOLD.toFixed(2)])
+  ),
+};
+
+/**
+ * `resolveAssessmentMode()` in case-service, restated over seed values.
+ *
+ * Not imported: the router takes a Prisma claim and a tenant row, and reaching
+ * into an app from the seed would invert the dependency. The precedence is the
+ * one that matters and is kept identical — medical, then fast track, then
+ * inspection, then video — and `assessment-mode.spec.ts` is what holds the
+ * original honest.
+ */
+function seededMode(input: {
+  category: ClaimCategory;
+  travelType: TravelClaimType | null;
+  amount: number;
+  evidenceComplete: boolean;
+}): AssessmentMode {
+  if (input.travelType === TravelClaimType.MEDICAL) return AssessmentMode.EXPERT_REFERRAL;
+
+  const fastTracked =
+    input.category === ClaimCategory.TRAVEL &&
+    input.amount <= FAST_TRACK_LIMIT_TRAVEL &&
+    input.evidenceComplete;
+  if (fastTracked) return AssessmentMode.DESK_REVIEW;
+
+  if (INSPECTABLE.includes(input.category) && input.amount >= SITE_VISIT_THRESHOLD) {
+    return AssessmentMode.SITE_VISIT;
+  }
+
+  return AssessmentMode.VIDEO;
+}
+
+type Requirement = { documentType: DocumentType; isMandatory: boolean };
+const requirementsByKey = new Map<string, Requirement[]>();
+const requirementKey = (category: ClaimCategory, travelType: TravelClaimType | null) =>
+  `${category}/${travelType ?? '*'}`;
+
+async function loadEvidenceRequirements() {
+  const rows = await prisma.evidenceRequirement.findMany({
+    where: { tenantId: null },
+    orderBy: { sortOrder: 'asc' },
+    select: { category: true, travelClaimType: true, documentType: true, isMandatory: true },
+  });
+  for (const row of rows) {
+    const key = requirementKey(row.category, row.travelClaimType);
+    if (!requirementsByKey.has(key)) requirementsByKey.set(key, []);
+    requirementsByKey.get(key)!.push({
+      documentType: row.documentType,
+      isMandatory: row.isMandatory,
+    });
+  }
+}
+
+function evidenceFor(
+  category: ClaimCategory,
+  travelType: TravelClaimType | null
+): [DocumentType, string][] {
+  const resolved =
+    requirementsByKey.get(requirementKey(category, travelType)) ??
+    requirementsByKey.get(requirementKey(category, null));
+
+  if (!resolved?.length) {
+    return EVIDENCE_BY_CATEGORY[category] ?? EVIDENCE_BY_CATEGORY.DEFAULT!;
+  }
+
+  return resolved
+    .filter(req => req.isMandatory || chance(0.66))
+    .map(req => [req.documentType, filenameFor(req.documentType)]);
+}
+
 const START = new Date('2026-01-01T00:00:00Z');
 const TODAY = new Date();
 
@@ -392,6 +527,10 @@ async function main() {
 
   await wipePreviousRun();
 
+  // The checklist on the claim page reads these rows, so the documents seeded
+  // below are drawn from them rather than from a second list written here.
+  await loadEvidenceRequirements();
+
   const configLike = { get: (key: string) => process.env[key] } as never;
   const encryption = new EncryptionService(new PrismaKeyStore(prisma), new EnvKeyProvider(configLike));
   await encryption.onModuleInit();
@@ -407,6 +546,22 @@ async function main() {
   if (!firm || !insurer || !adjuster || !staff) {
     throw new Error('Run `pnpm prisma:seed` first — this extends the base seed rather than replacing it');
   }
+
+  // ---- the firm's assessment policy -------------------------------------
+  // Written before any claim is routed. Without it the router fast-tracks
+  // nothing and attends nothing, so every claim would come out VIDEO — and the
+  // seeded modes would once again describe a firm this configuration does not
+  // describe. Merged rather than replaced: `licensedMode` and branding belong
+  // to whoever set them.
+  await prisma.tenant.update({
+    where: { id: firm.id },
+    data: {
+      settings: {
+        ...((firm.settings as Record<string, unknown> | null) ?? {}),
+        ...ASSESSMENT_SETTINGS,
+      },
+    },
+  });
 
   // ---- policies ---------------------------------------------------------
   // One per claimant-ish, under the insurer. A minority of claims will not
@@ -760,7 +915,7 @@ async function main() {
       // screen reads `case_documents`. Seeding only claim documents left the
       // checklist at 0/3 — and left the evidence-completeness signal that
       // drives the fast-track router reading nothing at all.
-      const caseEvidence = EVIDENCE_BY_CATEGORY[category] ?? EVIDENCE_BY_CATEGORY.DEFAULT!;
+      const caseEvidence = evidenceFor(category, type);
       const caseComplete = caseStatus !== CaseStatus.INFO_REQUESTED && chance(0.75);
       const caseUploads = caseComplete
         ? caseEvidence
@@ -946,24 +1101,16 @@ async function main() {
       totals.claims += 1;
 
       // --- assessment mode ------------------------------------------------
-      const fastTrackable =
-        isTravel && type !== TravelClaimType.MEDICAL && amount <= 5_000 && reached(ClaimStatus.IN_ASSESSMENT);
-      const mode =
-        !isTravel
-          ? // Property losses are inspected. A fire assessed from photographs
-            // is not an assessment an insurer would accept.
-            weighted<AssessmentMode>([
-              [AssessmentMode.SITE_VISIT, 82],
-              [AssessmentMode.VIDEO, 18],
-            ])
-          : type === TravelClaimType.MEDICAL
-          ? AssessmentMode.EXPERT_REFERRAL
-          : fastTrackable && chance(0.55)
-            ? AssessmentMode.DESK_REVIEW
-            : // Never SITE_VISIT. The loss happened overseas — there is no risk
-              // address in Malaysia to inspect, so a travel claim that misses
-              // the fast track is interviewed, exactly as the router decides.
-              AssessmentMode.VIDEO;
+      // Decided by the same rule the router applies, against the same tenant
+      // policy written above. The seed used to draw modes at random, which is
+      // how 76 travel claims ended up routed to a site visit — a mode the
+      // router cannot produce for a loss that happened overseas.
+      const mode = seededMode({
+        category,
+        travelType: type,
+        amount,
+        evidenceComplete: reached(ClaimStatus.IN_ASSESSMENT),
+      });
 
       if (assignedAt) {
         await prisma.assessmentModeDecision.create({
@@ -1103,7 +1250,7 @@ async function main() {
       // A checklist permanently reading 0/3 demonstrates the control and never
       // the outcome. Most converted claims have their mandatory evidence; a
       // deliberate minority do not, which is what the chase-up path is for.
-      const evidence = EVIDENCE_BY_CATEGORY[category] ?? EVIDENCE_BY_CATEGORY.DEFAULT!;
+      const evidence = evidenceFor(category, type);
       const complete = chance(0.78);
       const toUpload = complete ? evidence : evidence.slice(0, Math.max(evidence.length - 1, 1));
 

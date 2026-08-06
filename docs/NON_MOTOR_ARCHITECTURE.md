@@ -291,12 +291,12 @@ orderings drift apart and the figures stop being comparable.
 
 - **Site visit scheduling** — would extend `Session` with a `mode` enum
   (REMOTE | SITE_VISIT | HYBRID) or add a `SiteVisit` table. *Note (6 Aug
-  2026): `AssessmentMode.SITE_VISIT` exists in the schema, in the report's
-  method disclosure and in the portal's assessment panel, but
-  `resolveAssessmentMode()` never returns it — the escalation ladder in
-  MASTER_PLAN §2.4 is one rung. Property lines are the ones that need
-  inspection, so scheduling and routing want deciding together; a site
-  visit's COGS is an order above a video call (§2.5).*
+  2026): the **routing** half now exists — `resolveAssessmentMode()` sends a
+  property loss at or above the firm's per-category threshold to
+  `SITE_VISIT` (MASTER_PLAN §2.4). What is still deferred is everything
+  after that decision: no visit is scheduled, no appointment is held, and
+  the claimant is not told when someone is coming. The claim page says the
+  mode and stops there.*
 - **Inventory itemisation** — `InventoryItem` model linked to `Claim`,
   with photo, brand, model, purchase date, claimed value, validated
   value. Critical for fire/burglary; defer until UI lands.

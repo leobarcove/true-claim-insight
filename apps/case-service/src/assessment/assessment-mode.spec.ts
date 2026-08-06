@@ -179,3 +179,89 @@ describe('assessment mode — PD 12.6 disclosure', () => {
     for (const reason of decision.reasons) expect(prose).toContain(reason);
   });
 });
+
+describe('assessment mode — site visit routing', () => {
+  const inspection = {
+    categories: ['FIRE', 'FLOOD'],
+    thresholds: { FIRE: D(20_000), FLOOD: D(20_000) },
+  };
+
+  const fire: ModeInput = {
+    category: 'FIRE',
+    estimatedAmount: D(300_000),
+    hasOpenFraudSignal: false,
+    evidenceComplete: true,
+    policy: { categories: [], limits: {} },
+    inspection,
+  };
+
+  it('attends a large property loss instead of interviewing it', () => {
+    // The defect this closes: every non-fast-tracked claim went to VIDEO, so a
+    // RM300,000 fire was assessed over a video call.
+    expect(resolveAssessmentMode(fire).mode).toBe('SITE_VISIT');
+  });
+
+  it('interviews a property loss below the threshold', () => {
+    // Sending an adjuster costs more than the difference it makes down here.
+    expect(resolveAssessmentMode({ ...fire, estimatedAmount: D(19_999.99) }).mode).toBe('VIDEO');
+  });
+
+  it('treats the threshold as inclusive', () => {
+    expect(resolveAssessmentMode({ ...fire, estimatedAmount: D(20_000) }).mode).toBe('SITE_VISIT');
+  });
+
+  it('never attends a category the firm did not list', () => {
+    // Travel is the case that matters: the loss happened overseas and there is
+    // no risk address in Malaysia to attend.
+    const travel = { ...fire, category: 'TRAVEL', estimatedAmount: D(400_000) };
+    expect(resolveAssessmentMode(travel).mode).toBe('VIDEO');
+  });
+
+  it('does not route to a site visit without any policy', () => {
+    // Absence means no automatic spend, matching the fast track. A firm that
+    // has not set thresholds has not authorised the travel cost.
+    const { inspection: _omitted, ...noPolicy } = fire;
+    expect(resolveAssessmentMode(noPolicy).mode).toBe('VIDEO');
+  });
+
+  it('does not route to a site visit for a listed category with no threshold', () => {
+    // Same reading as a fast-track category with no ceiling: a configuration
+    // gap is refused rather than filled in.
+    const gap = { ...fire, inspection: { categories: ['FIRE'], thresholds: {} } };
+    expect(resolveAssessmentMode(gap).mode).toBe('VIDEO');
+  });
+
+  it('does not attend a claim with no estimated amount', () => {
+    // The threshold cannot be tested, and guessing errs towards spending.
+    expect(resolveAssessmentMode({ ...fire, estimatedAmount: null }).mode).toBe('VIDEO');
+  });
+
+  it('lets the fast track win where the firm configured both', () => {
+    // Desk review is cheaper and its four conditions all held; reaching the
+    // site-visit threshold must not override that.
+    const both = {
+      ...fire,
+      estimatedAmount: D(25_000),
+      policy: { categories: ['FIRE'], limits: { FIRE: D(50_000) } },
+    };
+    expect(resolveAssessmentMode(both).mode).toBe('DESK_REVIEW');
+  });
+
+  it('keeps medical ahead of the inspection test', () => {
+    const medical = { ...fire, isMedical: true };
+    expect(resolveAssessmentMode(medical).mode).toBe('EXPERT_REFERRAL');
+  });
+
+  it('says why it is attending, and why it is not desk-reviewing', () => {
+    // A site visit is the most expensive method; PD 12.6 makes it exactly the
+    // one whose basis a reader will want.
+    const decision = resolveAssessmentMode({ ...fire, hasOpenFraudSignal: true });
+    expect(decision.reasons).toContain(
+      'An open fraud signal at MEDIUM or above requires more than a desk review'
+    );
+    expect(decision.reasons.some(r => /reaches the site-visit threshold of 20000.00/.test(r))).toBe(
+      true
+    );
+    expect(decision.fastTracked).toBe(false);
+  });
+});

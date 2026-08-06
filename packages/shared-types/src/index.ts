@@ -226,6 +226,33 @@ export const ASSESSMENT_MODE_LABELS: Record<AssessmentMode, string> = {
   [AssessmentMode.EXPERT_REFERRAL]: 'Expert referral',
 };
 
+/**
+ * Statuses from which an adjuster may still recommend approval or rejection.
+ *
+ * The authority is `CLAIM_STATUS_TRANSITIONS` in case-service, which is typed
+ * against the Prisma enum so a schema change breaks its compile. This is the
+ * same fact stated where the portal can read it, and
+ * `claim-transitions.spec.ts` asserts the two agree for every status — a
+ * duplicated rule with a test holding it is honest; a duplicated rule without
+ * one is how the button below came to offer an action the server refuses.
+ *
+ * `CLOSED` is absent deliberately. A closed claim reopens only through the
+ * supplementary endpoint, which starts the CSP five-working-day clock; letting
+ * Approve reach it would decide a claim without that clock ever running.
+ */
+export const CLAIM_DECIDABLE_STATUSES: ClaimStatus[] = [
+  ClaimStatus.SUBMITTED,
+  ClaimStatus.ASSIGNED,
+  ClaimStatus.SCHEDULED,
+  ClaimStatus.IN_ASSESSMENT,
+  ClaimStatus.REPORT_PENDING,
+  ClaimStatus.ESCALATED_SIU,
+];
+
+/** Whether Approve/Reject is a transition the server will accept. */
+export const canDecideClaim = (status: ClaimStatus | string): boolean =>
+  (CLAIM_DECIDABLE_STATUSES as string[]).includes(status);
+
 export enum Priority {
   LOW = 'LOW',
   NORMAL = 'NORMAL',
@@ -321,11 +348,30 @@ export enum UserRole {
 
 // ============ INTERFACES ============
 
+/**
+ * Where the loss happened.
+ *
+ * Property lines carry a Malaysian risk address. Travel lines cannot: the loss
+ * happened at a destination abroad, which is why `address` is optional and why
+ * `describeLocation` exists — reading `.address` directly rendered an empty
+ * Location field on every travel claim.
+ */
 export interface Location {
-  address: string;
+  address?: string;
+  /** Travel: the place the loss occurred. */
+  destination?: string;
+  country?: string;
   latitude?: number;
   longitude?: number;
 }
+
+/** The location in one line, whichever shape it arrived in. */
+export const describeLocation = (location?: Location | null): string | null => {
+  if (!location) return null;
+  if (location.address) return location.address;
+  const parts = [location.destination, location.country].filter(Boolean);
+  return parts.length ? Array.from(new Set(parts)).join(', ') : null;
+};
 
 export interface Tenant {
   id: string;

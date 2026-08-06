@@ -49,6 +49,32 @@ export interface FastTrackPolicy {
   limits: Record<string, Decimal>;
 }
 
+/**
+ * When a loss is examined in person rather than over a video call.
+ *
+ * Only some lines can be inspected at all: a fire or flood loss has a risk
+ * address, a travel loss happened overseas and has none. Among the inspectable
+ * lines it is a question of value — sending an adjuster to a RM2,000 burglary
+ * costs more than the difference it makes, while assessing a RM300,000 fire
+ * from photographs is not an assessment an insurer would accept.
+ *
+ * Absent by default, and absence means **no automatic site visit**, matching
+ * `FastTrackPolicy` above: a firm that has not set its thresholds has not
+ * authorised the travel cost either, and spending is the direction that cannot
+ * be taken back. Escalation still reaches `SITE_VISIT` by hand whatever this
+ * says (see `escalateMode`) — this governs only the opening decision.
+ */
+export interface InspectionPolicy {
+  /** Categories with a physical risk address worth attending. Absent means none. */
+  categories: string[];
+  /**
+   * Per-category value at or above which the loss is inspected. A category
+   * listed with no threshold is never routed to a site visit, for the same
+   * reason a fast-track category with no ceiling is never fast-tracked.
+   */
+  thresholds: Record<string, Decimal>;
+}
+
 export interface ModeInput {
   category: string;
   /** Estimated or assessed amount. Unknown blocks the fast track. */
@@ -58,6 +84,8 @@ export interface ModeInput {
   /** True where every mandatory evidence item is present. */
   evidenceComplete: boolean;
   policy: FastTrackPolicy;
+  /** The firm's site-visit policy. Absent means it never routes there. */
+  inspection?: InspectionPolicy;
   /** Medical claims are never desk-reviewed — see MASTER_PLAN §1. */
   isMedical?: boolean;
 }
@@ -131,6 +159,32 @@ export function resolveAssessmentMode(input: ModeInput): ModeDecision {
         'Evidence checklist complete',
       ],
       fastTracked: true,
+    };
+  }
+
+  // The fast track has been refused, so this loss is examined. Whether that
+  // means attending it depends on the firm's inspection policy: a property loss
+  // above the threshold is seen, everything else is interviewed over video.
+  const threshold = input.inspection?.categories.includes(input.category)
+    ? input.inspection.thresholds[input.category]
+    : undefined;
+
+  if (
+    threshold &&
+    input.estimatedAmount !== undefined &&
+    input.estimatedAmount !== null &&
+    input.estimatedAmount.greaterThanOrEqualTo(threshold)
+  ) {
+    return {
+      mode: 'SITE_VISIT',
+      // The fast-track failures stay in the record. They are why this claim is
+      // not on a desk review, which a report reader is entitled to see even
+      // though the outcome went further than video.
+      reasons: [
+        ...reasons,
+        `${input.category} at ${input.estimatedAmount.toFixed(2)} reaches the site-visit threshold of ${threshold.toFixed(2)}`,
+      ],
+      fastTracked: false,
     };
   }
 
