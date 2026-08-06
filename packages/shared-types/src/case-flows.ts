@@ -104,7 +104,21 @@ export interface FlowStep {
   /** Present when answerType === 'document'. */
   documentType?: DocumentType;
   optional?: boolean;
-  validation?: { min?: number; max?: number; pattern?: string };
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+    /**
+     * Minimum characters of actual substance, for steps whose value is the
+     * claimant's own account of what happened.
+     *
+     * A description is the one field an adjuster cannot reconstruct from
+     * anything else, so "I don't know" being accepted is not a small loss —
+     * the claim reaches vetting unusable and bounces back days later, when the
+     * claimant has stopped thinking about it.
+     */
+    minLength?: number;
+  };
   /**
    * Load-bearing outside the conversation: something elsewhere reads this
    * answer by step id. `incident-date` drives the CSP deadline flags,
@@ -331,6 +345,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     prompt: 'Please describe the damage to your luggage.',
     label: 'Damage description',
     answerType: 'text',
+    validation: { minLength: 20 },
   },
   {
     id: 'estimated-amount',
@@ -391,6 +406,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     prompt: 'Please list the main contents of the lost luggage and their approximate values.',
     label: 'Contents description',
     answerType: 'text',
+    validation: { minLength: 20 },
   },
   {
     id: 'estimated-amount',
@@ -492,6 +508,7 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     prompt: 'Please describe the illness or injury and the treatment you received.',
     label: 'Condition and treatment',
     answerType: 'text',
+    validation: { minLength: 20 },
   },
   {
     id: 'estimated-amount',
@@ -671,6 +688,34 @@ export interface AnswerValidation {
 
 const SKIP_VALUE = 'skip';
 
+/**
+ * Things people type when they do not want to answer.
+ *
+ * Deliberately a small, literal list rather than a clever heuristic: rejecting
+ * a genuine answer is worse than accepting a poor one, because the claimant is
+ * standing in an airport and has no idea what we would accept instead. Only
+ * matched on steps that declare a minLength, so it never touches a name or a
+ * flight number.
+ */
+const NON_ANSWERS = new Set([
+  'i dont know',
+  "i don't know",
+  'idk',
+  'dont know',
+  "don't know",
+  'no idea',
+  'not sure',
+  'unsure',
+  'n/a',
+  'na',
+  'nil',
+  'none',
+  'nothing',
+  '-',
+  'tak tahu',
+  'entah',
+]);
+
 export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValidation => {
   if (step.optional && typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
     return { valid: true };
@@ -680,6 +725,26 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
     case 'phone': {
       if (typeof value !== 'string' || value.trim().length === 0) {
         return { valid: false, error: 'Please provide an answer.' };
+      }
+      const text = value.trim();
+
+      // Length alone would not catch these — "I don't know" is longer than
+      // plenty of good answers, and "nil" is shorter than most bad ones.
+      if (step.validation?.minLength !== undefined) {
+        if (NON_ANSWERS.has(text.toLowerCase().replace(/[.!?]+$/, ''))) {
+          return {
+            valid: false,
+            error:
+              'We need your own description here — it is the part nobody else can fill in ' +
+              'for you. Even a rough one helps, for example what is damaged and how.',
+          };
+        }
+        if (text.length < step.validation.minLength) {
+          return {
+            valid: false,
+            error: `Please give a little more detail — around ${step.validation.minLength} characters or more.`,
+          };
+        }
       }
       if (step.validation?.pattern && !new RegExp(step.validation.pattern).test(value.trim())) {
         return { valid: false, error: 'That does not look right — please check the format and try again.' };

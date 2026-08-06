@@ -753,6 +753,80 @@ describe('ConversationGateway', () => {
     });
   });
 
+  describe('when the claimant is not on the happy path', () => {
+    const verified = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+    const textFlow = {
+      travelClaimType: 'LUGGAGE_DAMAGE',
+      entryStepId: 'damage-description',
+      steps: [
+        {
+          id: 'damage-description',
+          prompt: 'Please describe the damage to your luggage.',
+          label: 'Damage description',
+          answerType: 'text',
+          validation: { minLength: 20 },
+          next: { type: 'end' },
+        },
+      ],
+    };
+    const caseRow = {
+      id: 'case-1',
+      caseNumber: 'CSE-1',
+      currentStepId: 'damage-description',
+      resumeStepId: null,
+      answers: {},
+      flowDefinitionId: 'flow-1',
+      travelClaimType: 'LUGGAGE_DAMAGE',
+      tenantId: 'tenant-1',
+    };
+
+    it('treats a question as a question, not as the answer', async () => {
+      const { gateway, cases, flows, sent } = setup({ binding: verified, caseRow });
+      (flows.forCase as jest.Mock).mockResolvedValue(textFlow);
+
+      await gateway.handleTurn(turn({ text: 'what is a PIR?' }));
+
+      // Otherwise an adjuster later reads a document reference that is a
+      // question, and the claimant got no help.
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(sent[0].text).toMatch(/looks like a question/i);
+    });
+
+    it('does not mistake a long description containing a question mark', async () => {
+      const { gateway, cases, flows } = setup({ binding: verified, caseRow });
+      (flows.forCase as jest.Mock).mockResolvedValue(textFlow);
+
+      await gateway.handleTurn(
+        turn({
+          text: 'The wheel snapped off and the zip is torn — is that covered? It happened on arrival.',
+        })
+      );
+
+      // Refusing a real answer is worse than storing an odd one.
+      expect(cases.patchAnswer).toHaveBeenCalled();
+    });
+
+    it('hands over when the claimant asks for a person', async () => {
+      const { gateway, prisma, cases, flows, sent } = setup({ binding: verified, caseRow });
+      (flows.forCase as jest.Mock).mockResolvedValue(textFlow);
+
+      await gateway.handleTurn(turn({ text: 'human' }));
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ mode: ConversationMode.HANDOVER }),
+        })
+      );
+      expect(sent[0].text).toMatch(/one of our team/i);
+    });
+  });
+
   describe('a second claim', () => {
     it('releases the binding and offers a new claim when the active one is done', async () => {
       const finished = {

@@ -58,6 +58,9 @@ const EDIT_CALLBACK_PREFIX = '__edit:';
 const BACK_WORDS = new Set(['back', 'undo', 'previous', '/back', 'kembali']);
 const EDIT_WORDS = new Set(['edit', 'change', 'correct', '/edit', 'ubah']);
 
+/** Asking for a person. Nothing in intake should trap someone who wants one. */
+const HUMAN_WORDS = new Set(['human', 'agent', 'help', 'support', '/human', 'bantuan']);
+
 /**
  * Callback value behind the "I agree" button on the consent notice.
  *
@@ -388,6 +391,41 @@ export class ConversationGateway {
       return;
     }
 
+    // A question is not an answer. "What is a PIR?" was being stored as the
+    // answer to the step that asked for one — the claimant gets no help, and
+    // an adjuster later reads a document reference that is actually a question.
+    if (this.looksLikeAQuestion(word, step)) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          'That looks like a question rather than an answer. If you are unsure, type "human" ' +
+          'and one of our team will help — otherwise here is the question again.',
+      });
+      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      return;
+    }
+
+    // Asking for a person, at any point. Nothing about intake should trap
+    // someone who wants to speak to somebody.
+    if (HUMAN_WORDS.has(word)) {
+      await this.handOverToAgent(
+        messageId,
+        payload,
+        adapter,
+        binding,
+        step.id,
+        `Claimant asked for a person at "${step.label}"`
+      );
+      return;
+    }
+
     if (typeof raw === 'string' && raw.startsWith(EDIT_CALLBACK_PREFIX)) {
       const target = raw.slice(EDIT_CALLBACK_PREFIX.length);
       await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, target, false);
@@ -507,6 +545,11 @@ export class ConversationGateway {
     // It also enforces access: assertAccess requires the Case to belong to
     // this claimant, so a Telegram sender provably cannot reach anyone else's
     // claim, checked by the same code as the browser.
+    // Remember what they typed, so we can show how it was read if the two
+    // differ. A date parsed day-first and stored as ISO is invisible to the
+    // claimant otherwise — and a month-day swap moves the CSP deadline flags.
+    const typed = typeof raw === 'string' ? raw.trim() : String(raw);
+
     // Deterministic parsing has had its go. If the value still will not pass,
     // ask the model to read it — and only then.
     //
@@ -552,6 +595,15 @@ export class ConversationGateway {
       where: { id: messageId },
       data: { status: ConversationMessageStatus.PROCESSED, stepId: step.id, processedAt: new Date() },
     });
+
+    // Show what we understood, where it is not obviously the same thing they
+    // typed. Only on the ambiguous types, and only when the stored value
+    // actually differs — echoing "MH370 → MH370" is noise that trains people
+    // to stop reading.
+    const echo = this.confirmationOf(step, typed, value);
+    if (echo) {
+      await this.say(adapter, binding.id, payload.platformUserId, { text: echo });
+    }
 
     // Deadline warnings are advisory by design (MASTER_PLAN §3.2) — a late
     // notification is recorded and flagged, never refused. The claimant must
@@ -937,6 +989,92 @@ export class ConversationGateway {
     const asked = flow.steps.filter(step => step.answerType !== 'confirm');
     const index = asked.findIndex(step => step.id === stepId);
     return { position: index >= 0 ? index + 1 : asked.length, total: asked.length };
+  }
+
+  /**
+   * A one-line "this is what I recorded", where the reading could be wrong.
+   *
+   * Restricted to the types where interpretation happens — dates, times and
+   * amounts. Everything else is stored as typed, so confirming it back says
+   * nothing and costs a message.
+   */
+  private confirmationOf(
+    step: FlowStep,
+    typed: string,
+    stored: string | number | boolean
+  ): string | null {
+    if (String(stored) === typed) return null;
+
+    if (step.answerType === 'date' || step.answerType === 'datetime') {
+      const parsed = new Date(String(stored));
+      if (Number.isNaN(parsed.getTime())) return null;
+      const shown = parsed.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        ...(step.answerType === 'datetime' ? { hour: '2-digit', minute: '2-digit' } : {}),
+        timeZone: 'UTC',
+      });
+      // Spelled month, deliberately: "16/06" and "06/16" look alike and that
+      // ambiguity is the exact thing being confirmed.
+      return `Recorded as ${shown}. Type "back" if that is not right.`;
+    }
+
+    if (step.answerType === 'number') {
+      return `Recorded as RM ${Number(stored).toLocaleString('en-MY')}. Type "back" if that is not right.`;
+    }
+
+    return null;
+  }
+
+  /**
+   * Whether a message reads as a question rather than an answer.
+   *
+   * Deliberately narrow: a leading interrogative *and* a question mark, and
+   * never on steps where a question mark could belong to a real answer. A
+   * false positive here refuses a valid answer and leaves the claimant with no
+   * idea what we wanted, which is worse than storing one odd value.
+   */
+  private looksLikeAQuestion(word: string, step: FlowStep): boolean {
+    if (!word || step.answerType === 'document' || step.answerType === 'confirm') return false;
+    // Free text can legitimately contain a question mark — a damage
+    // description might. Only the short, clearly-interrogative ones qualify.
+    if (word.length > 80) return false;
+    if (!word.includes('?')) return false;
+    return /^(what|which|why|how|who|when|where|is |are |do |does |can |apa|kenapa|macam)/.test(
+      word
+    );
+  }
+
+  /** Put the conversation in front of a person, with the reason recorded. */
+  private async handOverToAgent(
+    messageId: string,
+    payload: InboundTurnPayload,
+    adapter: ChannelAdapter,
+    binding: { id: string },
+    stepId: string,
+    reason: string
+  ): Promise<void> {
+    await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        mode: ConversationMode.HANDOVER,
+        handoverAt: new Date(),
+        handoverReason: reason,
+        resolvedAt: null,
+      },
+    });
+    await this.prisma.conversationMessage.update({
+      where: { id: messageId },
+      data: {
+        status: ConversationMessageStatus.AWAITING_AGENT,
+        stepId,
+        processedAt: new Date(),
+      },
+    });
+    await this.say(adapter, binding.id, payload.platformUserId, {
+      text: 'Of course — one of our team will pick this up with you shortly.',
+    });
   }
 
   /** Put one step to the claimant, degraded to what this channel can render. */

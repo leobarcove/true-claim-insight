@@ -576,10 +576,19 @@ model CaseDocument {
   // Slice 1 sets SKIPPED; the validation service fills these in later.
   validationStatus DocumentValidationStatus @default(SKIPPED)
   validationNote   String?
+  /// Set when the claimant re-sent this step's document.
+  ///
+  /// Superseded, never deleted: what a claimant actually submitted, and when,
+  /// is evidence — including the wrong photo they sent first. The checklist and
+  /// the adjuster's view read only live rows, so the mistake stays out of the
+  /// way without being destroyed. Same reasoning as a withdrawn consent keeping
+  /// its original grant.
+  supersededAt     DateTime?
   createdAt        DateTime                 @default(now())
   case             Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@index([caseId])
+  @@index([caseId, stepId, supersededAt])
   @@map("case_documents")
 }
 
