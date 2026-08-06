@@ -65,6 +65,7 @@ describe('ConversationGateway', () => {
       },
       case: {
         findUnique: jest.fn(async () => over.caseRow ?? null),
+        update: jest.fn(async () => ({})),
       },
     };
 
@@ -621,6 +622,168 @@ describe('ConversationGateway', () => {
         })
       );
       expect(sent[0].text).toMatch(/team will pick this up/i);
+    });
+  });
+
+  describe('correcting a mistake', () => {
+    const verified = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+
+    // Two ordinary steps plus one that decides the path.
+    const editFlow = {
+      travelClaimType: 'TRIP_CANCELLATION',
+      entryStepId: 'reason',
+      steps: [
+        {
+          id: 'reason',
+          prompt: 'Why was the trip cancelled?',
+          label: 'Cancellation reason',
+          answerType: 'choice',
+          choices: [
+            { value: 'ILLNESS', label: 'Illness' },
+            { value: 'OTHER', label: 'Other' },
+          ],
+          next: {
+            type: 'branch',
+            when: [{ stepId: 'reason', op: 'eq', value: 'ILLNESS' }],
+            then: 'flight',
+            else: 'flight',
+          },
+        },
+        {
+          id: 'flight',
+          prompt: 'What was your flight number?',
+          label: 'Flight number',
+          answerType: 'text',
+          next: { type: 'step', stepId: 'bank' },
+        },
+        {
+          id: 'bank',
+          prompt: 'Which bank?',
+          label: 'Bank name',
+          answerType: 'text',
+          next: { type: 'end' },
+        },
+      ],
+    };
+
+    const atBank = {
+      id: 'case-1',
+      caseNumber: 'CSE-1',
+      currentStepId: 'bank',
+      resumeStepId: null,
+      answers: { reason: 'OTHER', flight: 'MH360' },
+      flowDefinitionId: 'flow-1',
+      travelClaimType: 'TRIP_CANCELLATION',
+      tenantId: 'tenant-1',
+    };
+
+    it('"back" reopens the previous question', async () => {
+      const { gateway, prisma, flows, cases, sent } = setup({ binding: verified, caseRow: atBank });
+      (flows.forCase as jest.Mock).mockResolvedValue(editFlow);
+
+      await gateway.handleTurn(turn({ text: 'back' }));
+
+      // Not stored as the answer to "which bank".
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(prisma.case.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ currentStepId: 'flight' }),
+        })
+      );
+      expect(sent.map(s => s.text).join(' ')).toContain('Flight number');
+    });
+
+    it('"edit" lists answers with their current values', async () => {
+      const { gateway, flows, adapter } = setup({ binding: verified, caseRow: atBank });
+      (flows.forCase as jest.Mock).mockResolvedValue(editFlow);
+
+      await gateway.handleTurn(turn({ text: 'edit' }));
+
+      const prompt = (adapter.send as jest.Mock).mock.calls[0][1];
+      const labels = prompt.step.choices.map((c: any) => c.label);
+      // The value has to be on the button: "Flight number" alone does not tell
+      // a claimant which one holds their typo.
+      expect(labels).toContain('Flight number — MH360');
+    });
+
+    it('remembers where to resume, so a fix does not cost later answers', async () => {
+      const { gateway, prisma, flows } = setup({ binding: verified, caseRow: atBank });
+      (flows.forCase as jest.Mock).mockResolvedValue(editFlow);
+
+      await gateway.handleTurn(turn({ callbackValue: '__edit:flight' }));
+
+      expect(prisma.case.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ currentStepId: 'flight', resumeStepId: 'bank' }),
+        })
+      );
+    });
+
+    it('does not resume when the edited answer decides the path', async () => {
+      const { gateway, prisma, flows, sent } = setup({ binding: verified, caseRow: atBank });
+      (flows.forCase as jest.Mock).mockResolvedValue(editFlow);
+
+      await gateway.handleTurn(turn({ callbackValue: '__edit:reason' }));
+
+      // Changing it may make a later question necessary that was never asked,
+      // so the flow walks forward normally instead of jumping back.
+      expect(prisma.case.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ currentStepId: 'reason', resumeStepId: null }),
+        })
+      );
+      expect(sent.map(s => s.text).join(' ')).toMatch(/may affect what we need to ask/i);
+    });
+
+    it('says so rather than failing when there is nothing before the first question', async () => {
+      const { gateway, flows, sent } = setup({
+        binding: verified,
+        caseRow: { ...atBank, currentStepId: 'reason' },
+      });
+      (flows.forCase as jest.Mock).mockResolvedValue(editFlow);
+
+      await gateway.handleTurn(turn({ text: 'back' }));
+
+      expect(sent[0].text).toMatch(/first question/i);
+    });
+  });
+
+  describe('a second claim', () => {
+    it('releases the binding and offers a new claim when the active one is done', async () => {
+      const finished = {
+        verifiedAt: new Date(),
+        claimantId: 'claimant-1',
+        tenantId: 'tenant-1',
+        activeCaseId: 'case-1',
+      };
+      const { gateway, prisma, adapter } = setup({
+        binding: finished,
+        caseRow: {
+          id: 'case-1',
+          caseNumber: 'CSE-2026-000015',
+          // No cursor: the flow ran out of questions.
+          currentStepId: null,
+          answers: {},
+          flowDefinitionId: 'flow-1',
+          travelClaimType: 'FLIGHT_DELAY',
+          tenantId: 'tenant-1',
+        },
+      });
+
+      await gateway.handleTurn(turn({ text: 'hello again' }));
+
+      // Without releasing it, a claimant could file exactly one claim ever —
+      // every later message hitting a permanent dead end.
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { activeCaseId: null } })
+      );
+      const prompts = (adapter.send as jest.Mock).mock.calls.map(c => c[1]);
+      expect(prompts.some(p => p.step?.answerType === 'choice')).toBe(true);
     });
   });
 

@@ -596,6 +596,32 @@ export const evaluateNext = (rule: NextRule, answers: CaseAnswers): string | nul
   }
 };
 
+/**
+ * Steps whose answer decides where the flow goes next.
+ *
+ * Editing one of these is not the same as fixing a typo. Changing a
+ * cancellation reason from "natural disaster" to "illness" makes a medical
+ * report necessary that was never asked for — so the conversation has to
+ * re-walk from there rather than resume, and answers collected under the old
+ * path may no longer apply.
+ *
+ * Derived from the rules rather than hand-listed: a new branch added in the
+ * flow editor is covered the moment it is published, with nobody remembering
+ * to update a list somewhere else.
+ */
+export const branchInputSteps = (flow: CaseFlow): Set<string> => {
+  const inputs = new Set<string>();
+  for (const step of flow.steps) {
+    const rule = step.next;
+    if (rule.type === 'branch') {
+      for (const condition of rule.when) inputs.add(condition.stepId);
+    } else if (rule.type === 'switch') {
+      inputs.add(rule.on);
+    }
+  }
+  return inputs;
+};
+
 /** Every step id a rule can reach — for static validation, ignoring answers. */
 export const ruleTargets = (rule: NextRule): string[] => {
   switch (rule.type) {

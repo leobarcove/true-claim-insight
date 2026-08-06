@@ -519,6 +519,15 @@ model Case {
   /// Null on rows created before flows became data; those walk CASE_FLOWS.
   flowDefinitionId           String?
   flowVersion                Int?
+  /// Where the claimant was before they went back to fix an earlier answer.
+  ///
+  /// Correcting question 3 must not cost them questions 4 through 18. The
+  /// cursor moves back to the step being edited and this holds the return
+  /// point, so once the correction is saved the conversation resumes where it
+  /// was interrupted rather than re-walking everything.
+  ///
+  /// Null whenever no edit is in progress, which is nearly always.
+  resumeStepId               String?
   answers                    Json                  @default("{}") // Record<stepId, value>; pre-filled for SYSTEM cases
   incidentDate               DateTime? // promoted for queue + deadline calc
   destination                String? // promoted for queue display

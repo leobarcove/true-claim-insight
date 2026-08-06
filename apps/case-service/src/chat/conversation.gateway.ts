@@ -11,6 +11,7 @@ import {
   TravelClaimType,
 } from '@prisma/client';
 import {
+  branchInputSteps,
   CHANNEL_CAPABILITIES,
   getStep,
   parseTextDate,
@@ -18,6 +19,7 @@ import {
   TRAVEL_CLAIM_TYPE_LABELS,
   validateAnswer,
   type CaseAnswers,
+  type CaseFlow,
   type FlowStep,
 } from '@tci/shared-types';
 import { PrismaService } from '../config/prisma.service';
@@ -39,6 +41,22 @@ import { OTP_VERIFIER, type OtpVerifier } from './otp-verifier.interface';
 
 /** Rejected after this many wrong codes, so a stranger cannot grind a phone. */
 const MAX_OTP_ATTEMPTS = 5;
+
+/** Callback prefix for picking an earlier answer to correct. */
+const EDIT_CALLBACK_PREFIX = '__edit:';
+
+/**
+ * Words a claimant reasonably types to go back or change something.
+ *
+ * Matched as whole messages only. Someone answering "back" to a free-text
+ * question might mean it literally, so these fire only when the message is
+ * nothing but the word — and the check runs before parsing, so a step that
+ * legitimately expects one of these still receives it via the edit menu.
+ *
+ * Malay included because that is what half the country will type.
+ */
+const BACK_WORDS = new Set(['back', 'undo', 'previous', '/back', 'kembali']);
+const EDIT_WORDS = new Set(['edit', 'change', 'correct', '/edit', 'ubah']);
 
 /**
  * Callback value behind the "I agree" button on the consent notice.
@@ -316,13 +334,21 @@ export class ConversationGateway {
     const flow = await this.flows.forCase(caseRow);
     const step = caseRow.currentStepId ? getStep(flow, caseRow.currentStepId) : null;
     if (!step) {
-      await this.prisma.conversationMessage.update({
-        where: { id: messageId },
-        data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+      // The active claim has no question left. Release the binding and offer a
+      // fresh one rather than dead-ending.
+      //
+      // Without this a claimant could file exactly one claim, ever: activeCaseId
+      // stayed pinned to the finished Case and every later message got "nothing
+      // further to answer here" — a permanent dead end that reads as the bot
+      // being broken. People travel more than once.
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: { activeCaseId: null },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'Your claim request is complete — there is nothing further to answer here.',
+        text: `Your claim request ${caseRow.caseNumber} is with our team. Would you like to start another claim?`,
       });
+      await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
 
@@ -343,6 +369,30 @@ export class ConversationGateway {
     // A tapped button beats typed text: it carries the stored value directly
     // and needs no interpretation.
     const raw = payload.callbackValue ?? payload.text;
+    const answers = caseRow.answers as CaseAnswers;
+
+    // Corrections come before anything else interprets the message.
+    //
+    // The flow assumed a claimant who never mistypes. In practice most of a
+    // real intake is error recovery, and until now a wrong answer was
+    // permanent — the cursor only ever moved forwards.
+    const word = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+
+    if (BACK_WORDS.has(word)) {
+      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, step.id, true);
+      return;
+    }
+
+    if (EDIT_WORDS.has(word)) {
+      await this.offerEditMenu(messageId, payload, adapter, binding, flow, answers);
+      return;
+    }
+
+    if (typeof raw === 'string' && raw.startsWith(EDIT_CALLBACK_PREFIX)) {
+      const target = raw.slice(EDIT_CALLBACK_PREFIX.length);
+      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, target, false);
+      return;
+    }
 
     // "Change something" at the review. There is no edit-a-single-answer flow,
     // and a button that quietly does nothing is worse than no button — so it
@@ -510,6 +560,26 @@ export class ConversationGateway {
       await this.say(adapter, binding.id, payload.platformUserId, { text: warning });
     }
 
+    // A correction has been saved: go back to where they were interrupted
+    // rather than re-walking everything after the step they fixed.
+    if (caseRow.resumeStepId) {
+      const resumeStep = getStep(flow, caseRow.resumeStepId);
+      await this.prisma.case.update({
+        where: { id: caseRow.id },
+        data: { currentStepId: caseRow.resumeStepId, resumeStepId: null },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: `\u2713 Updated "${step.label}".`,
+      });
+      if (resumeStep) {
+        await this.ask(adapter, binding.id, payload.platformUserId, resumeStep, 0, {
+          steps: flow.steps,
+          answers: (result.case?.answers ?? {}) as CaseAnswers,
+        });
+        return;
+      }
+    }
+
     if (!result.nextStep) {
       // The conversation has run out of steps. On this channel that means the
       // claimant just confirmed the review — so submit, here, now.
@@ -535,7 +605,8 @@ export class ConversationGateway {
       result.nextStep,
       0,
       // Give the next step the material for a summary, in case it is the review.
-      { steps: flow.steps, answers: (result.case?.answers ?? {}) as CaseAnswers }
+      { steps: flow.steps, answers: (result.case?.answers ?? {}) as CaseAnswers },
+      this.progressOf(flow, result.nextStep.id)
     );
   }
 
@@ -704,6 +775,170 @@ export class ConversationGateway {
     };
   }
 
+  /**
+   * Reopen a step so the claimant can answer it again.
+   *
+   * `isBack` distinguishes "undo what I just said" from "change that one over
+   * there". Undo clears the answer to the *current* step, since the claimant
+   * has not answered it yet and is stepping backwards past it.
+   *
+   * Where they return to afterwards depends on whether the step decides the
+   * path. An ordinary field resumes exactly where they were interrupted. A
+   * branch input cannot: changing it may make a later question necessary that
+   * was never asked, or an answer already given irrelevant. So the conversation
+   * re-walks from there, and says so rather than silently discarding work.
+   */
+  private async reopenStep(
+    messageId: string,
+    payload: InboundTurnPayload,
+    adapter: ChannelAdapter,
+    binding: { id: string; claimantId: string | null; tenantId: string | null },
+    caseRow: { id: string; currentStepId: string | null; resumeStepId: string | null },
+    flow: CaseFlow,
+    targetStepId: string,
+    isBack: boolean
+  ): Promise<void> {
+    const target = getStep(flow, targetStepId);
+    if (!target) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'Sorry, I could not find that answer to change.',
+      });
+      return;
+    }
+
+    // Stepping back from the first question has nowhere to go.
+    if (isBack && targetStepId === flow.entryStepId) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'This is the first question, so there is nothing before it to change.',
+      });
+      await this.ask(adapter, binding.id, payload.platformUserId, target);
+      return;
+    }
+
+    const previousId = isBack ? this.previousAnsweredStep(flow, caseRow.currentStepId) : targetStepId;
+    if (!previousId) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'There is nothing before this to change yet.',
+      });
+      return;
+    }
+
+    const stepToRedo = getStep(flow, previousId);
+    if (!stepToRedo) return;
+
+    const changesThePath = branchInputSteps(flow).has(previousId);
+
+    await this.prisma.case.update({
+      where: { id: caseRow.id },
+      data: {
+        currentStepId: previousId,
+        // Nothing to resume to when the path itself may change — the flow will
+        // walk forward normally and re-ask whatever the new answer requires.
+        resumeStepId: changesThePath ? null : (caseRow.resumeStepId ?? caseRow.currentStepId),
+      },
+    });
+
+    await this.prisma.conversationMessage.update({
+      where: { id: messageId },
+      data: {
+        status: ConversationMessageStatus.PROCESSED,
+        stepId: previousId,
+        processedAt: new Date(),
+      },
+    });
+
+    if (changesThePath) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          `Changing "${stepToRedo.label}" may affect what we need to ask afterwards, ` +
+          'so we will carry on from there once you have answered.',
+      });
+    }
+
+    await this.say(adapter, binding.id, payload.platformUserId, {
+      text: `Let us redo "${stepToRedo.label}".`,
+    });
+    await this.ask(adapter, binding.id, payload.platformUserId, stepToRedo);
+  }
+
+  /** The last step before `fromStepId` that the claimant actually answered. */
+  private previousAnsweredStep(flow: CaseFlow, fromStepId: string | null): string | null {
+    const order = flow.steps.map(step => step.id);
+    const index = fromStepId ? order.indexOf(fromStepId) : order.length;
+    if (index <= 0) return null;
+    return order[index - 1];
+  }
+
+  /**
+   * Offer the answers so far as tappable buttons.
+   *
+   * Showing the current value on each button matters more than it looks: a
+   * claimant hunting a typo needs to see which one is wrong, and "Destination"
+   * alone does not tell them. "Destination — SG" does.
+   */
+  private async offerEditMenu(
+    messageId: string,
+    payload: InboundTurnPayload,
+    adapter: ChannelAdapter,
+    binding: { id: string },
+    flow: CaseFlow,
+    answers: CaseAnswers
+  ): Promise<void> {
+    const choices = flow.steps
+      .filter(step => step.answerType !== 'confirm' && answers[step.id] !== undefined)
+      .map(step => {
+        const value = answers[step.id];
+        const shown =
+          step.answerType === 'document'
+            ? 'provided'
+            : step.answerType === 'choice'
+              ? (step.choices?.find(choice => choice.value === value)?.label ?? String(value))
+              : String(value);
+        return {
+          value: `${EDIT_CALLBACK_PREFIX}${step.id}`,
+          label: `${step.label} — ${shown}`.slice(0, 60),
+        };
+      });
+
+    await this.prisma.conversationMessage.update({
+      where: { id: messageId },
+      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+    });
+
+    if (choices.length === 0) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'You have not answered anything yet, so there is nothing to change.',
+      });
+      return;
+    }
+
+    await this.say(adapter, binding.id, payload.platformUserId, {
+      text: 'Which detail would you like to change?',
+      step: {
+        id: '__edit-menu',
+        prompt: 'Which detail would you like to change?',
+        label: 'Change a detail',
+        answerType: 'choice',
+        choices,
+        next: { type: 'end' },
+      },
+    });
+  }
+
+  /**
+   * Where this step sits in the flow.
+   *
+   * Counted over the whole definition rather than the path actually taken: a
+   * branch means the true total is not knowable until the end, and a total
+   * that shrinks mid-conversation reads as a bug. Slightly pessimistic and
+   * stable beats accurate and jumpy.
+   */
+  private progressOf(flow: CaseFlow, stepId: string): { position: number; total: number } {
+    const asked = flow.steps.filter(step => step.answerType !== 'confirm');
+    const index = asked.findIndex(step => step.id === stepId);
+    return { position: index >= 0 ? index + 1 : asked.length, total: asked.length };
+  }
+
   /** Put one step to the claimant, degraded to what this channel can render. */
   private async ask(
     adapter: ChannelAdapter,
@@ -711,9 +946,13 @@ export class ConversationGateway {
     platformUserId: string,
     step: FlowStep,
     page = 0,
-    review?: { steps: FlowStep[]; answers: CaseAnswers }
+    review?: { steps: FlowStep[]; answers: CaseAnswers },
+    progress?: { position: number; total: number }
   ): Promise<void> {
-    let text = step.prompt;
+    // Position first, so a claimant knows how much is left before reading the
+    // question. Eighteen questions with no end in sight is how intake gets
+    // abandoned halfway.
+    let text = progress ? `(${progress.position} of ${progress.total}) ${step.prompt}` : step.prompt;
 
     // A channel with no date control gets an explicit format hint, because the
     // claimant is about to type free text that has to parse.
@@ -736,6 +975,13 @@ export class ConversationGateway {
     if (step.answerType === 'confirm' && review && capabilities?.summaryPanel === false) {
       const summary = summariseAnswers(review.steps, review.answers);
       if (summary) text += `\n\n${summary}`;
+    }
+
+    // A correction feature nobody knows about does not exist. Kept to one
+    // short line rather than repeated instructions, and only on steps a
+    // claimant types into — a tapped button is not where typos happen.
+    if (step.answerType !== 'confirm' && step.answerType !== 'choice') {
+      text += '\n\nType "back" to change your last answer, or "edit" to change any of them.';
     }
 
     await this.say(adapter, bindingId, platformUserId, { text, step, choicePage: page });
