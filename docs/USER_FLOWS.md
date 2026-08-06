@@ -385,7 +385,7 @@ items in?`"}
     CHASE --> EV
     COMPLETE -->|yes| STAMP["`documentsCompleteAt stamped
 → FINAL_REPORT clock starts
-10 working days`"]
+14 working days (CSP 10.13)`"]
 
     STAMP --> QUANT["`Quantum worksheet
 average · betterment · excess`"]

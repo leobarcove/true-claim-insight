@@ -10,6 +10,7 @@ import {
   PolicySource,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { CSP_ADJUSTING_WORKING_DAYS, CSP_SUPPLEMENTARY_WORKING_DAYS } from '@tci/shared-types';
 import { EncryptionService, EnvKeyProvider } from '@tci/crypto';
 import { PrismaKeyStore } from '../src/key-store';
 
@@ -513,8 +514,15 @@ async function main() {
   const slaPolicies = [
     { stage: 'ACK_TO_INSURER' as const, workingDays: 1, warnWorkingDaysBefore: 1 },
     { stage: 'PRELIMINARY_REPORT' as const, workingDays: 7, warnWorkingDaysBefore: 2 },
-    { stage: 'FINAL_REPORT' as const, workingDays: 10, warnWorkingDaysBefore: 2 },
-    { stage: 'SUPPLEMENTARY_CLAIM' as const, workingDays: 5, warnWorkingDaysBefore: 1 },
+    // CSP para 10.13: 14 working days for non-motor, from receipt of complete
+    // documents. This book is non-motor (MASTER_PLAN §1) — motor's 10 is not a
+    // second row because the platform does not serve that line.
+    {
+      stage: 'FINAL_REPORT' as const,
+      workingDays: CSP_ADJUSTING_WORKING_DAYS.NON_MOTOR,
+      warnWorkingDaysBefore: 2,
+    },
+    { stage: 'SUPPLEMENTARY_CLAIM' as const, workingDays: CSP_SUPPLEMENTARY_WORKING_DAYS, warnWorkingDaysBefore: 1 },
     { stage: 'INSURER_DECISION' as const, workingDays: 7, warnWorkingDaysBefore: 2, monitorOnly: true },
     { stage: 'INSURER_PAYMENT' as const, workingDays: 14, warnWorkingDaysBefore: 3, monitorOnly: true },
   ];

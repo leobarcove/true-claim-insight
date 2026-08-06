@@ -832,8 +832,9 @@ export class ClaimsService {
    */
   /**
    * Recompute evidence completeness and, on the transition to complete, set
-   * `documentsCompleteAt` and start the FINAL_REPORT clock — CSP runs the
-   * ten-working-day window from *complete documents*, and until this event
+   * `documentsCompleteAt` and start the FINAL_REPORT clock — CSP para 10.13
+   * runs the fourteen-working-day non-motor window from *complete documents*,
+   * and until this event
    * existed the clock could only anchor on REPORT_PENDING as a proxy.
    *
    * Set-once: a later upload does not move an anchor already set, and a

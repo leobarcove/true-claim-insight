@@ -227,6 +227,42 @@ export const ASSESSMENT_MODE_LABELS: Record<AssessmentMode, string> = {
 };
 
 /**
+ * Turnaround ceilings from the Claims Settlement Practices policy document
+ * (BNM/RH/PD 029-69, issued 1 July 2024).
+ *
+ * **Paragraph 10.13** — a registered adjuster or in-house assessor must
+ * complete the adjusting work or claims assessment within **10 working days
+ * for motor** or **14 working days for non-motor**, measured from receipt of
+ * *all completed and relevant documents*, except in exceptional circumstances.
+ * Para 10.14 gives those: complex lines (marine cargo, aviation, transit, CAR,
+ * liability, engineering, business interruption), motor damage needing longer
+ * to inspect, catastrophe and large-event losses, and suspected fraud.
+ *
+ * Two things worth stating because they are easy to get wrong:
+ *
+ *  - **The measurement runs from complete documents**, not from assignment.
+ *    That is why `documentsCompleteAt` exists and anchors the clock.
+ *  - **The PD binds time, not method.** It contemplates "desktop assessment
+ *    and/or field inspection" (footnote 2) and qualifies field inspection as
+ *    "where applicable" (footnote 22). Nothing requires a video interview, on
+ *    any line — which is what makes the desk-review fast track in
+ *    MASTER_PLAN §2.4 a compliant choice rather than a shortcut.
+ *
+ * These are ceilings. A firm may promise an insurer something tighter, and a
+ * per-tenant `SlaPolicy` row is how it does so — but the regulatory line is
+ * recorded here so a breach report can distinguish missing our own promise
+ * from missing the regulation.
+ */
+export const CSP_ADJUSTING_WORKING_DAYS = {
+  /** Out of scope for this platform (MASTER_PLAN §1); recorded for completeness. */
+  MOTOR: 10,
+  NON_MOTOR: 14,
+} as const;
+
+/** Supplementary claim response, CSP para 10.17 / 11.x. */
+export const CSP_SUPPLEMENTARY_WORKING_DAYS = 5;
+
+/**
  * Statuses from which an adjuster may still recommend approval or rejection.
  *
  * The authority is `CLAIM_STATUS_TRANSITIONS` in case-service, which is typed
