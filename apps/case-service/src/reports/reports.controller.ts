@@ -79,6 +79,12 @@ export class ReportsController {
     return this.service.updateSections(id, sections, tenantContext);
   }
 
+  @Post(':id/refresh-quantum')
+  @ApiOperation({ summary: 'Pull the current quantum worksheet into a draft report' })
+  refreshQuantum(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    return this.service.refreshQuantum(id, tenantContext);
+  }
+
   @Post(':id/submit')
   @ApiOperation({ summary: 'Submit for sign-off; refused while PD 12.6 sections are empty' })
   submit(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {

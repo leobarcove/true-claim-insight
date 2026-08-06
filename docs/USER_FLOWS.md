@@ -419,6 +419,12 @@ Corrections supersede via supersedesId`"]
     style ISSUED fill:#e8f4ea,stroke:#2d6a4f
 ```
 
+**The report cites a worksheet revision.** Creating a report pre-fills the
+PD 12.6 quantum section from the current worksheet and records which revision it
+used, so the figure and its workings cannot silently diverge. A draft citing a
+superseded revision reports itself as outdated; an issued report keeps the figure
+it was signed against.
+
 **Segregation of duties (A3):** the assessor cannot decide their own claim
 unless an `AuthorityLimit` expressly permits it, and never above its monetary
 ceiling. The basis is written onto the audit row.
@@ -514,6 +520,10 @@ never deleted`"]
     style REVIEW fill:#fdf0e3,stroke:#b5651d
     style DONE fill:#e8f4ea,stroke:#2d6a4f
 ```
+
+The operator queue is now a screen — *FNOL intake* in the portal, with
+`NEEDS_REVIEW` and `FAILED` leading the filters. Until it existed, the row was
+written and nobody could see it.
 
 The row is written **before** parsing, so an email nobody could understand still
 leaves a trace. A claimant who emailed you believes they have notified you.

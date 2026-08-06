@@ -20,6 +20,7 @@ import { underSupervision } from '../adjusters/adjuster-competency';
 import { ConflictsService } from '../adjusters/conflicts.service';
 import { canSign, canTransition, countersignDecision, type AdjusterStanding } from './report-authority';
 import { ReportPdfGenerator } from './report-pdf.generator';
+import { renderQuantumSection } from '../quantum/quantum-section';
 
 /** Which SLA stage a report type discharges when issued. */
 const STAGE_FOR_TYPE: Partial<Record<AdjusterReportType, SlaStage>> = {
@@ -120,6 +121,19 @@ export class ReportsService {
       templateFor(type).map(section => [section.key, { body: '' }])
     );
 
+    // Pre-fill quantum from the worksheet where one exists, and record which
+    // revision was cited. Retyping a figure that the system already computed is
+    // how a report and its workings come to disagree — and the report is the
+    // document the insurer acts on.
+    const worksheet = await this.prisma.quantumWorksheet.findFirst({
+      where: { claimId },
+      orderBy: { revision: 'desc' },
+    });
+
+    if (worksheet && sections.quantum) {
+      sections.quantum = { body: renderQuantumSection(worksheet) };
+    }
+
     try {
       const report = await this.prisma.adjusterReport.create({
         data: {
@@ -127,6 +141,7 @@ export class ReportsService {
           type,
           sections: sections as unknown as Prisma.InputJsonValue,
           authorAdjusterId: author.id,
+          quantumWorksheetId: worksheet?.id,
         },
       });
       this.logger.log(`${type} report opened on claim ${claim.claimNumber} by adjuster ${author.id}`);
@@ -422,7 +437,67 @@ export class ReportsService {
       },
     });
     if (!report) throw new NotFoundException('Report not found');
-    return report;
+
+    // Surfaced rather than silently corrected. An issued report must keep the
+    // figure it was signed against; a draft citing a superseded revision is
+    // something the author should refresh knowingly, not have changed under them.
+    const latest = await this.prisma.quantumWorksheet.findFirst({
+      where: { claimId: report.claimId },
+      orderBy: { revision: 'desc' },
+      select: { id: true, revision: true },
+    });
+
+    return {
+      ...report,
+      quantumOutdated: Boolean(
+        report.quantumWorksheetId && latest && latest.id !== report.quantumWorksheetId
+      ),
+      quantumAvailable: Boolean(latest && !report.quantumWorksheetId),
+      latestQuantumRevision: latest?.revision ?? null,
+    };
+  }
+
+  /**
+   * Pull the current quantum worksheet into a draft report.
+   *
+   * Draft only: once a report is in review or signed, its quantum is part of
+   * what was attested to. A revised figure after that point is a new report
+   * superseding this one, which is the existing mechanism.
+   */
+  async refreshQuantum(reportId: string, tenantContext: TenantContext) {
+    const report = await this.prisma.adjusterReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Report not found');
+
+    if (report.status !== AdjusterReportStatus.DRAFT) {
+      throw new BadRequestException(
+        `Quantum can only be refreshed while the report is a draft — this one is ${report.status}. ` +
+          'Supersede it with a new report if the figure has changed.'
+      );
+    }
+
+    const worksheet = await this.prisma.quantumWorksheet.findFirst({
+      where: { claimId: report.claimId },
+      orderBy: { revision: 'desc' },
+    });
+    if (!worksheet) {
+      throw new BadRequestException('No quantum worksheet has been prepared on this claim');
+    }
+
+    const sections = (report.sections as unknown as ReportSections) ?? {};
+    sections.quantum = { body: renderQuantumSection(worksheet) };
+
+    const updated = await this.prisma.adjusterReport.update({
+      where: { id: reportId },
+      data: {
+        sections: sections as unknown as Prisma.InputJsonValue,
+        quantumWorksheetId: worksheet.id,
+      },
+    });
+
+    this.logger.log(
+      `Report ${reportId} quantum refreshed to worksheet revision ${worksheet.revision}`
+    );
+    return updated;
   }
 
   /**

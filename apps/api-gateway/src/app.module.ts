@@ -17,6 +17,8 @@ import { VideoModule } from './video/video.module';
 import { CasesModule } from './cases/cases.module';
 import { ReportsModule } from './reports/reports.module';
 import { ClaimsModule } from './claims/claims.module';
+import { QuantumProxyModule } from './quantum/quantum.module';
+import { IngestionProxyModule } from './ingestion/ingestion.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
 import { RiskModule } from './risk/risk.module';
@@ -66,6 +68,8 @@ import configuration from './config/configuration';
     CasesModule,
     ReportsModule,
     ClaimsModule,
+    QuantumProxyModule,
+    IngestionProxyModule,
     ClaimantsModule,
     HealthModule,
     LocationModule,
