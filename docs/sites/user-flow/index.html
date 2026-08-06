@@ -886,9 +886,11 @@ from the pinned flow`"]
           verification happened at signup; it says nothing about who holds the handset today.
         </p>
         <p class="note">
-          <strong>Not yet built.</strong> Outbound messages are not persisted, so there is no
-          transcript an operator can read and no way for a human to take over a conversation.
-          Both are required before the channel meets real claimants.
+          Every message is stored in both directions, and an outbound one records whether the
+          bot or a named agent sent it. That single distinction is what makes bot performance
+          reviewable — and it is why the operator inbox can show three voices rather than two.
+          When an agent takes over, the bot stands down entirely until the conversation is
+          handed back.
         </p>
       </section>
 
@@ -940,6 +942,15 @@ at creation`"]
           the conversational cursor or invalidate a stored answer — so a typo can be corrected
           live, with conversations in flight. Only structure needs pinning, which is why the
           pin sits on the definition and the Case.
+        </p>
+        <p class="note">
+          <strong>The rules decide; a model only reads.</strong> Nothing here is an LLM choosing
+          what to ask. When a claimant's answer defeats deterministic parsing, a model may be
+          asked to interpret that one message into a value — and that value passes the same
+          validation as a typed one before it goes anywhere. The model never sees the flow,
+          never picks the next question, never writes to a claim. It is off by default, and
+          bounded that way so every question asked stays traceable to a published flow version
+          rather than to a model's judgement on the day.
         </p>
       </section>
 
@@ -1058,8 +1069,8 @@ legal holds`"]
         <p class="lede">
           A flow diagram is persuasive precisely because it looks like a specification, and an
           unmarked planned step reads exactly like a shipped one. These are the steps above
-          that do not yet run — or, in three cases, run on the server with no way for anyone
-          to reach them.
+          that do not yet run. The three that ran headlessly — report, handback and fee note —
+          now have screens; what is left is listed here.
         </p>
         <div class="tablewrap">
           <table>
@@ -1067,11 +1078,12 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
-              <tr><td>Report composer <em>(step 6)</em></td><td><span class="chip fail">No screen</span></td><td>The engine and its gateway routes exist; nothing in the portal reaches them. A claim at <code>REPORT_PENDING</code> offers an adjuster no way to draft, sign off or issue a report, and no report or template is seeded</td></tr>
-              <tr><td>Handback to the insurer <em>(step 7)</em></td><td><span class="chip fail">No screen</span></td><td>No surface at all. The status change exists; the act the diagram names — sending the work product to the insurer — has nowhere to happen</td></tr>
-              <tr><td>Fee note <em>(step 8)</em></td><td><span class="chip fail">Unreachable</span></td><td>The billing engine is complete in case-service, but there is <strong>no billing module at the gateway</strong> — <code>/api/v1/billing/…</code> returns 404 — and no screen. The platform's revenue step cannot be exercised from outside case-service</td></tr>
-              <tr><td>SLA clocks on screen</td><td><span class="chip plan">Invisible</span></td><td>Clocks run, pause on SIU referral and record breaches, and none of it is exposed: no gateway module and nothing on the claim page. An adjuster cannot see a deadline or a breach</td></tr>
               <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
+              <tr><td>eKYC, and any gate on it</td><td><span class="chip fail">Not built</span></td><td>Identity is recorded and never enforced: nothing refuses a report or a decision on an unverified claimant, and 225 seeded claims are decided or reported on one. Needs the provider <em>and</em> a decision about what it blocks</td></tr>
+              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip plan">No screen</span></td><td>The CSP 11.16–11.18 evidence — outstanding notes per insurer, aged — exists on the server and is proxied, with nothing reading it</td></tr>
+              <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
+              <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td>video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>; case-service writes <code>claimant</code>. The list only shrinks</td></tr>
+              <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
               <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip plan">Planned</span></td><td>Every claim runs the one CSP target of 14 working days. A shorter promise on fast-tracked claims is a commercial commitment per insurer, not a regulatory one</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
