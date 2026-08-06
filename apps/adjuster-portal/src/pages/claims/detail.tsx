@@ -74,6 +74,7 @@ import { QuantumWorksheetPanel } from '@/components/claims/quantum-worksheet';
 import { ReportPanel } from '@/components/claims/report-panel';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
 import { SlaPanel } from '@/components/claims/sla-panel';
+import { IdentityControl } from '@/components/claims/identity-control';
 import { FeeNotePanel } from '@/components/claims/fee-note-panel';
 import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
@@ -232,7 +233,7 @@ export function ClaimDetailPage() {
   const { toast } = useToast();
   const { isMobile, currentWidth } = useLayout();
 
-  const { data: claim, isLoading } = useClaim(claimId || '');
+  const { data: claim, isLoading, refetch: refetchClaim } = useClaim(claimId || '');
   const updateStatus = useUpdateClaimStatus(claimId || '');
   const createVideoRoom = useCreateVideoRoom();
   const [magicLink, setMagicLink] = useState<string | null>(null);
@@ -716,24 +717,28 @@ export function ClaimDetailPage() {
                           : 'Pending'}
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Repair Cost (Final)</p>
-                      <p className="text-xl font-bold text-muted-foreground">
-                        {claim.estimatedRepairCost
-                          ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
-                          : 'Pending'}
-                      </p>
-                    </div>
+                    {/* "Repair cost" is a motor idea. A bag is not repaired and a
+                        cancelled trip has nothing to repair; the assessed figure
+                        lives on the quantum worksheet, which is shown in full
+                        below. Only motor keeps this field. */}
+                    {claim.category === 'MOTOR' && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Repair Cost (Final)</p>
+                        <p className="text-xl font-bold text-muted-foreground">
+                          {claim.estimatedRepairCost
+                            ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
+                            : 'Pending'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+                    {/* SST is charged on the firm's fee, not on the claim — it
+                        belongs on the fee note and is shown there. Printing an
+                        empty one here invited the reading that a claimant pays
+                        service tax on their own loss. */}
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">SST (Service Tax)</span>
-                      <span className="text-sm font-medium">
-                        {claim.sstAmount ? `RM ${claim.sstAmount.toLocaleString()}` : 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Excess/Deductible</span>
+                      <span className="text-sm text-muted-foreground">Policy excess</span>
                       <span className="text-sm font-medium">
                         {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'N/A'}
                       </span>
@@ -1378,6 +1383,16 @@ export function ClaimDetailPage() {
                         </Badge>
                       )}
                     </div>
+
+                    {/* A gate nobody can satisfy is a gate that gets switched
+                        off. Automated eKYC is not integrated, so the operator
+                        records what they examined and the server keeps their
+                        name against it. */}
+                    <IdentityControl
+                      claimantId={claim.claimant?.id}
+                      kycStatus={claim.claimant?.kycStatus}
+                      onVerified={() => refetchClaim()}
+                    />
                   </div>
                 </div>
                 {claim.siuInvestigatorId && canInvestigateSIU && (

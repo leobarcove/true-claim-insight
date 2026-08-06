@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Claimant } from '@prisma/client';
 import { EncryptionService } from '@tci/crypto';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../auth/guards/tenant.guard';
+import { AuditService } from '../common/audit/audit.service';
 
 /**
  * A claimant as it comes back from a normal query: no ciphertext, no blind
@@ -19,7 +20,8 @@ export class ClaimantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly audit: AuditService
   ) {}
 
   /** Secret that makes the blind index unguessable. */
@@ -225,20 +227,47 @@ export class ClaimantsService {
   async updateKycStatus(
     id: string,
     status: 'PENDING' | 'VERIFIED' | 'FAILED' | 'EXPIRED',
-    tenant?: TenantContext
+    tenant?: TenantContext,
+    basis?: string
   ): Promise<ClaimantRow> {
     if (tenant) {
       const existing = await this.findById(id, tenant);
       if (!existing) throw new NotFoundException('Claimant not found or access denied');
     }
 
-    return this.prisma.claimant.update({
+    // Who verified this person, on what, and when — recorded before the status
+    // moves. Automated eKYC is not integrated (Innov8tif/CTOS, §3), so today
+    // this is an operator attesting to a document they examined. That is a
+    // legitimate basis and an auditable one, but only while it says whose
+    // judgement it was: "VERIFIED" with nobody's name against it is the kind of
+    // assertion §3.6 calls false comfort.
+    if (tenant && status === 'VERIFIED' && !basis?.trim()) {
+      throw new BadRequestException(
+        'Record what identity was checked against — the document seen, or the eKYC reference.'
+      );
+    }
+
+    const updated = await this.prisma.claimant.update({
       where: { id },
       data: {
         kycStatus: status,
         kycVerifiedAt: status === 'VERIFIED' ? new Date() : null,
       },
     });
+
+    if (tenant) {
+      await this.audit.record({
+        entityType: 'CLAIMANT',
+        entityId: id,
+        action: `IDENTITY_${status}`,
+        actorId: tenant.userId,
+        userId: tenant.userId,
+        tenantId: tenant.tenantId,
+        newValues: { kycStatus: status, basis: basis?.trim() ?? null },
+      });
+    }
+
+    return updated;
   }
 
   /**
