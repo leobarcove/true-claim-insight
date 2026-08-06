@@ -248,9 +248,9 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 | Requirement | Current | Target control | Phase |
 |---|---|---|---|
 | Consent (lawful basis, withdrawal) | **PASS** — machinery and wording both operative. v1 notices approved 31 July 2026 at the principal's direction, recorded under the firm-admin identity, following an AI-assisted substantive review against PDPA s.7, the 2024 Amendment and the CBPDT Guidelines. The review found and fixed two real defects: no contact particulars anywhere ("contact us" without a route fails s.7's substance — every notice now names the route and the Commissioner as the complaint avenue, in both languages), and the cross-border notice pointing at a privacy notice that did not exist — it now names each offshore recipient and country directly. Verified live: consent granted on approved wording, the biometric gate answering true, a second approval refused (approved wording is immutable; revisions ship as v2). **Independent Malaysian counsel review remains the standing recommendation**; counsel's changes would ship as v2, leaving v1 consents provably tied to v1 wording. **Tests:** 12, in CI | Counsel review → v2 if required | done |
-| NRIC/bank-detail protection | **PASS** — NRIC and bank account number encrypted at rest (AES-256-GCM envelope, versioned ciphertext); plaintext columns dropped, not merely shadowed; lookup via HMAC blind index; ciphertext and index omitted from query results by default so they cannot reach a browser; full value only through an audited firm-admin reveal. NRIC removed from logs; `verify-nric` throttled with non-enumerating errors. **Tests:** 15 crypto (incl. a simulated KMS custody migration) + a schema-reading omit-coverage test | Rotation drill and KMS custody transfer remain operational tasks | done |
+| NRIC/bank-detail protection | **PASS** — NRIC and bank account number encrypted at rest (AES-256-GCM envelope, versioned ciphertext); plaintext columns dropped, not merely shadowed; lookup via HMAC blind index; ciphertext and index omitted from query results by default so they cannot reach a browser; full value only through an audited firm-admin reveal. NRIC removed from logs; `verify-nric` throttled with non-enumerating errors. **Tests:** 15 crypto (incl. a simulated KMS custody migration) + a schema-reading omit-coverage test. **Qualified for messaging channels (6 Aug 2026):** the guarantee is end-to-end only where we control the transport. A claimant answering `bank-account-number` on Telegram (or, later, WhatsApp/Messenger) types the plaintext into the platform's own message history, where it persists offshore, outside our retention sweep and outside the claimant anonymisation job. Our column is still encrypted and the answer bag still masked — but the copy we do not hold is beyond both. This is a **decided position, not an oversight**: collecting payout details in-channel was chosen over a secure hand-off link for UX. `ChannelCapabilities.retainsPlaintext` records which channels carry the exposure. Revisit if a channel is used at volume, or if counsel reads s.129 as reaching it | Rotation drill and KMS custody transfer remain operational tasks; re-examine in-channel payout collection before the first non-pilot volume | done |
 | Retention/deletion | **PASS** — soft delete, scheduled document purge and legal hold, plus **claimant anonymisation** (6 Aug 2026): a nightly gateway sweep irreversibly destroys identity once every claim naming a person is closed and past the PD 12.8 floor, while the claim record survives. Replacements are random, never derived — a reversible transform is pseudonymisation and PDPA still applies to it. **Tests:** 15 | Purge of remaining non-document records as those contexts gain owners | done |
-| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, and the in-country LLM path itself | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
+| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim/Telegram) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. **Two paths added 6 Aug 2026, both recorded honestly rather than quietly.** Telegram carries claimant message content offshore for every conversational turn, and is *retentive* — what a claimant types stays in Meta's or Telegram's history, outside the retention sweep and the anonymisation job (see the payout-details qualification on the row above). And Gemini now receives free text a claimant typed, when deterministic parsing of an answer fails; that call writes a `TransferRecord` with an explicit data description for conversational text and `lawfulBasis: null`, because none is established. Neither is a new *kind* of gap — both are the same ungated-offshore gap this row already reports, now with two more paths in it. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, the in-country LLM path itself, and counsel on FSA 2013 secrecy over model inputs (§6.18) | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
 | AMLA/CTF screening | **FAIL** — no screening/CDD/STR concepts; `KycStatus` writer has zero callers, nothing gates on it | Sanctions/PEP screening plugin at claimant/payee registration; suspicious-matter → ComplianceEvent | 5 |
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
@@ -499,7 +499,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 1. **Uncommitted travel work** on `feature/non-motor-claims-ui`, no remote — commit + push first (Phase 0 item 1).
 2. **Dual Case/Claim lifecycle** — keep the boundary (Case = pre-claim intake funnel; Claim = regulated engagement); adopt Case's transition-table pattern for Claim guards (Ph 1); revisit only if Assignment-without-Case proves awkward.
-3. **Offshore LLM** — local (Ollama) default for PII docs from Ph 2; Gemini only under explicit per-tenant policy for non-PII. Until then: do not demo AI extraction on real claimant documents.
+3. **Offshore LLM** — local (Ollama) default for PII docs from Ph 2; Gemini only under explicit per-tenant policy for non-PII. Until then: do not demo AI extraction on real claimant documents. **Widened for demo, 6 Aug 2026 — recorded, not silently assumed.** Gemini now also normalises free text a claimant types during conversational intake (`CHAT_LLM_NORMALISER_ENABLED`, off by default). That is claimant personal data, so it sits outside the "non-PII only" line above. It is bounded three ways: fallback-only, so a deterministic parse is always tried first and most turns never reach a model; the model returns a *value*, never a decision, and that value must pass the same `validateAnswer` as a typed answer; and every call writes a `TransferRecord` with `lawfulBasis: null`, because none is established. **Conditions before this faces a real claimant:** a lawful basis (consent-gate or the in-country model), counsel's view on FSA 2013 secrecy (item 15), and the AI-scope assessment (item 16). Synthetic and internal-tester data only until then.
 4. **Merimen dependency** — market's appointment rail but access is insurer-sponsored/uncertain. Assignment is channel-agnostic from Ph 2 (manual/email works); Merimen is an ingestion adapter (Ph 5), never a schema assumption. **Ask MSIG early which channel they will use.**
 5. **Single-firm assumption — fix it now, it is a foundations item.** `resolveCaseTenant` currently resolves a claimant self-serve case to "the first `ADJUSTING_FIRM` tenant found". That is the one place the codebase assumes a single adjusting firm, and it is the cheapest possible moment to remove it. The rest of the platform is already genuinely multi-tenant (`Tenant` with ADJUSTING_FIRM/INSURER types, `UserTenant` m:n, tenant-scoped queries and redaction), so the fix is small: resolve the **handling firm explicitly** — from the insurer's panel configuration, the intake channel, or the `Assignment` — instead of picking one arbitrarily. **Phase 1a.** Doing this does not build a SaaS product; it merely stops foreclosing Path B (§6.14) for the sake of one convenience shortcut.
 6. **No queue/scheduler exists** — BullMQ on existing Redis, one shared worker pattern; decide first because Phases 1–2 all sit on it.
@@ -515,6 +515,9 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 17. **"Microservices" is currently a distributed monolith (§4.3 A2).** Four services write one database with no ownership boundaries, so a schema change can silently break three services and any service can corrupt any table — while cross-service operations have no transaction. The decided response is to enforce ownership at the API boundary rather than merge services, and to **stop adding services**. If ownership enforcement proves awkward, the fallback end state is two backend services (core API + `risk-analyzer`) plus two frontends.
 
 ---
+
+18. **FSA 2013 secrecy over AI inputs — open, needs counsel.** BNM's *Discussion Paper on Artificial Intelligence in the Malaysian Financial Sector* (5 Aug 2025) notes that where a model is trained on, or processes, information relating to the affairs or account of a customer of a financial institution, the **secrecy provision under the Financial Services Act 2013** may be engaged. Our exposure is narrower than training — we send a claimant's message for inference and retain nothing at the provider — but the question is not settled by that distinction alone, and it now applies to two paths (document extraction, intake normalisation). BNM points to its **Regulatory Sandbox** as the route where regulatory impediments exist. Put to counsel alongside item 7 rather than as a separate exercise.
+19. **AI-scope assessment — write it down before it is asked for.** The NAIC model bulletin, which the market treats as the reference governance text, states that *simple rule-based systems without adaptive or predictive components may fall outside* the definition of an AI System, **but that carriers should document that assessment explicitly**. Until 6 Aug 2026 the intake conversation was purely deterministic and plausibly outside scope — a position held by accident and never recorded. Adding the normaliser spends part of it. What remains defensible, and should be written as a short assessment: the *flow engine* is a versioned rule set with no learned or predictive component; the *model* touches only input interpretation, never what is asked, what is decided, or what is paid. BNM's discussion paper expects the same lifecycle disciplines under different names — fairness, accountability, transparency, explainability, reliability, security. **Owner: whoever prepares the vendor security assessment; the evidence already exists in the flow versioning, the publish gate and the conversation transcript.**
 
 ## 7. Verification
 
@@ -926,6 +929,39 @@ reported as nil; 617 worksheets were rebuilt from the claim's excess with their
 recommended figures and approved amounts recomputed. Both are fixed in
 `seed-volume.ts` and backfilled, so no re-seed was needed.
 
+### The last three steps of the flow, and the clock that could not be discharged (6 Aug 2026)
+
+Steps 6, 7 and 8 — report, handback, fee note — had engines and no way to
+reach them. All three now have screens, and building them found two defects
+worth more than the screens.
+
+**The fee note was unreachable, not merely unbuilt.** There was no billing
+module at the gateway at all, so every route 404'd from outside case-service.
+Added, along with the read route the engine never had. Two seeded facts had to
+be true first: only 7 of 980 claims recorded an insurer to bill, and the book
+sat under the wrong one — the seed picked "the first insurer" while writing
+MSIG-numbered policies, so 867 MSIG policies were under Allianz and five claims
+named the adjusting firm as their own insurer.
+
+**A breached SLA clock could never be discharged.** `stopFor` looked only at
+RUNNING and PAUSED, so issuing a report late left `stoppedAt` null for good and
+the record could not distinguish *late but delivered* from *still outstanding* —
+the first question an insurer asks about a breach. BREACHED is now stoppable and
+the breach survives being discharged, because it is history. The panel says
+which it is.
+
+**The report screen respects that this is a regulated document**: each section
+shows the PD paragraph it discharges, AI assistance is declared per section
+rather than per report (§6), submit names the mandatory sections still blank,
+sign-off and issue are separate acts, and an issued report renders read-only.
+Authorship is refused to a firm admin, which is correct — it is an adjusting
+employee's act under PD 12.7.
+
+**Also found, not fixed:** identity is recorded and never enforced. Nothing
+refuses a report or a decision on an unverified claimant, and **225 seeded
+claims are decided or reported on one**. eKYC needs the provider *and* a
+decision about what it should block.
+
 ### The final-report clock was four days tighter than the law requires (6 Aug 2026)
 
 `SlaPolicy.FINAL_REPORT` ran **10 working days**. That is the CSP figure for
@@ -1006,6 +1042,150 @@ is present, and the label reads *Destination* on travel claims.
 Still open, seen while verifying: travel worksheets carry a `REINSTATEMENT`
 settlement basis, which is a property concept — a lost bag is indemnified, not
 reinstated.
+
+### Intake flows became data, and Telegram became a channel — 6 Aug 2026
+
+**Why.** The five travel intake flows lived in `packages/shared-types/src/case-flows.ts`
+as hardcoded TypeScript, one of them branching through a JS closure. That is
+unauthorable — a closure cannot be stored in a column or edited in a form — so a
+wording change meant a code edit, a PR and a deploy of three packages. It also
+made a second conversational channel impossible without forking the flow.
+
+**Flow authoring.** `FlowStep.next` is now a serialisable `NextRule` union
+(`step` / `end` / `branch` / `switch`); the single closure is a `branch` row in
+Postgres. `FlowDefinition` holds versioned structure, tenant-scoped with
+`tenantId = null` as the platform default; `FlowOverlay` holds sparse per-channel
+and per-locale *wording only* — it has no `next` and no `answerType`, so a channel
+cannot diverge into asking different questions. That guarantee is in the shape of
+the data, not in a rule a later bulk-import tool could bypass. Locale outranks
+channel in the resolver: wrong tone is cosmetic, wrong language is a
+comprehension failure and PDPA s.7 treats it as substantive.
+
+Steps the rest of the system reads by name are marked `system: true`
+(`incident-date` drives the CSP deadline flags, `trip-start` is promoted to
+`Claim.tripStartDate`, `bank-account-number` keys the redaction set). The publish
+gate refuses a flow that dropped one — otherwise the conversation still runs, the
+claim still looks healthy, and a regulatory clock silently stops being computed.
+
+`Case.flowDefinitionId` + `flowVersion` pin the version at creation, so
+publishing an edit cannot rewrite an intake already in flight. Overlays are
+deliberately *not* versioned: because they carry only copy, they cannot move
+`currentStepId` or invalidate an answer, so wording is safe to correct live.
+
+**Telegram.** `ConversationBinding` binds a chat id to a Claimant; nothing about
+a claim is served before OTP verification. `InboundTurn` is written insert-first
+on `(channel, platformMessageId)`, so a unique violation *is* the "already seen"
+branch — the same arbitration as FNOL email, and necessary because every platform
+retries delivery. Answers route through `CasesService.patchAnswer`, not a second
+write path: that keeps redaction, policy promotion, deadline warnings and the
+audit row, and it means `assertAccess` proves a Telegram sender cannot reach
+another claimant's case. Long-polling ingress, so no public surface exists and
+local development needs no tunnel.
+
+**Verified.** 439 tests across 35 suites (56 new); all seven TypeScript packages
+typecheck; two migrations applied and tables confirmed; the five flows seeded as
+`PUBLISHED` platform defaults through the publish gate, idempotent on re-run; the
+service boots with the chat module resolved and polls the live bot.
+
+**Open, and known.** Telegram long-polling is a fleet-wide singleton — two
+pollers on one token each receive *half* the updates, which presents as claimants
+being intermittently ignored rather than as an outage. `TELEGRAM_POLLING_ENABLED`
+guards it; staging needs its own bot or the flag set. There is no flow editor UI
+yet (the models and publish gate exist to support one, SUPER_ADMIN only).
+
+### Conversations inbox and human takeover — 6 Aug 2026
+
+**Why.** A bot that cannot be watched cannot be improved, and a claimant who
+asks for a person must reach one. Both reduce to a question the data had to be
+able to answer — *who said this?* — and it could not: only inbound messages were
+stored, so a transcript would have shown a claimant talking to nobody.
+
+**Model.** `InboundTurn` became `ConversationMessage` carrying both directions,
+because a transcript is one ordered list and two tables would mean a merge-sort
+on every read. Inbound idempotency survives as a **partial** unique index
+(`WHERE platformMessageId IS NOT NULL`) — outbound rows legitimately have no
+platform id, and Postgres treats every NULL as distinct, so a plain unique index
+would not have held. Zero rows existed, so this was a rename rather than a
+second table bolted alongside.
+
+`sentByUserId` is null for the bot and set for an agent. That one nullable
+column is the feature: without it the machine's words and a human's are
+indistinguishable after the fact, and "the bot handled 200 conversations" is
+unfalsifiable.
+
+**Outbound** is persisted through a single `say()` funnel rather than a write at
+each of the fifteen send sites — the one that gets forgotten is invisible, since
+the claimant sees the message and the transcript does not.
+
+**Handover.** `ConversationMode.BOT | HANDOVER` on the binding. In handover the
+gateway records the inbound message as `AWAITING_AGENT` and sends nothing
+automated, so the bot cannot answer over an agent or overwrite a correction.
+`takeOver.reason` is **required**: a count of handovers is a metric, a column of
+reasons is a backlog.
+
+**Built rather than integrated**, deliberately. An external CRM would put claim
+content offshore — a materially larger transfer than the message text Telegram
+already sees, against a §3.4 position that is PARTIAL with no basis established —
+and no generic inbox knows what a Case, an evidence checklist or a deadline flag
+is, which is exactly the context an agent needs beside the thread.
+
+**Verified.** 444 tests across 35 suites; all six TypeScript packages typecheck;
+migration applied with the partial index confirmed in Postgres; case-service and
+api-gateway both boot with all four routes mapped; the gateway proxy returns 401
+without a token; the portal builds.
+
+**Open.** Unverified bindings are invisible in the inbox by design (they carry no
+tenantId until OTP passes, so showing them would leak a phone number across
+tenants) — a "stuck at verification" view for support needs its own design. No
+canned replies, no assignment queue, no per-agent reporting.
+
+### An LLM joins the intake path, as a normaliser only — 6 Aug 2026
+
+**Why.** A live Telegram test exposed the cost of a purely deterministic
+conversation: the bot asked for `DD/MM/YYYY`, the claimant sent exactly that,
+and the shared validator rejected it — `new Date()` reads a slash date
+month-first. The visible half was a loop. The silent half was worse:
+`06/07/2026` *parsed* as 7 June when a Malaysian writing day-first meant 6 July,
+which moves the CSP deadline flags with nothing to see. Both halves are now
+fixed deterministically (`parseTextDate`; the validator refuses slash dates
+outright), and 11 tests hold it.
+
+But the shape recurs — amounts, flight numbers, destinations all have it — so
+the question of a language layer was put properly rather than left implicit.
+
+**Position taken.** Research across FNOL-specific and general sources converges
+on one pattern for regulated intake: *the model is the language layer, the rule
+engine is the control plane*. Our state machine was already the recommended
+shape, by inheritance rather than decision. What was missing was only the
+language layer, so that is all that was added.
+
+`AnswerNormaliserService` (risk-engine) turns one message into one value.
+Fallback-only — a deterministic parse is always tried first, so most turns never
+reach a model. The value returned passes the same `validateAnswer` as a typed
+answer, and a choice value that was not offered is rejected before it leaves the
+service. The model never sees the flow, never chooses the next question, never
+writes to a Case. Off by default (`CHAT_LLM_NORMALISER_ENABLED`).
+
+**Placed in risk-engine deliberately.** Every offshore model call must write a
+`TransferRecord`, and `transferRecord` belongs to the assessment context, which
+only risk-engine may write. case-service calls it behind an `AnswerNormaliser`
+port over the internal channel — the same shape as the OTP port, and the seam
+the in-country model will bind to.
+
+**Verified.** 460 tests across 36 suites; five packages typecheck. Three of the
+seven new tests assert what the model *cannot* do: it is not consulted when
+deterministic parsing succeeded, it is skipped entirely when disabled, and a
+value it returns that still fails validation is discarded.
+
+**Open, and now recorded as §6.18 and §6.19.** A lawful basis for this path
+(none established). Counsel on FSA 2013 secrecy over model inputs, which BNM's
+August 2025 discussion paper raises directly. And the AI-scope assessment — the
+intake conversation was plausibly outside AI-governance scope while purely
+rule-based, a position held by accident and never written down; adding the
+normaliser spends part of it, and what remains defensible should be documented
+before a vendor assessment asks.
+
+**Constraint for now: synthetic and internal-tester data only on this path.**
 
 ---
 
