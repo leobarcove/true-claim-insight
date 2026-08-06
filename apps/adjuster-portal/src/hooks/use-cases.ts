@@ -3,6 +3,7 @@ import { apiClient, ApiResponse } from '@/lib/api-client';
 import type {
   CaseChannel,
   CaseStatus,
+  ClaimCategory,
   CompletenessSummary,
   DocumentValidationStatus,
   FlowStep,
@@ -43,6 +44,8 @@ export interface CaseSummary {
   caseNumber: string;
   status: CaseStatus | string;
   channel: CaseChannel | string;
+  /** The line of business. Travel refines it further with `travelClaimType`. */
+  category: ClaimCategory | string;
   travelClaimType?: TravelClaimType | string | null;
   claimant?: { id: string; fullName?: string | null; phoneNumber: string } | null;
   policy?: { id: string; policyNumber: string; insuredName?: string } | null;

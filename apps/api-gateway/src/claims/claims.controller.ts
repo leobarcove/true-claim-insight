@@ -104,16 +104,26 @@ export class ClaimsController {
 
     return this.httpService.get(endpoint, { headers, params: req.query }).pipe(
       map(response => {
+        // Flattened, not recomputed. This map used to redefine three of the
+        // figures on the way through — `totalAssigned` was fed the *active*
+        // count and `inProgress` the SCHEDULED bucket — so the dashboard could
+        // not agree with the service that produced them, and a fix in one place
+        // did not reach the screen. Each field now carries the value it is
+        // named for, and a new figure appears here or it does not appear at all.
         const data = response.data.data;
+        const stats = data.stats ?? {};
         return {
-          totalAssigned: data.stats?.activeClaims || 0,
-          pendingReview: data.statusBreakdown?.REPORT_PENDING || 0,
-          inProgress: data.statusBreakdown?.SCHEDULED || 0,
-          completedThisMonth: data.stats?.completedThisMonth || 0,
-          completedThisWeek: data.stats?.completedThisWeek || 0,
-          averagePerDay: data.stats?.averagePerDay || 0,
-          totalClaims: data.stats?.totalClaims || 0,
-          statusBreakdown: data.statusBreakdown || {},
+          totalAssigned: stats.totalAssigned ?? 0,
+          activeClaims: stats.activeClaims ?? 0,
+          totalCases: stats.totalCases ?? 0,
+          pendingReview: data.statusBreakdown?.REPORT_PENDING ?? 0,
+          inProgress: stats.inProgress ?? 0,
+          completedThisMonth: stats.completedThisMonth ?? 0,
+          completedThisWeek: stats.completedThisWeek ?? 0,
+          averagePerDay: stats.averagePerDay ?? 0,
+          totalClaims: stats.totalClaims ?? 0,
+          monthlyChange: stats.monthlyChange ?? 0,
+          statusBreakdown: data.statusBreakdown ?? {},
         };
       }),
       catchError(e => {

@@ -252,18 +252,23 @@ export class CasesService {
         },
       }),
       this.prisma.case.count({ where }),
-      this.travelEvidenceRequirements(),
+      this.evidenceRequirements(),
     ]);
 
-    const data = cases.map(caseRow => ({
-      ...caseRow,
-      completeness: caseRow.travelClaimType
-        ? computeCompleteness(
-            caseRow.documents.map(doc => doc.documentType as DocumentType),
-            requirements.filter(req => req.travelClaimType === caseRow.travelClaimType)
-          )
-        : null,
-    }));
+    const data = cases.map(caseRow => {
+      const applicable = this.requirementsFor(requirements, caseRow);
+      return {
+        ...caseRow,
+        // Null means "this line has no published checklist", which is a
+        // different thing from "nothing uploaded" and reads as a dash.
+        completeness: applicable.length
+          ? computeCompleteness(
+              caseRow.documents.map(doc => doc.documentType as DocumentType),
+              applicable
+            )
+          : null,
+      };
+    });
 
     // Status breakdown for the queue tab bar
     const grouped = await this.prisma.case.groupBy({
@@ -328,16 +333,12 @@ export class CasesService {
       caseRow.status = CaseStatus.UNDER_REVIEW;
     }
 
-    const requirements = caseRow.travelClaimType
-      ? (await this.travelEvidenceRequirements()).filter(
-          req => req.travelClaimType === caseRow.travelClaimType
-        )
-      : [];
+    const requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
 
     return {
       ...this.withFlowState(caseRow),
       evidenceRequirements: requirements,
-      completeness: caseRow.travelClaimType
+      completeness: requirements.length
         ? computeCompleteness(
             caseRow.documents.map(doc => doc.documentType as DocumentType),
             requirements
@@ -947,11 +948,32 @@ export class CasesService {
     return `CLM-${year}-${String(count + 1).padStart(6, '0')}`;
   }
 
-  private async travelEvidenceRequirements() {
+  /**
+   * The platform's evidence checklists, every line.
+   *
+   * Was travel-only, so a fire or burglary case showed no document progress at
+   * all — the operator vetting it had nothing to vet against, and the column
+   * read as "no requirement" rather than "not checked".
+   */
+  private async evidenceRequirements() {
     return this.prisma.evidenceRequirement.findMany({
-      where: { category: ClaimCategory.TRAVEL, tenantId: null },
+      where: { tenantId: null },
       orderBy: { sortOrder: 'asc' },
     });
+  }
+
+  /**
+   * The rows that apply to one case: its category, and either its travel
+   * subtype or the category-generic rows for lines that have no subtype.
+   */
+  private requirementsFor<
+    R extends { category: ClaimCategory; travelClaimType: TravelClaimType | null },
+  >(requirements: R[], caseRow: { category: ClaimCategory; travelClaimType: TravelClaimType | null }): R[] {
+    return requirements.filter(
+      req =>
+        req.category === caseRow.category &&
+        (req.travelClaimType === caseRow.travelClaimType || req.travelClaimType === null)
+    );
   }
 
   /** Attach the current flow step definition so channels can resume. */

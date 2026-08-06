@@ -12,8 +12,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { TRAVEL_CLAIM_TYPE_LABELS, type Claim } from '@tci/shared-types';
-import { getCategoryConfig } from '@/lib/category-config';
+import { claimTypeLabel } from '@/lib/claim-label';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
@@ -73,19 +72,6 @@ const typeLabels: Record<string, string> = {
  * on the TravelClaim child; property lines have no subtype at all and are
  * named by their category.
  */
-function claimTypeLabel(claim: Claim): string {
-  if (claim.category === 'MOTOR') {
-    return claim.claimType ? typeLabels[claim.claimType] || claim.claimType : 'Motor';
-  }
-
-  const travelType = claim.travelClaim?.travelClaimType;
-  if (travelType) {
-    return TRAVEL_CLAIM_TYPE_LABELS[travelType] ?? travelType;
-  }
-
-  return getCategoryConfig(claim.category).label;
-}
-
 export function ClaimsListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
