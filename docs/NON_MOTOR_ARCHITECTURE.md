@@ -97,6 +97,19 @@ for the same `(category, documentType)`. The `/claims/:id/evidence-
 checklist` endpoint joins each requirement against uploaded `Document`s
 and returns `satisfied: true/false`.
 
+### Retention and anonymisation (added 6 Aug 2026)
+
+Retention splits along the same ownership line as everything else: the claims
+context purges documents and case records (case-service, nightly at 03:00), and
+the identity context anonymises claimants (gateway, nightly at 04:00 — an hour
+later, so documents naming a person are examined before identity is destroyed).
+
+Anonymisation keeps the row and destroys the identity: name, birth date, email,
+NRIC ciphertext, NRIC tail and — most importantly — the NRIC **blind index**,
+which is an HMAC that would otherwise survive the plaintext and still match.
+The phone number is replaced with a random token rather than nulled, because
+the column is required, unique, and the natural key intake resolves by.
+
 ### Per-tenant configuration (added 6 Aug 2026)
 
 Evidence requirements were the first thing made per-tenant; `Tenant.settings`

@@ -192,6 +192,12 @@ model Claimant {
   email         String?
   kycStatus     KycStatus @default(PENDING)
   kycVerifiedAt DateTime?
+  /// When identity was irreversibly destroyed under PD 12.8 / PDPA s.10(2).
+  /// The row survives so claims still resolve and the firm's record of what it
+  /// assessed stays coherent; the person is simply no longer identifiable from
+  /// it. Set once and never cleared — anonymisation cannot be undone, which is
+  /// what distinguishes it from pseudonymisation.
+  anonymisedAt  DateTime?
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
