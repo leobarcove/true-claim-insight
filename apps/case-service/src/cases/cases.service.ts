@@ -284,7 +284,7 @@ export class CasesService {
         include: {
           claimant: { select: { id: true, fullName: true, phoneNumber: true } },
           policy: { select: { id: true, policyNumber: true, insuredName: true } },
-          documents: { select: { documentType: true } },
+          documents: { where: { supersededAt: null }, select: { documentType: true } },
         },
       }),
       this.prisma.case.count({ where }),
@@ -331,7 +331,10 @@ export class CasesService {
       where: { claimantId: tenantContext.userId },
       orderBy: { createdAt: 'desc' },
       omit: { bankAccountNumberEncrypted: true },
-      include: { documents: true, policy: { select: { policyNumber: true } } },
+      include: {
+        documents: { where: { supersededAt: null } },
+        policy: { select: { policyNumber: true } },
+      },
     });
     return Promise.all(cases.map(caseRow => this.withFlowState(caseRow)));
   }
@@ -345,7 +348,9 @@ export class CasesService {
       include: {
         claimant: true,
         policy: true,
-        documents: { orderBy: { createdAt: 'asc' } },
+        // Superseded uploads stay in the table as evidence of what was sent,
+        // but the checklist and the operator's view show only what counts.
+        documents: { where: { supersededAt: null }, orderBy: { createdAt: 'asc' } },
         convertedClaim: { select: { id: true, claimNumber: true, status: true } },
       },
     });
@@ -450,6 +455,21 @@ export class CasesService {
       file.mimetype,
       `cases/${id}`
     );
+
+    // A claimant re-sending a document means the first one was wrong. Retire it
+    // rather than leaving two attached to the same requirement, which would
+    // leave an adjuster guessing which one the claimant meant.
+    if (stepId) {
+      const superseded = await this.prisma.caseDocument.updateMany({
+        where: { caseId: caseRow.id, stepId, supersededAt: null },
+        data: { supersededAt: new Date() },
+      });
+      if (superseded.count > 0) {
+        this.logger.log(
+          `Case ${caseRow.id}: ${superseded.count} document(s) superseded at step ${stepId}.`
+        );
+      }
+    }
 
     const document = await this.prisma.caseDocument.create({
       data: {
@@ -650,7 +670,9 @@ export class CasesService {
     const delayHours = this.computeDelayHours(answers);
     const estimatedAmount = answers['estimated-amount'];
 
-    const documents = await this.prisma.caseDocument.findMany({ where: { caseId: id } });
+    const documents = await this.prisma.caseDocument.findMany({
+      where: { caseId: id, supersededAt: null },
+    });
 
     const converted = await this.prisma.$transaction(async tx => {
       const claim = await tx.claim.create({
