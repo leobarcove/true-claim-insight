@@ -1445,7 +1445,7 @@ model SessionClientInfo {
 enum SlaStage {
   ACK_TO_INSURER      /// firm acknowledges an appointment — 1 working day
   PRELIMINARY_REPORT  /// market practice, per-insurer target
-  FINAL_REPORT        /// 10 working days from complete documents
+  FINAL_REPORT        /// CSP 10.13: 14 working days non-motor, from complete documents
   SUPPLEMENTARY_CLAIM /// 5 working days
   INSURER_DECISION    /// insurer side: 7 working days — monitored, not owned
   INSURER_PAYMENT     /// insurer side: 14 working days non-motor — monitored

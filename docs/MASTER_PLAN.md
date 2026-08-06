@@ -91,7 +91,7 @@ Claimant/Insured      Agent/Broker      Insurer (ITO)             Adjusting firm
                                                                                                    average, betterment,
                                                                                                    depreciation, excess)
                                                                                                16. Final report draft ──► senior countersign ──► 17. Final report to ITO
-                                                                                                   (≤10 wkg days from complete docs, CSP)
+                                                                                                   (≤14 wkg days from complete docs, CSP 10.13 non-motor)
                                         18. ITO decides ≤7 wkg days
                                         19. Offer + discharge voucher
 20. Accepts/signs ◄─────────────────────
@@ -225,7 +225,7 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 |---|---|---|---|
 | Firm ack of appointment ≤1 wkg day | **PARTIAL** — `Assignment` records the instruction and starts the clock from *when it arrived*, not when work began; acknowledging or declining stops it, since both answer the insurer. Verified live: received Fri 31 Jul → due Mon 3 Aug, and a claim cannot be opened on an unacknowledged appointment. Remains PARTIAL because the acknowledgement is recorded, not **sent** — that needs the notification layer, deferred with the hosting decision | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
 | Preliminary report ~7–14 days (market practice) | **PASS** — `SlaClock` starts on adjuster assignment (7 working days, per-insurer override, KL calendar) and is stopped by the act CSP measures: issuing the PRELIMINARY report through the report engine. Pauses on awaiting-documents and SIU referral bank the remaining days. Operating on real dates since the 2026 calendar was installed — verified live: assignment Fri 31 Jul → due Tue 11 Aug | 2027 calendar when gazetted | done |
-| Final report ≤10 wkg days from complete documents | **PASS** — the clock now anchors where CSP puts it: `documentsCompleteAt`, stamped when the last mandatory checklist item is uploaded (set-once — a later upload cannot move the anchor, a deletion cannot unset the fact), starting the ten-working-day clock from that moment. Verified live: the completing upload stamped the anchor and started the clock, 31 Jul → due 14 Aug. `REPORT_PENDING` remains an idempotent fallback start for claims with no checklist. Moving to REPORT_PENDING with mandatory evidence missing blocks in registered mode and is recorded as a TPA — §3.6 #8 closes with this | 2027 calendar when gazetted | done |
+| Final report ≤14 wkg days from complete documents (CSP 10.13, non-motor) | **PASS** — the clock now anchors where CSP puts it: `documentsCompleteAt`, stamped when the last mandatory checklist item is uploaded (set-once — a later upload cannot move the anchor, a deletion cannot unset the fact), starting the fourteen-working-day clock from that moment. Verified live: the completing upload stamped the anchor and started the clock, 31 Jul → due 14 Aug. `REPORT_PENDING` remains an idempotent fallback start for claims with no checklist. Moving to REPORT_PENDING with mandatory evidence missing blocks in registered mode and is recorded as a TPA — §3.6 #8 closes with this | 2027 calendar when gazetted | done |
 | Supplementary claims 5 wkg days | **PASS** — no longer structurally precluded: `POST /claims/:id/supplementary` reopens a CLOSED claim (the one legal exit, reflected in the state machine so it tells the truth), starts the **5-working-day** `SUPPLEMENTARY_CLAIM` clock, requires the supplementary described, clears `closedAt` (retention re-anchors on the next closure), and works under a legal hold — the hold protects records, not work. Verified live: reopen Fri 31 Jul → due Fri 7 Aug; refused on a non-CLOSED claim. The response itself is the report engine's SUPPLEMENTARY type, which already stops this clock on issue | — | done |
 | ITO decision ≤7 days / payment ≤14 days (monitor) | **PARTIAL** — `INSURER_PAYMENT` runs as `monitorOnly` and `GET /sla/insurer-mi` now reports each panel insurer's met/breached/running counts per stage — the evidence that a delay originated with the insurer, verified live. `INSURER_DECISION` remains defined but unreachable (starts at `UNDER_REVIEW`, which the claim state machine has no route to) | Close the lifecycle gap | 2 |
 | Fee settlement by ITO (CSP 11.16–11.18) | **PASS** — the billing foundation, client-agnostic per §6.8: `FeeScale` per insurer (SCALE with **progressive** bands like a tax schedule — a flat-on-total reading would make fees jump at band edges — plus TIME and FIXED; SST as a configurable rate, applied to the professional fee only, never to disbursements, which are reimbursements), `TimeEntry`, `Disbursement`, and a `FeeNote` that stores its own **derivation** — the number without its working is unanswerable in a dispute. Draft only after the claim is decided; issued notes immutable; paid requires the payment reference; the per-insurer statement ages outstanding notes (CURRENT/1–30/31–60/61–90/90+) — the CSP 11.16–11.18 evidence. Verified live: RM 25,000 → 1,750.00 + 140.00 SST + 85.50 disbursement = 1,975.50, due +30 days. MSIG's actual terms arrive as a row, not a release. **Tests:** 10, in CI | Rates await each insurer's real terms | done |
@@ -646,7 +646,7 @@ Four FAIL rows closed or advanced in one pass — everything still buildable wit
 
 The remaining FAILs, stated precisely this time: **AMLA/CTF screening** is blocked on counsel gate G8; **fee settlement (CSP 11.16–11.18)** is buildable but is the Phase 2 billing build — `FeeScale`/`FeeNote`/SST — sequenced after MSIG's actual fee terms exist, per §6.8, rather than invented ahead of them. (An earlier version of this note said "two FAILs, both blocked"; the fee row had been miscounted under a malformed-row defect and the Consent §3.4 row had never been updated when the machinery shipped — both now corrected.)
 
-Re-audit note, corrected: the sweep ultimately found **four** rows where an early re-audit regex had written the new verdict into the *target* column of the four-column §3.2 table, leaving the old verdict in place — ITO decision, preliminary report, final report, and records-readily-available. Every recount since had read the stale first cell, so the published totals were consistently *conservative* (PASS/PARTIAL upgrades counted as FAIL/PARTIAL) — the right direction to be wrong in, but wrong for three weeks of commits. All four repaired; the recount script now hard-fails on any row carrying two verdicts, so this class of error cannot recur silently. Two of the repaired rows were also stale on their own terms ("cannot operate until the holidays are entered" — the 2026 calendar was installed this morning): preliminary-report reaches **PASS**; final-report stays PARTIAL for the honest reason that its clock anchors on `REPORT_PENDING` rather than a `documentsCompleteAt` event.
+Re-audit note, corrected: the sweep ultimately found **four** rows where an early re-audit regex had written the new verdict into the *target* column of the four-column §3.2 table, leaving the old verdict in place — ITO decision, preliminary report, final report, and records-readily-available. Every recount since had read the stale first cell, so the published totals were consistently *conservative* (PASS/PARTIAL upgrades counted as FAIL/PARTIAL) — the right direction to be wrong in, but wrong for three weeks of commits. All four repaired; the recount script now hard-fails on any row carrying two verdicts, so this class of error cannot recur silently. Two of the repaired rows were also stale on their own terms ("cannot operate until the holidays are entered" — the 2026 calendar was installed this morning): preliminary-report reaches **PASS**; final-report was PARTIAL at that point because its clock anchored on `REPORT_PENDING` rather than a `documentsCompleteAt` event — since superseded, the anchor now exists and the row is PASS.
 
 ### Fit and proper (31 July 2026) — the criteria as data
 PD 10.1/10.2. `KeyPerson` + `FitProperAttestation`, with the ten criteria transcribed from the paragraphs and pinned by test, so the attestation form *is* the regulation. The rules that matter: **silence is not attestation** — every applicable criterion must be answered, and a shareholder's 10.1-only answers cannot satisfy a KRP; a **NOT_MET is recorded, never blocked** (the same honesty shape as screening FINDINGS and COI declarations — a register that punishes honest answers stops receiving them), but it must be described, it flips standing to NOT_FIT, and it raises a CRITICAL event onto the Board register — the fitness finding and the Board's visibility of it arrive in the same act. The annual re-attestation cycle is recorded as the firm's own policy choice, deliberately not attributed to the PD, which requires ongoing compliance without naming a period.
@@ -925,6 +925,48 @@ policy excess was drawn twice, once for the claim and again for the worksheet, s
 reported as nil; 617 worksheets were rebuilt from the claim's excess with their
 recommended figures and approved amounts recomputed. Both are fixed in
 `seed-volume.ts` and backfilled, so no re-seed was needed.
+
+### The final-report clock was four days tighter than the law requires (6 Aug 2026)
+
+`SlaPolicy.FINAL_REPORT` ran **10 working days**. That is the CSP figure for
+**motor**; paragraph 10.13 allows **14 for non-motor**, and this book is
+non-motor by standing decision. Not a breach — stricter than the ceiling — but
+it meant a breach report could not distinguish *we missed our own promise* from
+*we missed the regulation*, which are different conversations with an insurer.
+
+The ceilings now live in `@tci/shared-types` as `CSP_ADJUSTING_WORKING_DAYS`,
+cited to the paragraph, with `csp-timelines.spec.ts` as a tripwire: if that test
+fails the answer is to re-read 10.13, never to update the expectation. The seed
+reads the constant rather than a literal.
+
+Correcting the target exposed three false readings in the seeded clocks, all
+now fixed: **54 of 81 "breaches" were only breaches against the old 10-day
+target**; **35 claims referred to SIU had live or breached clocks** although
+`SLA_TRANSITIONS[ESCALATED_SIU]` pauses the reporting obligation — the firm
+cannot write a report while an investigation it does not control is running;
+and **21 claims at REPORT_PENDING showed a clock already `MET`**, recording that
+the firm met a deadline for a report it had not issued. Genuine overdue work is
+now 35 claims, not 81.
+
+Also corrected here: the §3.2 re-audit note still said the final-report row was
+PARTIAL because the clock anchored on `REPORT_PENDING`. `refreshDocumentsComplete`
+has since made `documentsCompleteAt` the anchor, which is what the row itself
+records — the note was stale, not the row.
+
+**A question worth having asked.** Checking the source settled a larger one: the
+CSP **binds time, not method**. It contemplates "desktop assessment and/or field
+inspection" (footnote 2) and qualifies field inspection as "where applicable"
+(footnote 22). No Malaysian requirement compels a video interview on any line;
+every mandatory *physical* inspection in the PD is motor-specific (10.12 above
+65% of sum insured, 10.16, 10.17). PIAM's inspection requirement is a **PARS
+workshop-accreditation** matter and does not reach non-motor claim method. So
+the desk-review fast track in §2.4 is a compliant choice rather than a shortcut,
+and the §2.5 COGS ceiling rests on firmer ground than it did.
+
+**Still to verify:** the adjusters PD was reissued **29 August 2025 as
+BNM/RH/PD 032-29**, superseding PD 032-27 of 1 June 2023. §3's paragraph
+references (12.6, 12.7, 12.8, 11.2(d)) were numbered against the older document
+and must be re-checked against the 2025 text before the matrix can be relied on.
 
 ### The four the audit deferred, closed the same day (6 Aug 2026)
 

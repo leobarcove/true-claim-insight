@@ -25,7 +25,7 @@ export interface SlaTransition {
  * `REPORT_PENDING` stands in for "documents complete" for the same reason: the
  * evidence checklist computes completeness but emits no event yet. When
  * `documentsCompleteAt` lands, FINAL_REPORT moves onto it, which is where CSP
- * actually starts the ten working days.
+ * actually starts the fourteen working days (para 10.13, non-motor).
  */
 export const SLA_TRANSITIONS: Partial<Record<ClaimStatus, SlaTransition>> = {
   // An adjuster now owns the claim: the preliminary-report target begins.
