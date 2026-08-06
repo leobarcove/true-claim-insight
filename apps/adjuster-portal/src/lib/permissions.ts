@@ -21,6 +21,13 @@ export const PERMISSIONS = {
   // Users
   USERS_MANAGE: 'users:manage',
 
+  /**
+   * Raising and settling fee notes. Mirrors the server, which restricts
+   * drafting, issuing, settling and disputing to firm admins — an adjuster may
+   * *see* what the firm billed on a claim they worked, and may not raise it.
+   */
+  BILLING_MANAGE: 'billing:manage',
+
   // Audit & Compliance
   AUDIT_VIEW: 'audit:view',
   COMPLIANCE_FLAG: 'compliance:flag',
@@ -62,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.CLAIMS_NOTE_PRIVATE,
   ],
   FIRM_ADMIN: [
+    PERMISSIONS.BILLING_MANAGE,
     PERMISSIONS.CLAIMS_VIEW_ALL,
     PERMISSIONS.CLAIMS_CREATE,
     PERMISSIONS.CLAIMS_EDIT,
@@ -97,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   SUPPORT_DESK: [PERMISSIONS.CLAIMS_VIEW_ALL, PERMISSIONS.CLAIMS_VIEW_BASIC],
   SHARIAH_REVIEWER: [PERMISSIONS.CLAIMS_VIEW_ALL, PERMISSIONS.SHARIAH_REVIEW],
   SUPER_ADMIN: [
+    PERMISSIONS.BILLING_MANAGE,
     PERMISSIONS.CLAIMS_VIEW_OWN,
     PERMISSIONS.CLAIMS_VIEW_BASIC,
     PERMISSIONS.CLAIMS_VIEW_ALL,
