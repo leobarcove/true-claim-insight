@@ -12,7 +12,8 @@
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
     "seed": "tsx --env-file-if-exists=../../.env prisma/seed.ts",
-    "clean": "rm -rf dist node_modules/.prisma"
+    "clean": "rm -rf dist node_modules/.prisma",
+    "seed:volume": "tsx --env-file-if-exists=../../.env prisma/seed-volume.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
