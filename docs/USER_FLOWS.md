@@ -385,7 +385,7 @@ items in?`"}
 10 working days`"]
 
     STAMP --> QUANT["`Quantum worksheet
-**(planned)**`"]
+average · betterment · excess`"]
     QUANT --> DRAFT["Report DRAFT"]
 
     DRAFT --> SECTIONS{"`PD 12.6 sections
@@ -615,7 +615,6 @@ not merely an access check.
 |---|---|
 | Assessment-mode router (§1 step 4) | **Not built** — specified in MASTER_PLAN §2.4 only |
 | Small-claims fast-track (§10, in full) | **Not built** — depends on the mode router |
-| Quantum worksheet | Planned, Phase 2 |
 | Policy file feed from the insurer | Planned, gated on **G9** |
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
 | Local-LLM document validation | `validationStatus` is a labelled stub |

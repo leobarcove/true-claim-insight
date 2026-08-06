@@ -751,7 +751,26 @@ The MSIG pilot's primary intake, and the first Phase 2 exit criterion. **MSIG AP
 - **Verified:** 282 tests pass (20 new), typecheck clean, routes live, duplicate Message-ID rejected by Postgres. The new tests caught two real parser defects before review — "cancel the trip" failing to classify, and "Delay **of 8** hours" parsing as flight "OF 8".
 - **Operational note:** the migration was applied by `db execute` + `migrate resolve --applied` because the local development database carries pre-existing drift (`20260729162228_add_cases_travel_policies` modified after being applied) and `migrate dev` wanted a full reset. The migration file is ordinary and applies cleanly to a fresh database, so staging is unaffected — but the drift remains and the next `migrate dev` meets the same wall. `pnpm prisma:clean` squashes it.
 
-**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure); policy file feed (gated on G9); quantum worksheet; **assessment-mode router and the small-claims fast-track of §2.4 — specified there but not built, see below**; structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); **assessment-mode router and the small-claims fast-track of §2.4 — specified there but not built, see below**; structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+
+### Quantum worksheet (6 Aug 2026)
+
+How a loss becomes a recommended figure — **prod for fire and property**, demonstrable for other lines. The calculator is a pure function, so the rules are exercised in CI without a database, and the ordering is documented in the code because it *is* the domain rather than a preference.
+
+**The order is domain law, not configuration.** Two placements change the answer materially:
+
+- **Average is applied before the excess.** Underinsurance reduces the loss proportionally and the excess is then taken from the reduced figure. Deducting the excess first would shrink it by the same proportion: on the worked example in the tests — a RM50,000 loss, RM150,000 declared against RM250,000 at risk, RM1,000 excess — the correct figure is **RM29,000** and the wrong order pays **RM29,400**, so the insured bears only 60% of their own excess.
+- **The sum insured caps last**, because it limits what the policy pays rather than feeding the arithmetic.
+
+**Depreciation and betterment are distinct deductions**, not synonyms — one converts a reinstatement cost to an indemnity value, the other charges the insured for being left better off than before. Supplying depreciation on a reinstatement policy is **refused rather than ignored**, because it almost always means the settlement basis was recorded wrongly and silently dropping it would hide that.
+
+**Nothing is applied silently.** Average with no value at risk assessed produces a warning that underinsurance *could not be tested* — unknown, not absent. Underinsurance on a policy carrying no average condition also warns, because the insurer may want to know the risk was underdeclared even where it costs them nothing. **Decided 6 Aug:** where the policy carries the condition and the numbers show underinsurance, average **is applied** and reported with its ratio in the workings, rather than left advisory — consistency across adjusters was judged to matter more than pre-empting a negotiation the insurer may waive. No additional sign-off gate was added: the report already requires an adjusting employee to sign and registered mode requires a countersign, and duplicating that control would add friction without adding assurance.
+
+`QuantumWorksheet` stores **both the inputs and the computed lines**, which looks redundant and is not: the inputs let the figure be re-derived when an insured disputes it, and the stored lines record what was actually recommended at the time — a later correction to the calculator must not silently restate a figure already issued to an insurer under PD 12.6. Worksheets are **superseded, never edited**, for the same reason an issued report is immutable.
+
+Money is carried as a decimal string over the wire and `Prisma.Decimal` throughout. A JSON number is an IEEE-754 double, and quantum is the one place where a rounding artefact becomes a sum of money in a report.
+
+**Verified:** 18 calculator tests, 314 across the service, routes live. The tests caught a real error while being written — my own worked example was wrong and the calculator was right, which is the argument for worked examples over assertions on round numbers.
 
 ### Notifications — three obligations that were being discharged by remembering (5 Aug 2026)
 

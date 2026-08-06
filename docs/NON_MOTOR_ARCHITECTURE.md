@@ -235,6 +235,33 @@ verification** stages plus the schema for the rest. Site visits, tier
 triage (auto-settle low-value claims with PARAMETRIC trigger), inventory
 modelling, and subrogation are tracked as follow-on work.
 
+## Quantum (added 6 Aug 2026)
+
+`quantum/quantum.calculator.ts` turns an assessed loss into a recommended
+figure. Relevant to this document because the deduction order is **shared
+across every non-motor category** — fire, flood, burglary and property all
+apply average, betterment and excess the same way, so the calculator is
+category-agnostic and only its *inputs* differ per line.
+
+Ordered deductions, each documented in the source with why it sits there:
+
+```
+assessed loss
+  − depreciation      (indemnity basis only; refused on reinstatement)
+  − betterment        (improvement beyond pre-loss condition)
+  − condition of average   ← before the excess, or the insured bears
+                             only a fraction of their own excess
+  − salvage
+  − excess            ← always last among the deductions
+  = recommended, then capped at the sum insured
+```
+
+Where a category needs its own rule — a flood policy with a separate
+sub-limit, say — it belongs in the *inputs* handed to the calculator
+(`sumInsured` scoped to the affected section), not in a category-specific
+branch inside it. The moment the arithmetic forks per category, the
+orderings drift apart and the figures stop being comparable.
+
 ## What's deferred (intentionally)
 
 - **Site visit scheduling** — would extend `Session` with a `mode` enum
