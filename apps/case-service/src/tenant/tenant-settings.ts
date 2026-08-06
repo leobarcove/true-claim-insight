@@ -41,6 +41,18 @@ export interface TenantSettings {
   fastTrackCategories?: string[];
   fastTrackLimits?: Record<string, string>;
 
+  /**
+   * Claim categories this firm attends in person, and the value at or above
+   * which it does so (MASTER_PLAN §2.4).
+   *
+   * Absent by default for the mirror-image reason of the fast track: that one
+   * governs when the firm spends *less* than standard, this one when it spends
+   * more. Neither is inferred on the firm's behalf. Only lines with a physical
+   * risk address belong here — a travel loss happened overseas.
+   */
+  siteVisitCategories?: string[];
+  siteVisitThresholds?: Record<string, string>;
+
   /** Display name on white-labelled claimant-facing output. */
   brandingName?: string;
 }
@@ -80,4 +92,30 @@ export function fastTrackPolicy(settings: unknown): {
   }
 
   return { categories: parsed.fastTrackCategories ?? [], limits };
+}
+
+/**
+ * The firm's site-visit policy, in the shape the router expects.
+ *
+ * Same handling as `fastTrackPolicy`, including dropping a malformed threshold
+ * rather than defaulting it — an unparseable number here would otherwise decide
+ * to send an adjuster somewhere.
+ */
+export function inspectionPolicy(settings: unknown): {
+  categories: string[];
+  thresholds: Record<string, Prisma.Decimal>;
+} {
+  const parsed = tenantSettings(settings);
+  const thresholds: Record<string, Prisma.Decimal> = {};
+
+  for (const [category, value] of Object.entries(parsed.siteVisitThresholds ?? {})) {
+    try {
+      thresholds[category] = new Prisma.Decimal(value);
+    } catch {
+      // Dropped: the category then has no threshold and is never routed to a
+      // site visit, the same outcome as never configuring it.
+    }
+  }
+
+  return { categories: parsed.siteVisitCategories ?? [], thresholds };
 }

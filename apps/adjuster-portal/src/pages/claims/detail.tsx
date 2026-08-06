@@ -61,7 +61,12 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { useLayout } from '@/components/layout';
-import { AssessmentMode, ASSESSMENT_MODE_LABELS } from '@tci/shared-types';
+import {
+  AssessmentMode,
+  ASSESSMENT_MODE_LABELS,
+  canDecideClaim,
+  describeLocation,
+} from '@tci/shared-types';
 import { getCategoryConfig } from '@/lib/category-config';
 import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
@@ -302,12 +307,12 @@ export function ClaimDetailPage() {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
+          if (claim && canDecideClaim(claim.status) && canApprove) {
             handleUpdateStatus('APPROVED');
           }
         } else if (e.key === 'Backspace') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
+          if (claim && canDecideClaim(claim.status) && canApprove) {
             handleUpdateStatus('REJECTED');
           }
         }
@@ -528,11 +533,7 @@ export function ClaimDetailPage() {
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('APPROVED')}
-                disabled={
-                  claim.status === 'APPROVED' ||
-                  claim.status === 'REJECTED' ||
-                  updateStatus.isPending
-                }
+                disabled={!canDecideClaim(claim.status) || updateStatus.isPending}
               >
                 {updateStatus.isPending && updateStatus.variables === 'APPROVED' ? (
                   <div className="flex items-center gap-2">
@@ -564,11 +565,7 @@ export function ClaimDetailPage() {
                 size="sm"
                 className="h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('REJECTED')}
-                disabled={
-                  claim.status === 'APPROVED' ||
-                  claim.status === 'REJECTED' ||
-                  updateStatus.isPending
-                }
+                disabled={!canDecideClaim(claim.status) || updateStatus.isPending}
               >
                 {updateStatus.isPending && updateStatus.variables === 'REJECTED' ? (
                   <div className="flex items-center gap-2">
@@ -623,9 +620,11 @@ export function ClaimDetailPage() {
                   </div>
                   <div className="flex items-start gap-3">
                     <div>
-                      <p className="text-xs font-medium">Location</p>
+                      <p className="text-xs font-medium">
+                        {claim.category === 'TRAVEL' ? 'Destination' : 'Location'}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {claim.incidentLocation.address}
+                        {describeLocation(claim.incidentLocation) ?? 'Not recorded'}
                       </p>
                     </div>
                   </div>

@@ -10,7 +10,7 @@ import {
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
-import { fastTrackPolicy } from '../tenant/tenant-settings';
+import { fastTrackPolicy, inspectionPolicy } from '../tenant/tenant-settings';
 import {
   describeMode,
   escalateMode,
@@ -60,6 +60,7 @@ export class AssessmentService {
       hasOpenFraudSignal: blockingSignals > 0,
       evidenceComplete,
       policy: fastTrackPolicy(tenant?.settings),
+      inspection: inspectionPolicy(tenant?.settings),
       isMedical: claim.travelClaim?.travelClaimType === TravelClaimType.MEDICAL,
     });
 

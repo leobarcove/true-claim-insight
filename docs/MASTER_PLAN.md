@@ -151,18 +151,33 @@ ELSE escalate one level (video → site → expert) on any trigger:
 
 Mode changes are audited and disclosed in the report (PD 12.6 methodology disclosure).
 
-**Gap, recorded 6 Aug 2026 — the escalation ladder is one rung, not three.**
-`resolveAssessmentMode()` returns `EXPERT_REFERRAL` for medical, `DESK_REVIEW`
-when every fast-track condition holds, and `VIDEO` in every other case. The
-"escalate one level (video → site → expert)" above is not implemented: **no code
-path emits `SITE_VISIT`**, and `EXPERT_REFERRAL` is reachable only through the
-medical rule. The enum, the report's disclosure text and the portal's assessment
-panel all carry `SITE_VISIT`, so it reads as a live capability — the §4.3 A8
-failure mode, found this time by seeded data showing a mode the router cannot
-produce. Property lines are exactly the ones that need physical inspection, so
-this is the rung that matters most. Deciding it is a pricing decision as much as
-a routing one (a site visit's COGS is an order above a video call, per §2.5), so
-it is recorded here rather than guessed at in code.
+**Closed 6 Aug 2026 — the opening decision can now attend a loss.**
+`resolveAssessmentMode()` previously returned `EXPERT_REFERRAL` for medical,
+`DESK_REVIEW` on the fast track and `VIDEO` for everything else, so no *opening*
+decision ever chose `SITE_VISIT` — a RM300,000 fire was assessed over a video
+call. (Escalation always reached it: `escalateMode` walks the ladder and
+`VIDEO → SITE_VISIT` was live throughout. An earlier draft of this note said no
+code path emitted it, which was wrong.)
+
+The router now consults an **inspection policy** after the fast track: a claim in
+a category the firm attends, at or above that category's threshold, is inspected;
+everything else is interviewed. Both halves are per-tenant
+(`siteVisitCategories`, `siteVisitThresholds`) and **absent by default** — the
+mirror of the fast track, and for the sharper reason. The fast track governs
+spending *less* than standard; this governs spending *more*, and money committed
+on a firm's behalf cannot be taken back. A category listed without a threshold is
+refused rather than defaulted.
+
+Only lines with a physical risk address belong in the policy. Travel does not:
+the loss happened overseas, which is what put 76 seeded travel claims on a mode
+no adjuster could have carried out.
+
+The demo firm is configured with FIRE/FLOOD/BURGLARY/LIGHTNING/HOH at
+**RM20,000** and travel fast-tracked to **RM5,000**. Both are business decisions
+recorded in the seed, not properties of the platform — RM20,000 sends an adjuster
+to essentially every fire (the band opens at RM25,000) and to the larger floods
+and burglaries, while small contents losses stay on video. Set them per insurer
+panel against the fee scale; §2.5 is the constraint they answer to.
 
 ### 2.5 The assessment mode is also the cost control
 
@@ -911,12 +926,44 @@ reported as nil; 617 worksheets were rebuilt from the claim's excess with their
 recommended figures and approved amounts recomputed. Both are fixed in
 `seed-volume.ts` and backfilled, so no re-seed was needed.
 
-Found but **not** fixed, and recorded rather than guessed at: the router cannot
-emit `SITE_VISIT` at all (see §2.4); Approve/Reject remain live on a closed
-claim, the same defect class as the session CTA; travel claims are seeded the
-flight-delay document set whatever their subtype, which is why the evidence
-checklist reads 0/3 on a luggage claim; and travel `incidentLocation` carries a
-destination but no address, so the Location field renders blank on all 614.
+### The four the audit deferred, closed the same day (6 Aug 2026)
+
+**The opening decision never attended a loss.** Fixed in §2.4 above, with a
+per-tenant inspection policy, nine tests, and the seed reconfigured to route from
+the firm's own policy instead of drawing modes at random. Verified against the
+running data: the real router, reading the real tenant row, now agrees with the
+stored mode on every sampled claim — property above RM20,000 to `SITE_VISIT`,
+below it to `VIDEO`, small travel to `DESK_REVIEW`, medical to
+`EXPERT_REFERRAL`. Correction: an earlier note here said `SITE_VISIT` was
+unreachable; escalation always reached it, and only the opening decision did not.
+
+**Approve and Reject stayed live on a closed claim.** The state machine permits
+`CLOSED → IN_ASSESSMENT` and nothing else, so the buttons offered an action the
+server was certain to refuse. The portal had the rule written out four times as
+`status !== APPROVED && status !== REJECTED`. It is now one named thing,
+`canDecideClaim` in `@tci/shared-types`, and `claim-transitions.spec.ts` asserts
+it agrees with `CLAIM_STATUS_TRANSITIONS` for every status — the table stays the
+authority, typed against the Prisma enum, and the duplicate cannot drift silently.
+`CLOSED` is excluded deliberately: reopening runs through the supplementary
+endpoint so the CSP five-working-day clock starts.
+
+**Every travel claim was seeded the flight-delay document set.** A luggage claim
+carried a boarding pass and an airline delay confirmation while its checklist
+asked for a PIR, a baggage tag and a damage photo — which is why it read 0/3. The
+seed now resolves evidence from `evidence_requirements`, the same table the
+checklist reads, so the two cannot describe different claims. 990 claim documents
+and 920 case documents were replaced; 606 of 614 travel claims now read complete,
+the remaining 8 deliberately short of one item so the chase-up queue is not empty.
+Property lines have no rows in that table yet and keep their hand-written lists.
+
+**Travel claims rendered a blank Location.** The field read `.address`, which a
+travel loss has never had — the incident is a destination abroad. `Location` now
+declares the shape it actually arrives in, `describeLocation` renders whichever
+is present, and the label reads *Destination* on travel claims.
+
+Still open, seen while verifying: travel worksheets carry a `REINSTATEMENT`
+settlement basis, which is a property concept — a lost bag is indemnified, not
+reinstated.
 
 ---
 
