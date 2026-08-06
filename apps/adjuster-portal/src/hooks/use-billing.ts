@@ -92,3 +92,30 @@ export function useIssueFeeNote(claimId?: string) {
       queryClient.invalidateQueries({ queryKey: billingKeys.forClaim(claimId ?? '') }),
   });
 }
+
+export interface InsurerStatementRow {
+  insurerTenantId: string;
+  insurerName: string;
+  /** Total issued and unsettled, in Ringgit. */
+  outstanding: number;
+  /** Amount per ageing bucket, keyed CURRENT / OVERDUE_1_30 / … */
+  ageing: Record<string, number>;
+}
+
+/**
+ * Outstanding fee notes per insurer, aged.
+ *
+ * The CSP 11.16–11.18 evidence: what the firm is owed, by whom, and how long
+ * it has been owed. It existed on the server and was proxied with nothing
+ * reading it — so the firm could raise notes and had no view of whether any of
+ * them were being paid.
+ */
+export function useInsurerStatement() {
+  return useQuery({
+    queryKey: [...billingKeys.all, 'statement'] as const,
+    queryFn: async () => {
+      const response = await apiClient.get<ApiResponse<InsurerStatementRow[]>>('/billing/statement');
+      return response.data?.data ?? [];
+    },
+  });
+}

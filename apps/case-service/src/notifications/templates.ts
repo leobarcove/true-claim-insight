@@ -23,6 +23,7 @@
 
 export type TemplateId =
   | 'case.information-requested'
+  | 'claim.assessment-scheduled'
   | 'sla.breach-escalated'
   | 'assignment.acknowledged';
 
@@ -58,6 +59,30 @@ export interface AssignmentAcknowledgedInput {
 const asDate = (value: Date): string =>
   value.toISOString().slice(0, 10).split('-').reverse().join('/');
 
+/**
+ * The wall-clock time in Kuala Lumpur.
+ *
+ * Stored naive-UTC, and an appointment is the one field where getting the zone
+ * wrong is unforgivable: telling someone 09:00 when the adjuster arrives at
+ * 17:00 is worse than telling them nothing.
+ */
+const asTime = (value: Date): string => {
+  const kl = new Date(value.getTime() + 8 * 3600_000);
+  return `${String(kl.getUTCHours()).padStart(2, '0')}:${String(kl.getUTCMinutes()).padStart(2, '0')}`;
+};
+
+export interface AssessmentScheduledInput {
+  claimNumber: string;
+  claimantName?: string;
+  /** When the assessment happens, already in Malaysian time for display. */
+  when: Date;
+  /** How it is being carried out — the words the claimant needs, not the enum. */
+  mode: 'SITE_VISIT' | 'VIDEO';
+  /** Where, for a site visit. Absent for a video call. */
+  address?: string;
+  adjusterName?: string;
+}
+
 export const TEMPLATES = {
   'case.information-requested': (input: InformationRequestedInput): RenderedMessage => ({
     subject: `Action needed on your claim ${input.caseNumber}`,
@@ -79,6 +104,55 @@ export const TEMPLATES = {
       'bank details or identity documents by email — add them to your claim in',
       'the app, where they are encrypted.',
     ].join('\n'),
+  }),
+
+  /**
+   * Telling the claimant when someone is coming.
+   *
+   * The router has sent property losses to a site visit since 6 Aug and the
+   * appointment was held only in the firm's own diary — the claimant found out
+   * when an adjuster arrived at their door, which is not a way to attend
+   * someone's fire-damaged home. What the message must carry is the date, the
+   * time, and what will happen; everything else is noise to someone who has
+   * just had a loss.
+   */
+  'claim.assessment-scheduled': (input: AssessmentScheduledInput): RenderedMessage => ({
+    subject:
+      input.mode === 'SITE_VISIT'
+        ? `Visit arranged for your claim ${input.claimNumber}`
+        : `Video assessment arranged for your claim ${input.claimNumber}`,
+    text: [
+      input.claimantName ? `Dear ${input.claimantName},` : 'Hello,',
+      '',
+      input.mode === 'SITE_VISIT'
+        ? 'We have arranged to visit and inspect the damage.'
+        : 'We have arranged a video call to go through your claim.',
+      '',
+      `  Claim:   ${input.claimNumber}`,
+      `  Date:    ${asDate(input.when)}`,
+      `  Time:    ${asTime(input.when)}`,
+      input.mode === 'SITE_VISIT' && input.address ? `  Where:   ${input.address}` : '',
+      input.adjusterName ? `  Adjuster: ${input.adjusterName}` : '',
+      '',
+      input.mode === 'SITE_VISIT'
+        ? 'Please make sure someone over 18 is there to let us in. Leave the damage'
+        : 'You will receive a link to join shortly before the call. Please have your',
+      input.mode === 'SITE_VISIT'
+        ? 'as it is if you safely can — it helps us assess it accurately.'
+        : 'documents to hand.',
+      '',
+      'If this time does not suit, reply to this email or call us and we will',
+      'rearrange.',
+      '',
+      'True Claim Insight',
+      '',
+      '--',
+      'This message is about a claim you submitted. Please do not reply with',
+      'bank details or identity documents by email — add them to your claim in',
+      'the app, where they are encrypted.',
+    ]
+      .filter(line => line !== '')
+      .join('\n'),
   }),
 
   'sla.breach-escalated': (input: SlaBreachInput): RenderedMessage => ({
@@ -129,8 +203,16 @@ export function render(
   input: AssignmentAcknowledgedInput
 ): RenderedMessage;
 export function render(
+  id: 'claim.assessment-scheduled',
+  input: AssessmentScheduledInput
+): RenderedMessage;
+export function render(
   id: TemplateId,
-  input: InformationRequestedInput | SlaBreachInput | AssignmentAcknowledgedInput
+  input:
+    | InformationRequestedInput
+    | SlaBreachInput
+    | AssignmentAcknowledgedInput
+    | AssessmentScheduledInput
 ): RenderedMessage {
   return (TEMPLATES[id] as (value: unknown) => RenderedMessage)(input);
 }

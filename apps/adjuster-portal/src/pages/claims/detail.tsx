@@ -75,6 +75,7 @@ import { ReportPanel } from '@/components/claims/report-panel';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
 import { SlaPanel } from '@/components/claims/sla-panel';
 import { IdentityControl } from '@/components/claims/identity-control';
+import { ScheduleAssessment } from '@/components/claims/schedule-assessment';
 import { FeeNotePanel } from '@/components/claims/fee-note-panel';
 import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
@@ -1312,13 +1313,28 @@ export function ClaimDetailPage() {
                             <p className="text-xs text-muted-foreground text-center mt-5">
                               Creates room and notifies claimant via SMS
                             </p>
+
+                            <ScheduleAssessment
+                              claimId={claimId}
+                              mode={mode}
+                              scheduledFor={claim.scheduledAssessmentTime}
+                              onScheduled={() => refetchClaim()}
+                            />
                           </>
                         )}
 
                         {!videoIsTheMethod && !settled && (
-                          <p className="text-sm text-muted-foreground">
-                            {explanation[mode!] ?? 'No interview required for this assessment mode.'}
-                          </p>
+                          <>
+                            <p className="text-sm text-muted-foreground">
+                              {explanation[mode!] ?? 'No interview required for this assessment mode.'}
+                            </p>
+                            <ScheduleAssessment
+                              claimId={claimId}
+                              mode={mode}
+                              scheduledFor={claim.scheduledAssessmentTime}
+                              onScheduled={() => refetchClaim()}
+                            />
+                          </>
                         )}
 
                         {settled && (
