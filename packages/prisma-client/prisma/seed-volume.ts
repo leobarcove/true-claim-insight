@@ -497,6 +497,19 @@ function nextWorkingSlot(daysAhead: number): Date {
   return new Date(Date.UTC(year, month, date, hour - KL_OFFSET_HOURS, minute));
 }
 
+/** How an agent would name the line in a notification email. */
+const CATEGORY_LABELS: Record<ClaimCategory, string> = {
+  TRAVEL: 'Travel',
+  FIRE: 'Fire',
+  FLOOD: 'Flood',
+  BURGLARY: 'Burglary',
+  LIGHTNING: 'Lightning',
+  HOH: 'Houseowner',
+  MOTOR: 'Motor',
+  PERSONAL_ACCIDENT: 'Personal accident',
+  OTHER: 'General',
+};
+
 const START = new Date('2026-01-01T00:00:00Z');
 const TODAY = new Date();
 
@@ -895,6 +908,22 @@ async function main() {
       const flightNumber = `${pick(AIRLINES)}${intBetween(100, 9999)}`;
       const destination = pick(DESTINATIONS);
 
+      /*
+       * Where the loss happened, decided once for the whole claim.
+       *
+       * A travel loss has a destination abroad; a property loss has a risk
+       * address in Malaysia. Building the address later, at claim creation,
+       * left the notification email with nothing to quote — so every FNOL,
+       * including fire and houseowner ones, was headed "Travel claim
+       * notification" and carried an overseas destination.
+       */
+      const riskAddress = {
+        address: `${intBetween(1, 220)} Jalan ${pick(STREETS)}`,
+        city: pick(TOWNS),
+        state: pick(STATES),
+        postcode: String(intBetween(10000, 98000)),
+      };
+
       const caseRow = await prisma.case.create({
         data: {
           caseNumber,
@@ -932,17 +961,27 @@ async function main() {
                     'Please provide the itemised medical invoice.',
                   ])
                 : null,
+          // What the claimant was asked, by line. A fire loss has a risk
+          // address, not a holiday destination — seeding `destination` on
+          // every case put "Osaka" on a shoplot fire in Kuala Lumpur.
           answers: {
             'policy-number': policy?.policyNumber ?? '',
             'incident-date': incidentDate.toISOString().slice(0, 10),
-            destination,
-            ...(isTravel && type === TravelClaimType.FLIGHT_DELAY ? { 'flight-number': flightNumber } : {}),
+            ...(isTravel
+              ? {
+                  destination,
+                  ...(type === TravelClaimType.FLIGHT_DELAY ? { 'flight-number': flightNumber } : {}),
+                }
+              : {
+                  'risk-address': `${riskAddress.address}, ${riskAddress.city}, ${riskAddress.state}`,
+                  'loss-description': pick(PROPERTY_NARRATIVE[category] ?? ['Non-motor property loss.']),
+                }),
           },
           sourceMeta:
             channel === CaseChannel.EMAIL
               ? {
                   from: `agent${intBetween(1, 40)}@brokerage.com.my`,
-                  subject: `Travel claim notification — ${caseNumber}`,
+                  subject: `${CATEGORY_LABELS[category]} claim notification — ${caseNumber}`,
                   receivedAt: notifiedAt.toISOString(),
                 }
               : undefined,
@@ -1041,17 +1080,23 @@ async function main() {
             tenantId: firm.id,
             fromAddress: `agent${intBetween(1, 40)}@brokerage.com.my`,
             toAddress: 'claims@trueclaiminsight.my',
-            subject: `Travel claim notification — ${caseNumber}`,
+            // An agent notifying a fire loss does not write "travel claim",
+            // and there is no destination to quote — the risk has an address.
+            subject: `${CATEGORY_LABELS[category]} claim notification — ${caseNumber}`,
             receivedAt: notifiedAt,
             status: InboundMessageStatus.PROCESSED,
             caseId: caseRow.id,
             parsed: {
               policyNumber: policy?.policyNumber,
-              travelClaimType: type ?? undefined,
               category,
               incidentDate: incidentDate.toISOString(),
-              ...(type === TravelClaimType.FLIGHT_DELAY ? { flightNumber } : {}),
-              destination,
+              ...(isTravel
+                ? {
+                    travelClaimType: type ?? undefined,
+                    destination,
+                    ...(type === TravelClaimType.FLIGHT_DELAY ? { flightNumber } : {}),
+                  }
+                : { riskAddress: `${riskAddress.address}, ${riskAddress.city}` }),
               missing: [],
             },
             processedAt: notifiedAt,
@@ -1165,14 +1210,7 @@ async function main() {
           category,
           status,
           incidentDate,
-          incidentLocation: isTravel
-            ? { destination, country: destination }
-            : {
-                address: `${intBetween(1, 220)} Jalan ${pick(STREETS)}`,
-                city: pick(TOWNS),
-                state: pick(STATES),
-                postcode: String(intBetween(10000, 98000)),
-              },
+          incidentLocation: isTravel ? { destination, country: destination } : riskAddress,
           description: isTravel
             ? describeIncident(type!, destination, flightNumber)
             : pick(PROPERTY_NARRATIVE[category] ?? ['Non-motor property loss.']),

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
+import { getCategoryConfig } from '@/lib/category-config';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -89,11 +90,36 @@ export function CaseDetailPage() {
     ? CASE_FLOWS[caseData.travelClaimType as TravelClaimType]
     : null;
 
+  /**
+   * What the claimant told us, labelled.
+   *
+   * A travel case has a question flow, so each answer is labelled by the step
+   * that asked it. Property lines have no flow yet — but they do have answers,
+   * and resolving labels only through the flow meant a fire case showed
+   * "No answers captured yet" while holding a risk address and a loss date.
+   * Falling back to the answer key keeps the operator's vetting screen honest
+   * until those flows exist.
+   */
   const answeredSteps = useMemo(() => {
-    if (!flow || !caseData) return [] as Array<{ step: FlowStep; value: string }>;
-    return flow.steps
-      .filter(step => step.answerType !== 'confirm' && caseData.answers?.[step.id] !== undefined)
-      .map(step => ({ step, value: String(caseData.answers[step.id]) }));
+    if (!caseData?.answers) return [] as Array<{ step: FlowStep; value: string }>;
+
+    if (flow) {
+      return flow.steps
+        .filter(step => step.answerType !== 'confirm' && caseData.answers?.[step.id] !== undefined)
+        .map(step => ({ step, value: String(caseData.answers[step.id]) }));
+    }
+
+    return Object.entries(caseData.answers)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => ({
+        step: {
+          id: key,
+          label: convertToTitleCase(key.replace(/-/g, ' ')),
+          prompt: '',
+          answerType: 'text',
+        } as FlowStep,
+        value: String(value),
+      }));
   }, [flow, caseData]);
 
   if (isLoading || !caseData) {
@@ -165,9 +191,13 @@ export function CaseDetailPage() {
       <Header
         title={caseData.caseNumber}
         description={
-          caseData.travelClaimType
-            ? `${TRAVEL_CLAIM_TYPE_LABELS[caseData.travelClaimType as TravelClaimType]} — ${convertToTitleCase(String(caseData.channel))} intake`
-            : 'Travel claim request'
+          /* Travel carries a subtype; every other line is named by itself. The
+             fallback used to read "Travel claim request" on a fire case. */
+          `${
+            caseData.travelClaimType
+              ? TRAVEL_CLAIM_TYPE_LABELS[caseData.travelClaimType as TravelClaimType]
+              : getCategoryConfig(caseData.category).label
+          } — ${convertToTitleCase(String(caseData.channel))} intake`
         }
       >
         <Button variant="outline" size="sm" onClick={() => navigate('/cases')}>
@@ -222,7 +252,14 @@ export function CaseDetailPage() {
               </CardHeader>
               <CardContent>
                 {answeredSteps.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No answers captured yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {/* A notification that arrived by email or was captured by
+                        staff has no conversational intake. Saying "not yet"
+                        implies something is missing that never was. */}
+                    {caseData.channel === 'EMAIL' || caseData.channel === 'STAFF'
+                      ? 'Captured from the notification — this channel has no question flow.'
+                      : 'No answers captured yet.'}
+                  </p>
                 ) : (
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                     {answeredSteps.map(({ step, value }) => (
