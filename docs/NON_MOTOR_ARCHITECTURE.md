@@ -97,6 +97,18 @@ for the same `(category, documentType)`. The `/claims/:id/evidence-
 checklist` endpoint joins each requirement against uploaded `Document`s
 and returns `satisfied: true/false`.
 
+### Per-tenant configuration (added 6 Aug 2026)
+
+Evidence requirements were the first thing made per-tenant; `Tenant.settings`
+is now a validated surface carrying the rest — fast-track categories and
+ceilings, working-day calendar state, licensed mode, branding.
+
+The rule worth carrying: **configuration lives where the context that owns it
+lives.** `Tenant` is identity-context data, so the settings writer is in the
+gateway; case-service reads it to decide whether a gate blocks. The
+data-ownership test enforces that split, and refused the first placement of
+this service in case-service.
+
 ## FraudSignalProvider plugin pattern
 
 > **The pattern generalised.** `FraudSignalProvider` was the first instance of

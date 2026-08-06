@@ -751,7 +751,23 @@ The MSIG pilot's primary intake, and the first Phase 2 exit criterion. **MSIG AP
 - **Verified:** 282 tests pass (20 new), typecheck clean, routes live, duplicate Message-ID rejected by Postgres. The new tests caught two real parser defects before review — "cancel the trip" failing to classify, and "Delay **of 8** hours" parsing as flight "OF 8".
 - **Operational note:** the migration was applied by `db execute` + `migrate resolve --applied` because the local development database carries pre-existing drift (`20260729162228_add_cases_travel_policies` modified after being applied) and `migrate dev` wanted a full reset. The migration file is ordinary and applies cleanly to a fresh database, so staging is unaffected — but the drift remains and the next `migrate dev` meets the same wall. `pnpm prisma:clean` squashes it.
 
-**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+**Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
+
+### Per-tenant configuration surface (6 Aug 2026)
+
+`Tenant.settings` was free-form JSON, which is how it came to hold nothing at all while the behaviour it was meant to drive stayed hardcoded or absent (§4.2). It is now a validated surface with a screen: licensed mode, working-day calendar state, fast-track categories and per-category ceilings, and white-label branding name.
+
+**Every default fails closed.** Absent settings mean unregistered, no fast track, and Kuala Lumpur's calendar. A missing flag must never enable a control the firm is not authorised to operate under, nor a shortcut it has not chosen. A malformed ceiling is **dropped rather than defaulted** — the category is then refused the fast track, which is the same outcome as never configuring it and the safe reading of a typo.
+
+**Flipping `licensedMode` requires a stated reason.** It turns advisory compliance checks into blocking ones across sign-off, competency and conflicts, so it is not a preference and the service refuses the change without one. The reason lands on the audit row alongside the before and after; the screen states the consequence next to the switch rather than hiding it in a tooltip.
+
+**Patches merge rather than replace**, so a screen editing fast-track limits cannot silently clear registered status because it did not send it. Only the touched keys are audited — recording the whole object each time would bury the one field that changed.
+
+**Validation is at the boundary and specific.** Calendar state is checked against the states the SLA engine knows, because four of them observe a Friday–Saturday weekend and a typo silently computes deadlines against the wrong one. Ceilings are decimal strings, not JSON numbers: the threshold turns on equality at the boundary, and RM5,000.00 exactly is inside the limit.
+
+**The data-ownership ratchet caught a real placement error.** The service was first written into case-service, and the test refused it: `Tenant` belongs to the **identity** context, which the gateway owns. It was moved to the gateway, where tenant writes already live. case-service still *reads* the settings — cross-context reads are permitted; it is the writes that need one owner. This is the second time the ratchet has paid for itself, and the first where it prevented rather than recorded a violation.
+
+**Verified live:** reading returns the effective configuration with defaults made explicit; a `licensedMode` change without a reason is refused with the reason why; a fast-track patch merged without disturbing licensed mode; and the assessment-mode router immediately routed a real claim against the newly-configured TRAVEL policy. 14 settings tests, 336 in case-service.
 
 ### Assessment-mode router and the small-claims fast-track (6 Aug 2026)
 
