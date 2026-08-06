@@ -25,6 +25,8 @@ import { checkAuthority, type AuthorityDecision } from './claim-authority';
 import { AuditService } from '../common/audit/audit.service';
 import { ConsentService } from '../consent/consent.service';
 import { isLicensedMode } from '../tenant/tenant-settings';
+import { NotificationsService } from '../notifications/notifications.service';
+import { render } from '../notifications/templates';
 
 /**
  * Statuses a claim may not reach on an unverified claimant.
@@ -49,7 +51,8 @@ export class ClaimsService {
     private readonly encryption: EncryptionService,
     private readonly sla: SlaService,
     private readonly consent: ConsentService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService
   ) {}
 
   /**
@@ -910,6 +913,87 @@ export class ClaimsService {
     await this.sla.startQuietly(claimId, SlaStage.FINAL_REPORT, claim.tenantId);
     this.logger.log(`Claim ${claim.claimNumber}: mandatory evidence complete; final-report clock anchored`);
     return true;
+  }
+
+  /**
+   * Arrange the assessment, and tell the claimant.
+   *
+   * The router has decided *how* a claim is examined since 6 Aug; nothing set
+   * *when*. `scheduledAssessmentTime` was read in three places and written by
+   * nobody, so the firm's diary was empty and a property claimant learned an
+   * adjuster was coming when one arrived at the door.
+   *
+   * Notifying is the point of the endpoint, not a side effect: an appointment
+   * nobody told the claimant about is not an appointment. It is enqueued after
+   * the write and never throws — a mail failure must not lose the booking.
+   */
+  async scheduleAssessment(
+    id: string,
+    when: Date,
+    tenantContext: TenantContext
+  ) {
+    const claim = await this.prisma.claim.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        claimNumber: true,
+        tenantId: true,
+        assessmentMode: true,
+        incidentLocation: true,
+        status: true,
+        claimant: { select: { fullName: true, email: true } },
+        adjuster: { select: { user: { select: { fullName: true } } } },
+      },
+    });
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('This claim does not belong to your organisation');
+    }
+
+    if (Number.isNaN(when.getTime())) {
+      throw new BadRequestException('An appointment needs a valid date and time.');
+    }
+    if (when.getTime() < Date.now()) {
+      // A booking in the past is a data-entry slip every time, and it would
+      // send the claimant a message about a visit that has already not happened.
+      throw new BadRequestException('An appointment cannot be arranged in the past.');
+    }
+    if (claim.assessmentMode === 'DESK_REVIEW' || claim.assessmentMode === 'EXPERT_REFERRAL') {
+      throw new BadRequestException(
+        `A ${claim.assessmentMode.toLowerCase().replace('_', ' ')} has no appointment to arrange.`
+      );
+    }
+
+    const updated = await this.prisma.claim.update({
+      where: { id },
+      data: { scheduledAssessmentTime: when, status: 'SCHEDULED', updatedAt: new Date() },
+    });
+
+    await this.createAuditTrail(id, 'ASSESSMENT_SCHEDULED', {
+      scheduledFor: when.toISOString(),
+      mode: claim.assessmentMode,
+    }, tenantContext);
+
+    const location = claim.incidentLocation as { address?: string; city?: string } | null;
+    await this.notifications.enqueue({
+      tenantId: claim.tenantId!,
+      template: 'claim.assessment-scheduled',
+      recipient: claim.claimant?.email ?? undefined,
+      entityType: 'CLAIM',
+      entityId: id,
+      message: render('claim.assessment-scheduled', {
+        claimNumber: claim.claimNumber,
+        claimantName: claim.claimant?.fullName ?? undefined,
+        when,
+        mode: claim.assessmentMode === 'SITE_VISIT' ? 'SITE_VISIT' : 'VIDEO',
+        address: location?.address
+          ? [location.address, location.city].filter(Boolean).join(', ')
+          : undefined,
+        adjusterName: claim.adjuster?.user?.fullName ?? undefined,
+      }),
+    });
+
+    return updated;
   }
 
   async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {

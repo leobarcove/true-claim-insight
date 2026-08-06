@@ -13,6 +13,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { unwrapEnvelope } from '../common/unwrap-envelope';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
@@ -267,6 +268,33 @@ export class ClaimsController {
         catchError(e => {
           throw new HttpException(
             e.response?.data || 'Failed to update claim',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Patch(':id/appointment')
+  @ApiOperation({ summary: 'Arrange the assessment and tell the claimant when' })
+  scheduleAssessment(
+    @Param('id') id: string,
+    @Body('scheduledFor') scheduledFor: string,
+    @Req() req: any
+  ) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+
+    return this.httpService
+      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/appointment`, { scheduledFor }, { headers })
+      .pipe(
+        map(response => unwrapEnvelope(response.data)),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to arrange the assessment',
             e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
           );
         })

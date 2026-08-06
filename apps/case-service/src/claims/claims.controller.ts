@@ -124,6 +124,18 @@ export class ClaimsController {
     return this.claimsService.update(id, updateClaimDto, tenantContext);
   }
 
+  @Patch(':id/appointment')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Arrange the assessment and tell the claimant when' })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  async scheduleAssessment(
+    @Param('id') id: string,
+    @Body('scheduledFor') scheduledFor: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.scheduleAssessment(id, new Date(scheduledFor), tenantContext);
+  }
+
   @Patch(':id/status')
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update claim status (tenant-validated)' })

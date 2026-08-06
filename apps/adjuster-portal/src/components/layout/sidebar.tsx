@@ -19,6 +19,7 @@ import {
   Inbox,
   MailQuestion,
   MessagesSquare,
+  Receipt,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -100,6 +101,14 @@ const navigation: NavItem[] = [
     href: '/schedule',
     icon: Calendar,
     roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'],
+  },
+  {
+    // The firm's own money. Restricted to those who may raise a note, which is
+    // the same line the server draws on drafting and issuing one.
+    name: 'Fee notes',
+    href: '/billing',
+    icon: Receipt,
+    permissions: [PERMISSIONS.BILLING_MANAGE],
   },
   {
     name: 'Documents',

@@ -116,6 +116,7 @@ describe('notification templates — held in code', () => {
   it('declares exactly the templates the registry exports', () => {
     const ids: TemplateId[] = [
       'case.information-requested',
+      'claim.assessment-scheduled',
       'sla.breach-escalated',
       'assignment.acknowledged',
     ];
@@ -135,5 +136,63 @@ describe('notification templates — held in code', () => {
     expect(model).not.toBeNull();
     expect(model![1]).not.toMatch(/^\s*body\s/m);
     expect(model![1]).toMatch(/dedupeKey\s+String\?\s+@unique/);
+  });
+});
+
+describe('claim.assessment-scheduled — telling the claimant when someone is coming', () => {
+  // 02:00 UTC is 10:00 in Kuala Lumpur. The zone is the whole point: telling
+  // someone 02:00 when the adjuster arrives at 10:00 is worse than saying
+  // nothing, and the column stores naive UTC.
+  const when = new Date('2026-08-11T02:00:00.000Z');
+
+  const siteVisit = () =>
+    render('claim.assessment-scheduled', {
+      claimNumber: 'CLM-2026-001658',
+      claimantName: 'Ng Mei Ling',
+      when,
+      mode: 'SITE_VISIT' as const,
+      address: '47 Jalan Bukit Bintang, Kuala Lumpur',
+      adjusterName: 'Ahmad Adjuster',
+    });
+
+  it('gives the time in Malaysian time, not UTC', () => {
+    expect(siteVisit().text).toContain('10:00');
+    expect(siteVisit().text).not.toContain('02:00');
+  });
+
+  it('gives the date the claimant can act on', () => {
+    expect(siteVisit().text).toContain('11/08/2026');
+  });
+
+  it('says where, for a visit', () => {
+    expect(siteVisit().text).toContain('47 Jalan Bukit Bintang, Kuala Lumpur');
+  });
+
+  it('asks for someone to be there, and for the damage to be left alone', () => {
+    // Both are practical: an adjuster who cannot get in has wasted a journey,
+    // and damage tidied away before it is seen cannot be assessed.
+    expect(siteVisit().text).toMatch(/someone over 18/);
+    expect(siteVisit().text).toMatch(/Leave the damage/);
+  });
+
+  it('offers a way to rearrange', () => {
+    // A claimant who cannot make the time and cannot say so is a wasted visit
+    // the firm pays for.
+    expect(siteVisit().text).toMatch(/rearrange/i);
+  });
+
+  it('does not quote an address for a video assessment', () => {
+    const video = render('claim.assessment-scheduled', {
+      claimNumber: 'CLM-2026-001705',
+      when,
+      mode: 'VIDEO' as const,
+      address: '47 Jalan Bukit Bintang',
+    });
+    expect(video.text).not.toContain('Jalan Bukit Bintang');
+    expect(video.subject).toMatch(/Video assessment/);
+  });
+
+  it('carries the standing warning about sending documents by email', () => {
+    expect(siteVisit().text).toMatch(/do not reply with/i);
   });
 });

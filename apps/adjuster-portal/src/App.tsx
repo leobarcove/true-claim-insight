@@ -27,6 +27,7 @@ import { SettingsPage } from '@/pages/settings';
 import { HelpPage } from '@/pages/help';
 import { VehicleMakePage } from '@/pages/master-data/vehicle-make';
 import { VehicleModelPage } from '@/pages/master-data/vehicle-model';
+import { BillingPage } from '@/pages/billing';
 import { DocumentsListPage } from '@/pages/documents';
 import { DocumentDetailPage } from '@/pages/documents/detail';
 import { TenantsPage } from '@/pages/tenants';
@@ -122,6 +123,7 @@ export default function App() {
                 }
               />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
+              <Route path="/billing" element={<BillingPage />} />
               <Route path="/documents" element={<DocumentsListPage />} />
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
               <Route
