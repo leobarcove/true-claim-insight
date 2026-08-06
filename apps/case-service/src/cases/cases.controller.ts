@@ -64,6 +64,19 @@ export class CasesController {
     return this.service.findOne(id, tenantContext);
   }
 
+  @Get(':id/flow')
+  @Roles(...INTAKE_ROLES)
+  @ApiOperation({
+    summary: 'The full intake flow this case is walking — its pinned version',
+    description:
+      'Fetched once per case by the claimant app to rebuild the transcript and render each ' +
+      'step. Returns the version pinned at creation, so a flow published mid-conversation ' +
+      'does not change the questions already asked.',
+  })
+  getFlow(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
+    return this.service.getFlowForCase(id, tenantContext);
+  }
+
   @Patch(':id/answers')
   @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Save one intake answer and advance the conversation' })

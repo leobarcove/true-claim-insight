@@ -120,6 +120,17 @@ export class CasesController {
     );
   }
 
+  @Get(':id/flow')
+  @ApiOperation({ summary: 'The intake flow this case is walking (pinned version)' })
+  getFlow(@Param('id') id: string, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.get(`${this.caseServiceUrl}/api/v1/cases/${id}/flow`, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to fetch case flow'
+    );
+  }
+
   @Patch(':id/answers')
   @ApiOperation({ summary: 'Save one intake answer' })
   patchAnswer(@Param('id') id: string, @Body() body: any, @Req() req: any) {

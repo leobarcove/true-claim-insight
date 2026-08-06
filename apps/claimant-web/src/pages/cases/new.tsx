@@ -22,6 +22,7 @@ import {
 } from '@tci/shared-types';
 import {
   uploadCaseDocument,
+  useCaseFlow,
   useClaimantCase,
   useCreateClaimantCase,
   usePatchCaseAnswer,
@@ -66,9 +67,17 @@ export function CaseIntakePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const flow = caseData?.travelClaimType
-    ? CASE_FLOWS[caseData.travelClaimType as TravelClaimType]
-    : null;
+  const { data: serverFlow } = useCaseFlow(caseId);
+
+  // The server's resolved flow is authoritative — it is the version pinned on
+  // this case. CASE_FLOWS is the fallback for the moment before the fetch
+  // lands, so the first paint is not blank; it is only ever the built-in flow,
+  // which for an unpinned case is the same thing the server would return.
+  const flow = serverFlow
+    ? serverFlow
+    : caseData?.travelClaimType
+      ? CASE_FLOWS[caseData.travelClaimType as TravelClaimType]
+      : null;
 
   const currentStep: FlowStep | null = useMemo(() => {
     if (!flow || !caseData) return null;

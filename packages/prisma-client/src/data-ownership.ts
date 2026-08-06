@@ -98,6 +98,22 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   evidenceRequirement: 'claims',
   adjuster: 'claims',
   auditTrail: 'claims',
+  // The intake instrument and its per-channel wording. `claims` rather than
+  // `reference` despite looking like configuration: the publish gate has to
+  // refuse a flow that drops a step the rest of the system depends on by name
+  // (incident-date drives the CSP deadline flags, bank-account-number keys the
+  // redaction set), and that knowledge lives in case-service beside the code
+  // that consumes it. Owning the write path in api-gateway would put the
+  // invariant in one service and its enforcement in another.
+  flowDefinition: 'claims',
+  flowOverlay: 'claims',
+  // Conversational intake over messaging channels. `claims` rather than
+  // `identity` even though the binding names a person: it exists only to fill
+  // a Case, holds no credential, and its whole lifecycle is the intake it
+  // serves. The identity it resolves to is still a Claimant, written by the
+  // gateway — same split as consent, for the same reason.
+  conversationBinding: 'claims',
+  conversationMessage: 'claims',
 
   // assessment — how a loss was examined and scored
   transferRecord: 'assessment',

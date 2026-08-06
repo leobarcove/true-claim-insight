@@ -56,19 +56,30 @@ legacy and must not be extended; see "Standing decisions" below and
 | Provider       | Purpose              | Status |
 | -------------- | -------------------- | ------ |
 | Daily.co       | Video calls          | **integrated** |
+| Telegram Bot API | Conversational intake | **integrated — offshore; see caveat below** |
 | Hume AI        | Voice/face prosody analysis | **integrated** (risk-analyzer) |
 | MediaPipe / Parselmouth | Attention & voice-stress analysis | **integrated** (risk-analyzer) |
-| Google Gemini  | Document extraction  | **integrated — offshore; see caveat below** |
+| Google Gemini  | Document extraction + intake answer normalisation (fallback only, off by default) | **integrated — offshore; see caveat below** |
 | Supabase Storage | Document storage   | **integrated**, with local-filesystem fallback |
 | Innov8tif/CTOS | eKYC (OCR, Liveness) | not integrated |
 | Clearspeed     | Voice risk analysis  | not integrated |
 | Hive AI        | Deepfake detection   | not integrated |
 | SigningCloud   | Digital signatures   | not integrated — provider interface exists with a stub |
 
-⚠️ **Data residency caveat.** Gemini, Hume and Daily.co all process claimant
-personal data outside Malaysia, and no cross-border transfer basis has been
-established. Do not describe the system as keeping data in-country until the
-in-country LLM path is real (`docs/MASTER_PLAN.md` §3.4, risk 15).
+⚠️ **Data residency caveat.** Gemini, Hume, Daily.co and Telegram all process
+claimant personal data outside Malaysia, and no cross-border transfer basis has
+been established. Gemini now receives free text a claimant typed, not only
+document images, when deterministic parsing of an intake answer fails
+(`CHAT_LLM_NORMALISER_ENABLED`, off by default) — synthetic and internal-tester
+data only until a basis exists (`docs/MASTER_PLAN.md` §6.3, §6.18).
+
+Messaging channels are additionally *retentive*: whatever a claimant types —
+including payout details — persists in the platform's own message history,
+beyond our retention sweep and anonymisation job. That is a decided trade,
+recorded in `docs/MASTER_PLAN.md` §3.4, not an oversight.
+
+Do not describe the system as keeping data in-country until the in-country LLM
+path is real (`docs/MASTER_PLAN.md` §3.4, risk 15).
 
 ## Coding Standards
 
@@ -89,14 +100,14 @@ services misled an architecture review).
 true-claim-insight/
 ├── apps/
 │   ├── api-gateway/          # NestJS - edge: auth, proxying; also owns otp/claimants/master-data/users
-│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters + FNOL email ingestion
+│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters + FNOL email ingestion + intake flows + chat channels
 │   ├── video-service/        # NestJS - Daily.co rooms, recordings, uploads
 │   ├── risk-engine/          # NestJS - Trinity rules, fraud signals, LLM extraction
 │   ├── risk-analyzer/        # Python FastAPI - Hume / Parselmouth / MediaPipe analysis
 │   ├── adjuster-portal/      # React - adjuster + operator web app
 │   └── claimant-web/         # React PWA - claimant app
 ├── packages/
-│   ├── shared-types/         # TypeScript interfaces + intake flow definitions (@tci/shared-types)
+│   ├── shared-types/         # TypeScript interfaces + intake flows, overlay resolver, publish gate, channel capabilities (@tci/shared-types)
 │   ├── ui-components/        # Shared React components (@tci/ui-components)
 │   ├── crypto/               # Envelope encryption: KeyProvider/KeyStore (@tci/crypto)
 │   └── prisma-client/        # Prisma schema + client, shared writers, ownership map (@tci/prisma-client)
@@ -147,7 +158,7 @@ and Mailhog only.
 1. **Do not run `php artisan migrate` on remote server**
 2. **Always perform cleanup for unused files after verification**
 3. **Use British English** (colour, behaviour, organisation)
-4. **Data sovereignty is a target, not a fact.** Gemini, Hume and Daily.co
+4. **Data sovereignty is a target, not a fact.** Gemini, Hume, Daily.co and Telegram
    process claimant personal data offshore today and no cross-border basis is
    established — see the caveat above. Do not write code or copy that asserts
    in-country processing until it is true. AWS Malaysia (`ap-southeast-5`) is

@@ -12,7 +12,7 @@ Read `MASTER_PLAN.md` §2 for the narrative these diagrams formalise.
 
 ## 1. The whole journey, end to end
 
-Four intake channels converge on one Case funnel; a vetted Case converts to a
+Five intake channels converge on one Case funnel; a vetted Case converts to a
 Claim, which is the regulated engagement.
 
 ```mermaid
@@ -20,6 +20,8 @@ flowchart TD
     subgraph INTAKE["1 · Notification of loss"]
         C1["`Claimant
 PWA :4001`"]
+        C5["`Claimant
+Telegram`"]
         C2["`Agent or broker
 email`"]
         C3["`Insurer forwards
@@ -29,6 +31,9 @@ portal :4000`"]
     end
 
     C1 --> CASE
+    C5 --> BIND["`Verify the sender
+phone share + OTP`"]
+    BIND --> CASE
     C2 --> ING["`FNOL email ingestion
 deterministic parse + policy match`"]
     C3 --> ING

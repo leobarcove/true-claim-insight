@@ -79,6 +79,8 @@ export enum CaseChannel {
   STAFF = 'STAFF',
   EMAIL = 'EMAIL',
   WHATSAPP = 'WHATSAPP',
+  TELEGRAM = 'TELEGRAM',
+  MESSENGER = 'MESSENGER',
 }
 
 export enum CaseInitiator {
@@ -680,6 +682,8 @@ export {
   CLAIM_WINDOW_DAYS,
   getFlow,
   getStep,
+  evaluateNext,
+  ruleTargets,
   resolveNextStep,
   validateAnswer,
   computeDeadlineFlags,
@@ -695,5 +699,42 @@ export type {
   DeadlineFlags,
   DocumentTypeLike,
   FlowStep,
+  NextCondition,
+  NextRule,
   TravelClaimTypeLike,
 } from './case-flows';
+
+// Channel capability descriptors — what each platform can physically render,
+// so one flow definition degrades across web chat, Telegram, WhatsApp and
+// Messenger instead of forking into one flow per channel.
+export {
+  CHANNEL_CAPABILITIES,
+  parseTextDate,
+  renderChoices,
+  supportsAnswerType,
+} from './channel-capabilities';
+export type {
+  ChannelCapabilities,
+  ChoiceRendering,
+  ChoiceStyle,
+  RenderableChoice,
+} from './channel-capabilities';
+
+// Publish gate — what a FlowDefinition must satisfy before claimants walk it.
+export { canPublish, systemStepIds, validateFlowDefinition } from './flow-publish-gate';
+export type { FlowProblem, FlowProblemKind } from './flow-publish-gate';
+
+// Flow overlay resolution — merges canonical structure with per-channel and
+// per-locale wording. Same explicit-re-export rule as above.
+export {
+  resolveFlow,
+  resolveStep,
+  uncoveredSteps,
+  validateOverlay,
+} from './flow-resolver';
+export type {
+  FlowOverlayRecord,
+  FlowOverrides,
+  OverlayProblem,
+  StepOverride,
+} from './flow-resolver';

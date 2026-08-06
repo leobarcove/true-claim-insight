@@ -26,6 +26,19 @@ import { AuditService } from '../common/audit/audit.service';
 import { ConsentService } from '../consent/consent.service';
 import { isLicensedMode } from '../tenant/tenant-settings';
 
+/**
+ * Statuses a claim may not reach on an unverified claimant.
+ *
+ * The point the firm commits an opinion: writing the report, and the decisions
+ * that follow it. Intake is deliberately absent — someone reporting a loss
+ * should never be turned away for not having been verified yet.
+ */
+const IDENTITY_GATED_STATUSES: ClaimStatus[] = [
+  ClaimStatus.REPORT_PENDING,
+  ClaimStatus.APPROVED,
+  ClaimStatus.REJECTED,
+];
+
 @Injectable()
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
@@ -614,6 +627,41 @@ export class ClaimsService {
           );
         }
         this.logger.warn(`Claim ${id} moved to REPORT_PENDING with incomplete mandatory evidence (advisory while TPA)`);
+      }
+    }
+
+    // Identity, on the same licence-flip shape. A claim cannot be reported on
+    // or decided for someone the firm never established the identity of: it is
+    // the firm's own AMLA exposure, and an insurer settling on our
+    // recommendation is relying on us for it.
+    //
+    // Deliberately at REPORT_PENDING and the decisions rather than at intake —
+    // taking a notification from someone before verifying them is normal, and
+    // refusing it would turn a compliance control into a barrier to reporting a
+    // loss. The line is drawn where the firm commits an opinion.
+    if (IDENTITY_GATED_STATUSES.includes(status as ClaimStatus)) {
+      const claimant = existingClaim.claimantId
+        ? await this.prisma.claimant.findUnique({
+            where: { id: existingClaim.claimantId },
+            select: { kycStatus: true },
+          })
+        : null;
+
+      if (claimant?.kycStatus !== 'VERIFIED') {
+        const standing = claimant?.kycStatus ?? 'no claimant record';
+        if (await this.isLicensedMode(existingClaim.tenantId)) {
+          throw new BadRequestException(
+            `The claimant's identity is not verified (${standing}). A claim cannot be ` +
+              'reported on or decided until it is.'
+          );
+        }
+        this.logger.warn(
+          `Claim ${id} → ${status} with unverified identity (${standing}) — advisory while TPA`
+        );
+        await this.createAuditTrail(id, 'IDENTITY_UNVERIFIED_AT_DECISION', {
+          status,
+          kycStatus: standing,
+        }, tenantContext);
       }
     }
 

@@ -20,13 +20,15 @@ import {
   CaseAnswers,
   computeCompleteness,
   computeDeadlineFlags,
-  getFlow,
+  evaluateNext,
   getStep,
   resolveNextStep,
   validateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
+  type CaseFlow,
 } from '@tci/shared-types';
 import { PrismaService } from '../config/prisma.service';
+import { FlowsService } from './flows.service';
 import { AuditService } from '../common/audit/audit.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -96,7 +98,8 @@ export class CasesService {
     private readonly configService: ConfigService,
     private readonly encryption: EncryptionService,
     private readonly auditService: AuditService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly flows: FlowsService
   ) {}
 
   /**
@@ -155,10 +158,25 @@ export class CasesService {
     const claimantId = await this.resolveClaimantId(dto, tenantContext);
     const caseNumber = await this.generateCaseNumber();
 
-    const flow = getFlow(dto.travelClaimType);
     const answers: CaseAnswers = (dto.answers as CaseAnswers) ?? {};
 
-    // Validate any pre-filled answers (staff form / future SYSTEM cases)
+    // Promote answers first: a matched policy identifies the insurer, which is
+    // what nominates the handling firm for self-service intake — and the tenant
+    // in turn decides whether a tenant-specific flow shadows the platform
+    // default. So the tenant has to be known before the flow can be chosen,
+    // which is why promotion runs ahead of answer validation rather than after.
+    const promoted = await this.promoteAnswers(answers);
+    const tenantId = await this.resolveCaseTenant(tenantContext, promoted.policyId as string | null);
+
+    // Chosen once, here, and pinned onto the row below. Every later turn reads
+    // the pin instead of re-selecting.
+    const { flow, flowDefinitionId, flowVersion } = await this.flows.selectForNewCase(
+      dto.travelClaimType,
+      tenantId
+    );
+
+    // Validate any pre-filled answers (staff form / FNOL email / SYSTEM cases)
+    // against the flow this Case will actually walk, not the built-in one.
     for (const [stepId, value] of Object.entries(answers)) {
       const step = getStep(flow, stepId);
       if (!step) throw new BadRequestException(`Unknown step: ${stepId}`);
@@ -168,10 +186,6 @@ export class CasesService {
       }
     }
 
-    // Promote answers first: a matched policy identifies the insurer, which is
-    // what nominates the handling firm for self-service intake.
-    const promoted = await this.promoteAnswers(answers);
-    const tenantId = await this.resolveCaseTenant(tenantContext, promoted.policyId as string | null);
     const currentStepId =
       answers[flow.entryStepId] === undefined
         ? flow.entryStepId
@@ -188,6 +202,8 @@ export class CasesService {
         claimantId,
         createdByUserId: isClaimant ? null : tenantContext.userId,
         currentStepId,
+        flowDefinitionId,
+        flowVersion,
         answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
         sourceMeta: (dto.sourceMeta as Prisma.InputJsonValue) ?? undefined,
         status: Object.keys(answers).length > 0 ? CaseStatus.IN_PROGRESS : CaseStatus.DRAFT,
@@ -297,7 +313,7 @@ export class CasesService {
       omit: { bankAccountNumberEncrypted: true },
       include: { documents: true, policy: { select: { policyNumber: true } } },
     });
-    return cases.map(caseRow => this.withFlowState(caseRow));
+    return Promise.all(cases.map(caseRow => this.withFlowState(caseRow)));
   }
 
   async findOne(id: string, tenantContext: TenantContext) {
@@ -336,7 +352,7 @@ export class CasesService {
     const requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
 
     return {
-      ...this.withFlowState(caseRow),
+      ...(await this.withFlowState(caseRow)),
       evidenceRequirements: requirements,
       completeness: requirements.length
         ? computeCompleteness(
@@ -353,7 +369,7 @@ export class CasesService {
 
   async patchAnswer(id: string, dto: PatchAnswerDto, tenantContext: TenantContext) {
     const caseRow = await this.getEditableCase(id, tenantContext);
-    const flow = getFlow(caseRow.travelClaimType as TravelClaimType);
+    const flow = await this.flows.forCase(caseRow);
     const step = getStep(flow, dto.stepId);
     if (!step) throw new BadRequestException(`Unknown step: ${dto.stepId}`);
 
@@ -390,7 +406,7 @@ export class CasesService {
 
     return {
       accepted: true,
-      case: this.withFlowState(updated),
+      case: await this.withFlowState(updated),
       nextStep: nextStepId ? getStep(flow, nextStepId) : null,
       warnings,
     };
@@ -442,7 +458,7 @@ export class CasesService {
 
   async submit(id: string, tenantContext: TenantContext) {
     const caseRow = await this.getEditableCase(id, tenantContext);
-    const flow = getFlow(caseRow.travelClaimType as TravelClaimType);
+    const flow = await this.flows.forCase(caseRow);
     const answers = caseRow.answers as CaseAnswers;
 
     // Walk the flow from entry and require every reachable mandatory step
@@ -457,9 +473,7 @@ export class CasesService {
       if (step.id !== 'review' && !step.optional && answers[step.id] === undefined) {
         missing.push(step.label);
       }
-      const next: string | null =
-        typeof step.next === 'function' ? step.next(answers) : step.next;
-      stepId = next;
+      stepId = evaluateNext(step.next, answers);
     }
     if (missing.length > 0) {
       throw new BadRequestException(
@@ -976,14 +990,37 @@ export class CasesService {
     );
   }
 
-  /** Attach the current flow step definition so channels can resume. */
-  private withFlowState<T extends { travelClaimType: TravelClaimType | null; currentStepId: string | null }>(
-    caseRow: T
-  ) {
+  /**
+   * Attach the current flow step definition so channels can resume.
+   *
+   * Resolved from the Case's pinned flow rather than the built-in one: after an
+   * edit is published, those differ, and the step a claimant is looking at must
+   * come from the flow they started.
+   */
+  private async withFlowState<
+    T extends {
+      travelClaimType: TravelClaimType | null;
+      currentStepId: string | null;
+      flowDefinitionId: string | null;
+    },
+  >(caseRow: T) {
     if (!caseRow.travelClaimType) return { ...caseRow, currentStep: null };
-    const flow = getFlow(caseRow.travelClaimType);
+    const flow = await this.flows.forCase(caseRow);
     const currentStep = caseRow.currentStepId ? getStep(flow, caseRow.currentStepId) : null;
     return { ...caseRow, currentStep: currentStep ?? null };
+  }
+
+  /**
+   * The whole flow a Case is walking — its pinned version.
+   *
+   * A separate call rather than a field on every case payload. The claimant app
+   * needs all the steps once, to rebuild the transcript and know what comes
+   * next; the list and per-answer responses do not, and embedding eighteen step
+   * definitions in each of them would cost far more than the extra request.
+   */
+  async getFlowForCase(id: string, tenantContext: TenantContext): Promise<CaseFlow> {
+    const caseRow = await this.findOne(id, tenantContext);
+    return this.flows.forCase(caseRow);
   }
 
   private buildClaimDescription(type: TravelClaimType, answers: CaseAnswers): string {
