@@ -561,6 +561,11 @@ video → site → expert`"]
     style FAST fill:#e8f4ea,stroke:#2d6a4f
 ```
 
+> **The thresholds are the firm's, set per tenant.** Categories and per-category
+> ceilings live in firm configuration, alongside licensed mode and the
+> working-day calendar — so a white-labelled insurer's claims are routed on that
+> insurer's rules rather than a platform default.
+
 > **Configuration gaps fail closed.** A category with no limit configured is not
 > fast-tracked, and an unknown estimated amount is not treated as a small one.
 > Medical is excluded ahead of the economic checks, so a small medical claim

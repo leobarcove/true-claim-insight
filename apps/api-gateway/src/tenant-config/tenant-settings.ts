@@ -1,7 +1,16 @@
 import { Prisma } from '@prisma/client';
 
 /**
- * Typed reader for `Tenant.settings`.
+ * Typed reader for `Tenant.settings` — gateway copy.
+ *
+ * Deliberately duplicated from case-service rather than shared. The two
+ * services read the same column for different reasons: case-service to decide
+ * whether a gate blocks, the gateway to render and write the configuration.
+ * Extracting it to a package would couple the identity and claims contexts
+ * through a type, and the shape is small enough that drift is caught by the
+ * validating DTO next to this file.
+ *
+ * Original:
  *
  * The column is free-form JSON, which is how it came to hold nothing at all. The
  * settings that gate regulated behaviour need to be read the same way everywhere,

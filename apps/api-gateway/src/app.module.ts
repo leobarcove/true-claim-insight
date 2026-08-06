@@ -19,6 +19,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ClaimsModule } from './claims/claims.module';
 import { QuantumProxyModule } from './quantum/quantum.module';
 import { IngestionProxyModule } from './ingestion/ingestion.module';
+import { TenantConfigModule } from './tenant-config/tenant-config.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
 import { RiskModule } from './risk/risk.module';
@@ -70,6 +71,7 @@ import configuration from './config/configuration';
     ClaimsModule,
     QuantumProxyModule,
     IngestionProxyModule,
+    TenantConfigModule,
     ClaimantsModule,
     HealthModule,
     LocationModule,
