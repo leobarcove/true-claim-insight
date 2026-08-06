@@ -381,6 +381,7 @@ async function wipePreviousRun() {
   if (claimIds.length) await prisma.claim.deleteMany({ where: { id: { in: claimIds } } });
 
   await prisma.assignment.deleteMany({ where: { externalRef: { startsWith: 'MSIG-APP-' } } });
+  await prisma.consent.deleteMany({ where: { claimantId: { in: claimantIds } } });
   await prisma.claimant.deleteMany({ where: { id: { in: claimantIds } } });
   await prisma.policy.deleteMany({ where: { policyNumber: { startsWith: 'MSIG-' } } });
 
@@ -511,6 +512,7 @@ async function main() {
     sessions: 0,
     documents: 0,
     caseDocuments: 0,
+    consents: 0,
   };
 
   // Start above anything already present. The wipe removes this seeder's own
@@ -521,6 +523,26 @@ async function main() {
   const lastCase = await prisma.case.findFirst({ orderBy: { caseNumber: 'desc' }, select: { caseNumber: true } });
   const lastClaim = await prisma.claim.findFirst({ orderBy: { claimNumber: 'desc' }, select: { claimNumber: true } });
   const tail = (value: string | undefined) => Number(value?.split('-').pop() ?? 0) || 0;
+
+  // Consent cannot be recorded against unapproved wording — the server refuses
+  // it, and seeded data must obey the same rule the application does.
+  const claimProcessingNotice = await prisma.consentNotice.findFirst({
+    where: { purpose: 'CLAIM_PROCESSING', locale: 'en', approvedAt: { not: null } },
+    orderBy: { version: 'desc' },
+  });
+  const biometricNotice = await prisma.consentNotice.findFirst({
+    where: { purpose: 'BIOMETRIC_ANALYSIS', locale: 'en', approvedAt: { not: null } },
+    orderBy: { version: 'desc' },
+  });
+  if (!claimProcessingNotice || !biometricNotice) {
+    throw new Error(
+      'No approved consent notice — approve the v1 wording before seeding, or the seed would ' +
+        'record consents the application itself would have refused.'
+    );
+  }
+  const claimProcessingNoticeId = claimProcessingNotice.id;
+  const biometricNoticeId = biometricNotice.id;
+  const consentedClaimants = new Set<string>();
 
   let caseSeq = Math.max(tail(lastCase?.caseNumber), 1000);
   let claimSeq = Math.max(tail(lastClaim?.claimNumber), 1000);
@@ -684,6 +706,54 @@ async function main() {
       if (caseStatus === CaseStatus.REJECTED) totals.rejected += 1;
       if (caseStatus === CaseStatus.ABANDONED) totals.abandoned += 1;
       if (askedForInfo) totals.infoRequested += 1;
+
+      // PDPA consent, captured at intake before any processing begins.
+      //
+      // Recorded against the approved notice version, because a consent that
+      // cannot name the wording the person agreed to is not evidence of
+      // anything. Channel follows how the case arrived: a claimant filling in
+      // the app consented on a web form, an emailed FNOL was captured by staff.
+      //
+      // A small share is withdrawn — the withdrawal path exists and a book
+      // where nobody ever withdraws does not exercise it.
+      if (!consentedClaimants.has(claimant.id)) {
+        consentedClaimants.add(claimant.id);
+        const withdrawn = chance(0.03);
+
+        await prisma.consent.create({
+          data: {
+            claimantId: claimant.id,
+            purpose: 'CLAIM_PROCESSING',
+            noticeId: claimProcessingNoticeId,
+            status: withdrawn ? 'WITHDRAWN' : 'GRANTED',
+            grantedAt: notifiedAt,
+            withdrawnAt: withdrawn ? addDays(notifiedAt, intBetween(5, 60)) : null,
+            withdrawalReason: withdrawn ? 'Claimant asked us to stop processing' : null,
+            capturedVia: channel === CaseChannel.WEB_CHAT ? 'WEB_FORM' : 'STAFF_CAPTURED',
+            capturedByUserId: channel === CaseChannel.WEB_CHAT ? null : staff.id,
+            createdAt: notifiedAt,
+          },
+        });
+        totals.consents += 1;
+
+        // Biometric consent is separate and narrower: it is only sought where
+        // a video assessment is actually going to happen, and the analysis
+        // path fails closed without it.
+        if (!isTravel ? false : chance(0.55)) {
+          await prisma.consent.create({
+            data: {
+              claimantId: claimant.id,
+              purpose: 'BIOMETRIC_ANALYSIS',
+              noticeId: biometricNoticeId,
+              status: 'GRANTED',
+              grantedAt: addHours(notifiedAt, 1),
+              capturedVia: 'VIDEO_SESSION',
+              createdAt: addHours(notifiedAt, 1),
+            },
+          });
+          totals.consents += 1;
+        }
+      }
 
       // Case-level evidence. Distinct from claim documents on purpose: the
       // operator vets a CASE before it converts, and the checklist on that
@@ -1136,6 +1206,7 @@ async function main() {
   console.log(`  assessment decisions  ${totals.modeDecisions}`);
   console.log(`  quantum worksheets    ${totals.worksheets}`);
   console.log(`  fraud signals         ${totals.fraudSignals}`);
+  console.log(`  PDPA consents         ${totals.consents}`);
   console.log(`  case evidence         ${totals.caseDocuments}`);
   console.log(`  claim documents       ${totals.documents}`);
   console.log(`  video sessions        ${totals.sessions}`);

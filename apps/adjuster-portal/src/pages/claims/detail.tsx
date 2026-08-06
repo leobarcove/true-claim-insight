@@ -1491,16 +1491,38 @@ export function ClaimDetailPage() {
                     {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
                   </span>
                 </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">NCD Rate:</span>
-                  <span className="font-medium">
-                    {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Panel Workshop:</span>
-                  <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
-                </div>
+                {/* No-claim discount and panel workshops are motor concepts.
+                    On a fire or travel claim they read as an unfinished port of
+                    a motor system — and this platform's scope is non-motor, so
+                    the fields are shown only where they mean something. */}
+                {claim.category === 'MOTOR' && (
+                  <>
+                    <div className="flex flex-col sm:flex-row justify-between">
+                      <span className="text-muted-foreground">NCD Rate:</span>
+                      <span className="font-medium">
+                        {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-between">
+                      <span className="text-muted-foreground">Panel Workshop:</span>
+                      <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
+                    </div>
+                  </>
+                )}
+
+                {/* What a non-motor reviewer needs in their place. The excess
+                    is the figure they check the quantum against, and it is on
+                    the claim itself — the policy is referenced by number only,
+                    so anything drawn from the policy record would never render
+                    here. */}
+                {claim.category !== 'MOTOR' && (
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Excess:</span>
+                    <span className="font-medium">
+                      {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'Nil'}
+                    </span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
