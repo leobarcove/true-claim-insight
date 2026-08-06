@@ -71,6 +71,7 @@ import { getCategoryConfig } from '@/lib/category-config';
 import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
 import { QuantumWorksheetPanel } from '@/components/claims/quantum-worksheet';
+import { ReportPanel } from '@/components/claims/report-panel';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
 import { SlaPanel } from '@/components/claims/sla-panel';
 import { FeeNotePanel } from '@/components/claims/fee-note-panel';
@@ -756,6 +757,11 @@ export function ClaimDetailPage() {
                 separate screen: the figure and the estimates it supersedes
                 should be read together. */}
             {claimId && <QuantumWorksheetPanel claimId={claimId} />}
+
+            {/* The work product itself: written here, signed, then handed
+                back. It sits below quantum because the figure is what the
+                report reasons about. */}
+            {claimId && <ReportPanel claimId={claimId} claimStatus={claim.status} />}
 
             {/* Documents */}
             <Card>

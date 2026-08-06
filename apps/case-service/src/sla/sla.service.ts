@@ -17,6 +17,17 @@ import { UnverifiedHolidayYearError } from './working-days';
 const LIVE: SlaClockState[] = [SlaClockState.RUNNING, SlaClockState.PAUSED];
 
 /**
+ * States a clock can still be discharged from.
+ *
+ * A breached clock is one of them. Missing a deadline does not end the
+ * obligation — the report is still owed — and until this included BREACHED,
+ * delivering late left `stoppedAt` null forever, so the record could not
+ * distinguish *late but delivered* from *still outstanding*. That is precisely
+ * the number an insurer asks about, and the firm was unable to answer it.
+ */
+const STOPPABLE: SlaClockState[] = [...LIVE, SlaClockState.BREACHED];
+
+/**
  * SLA clocks: starting, pausing, stopping and reporting turnaround deadlines.
  *
  * A clock is evidence, not a reminder. PD 12.5 requires turnaround per an
@@ -224,11 +235,14 @@ export class SlaService {
     at: Date
   ) {
     const clock = await this.prisma.slaClock.findFirst({
-      where: { ...subject, stage, state: { in: LIVE } },
+      where: { ...subject, stage, state: { in: STOPPABLE } },
     });
     if (!clock) return null;
 
-    const late = at.getTime() > clock.dueAt.getTime();
+    // Already breached stays breached: the deadline *was* missed, and
+    // discharging the obligation later must not rewrite that. What it does
+    // record is that the work was finally delivered, and when.
+    const late = clock.state === SlaClockState.BREACHED || at.getTime() > clock.dueAt.getTime();
 
     return this.prisma.slaClock.update({
       where: { id: clock.id },
