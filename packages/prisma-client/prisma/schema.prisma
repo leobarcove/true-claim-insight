@@ -1531,6 +1531,14 @@ model AdjusterReport {
   reviewerAdjusterId String?
   signedByAdjusterId String?
 
+  /// The exact quantum worksheet revision this report cites.
+  ///
+  /// Stored rather than resolved at render time so the two cannot silently
+  /// diverge: an issued report must keep showing the figure it was signed
+  /// against, even after the worksheet is revised. A draft citing a superseded
+  /// revision is reported as outdated so the author can refresh it deliberately.
+  quantumWorksheetId String?
+
   /// Recorded when the countersign requirement could not be verified against
   /// seniority data, so the basis of a sign-off is never silently assumed.
   countersignBasis String?

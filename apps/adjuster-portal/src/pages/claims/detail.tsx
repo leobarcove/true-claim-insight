@@ -64,6 +64,7 @@ import { useLayout } from '@/components/layout';
 import { getCategoryConfig } from '@/lib/category-config';
 import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
+import { QuantumWorksheetPanel } from '@/components/claims/quantum-worksheet';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
 import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
@@ -748,6 +749,11 @@ export function ClaimDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Quantum — sits beside the financials it produces, not in a
+                separate screen: the figure and the estimates it supersedes
+                should be read together. */}
+            {claimId && <QuantumWorksheetPanel claimId={claimId} />}
 
             {/* Documents */}
             <Card>

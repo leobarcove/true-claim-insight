@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
+  MailQuestion,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -45,6 +46,19 @@ const navigation: NavItem[] = [
     name: 'Cases',
     href: '/cases',
     icon: Inbox,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
+    // Sits next to Cases because that is what an inbound email becomes. An
+    // operator working the intake funnel should not have to know the queue
+    // exists somewhere else.
+    name: 'FNOL intake',
+    href: '/intake',
+    icon: MailQuestion,
     permissions: [
       PERMISSIONS.CLAIMS_VIEW_OWN,
       PERMISSIONS.CLAIMS_VIEW_BASIC,

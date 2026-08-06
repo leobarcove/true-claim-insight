@@ -12,6 +12,7 @@ import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
 import { NewClaimPage } from '@/pages/claims/new';
 import { CasesListPage } from '@/pages/cases';
+import { IntakeQueuePage } from '@/pages/intake';
 import { CaseDetailPage } from '@/pages/cases/details';
 import { NewCasePage } from '@/pages/cases/new';
 import { UploadVideoPage } from '@/pages/claims/upload-video';
@@ -99,6 +100,7 @@ export default function App() {
             >
               <Route path="/" element={<DashboardPage />} />
               <Route path="/cases" element={<CasesListPage />} />
+              <Route path="/intake" element={<IntakeQueuePage />} />
               <Route
                 path="/cases/new"
                 element={

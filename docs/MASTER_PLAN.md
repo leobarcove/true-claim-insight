@@ -753,6 +753,18 @@ The MSIG pilot's primary intake, and the first Phase 2 exit criterion. **MSIG AP
 
 **Phase 2 remaining:** local-LLM default + per-tenant provider policy (§6.15, still the live offshore exposure — scheduled week of 10 Aug 2026); policy file feed (gated on G9); **assessment-mode router and the small-claims fast-track of §2.4 — specified there but not built, see below**; structured tenant config surface; retention anonymisation and non-document purge; the insurer-side MI reporting surface (the `monitorOnly` clocks already measure it).
 
+### The operator slice — three backends acquire a user (6 Aug 2026)
+
+FNOL ingestion, notifications and quantum had all shipped as correct, tested backends with **no screen**. An operator queue nobody can see is functionally the same as one that does not exist, so this closes that for two of the three and fixes a gap the quantum work left behind.
+
+**The report now cites a quantum worksheet revision.** The previous entry claimed quantum was wired into the report; it was not — the template had a `quantum` section key and an adjuster still typed the figure by hand, so the report and its workings could disagree. Creating a report now pre-fills that section from the current worksheet and stores `quantumWorksheetId`. Rendering reads the **cited** revision rather than recomputing, so a later correction to the calculator cannot restate a figure already issued. A draft citing a superseded revision reports `quantumOutdated`; refreshing is draft-only, because once a report is in review its quantum is part of what was attested to, and a changed figure after that is a new report superseding this one.
+
+**Gateway proxies for quantum and ingestion.** Both case-service modules sit behind `InternalAuthGuard`, so the portal could not reach them at all — the endpoints existed and were unreachable. Role gating stays downstream so it has one home rather than two that drift.
+
+**Two screens.** *FNOL intake* lists inbound email with `NEEDS_REVIEW` and `FAILED` leading the filters rather than sitting behind a default "all" view, shows the deterministic parse result and why it failed, and offers retry and dismiss. The *Quantum* panel sits beside the financials it supersedes on claim detail, renders the worksheet as an adjuster reads it, surfaces warnings as "matters outstanding", and lists the revision history. Money is typed and submitted as **text** throughout — `<input type="number">` coerces to a float, and this is the one screen where a rounding artefact becomes a figure in a report.
+
+**Verified end to end, not by inspection:** the worked example posted through the portal's own path — portal → gateway → case-service → calculator → database — returned **RM29,000.00** with average applied at 60%, and both screens were driven in a browser.
+
 ### Quantum worksheet (6 Aug 2026)
 
 How a loss becomes a recommended figure — **prod for fire and property**, demonstrable for other lines. The calculator is a pure function, so the rules are exercised in CI without a database, and the ordering is documented in the code because it *is* the domain rather than a preference.

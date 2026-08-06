@@ -276,9 +276,11 @@ orderings drift apart and the figures stop being comparable.
 - **SIU auto-escalation rules** — currently status `ESCALATED_SIU`
   exists but transition rules are manual. Wire to `FraudSignal.severity
   = CRITICAL` later.
-- **Frontend** — no UI changes in this branch. Next branch extends the
-  FNOL form with a category selector, swaps the right-panel sections per
-  category, and renders the evidence checklist + fraud signals.
+- **Frontend** — *partially closed 6 Aug 2026.* The claim detail screen now
+  carries the quantum worksheet panel, and a new *FNOL intake* screen works
+  the inbound email queue. Still open: a category selector on the FNOL form,
+  per-category right-panel sections, and rendering the evidence checklist and
+  fraud signals.
 
 ## How to extend to other categories
 

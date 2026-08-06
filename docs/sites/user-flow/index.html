@@ -695,6 +695,13 @@ Corrections supersede`"]
     style ISSUED stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
+          <strong>The report cites a worksheet revision.</strong> Creating a report pre-fills
+          the PD 12.6 quantum section from the current worksheet and records which revision it
+          used, so the figure in the report and the workings behind it cannot silently diverge.
+          A draft citing a superseded revision reports itself as outdated; an issued report
+          keeps the figure it was signed against.
+        </p>
+        <p class="note">
           <strong>Segregation of duties.</strong> The assessor cannot decide their own claim
           unless an <code>AuthorityLimit</code> expressly permits it, and never above its
           monetary ceiling. The basis is written onto the audit row, so the question
@@ -803,6 +810,11 @@ never deleted`"]
     style REVIEW stroke:#C77A2E,stroke-width:2.5px
     style DONE stroke:#17966A,stroke-width:2.5px
         </pre></div>
+        <p class="note">
+          The operator queue is now a screen — <em>FNOL intake</em> in the portal, with
+          <code>NEEDS_REVIEW</code> and <code>FAILED</code> leading the filters. Until it
+          existed, the row was written and nobody could see it.
+        </p>
         <p class="note">
           The row is written <strong>before</strong> parsing, so an email nobody could
           understand still leaves a trace. A claimant who emailed you believes they have
