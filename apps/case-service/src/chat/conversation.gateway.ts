@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CaseChannel,
   CaseInitiator,
+  ConsentChannel,
+  ConsentPurpose,
   ConversationMessageStatus,
   ConversationMode,
   MessageDirection,
@@ -12,14 +14,17 @@ import {
   CHANNEL_CAPABILITIES,
   getStep,
   parseTextDate,
+  summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
   validateAnswer,
+  type CaseAnswers,
   type FlowStep,
 } from '@tci/shared-types';
 import { PrismaService } from '../config/prisma.service';
 import { CasesService } from '../cases/cases.service';
 import type { CreateCaseDto } from '../cases/dto/create-case.dto';
 import { FlowsService } from '../cases/flows.service';
+import { ConsentService } from '../consent/consent.service';
 import { TenantScope } from '../common/decorators/tenant.decorator';
 import type { TenantContext } from '../common/guards/tenant.guard';
 import {
@@ -34,6 +39,15 @@ import { OTP_VERIFIER, type OtpVerifier } from './otp-verifier.interface';
 
 /** Rejected after this many wrong codes, so a stranger cannot grind a phone. */
 const MAX_OTP_ATTEMPTS = 5;
+
+/**
+ * Callback value behind the "I agree" button on the consent notice.
+ *
+ * Prefixed like the pagination marker so it can never collide with a real
+ * choice value — a claimant selecting a cause of loss must not be able to
+ * accidentally grant consent.
+ */
+const CONSENT_AGREED = '__consent:agree';
 
 /**
  * Handles one inbound turn from any messaging channel.
@@ -62,7 +76,8 @@ export class ConversationGateway {
     private readonly flows: FlowsService,
     @Inject(OTP_VERIFIER) private readonly otp: OtpVerifier,
     @Inject(CHANNEL_ADAPTERS) private readonly adapters: ChannelAdapter[],
-    @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser
+    @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
+    private readonly consent: ConsentService
   ) {}
 
   private adapterFor(channel: CaseChannel): ChannelAdapter | undefined {
@@ -266,7 +281,7 @@ export class ConversationGateway {
     // and asked nothing — the menu only fired on their *next* message, so the
     // conversation looked finished when it had barely started. Nothing errored,
     // which is what made it invisible: the bot had simply stopped talking.
-    await this.startCase(messageId, payload, adapter, verified);
+    await this.requireConsentThenStart(messageId, payload, adapter, verified);
   }
 
   /**
@@ -285,7 +300,7 @@ export class ConversationGateway {
     binding: { id: string; activeCaseId: string | null; claimantId: string | null; tenantId: string | null }
   ): Promise<void> {
     if (!binding.activeCaseId) {
-      await this.startCase(messageId, payload, adapter, binding);
+      await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
 
@@ -328,6 +343,35 @@ export class ConversationGateway {
     // A tapped button beats typed text: it carries the stored value directly
     // and needs no interpretation.
     const raw = payload.callbackValue ?? payload.text;
+
+    // "Change something" at the review. There is no edit-a-single-answer flow,
+    // and a button that quietly does nothing is worse than no button — so it
+    // asks for a person, which is exactly what the inbox exists to serve.
+    if (step.answerType === 'confirm' && raw === 'false') {
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: {
+          mode: ConversationMode.HANDOVER,
+          handoverAt: new Date(),
+          handoverReason: 'Claimant asked to change a detail at the review step',
+          resolvedAt: null,
+        },
+      });
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.AWAITING_AGENT,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          'No problem. Tell us what needs changing and one of our team will pick this up ' +
+          'with you shortly.',
+      });
+      return;
+    }
 
     let value: string | number | boolean;
     if (step.answerType === 'document') {
@@ -467,13 +511,32 @@ export class ConversationGateway {
     }
 
     if (!result.nextStep) {
+      // The conversation has run out of steps. On this channel that means the
+      // claimant just confirmed the review — so submit, here, now.
+      //
+      // Previously this said "submit your claim in the app", which was wrong
+      // twice: a Telegram claimant has no app and was never told of one, and
+      // nothing submitted the Case at all. It stayed IN_PROGRESS and never
+      // reached the operator vetting queue — a completed intake that no human
+      // would ever see.
+      const submitted = await this.cases.submit(caseRow.id, this.claimantContext(binding));
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'That is everything we need. Please review and submit your claim in the app.',
+        text:
+          `Thank you — your claim request ${submitted.caseNumber} has been submitted. ` +
+          'Our team will review it and contact you if anything further is needed.',
       });
       return;
     }
 
-    await this.ask(adapter, binding.id, payload.platformUserId, result.nextStep);
+    await this.ask(
+      adapter,
+      binding.id,
+      payload.platformUserId,
+      result.nextStep,
+      0,
+      // Give the next step the material for a summary, in case it is the review.
+      { steps: flow.steps, answers: (result.case?.answers ?? {}) as CaseAnswers }
+    );
   }
 
   /**
@@ -488,6 +551,79 @@ export class ConversationGateway {
       scope: TenantScope.STRICT,
       allowCrossTenant: false,
     };
+  }
+
+  /**
+   * Show the approved consent notice, and open a Case only once it is agreed.
+   *
+   * Consent is a precondition for processing, not a question in the flow — so
+   * it sits here in code rather than in a FlowDefinition an author could edit.
+   * `CasesService.create` refuses without it regardless, which is what makes
+   * this channel-proof; this method is how a Telegram claimant is actually
+   * given the chance to agree.
+   *
+   * The wording comes from the approved ConsentNotice, never from copy written
+   * here. Consent recorded against unapproved or ad-hoc wording is unprovable
+   * later, which is the whole reason notices are versioned and immutable.
+   */
+  private async requireConsentThenStart(
+    messageId: string,
+    payload: InboundTurnPayload,
+    adapter: ChannelAdapter,
+    binding: { id: string; claimantId: string | null; tenantId: string | null }
+  ): Promise<void> {
+    if (!binding.claimantId) {
+      this.logger.error(`Binding ${binding.id} is verified but has no claimant; cannot proceed.`);
+      return;
+    }
+
+    if (await this.consent.hasConsent(binding.claimantId, ConsentPurpose.CLAIM_PROCESSING)) {
+      await this.startCase(messageId, payload, adapter, binding);
+      return;
+    }
+
+    // Agreement arrives as the callback from the button below.
+    if (payload.callbackValue === CONSENT_AGREED) {
+      await this.consent.grant({
+        claimantId: binding.claimantId,
+        purpose: ConsentPurpose.CLAIM_PROCESSING,
+        capturedVia: ConsentChannel.MESSAGING,
+      });
+      this.logger.log(`Consent captured on ${payload.channel} for claimant ${binding.claimantId}.`);
+      await this.startCase(messageId, payload, adapter, binding);
+      return;
+    }
+
+    const notice = await this.consent.currentNotice(ConsentPurpose.CLAIM_PROCESSING, 'en');
+    if (!notice) {
+      // Refuse rather than proceed. Taking a claim with no approved wording to
+      // record against is the failure this whole gate exists to prevent.
+      this.logger.error('No approved CLAIM_PROCESSING notice; refusing to start intake.');
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'Sorry — we cannot start a claim just now. Please contact our support desk.',
+      });
+      return;
+    }
+
+    await this.prisma.conversationMessage.updateMany({
+      where: { id: messageId, status: ConversationMessageStatus.PENDING },
+      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+    });
+
+    // Sent as a choice step so the adapter renders it through its normal
+    // keyboard path — and so both the wording and the reply agreeing to it
+    // land in the conversation transcript, which is the evidence.
+    await this.say(adapter, binding.id, payload.platformUserId, {
+      text: `${notice.title}\n\n${notice.body}`,
+      step: {
+        id: '__consent',
+        prompt: notice.title,
+        label: 'Consent',
+        answerType: 'choice',
+        choices: [{ value: CONSENT_AGREED, label: 'I agree' }],
+        next: { type: 'end' },
+      },
+    });
   }
 
   /**
@@ -574,7 +710,8 @@ export class ConversationGateway {
     bindingId: string | null,
     platformUserId: string,
     step: FlowStep,
-    page = 0
+    page = 0,
+    review?: { steps: FlowStep[]; answers: CaseAnswers }
   ): Promise<void> {
     let text = step.prompt;
 
@@ -590,6 +727,15 @@ export class ConversationGateway {
 
     if (step.answerType === 'document' && capabilities?.document === 'link_out') {
       text += '\n\nPlease upload this document in the app.';
+    }
+
+    // A confirm step on a channel with nowhere to put a summary must carry the
+    // answers in the message. Otherwise the claimant is asked to agree to
+    // details they cannot see — and what they are agreeing to is a claim
+    // submission.
+    if (step.answerType === 'confirm' && review && capabilities?.summaryPanel === false) {
+      const summary = summariseAnswers(review.steps, review.answers);
+      if (summary) text += `\n\n${summary}`;
     }
 
     await this.say(adapter, bindingId, platformUserId, { text, step, choicePage: page });

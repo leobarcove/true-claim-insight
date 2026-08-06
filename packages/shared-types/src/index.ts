@@ -711,6 +711,7 @@ export {
   CHANNEL_CAPABILITIES,
   parseTextDate,
   renderChoices,
+  summariseAnswers,
   supportsAnswerType,
 } from './channel-capabilities';
 export type {

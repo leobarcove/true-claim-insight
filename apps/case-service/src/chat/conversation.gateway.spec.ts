@@ -58,7 +58,10 @@ describe('ConversationGateway', () => {
       },
       conversationBinding: {
         upsert: jest.fn(async () => binding),
-        update: jest.fn(async () => ({})),
+        // Prisma returns the updated row; returning {} made a freshly-verified
+        // binding look like it had no claimant, which is not a state that can
+        // occur in production.
+        update: jest.fn(async ({ data }: any) => ({ ...binding, ...data })),
       },
       case: {
         findUnique: jest.fn(async () => over.caseRow ?? null),
@@ -82,7 +85,13 @@ describe('ConversationGateway', () => {
     };
 
     const cases = {
-      patchAnswer: jest.fn(async () => ({ accepted: true, nextStep: null, warnings: [] })),
+      patchAnswer: jest.fn(async () => ({
+        accepted: true,
+        nextStep: null,
+        warnings: [],
+        case: { answers: {} },
+      })),
+      submit: jest.fn(async () => ({ id: 'case-1', caseNumber: 'CSE-2026-000015' })),
       create: jest.fn(async () => ({
         id: 'case-9',
         caseNumber: 'CSE-1',
@@ -115,16 +124,31 @@ describe('ConversationGateway', () => {
       normalise: jest.fn(async () => null),
     };
 
+    // Consent already granted in most tests, so they exercise the path after
+    // the gate; the consent tests below flip it.
+    const consent = {
+      hasConsent: jest.fn(async () => true),
+      grant: jest.fn(async () => ({ id: 'consent-1' })),
+      currentNotice: jest.fn(async () => ({
+        id: 'notice-1',
+        version: 1,
+        locale: 'en',
+        title: 'How we use your information',
+        body: 'We process your personal data to handle your claim…',
+      })),
+    };
+
     const gateway = new ConversationGateway(
       prisma as unknown as PrismaService,
       cases as unknown as CasesService,
       flows as unknown as FlowsService,
       otp,
       [adapter],
-      normaliser
+      normaliser,
+      consent as never
     );
 
-    return { gateway, prisma, adapter, otp, cases, flows, sent, binding, normaliser };
+    return { gateway, prisma, adapter, otp, cases, flows, sent, binding, normaliser, consent };
   };
 
   const turn = (over: Partial<InboundTurnPayload> = {}): InboundTurnPayload => ({
@@ -465,6 +489,138 @@ describe('ConversationGateway', () => {
       const call = (cases.patchAnswer as jest.Mock).mock.calls[0];
       expect(call[1].value).not.toBe('still not a number');
       (caseRow as any).currentStepId = 'airline';
+    });
+  });
+
+  describe('consent', () => {
+    const verifiedNoCase = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: null,
+    };
+
+    it('shows the approved notice before any claim question', async () => {
+      const { gateway, cases, consent, sent } = setup({ binding: verifiedNoCase });
+      consent.hasConsent.mockResolvedValue(false);
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      // No Case, and no claim-type menu, until consent is given.
+      expect(cases.create).not.toHaveBeenCalled();
+      expect(sent[0].text).toContain('How we use your information');
+    });
+
+    it('records consent against the approved notice, then starts the claim', async () => {
+      const { gateway, cases, consent } = setup({ binding: verifiedNoCase });
+      consent.hasConsent.mockResolvedValue(false);
+
+      await gateway.handleTurn(turn({ callbackValue: '__consent:agree' }));
+
+      expect(consent.grant).toHaveBeenCalledWith(
+        expect.objectContaining({
+          claimantId: 'claimant-1',
+          purpose: 'CLAIM_PROCESSING',
+          // Recorded as what it was. A chat thread is not a web form.
+          capturedVia: 'MESSAGING',
+        })
+      );
+    });
+
+    it('does not ask again once consent is on record', async () => {
+      const { gateway, consent, sent } = setup({ binding: verifiedNoCase });
+      consent.hasConsent.mockResolvedValue(true);
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      expect(consent.grant).not.toHaveBeenCalled();
+      expect(sent[0].text).not.toContain('How we use your information');
+    });
+
+    it('refuses to start intake when no approved notice exists', async () => {
+      const { gateway, cases, consent, sent } = setup({ binding: verifiedNoCase });
+      consent.hasConsent.mockResolvedValue(false);
+      consent.currentNotice.mockResolvedValue(null as never);
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      // Taking a claim with no approved wording to record against is the
+      // failure this gate exists to prevent — so it stops rather than proceeds.
+      expect(cases.create).not.toHaveBeenCalled();
+      expect(sent[0].text).toMatch(/cannot start a claim/i);
+    });
+  });
+
+  describe('completing the claim', () => {
+    const verified = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+    const reviewFlow = {
+      travelClaimType: 'FLIGHT_DELAY',
+      entryStepId: 'review',
+      steps: [
+        {
+          id: 'review',
+          prompt: 'Please review your details, then confirm.',
+          label: 'Review and confirm',
+          answerType: 'confirm',
+          next: { type: 'end' },
+        },
+      ],
+    };
+    const reviewCase = {
+      id: 'case-1',
+      currentStepId: 'review',
+      answers: {},
+      flowDefinitionId: 'flow-1',
+      travelClaimType: 'FLIGHT_DELAY',
+      tenantId: 'tenant-1',
+    };
+
+    it('submits the case when the claimant confirms', async () => {
+      const { gateway, cases, flows, sent } = setup({ binding: verified, caseRow: reviewCase });
+      (flows.forCase as jest.Mock).mockResolvedValue(reviewFlow);
+
+      await gateway.handleTurn(turn({ callbackValue: 'true' }));
+
+      // Without this the intake completes and the Case sits in IN_PROGRESS,
+      // never reaching the operator vetting queue — a finished claim nobody
+      // would ever see.
+      expect(cases.submit).toHaveBeenCalledWith('case-1', expect.objectContaining({
+        userRole: 'CLAIMANT',
+      }));
+      expect(sent.map(s => s.text).join(' ')).toContain('CSE-2026-000015');
+    });
+
+    it('never tells a messaging claimant to use "the app"', async () => {
+      const { gateway, flows, sent } = setup({ binding: verified, caseRow: reviewCase });
+      (flows.forCase as jest.Mock).mockResolvedValue(reviewFlow);
+
+      await gateway.handleTurn(turn({ callbackValue: 'true' }));
+
+      // They arrived via Telegram and were never told an app exists.
+      expect(sent.map(s => s.text).join(' ')).not.toMatch(/in the app/i);
+    });
+
+    it('asks for a human when the claimant wants to change something', async () => {
+      const { gateway, cases, prisma, flows, sent } = setup({
+        binding: verified,
+        caseRow: reviewCase,
+      });
+      (flows.forCase as jest.Mock).mockResolvedValue(reviewFlow);
+
+      await gateway.handleTurn(turn({ callbackValue: 'false' }));
+
+      expect(cases.submit).not.toHaveBeenCalled();
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ mode: ConversationMode.HANDOVER }),
+        })
+      );
+      expect(sent[0].text).toMatch(/team will pick this up/i);
     });
   });
 

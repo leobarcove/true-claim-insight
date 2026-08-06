@@ -206,8 +206,13 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   },
   {
     id: 'review',
+    // Channel-neutral on purpose. "the summary below" was true only of the PWA,
+    // which renders a panel under the chat; on a messaging thread there is no
+    // below, and the bot pointed at something that did not exist. Channels with
+    // no summary surface get the answers appended to this message instead —
+    // see ChannelCapabilities.summaryPanel.
     prompt:
-      'Thank you. Please review your details in the summary below, then confirm to submit your claim request.',
+      'Thank you. Please review your details, then confirm to submit your claim request.',
     label: 'Review and confirm',
     answerType: 'confirm',
     system: true, // resolveNextStep and submit() both special-case this id

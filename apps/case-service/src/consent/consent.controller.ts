@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConsentChannel, ConsentPurpose } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -7,6 +16,19 @@ import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { ConsentService } from './consent.service';
+
+/**
+ * Claimants act on their own record only (enforced per-route below); staff see
+ * the firm's. Compliance officers are included because consent standing is
+ * theirs to audit.
+ */
+const CONSENT_ROLES = [
+  UserRole.CLAIMANT,
+  UserRole.ADJUSTER,
+  UserRole.FIRM_ADMIN,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.SUPER_ADMIN,
+] as const;
 
 @ApiTags('consent')
 @Controller({ path: 'consent', version: '1' })
@@ -58,29 +80,52 @@ export class ConsentController {
     return this.service.approveNotice(purpose, Number(version), tenantContext.userId);
   }
 
+  /**
+   * A claimant may only ever act on their own record.
+   *
+   * These routes carried no `@Roles`, and RolesGuard treats missing metadata as
+   * allow-all — which was harmless while nothing outside the firm could reach
+   * them, and became a hole the moment the claimant app needed to grant its own
+   * consent. Without this check a claimant could grant, read or withdraw
+   * consent for any other claimant by changing the id in the URL.
+   */
+  private assertOwnRecord(claimantId: string, tenantContext: TenantContext) {
+    if (tenantContext.userRole === 'CLAIMANT' && tenantContext.userId !== claimantId) {
+      throw new ForbiddenException('Not permitted');
+    }
+  }
+
   @Get('claimant/:claimantId')
+  @Roles(...CONSENT_ROLES)
   @ApiOperation({ summary: 'Consent record for a claimant, current and withdrawn' })
-  forClaimant(@Param('claimantId') claimantId: string) {
+  forClaimant(@Param('claimantId') claimantId: string, @Tenant() tenantContext: TenantContext) {
+    this.assertOwnRecord(claimantId, tenantContext);
     return this.service.forClaimant(claimantId);
   }
 
   @Post('claimant/:claimantId/grant')
+  @Roles(...CONSENT_ROLES)
   @ApiOperation({ summary: 'Record consent against the approved notice' })
   grant(
     @Param('claimantId') claimantId: string,
     @Body() body: { purpose: ConsentPurpose; locale?: string; capturedVia?: ConsentChannel },
     @Tenant() tenantContext: TenantContext
   ) {
+    this.assertOwnRecord(claimantId, tenantContext);
     return this.service.grant({
       claimantId,
       purpose: body.purpose,
       locale: body.locale,
       capturedVia: body.capturedVia,
-      capturedByUserId: tenantContext.userId,
+      // A claimant granting their own consent is the subject, not a capturer.
+      // Recording them as capturedByUserId would read as staff-captured.
+      capturedByUserId:
+        tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
     });
   }
 
   @Post('claimant/:claimantId/withdraw')
+  @Roles(...CONSENT_ROLES)
   @ApiOperation({ summary: 'Withdraw consent; the original grant is retained' })
   withdraw(
     @Param('claimantId') claimantId: string,

@@ -11,6 +11,7 @@ import {
   CaseInitiator,
   CaseStatus,
   ClaimCategory,
+  ConsentPurpose,
   DocumentType,
   Prisma,
   TenantType,
@@ -29,6 +30,7 @@ import {
 } from '@tci/shared-types';
 import { PrismaService } from '../config/prisma.service';
 import { FlowsService } from './flows.service';
+import { ConsentService } from '../consent/consent.service';
 import { AuditService } from '../common/audit/audit.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -99,7 +101,8 @@ export class CasesService {
     private readonly encryption: EncryptionService,
     private readonly auditService: AuditService,
     private readonly notifications: NotificationsService,
-    private readonly flows: FlowsService
+    private readonly flows: FlowsService,
+    private readonly consent: ConsentService
   ) {}
 
   /**
@@ -156,6 +159,23 @@ export class CasesService {
       dto.initiatedBy ?? (isClaimant ? CaseInitiator.CLAIMANT : CaseInitiator.STAFF);
 
     const claimantId = await this.resolveClaimantId(dto, tenantContext);
+
+    // No Case without a lawful basis to process one.
+    //
+    // Enforced here rather than as a flow step, deliberately. A flow step lives
+    // in editable data: an author could reorder or delete it, and the intake
+    // would carry on looking healthy while the basis for processing quietly
+    // disappeared. Enforced at creation it is channel-proof — web chat,
+    // Telegram, staff capture and FNOL email all pass through this method, so
+    // none of them can open a Case without it.
+    //
+    // The machinery for this existed and was tested; nothing called it. That is
+    // the §3.6 shape: a control that is real, marked PASS, and does not run on
+    // the path that needs it.
+    if (claimantId) {
+      await this.consent.assertConsent(claimantId, ConsentPurpose.CLAIM_PROCESSING);
+    }
+
     const caseNumber = await this.generateCaseNumber();
 
     const answers: CaseAnswers = (dto.answers as CaseAnswers) ?? {};

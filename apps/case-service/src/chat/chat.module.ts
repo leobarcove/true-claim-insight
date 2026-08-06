@@ -1,6 +1,7 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { CasesModule } from '../cases/cases.module';
+import { ConsentModule } from '../consent/consent.module';
 import { CHANNEL_ADAPTERS } from './channel-adapter.interface';
 import { ConversationGateway } from './conversation.gateway';
 import { ConversationsController } from './conversations.controller';
@@ -24,7 +25,7 @@ import { TelegramPoller } from './telegram/telegram.poller';
  * calls its endpoints instead of the tables.
  */
 @Module({
-  imports: [HttpModule, CasesModule],
+  imports: [HttpModule, CasesModule, ConsentModule],
   controllers: [ConversationsController],
   providers: [
     ConversationGateway,
