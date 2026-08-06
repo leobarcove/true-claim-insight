@@ -1,7 +1,8 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, SlaClockState, SlaStage } from '@prisma/client';
 import { Queue } from 'bullmq';
+import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
 import { QUEUE } from '../queue/queue.constants';
 import {
@@ -240,7 +241,20 @@ export class SlaService {
   }
 
   /** Every clock for a claim, newest first — the per-claim SLA history. */
-  async forClaim(claimId: string) {
+  async forClaim(claimId: string, tenantContext?: TenantContext) {
+    if (tenantContext) {
+      const claim = await this.prisma.claim.findUnique({
+        where: { id: claimId },
+        select: { id: true, tenantId: true },
+      });
+      // Existence check, not an access check: confirming a claim exists in
+      // another tenant is itself a disclosure.
+      if (!claim) throw new NotFoundException('Claim not found');
+      if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
+        throw new ForbiddenException('This claim does not belong to your organisation');
+      }
+    }
+
     return this.prisma.slaClock.findMany({
       where: { claimId },
       include: { policy: true },
