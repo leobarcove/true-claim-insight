@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table';
 import { useAuthStore } from '@/stores/auth-store';
 import { PERMISSIONS, useHasAnyPermission } from '@/lib/permissions';
+import { claimTypeLabel } from '@/lib/claim-label';
 
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { convertToTitleCase, cn } from '@/lib/utils';
@@ -141,32 +142,30 @@ export function DashboardPage() {
 
   const stats = [
     {
-      title: 'Scheduled Sessions',
+      title: 'Upcoming assessments',
       value: statsData?.inProgress.toString() || '0',
-      change: 'Active status',
+      change: 'Video, desk or site — all modes',
       icon: Video,
       trend: 'neutral',
     },
     {
       title: 'Active Claims',
-      value: statsData?.totalAssigned.toString() || '0',
-      change: 'Currently assigned',
+      // Every claim the firm is working, not only the ones sitting at ASSIGNED.
+      value: statsData?.activeClaims.toString() || '0',
+      change: 'Assigned through to report',
       icon: FileText,
       trend: 'neutral',
     },
     {
       title: 'Total Cases',
-      value: statsData?.totalClaims.toString() || '0',
-      change: 'Lifetime total',
+      // Intake, not claims. A case the firm rejects never becomes a claim, so
+      // the two counts differ and this card is headed with the intake one.
+      value: statsData?.totalCases.toString() || '0',
+      change: 'Intake, lifetime',
       icon: CheckCircle,
       trend: 'up',
     },
   ];
-
-  const daysInMonthSoFar = new Date().getDate();
-  const averagePerDayMonth = statsData
-    ? (statsData.completedThisMonth / daysInMonthSoFar).toFixed(1)
-    : '0';
 
   const recentClaims = claimsData?.claims || [];
   const upcomingSessions = sessionsData?.claims || [];
@@ -200,14 +199,14 @@ export function DashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div className="space-y-2">
                 <p className="text-primary-foreground/80 font-medium text-sm">
-                  Total Monthly Cases
+                  Claims closed this month
                 </p>
                 <div className="flex items-baseline gap-4">
                   {statsLoading ? (
                     <Skeleton className="h-12 w-16 sm:w-32 bg-primary-foreground/20" />
                   ) : (
                     <h2 className="text-5xl font-bold tracking-tight">
-                      {statsData?.completedThisMonth || 0}
+                      {statsData?.completedThisMonth ?? 0}
                     </h2>
                   )}
                   <div className="flex items-center text-primary-foreground/90 bg-primary-foreground/10 px-2 py-0.5 rounded text-sm font-medium">
@@ -226,18 +225,18 @@ export function DashboardPage() {
               <div className="flex gap-3 md:gap-8">
                 <div className="space-y-1">
                   <p className="text-xs text-primary-foreground/70 uppercase tracking-wider font-semibold">
-                    Average Cases/Day
+                    Closed per day
                   </p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-16 bg-primary-foreground/20" />
                   ) : (
-                    <p className="text-2xl font-bold">{averagePerDayMonth}</p>
+                    <p className="text-2xl font-bold">{statsData?.averagePerDay ?? 0}</p>
                   )}
                 </div>
                 <div className="w-[1px] bg-primary-foreground/20 h-10 self-center" />
                 <div className="space-y-1">
                   <p className="text-xs text-primary-foreground/70 uppercase tracking-wider font-semibold">
-                    Completed This Week
+                    Closed this week
                   </p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-16 bg-primary-foreground/20" />
@@ -376,7 +375,7 @@ export function DashboardPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                              {claim.claimType?.replace('_', ' ') ?? '—'}
+                              {claimTypeLabel(claim)}
                             </TableCell>
                             <TableCell>{getStatusBadge(claim.status)}</TableCell>
                             <TableCell>
@@ -426,8 +425,7 @@ export function DashboardPage() {
                         <div className="space-y-1">
                           <p className="text-sm font-medium">{claim.claimNumber}</p>
                           <p className="text-xs text-muted-foreground">
-                            {claim.claimant?.fullName} • {claim.vehiclePlateNumber} •{' '}
-                            {claim.claimType ? convertToTitleCase(claim.claimType) : '—'}
+                            {claim.claimant?.fullName} • {claimTypeLabel(claim)}
                           </p>
                         </div>
                         <div className="flex flex-col items-center gap-1">
@@ -444,7 +442,7 @@ export function DashboardPage() {
           {/* Upcoming Sessions */}
           <Card className="flex flex-col">
             <CardHeader className="flex flex-col sm:flex-row items-center justify-between">
-              <CardTitle className="text-lg">Upcoming Sessions</CardTitle>
+              <CardTitle className="text-lg">Upcoming assessments</CardTitle>
               <div className="flex items-center gap-2">
                 {canViewSessions && (
                   <Button
@@ -505,7 +503,7 @@ export function DashboardPage() {
                       ) : upcomingSessions.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                            No upcoming sessions.
+                            No upcoming assessments.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -610,7 +608,7 @@ export function DashboardPage() {
                   ) : upcomingSessions.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Video className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No upcoming sessions</p>
+                      <p>No upcoming assessments</p>
                     </div>
                   ) : (
                     upcomingSessions.map(claim => (

@@ -370,6 +370,71 @@ const requirementsByKey = new Map<string, Requirement[]>();
 const requirementKey = (category: ClaimCategory, travelType: TravelClaimType | null) =>
   `${category}/${travelType ?? '*'}`;
 
+/**
+ * Publish the property lines' evidence checklists.
+ *
+ * The base seed ships requirements for travel and flood only, so a fire,
+ * burglary, lightning or house-owner claim had no checklist at all — the panel
+ * simply did not appear, and the operator had nothing to vet against. These
+ * are the documents an insurer expects on each line: a Bomba report on a fire,
+ * a police report on a burglary, a TNB surge report on a lightning strike.
+ *
+ * Global rows (`tenantId: null`). A firm that wants more can add tenant rows,
+ * which override these by the precedence in `resolveEvidence`.
+ */
+const PROPERTY_REQUIREMENTS: Partial<Record<ClaimCategory, [DocumentType, boolean, string][]>> = {
+  FIRE: [
+    ['BOMBA_REPORT', true, 'Fire and Rescue Department report for the incident'],
+    ['DAMAGE_PHOTO', true, 'Photographs of the fire damage'],
+    ['INVENTORY_LIST', true, 'Schedule of damaged stock, plant or contents'],
+    ['REPAIR_QUOTATION', false, 'Quotation to reinstate or repair'],
+    ['POLICY_DOCUMENT', false, 'The policy schedule in force at the date of loss'],
+  ],
+  BURGLARY: [
+    ['POLICE_REPORT', true, 'Police report made within 24 hours of discovery'],
+    ['DAMAGE_PHOTO', true, 'Photographs of the forced entry'],
+    ['PROOF_OF_OWNERSHIP', true, 'Receipts or proof of ownership for the stolen items'],
+    ['INVENTORY_LIST', false, 'Schedule of items taken'],
+  ],
+  LIGHTNING: [
+    ['UTILITY_SURGE_REPORT', true, 'Utility or TNB confirmation of the surge event'],
+    ['DAMAGE_PHOTO', true, 'Photographs of the damaged equipment'],
+    ['REPAIR_QUOTATION', false, 'Quotation to repair or replace'],
+  ],
+  HOH: [
+    ['DAMAGE_PHOTO', true, 'Photographs of the damaged contents'],
+    ['PROOF_OF_OWNERSHIP', true, 'Receipts or proof of ownership'],
+    ['INVENTORY_LIST', false, 'Schedule of damaged contents'],
+  ],
+};
+
+async function ensureEvidenceRequirements() {
+  for (const [category, rows] of Object.entries(PROPERTY_REQUIREMENTS)) {
+    let sortOrder = 0;
+    for (const [documentType, isMandatory, description] of rows!) {
+      await prisma.evidenceRequirement.upsert({
+        where: {
+          tenantId_category_travelClaimType_documentType: {
+            tenantId: null as never,
+            category: category as ClaimCategory,
+            travelClaimType: null as never,
+            documentType,
+          },
+        },
+        update: { isMandatory, description, sortOrder },
+        create: {
+          category: category as ClaimCategory,
+          documentType,
+          isMandatory,
+          description,
+          sortOrder,
+        },
+      });
+      sortOrder += 1;
+    }
+  }
+}
+
 async function loadEvidenceRequirements() {
   const rows = await prisma.evidenceRequirement.findMany({
     where: { tenantId: null },
@@ -401,6 +466,35 @@ function evidenceFor(
   return resolved
     .filter(req => req.isMandatory || chance(0.66))
     .map(req => [req.documentType, filenameFor(req.documentType)]);
+}
+
+/**
+ * An appointment slot a working adjuster would actually hold.
+ *
+ * Weekdays only, 09:00–16:30 **Malaysian time**, on the half hour. Two things
+ * this gets right that the obvious version does not: adding whole hours to
+ * "now" put five assessments at 09:39 on the same morning and others at 22:50,
+ * and `setHours` follows whatever zone the seeding machine happens to be in —
+ * on a UTC box that made 09:00 into a five-o'clock evening appointment in Kuala
+ * Lumpur. The offset is fixed at +08; Malaysia has no daylight saving.
+ */
+const KL_OFFSET_HOURS = 8;
+
+function nextWorkingSlot(daysAhead: number): Date {
+  // Today's calendar date *in Kuala Lumpur*, whatever the machine's zone.
+  const kl = new Date(TODAY.getTime() + KL_OFFSET_HOURS * 3600_000);
+  let year = kl.getUTCFullYear();
+  let month = kl.getUTCMonth();
+  let date = kl.getUTCDate() + daysAhead;
+
+  // Roll a weekend forward to the Monday.
+  const weekday = new Date(Date.UTC(year, month, date)).getUTCDay();
+  if (weekday === 6) date += 2;
+  if (weekday === 0) date += 1;
+
+  const hour = 9 + intBetween(0, 7);
+  const minute = chance(0.5) ? 0 : 30;
+  return new Date(Date.UTC(year, month, date, hour - KL_OFFSET_HOURS, minute));
 }
 
 const START = new Date('2026-01-01T00:00:00Z');
@@ -529,6 +623,7 @@ async function main() {
 
   // The checklist on the claim page reads these rows, so the documents seeded
   // below are drawn from them rather than from a second list written here.
+  await ensureEvidenceRequirements();
   await loadEvidenceRequirements();
 
   const configLike = { get: (key: string) => process.env[key] } as never;
@@ -1021,13 +1116,34 @@ async function main() {
 
       const reached = (target: ClaimStatus) => stageIndex(status) >= stageIndex(target);
       const assignedAt = reached(ClaimStatus.ASSIGNED) ? addDays(convertedAt, intBetween(0, 2)) : null;
+      /*
+       * A claim at SCHEDULED has an appointment; that is what the status means.
+       * Claims that have moved past it keep the date they were seen. Claims
+       * still sitting there are given a date in the days ahead, because an
+       * appointment in the past that nobody attended is a different state —
+       * and 19 claims sat at SCHEDULED with no time at all, so the adjuster's
+       * diary was empty while the queue said otherwise.
+       */
       const scheduledAt = reached(ClaimStatus.SCHEDULED) && assignedAt ? addDays(assignedAt, intBetween(1, 5)) : null;
+      const appointmentAt =
+        status === ClaimStatus.SCHEDULED ? nextWorkingSlot(intBetween(0, 13)) : scheduledAt;
       const assessedAt = reached(ClaimStatus.IN_ASSESSMENT) && scheduledAt ? addDays(scheduledAt, intBetween(0, 3)) : null;
       const reportAt = reached(ClaimStatus.REPORT_PENDING) && assessedAt ? addDays(assessedAt, intBetween(2, 9)) : null;
-      const closedAt =
-        status === ClaimStatus.CLOSED || status === ClaimStatus.APPROVED || status === ClaimStatus.REJECTED
+      /*
+       * Only a CLOSED claim has a closure date, matching what the service
+       * actually writes. An approved claim is decided but the file is still
+       * open — the machine has APPROVED → CLOSED as a further step, and PD 12.8
+       * retention runs from the closure, not the decision. Stamping every
+       * terminal status here simulated a state the application never produces,
+       * and the dashboard's turnaround figures were counting it.
+       */
+      const decidedAt =
+        status === ClaimStatus.CLOSED ||
+        status === ClaimStatus.APPROVED ||
+        status === ClaimStatus.REJECTED
           ? addDays(reportAt ?? assessedAt ?? convertedAt, intBetween(2, 14))
           : null;
+      const closedAt = status === ClaimStatus.CLOSED ? decidedAt : null;
 
       /**
        * The policy excess, drawn once and used everywhere.
@@ -1065,11 +1181,12 @@ async function main() {
             status === ClaimStatus.APPROVED || status === ClaimStatus.CLOSED
               ? money(amount * between(0.55, 1))
               : null,
+          scheduledAssessmentTime: appointmentAt,
           excessAmount: money(excessAmount),
           sumInsured: money((isTravel ? AMOUNT_BAND[type!][1] : PROPERTY_BAND[category]![1]) * 2),
           closedAt,
           createdAt: convertedAt,
-          updatedAt: closedAt ?? reportAt ?? assessedAt ?? convertedAt,
+          updatedAt: decidedAt ?? reportAt ?? assessedAt ?? convertedAt,
         },
         select: { id: true },
       });
@@ -1172,14 +1289,32 @@ async function main() {
         // again here once put 125 worksheets in contradiction with the
         // Policy Information panel on the same screen.
         const excess = excessAmount;
-        // Property is usually reinstatement; contents and older risks settle on
-        // indemnity, where depreciation for age and wear applies.
-        const settlementBasis = chance(0.75)
-          ? SettlementBasis.REINSTATEMENT
-          : SettlementBasis.INDEMNITY;
-        const depreciation = settlementBasis === SettlementBasis.INDEMNITY ? between(0.1, 0.35) : 0;
-        const afterDepreciation = assessed * (1 - depreciation);
-        const recommended = Math.max(afterDepreciation - excess, 0);
+        /*
+         * Reinstatement is a property basis — buildings and contents put back
+         * new-for-old. A travel loss is not reinstated: a bag is worth what it
+         * was worth when it was lost, and a delayed flight or a hospital bill
+         * is reimbursed at what it cost. Seeding travel as reinstatement put
+         * the word on hundreds of claims where no adjuster would write it.
+         */
+        const settlementBasis =
+          isTravel || !chance(0.75) ? SettlementBasis.INDEMNITY : SettlementBasis.REINSTATEMENT;
+
+        // Only things that wear out are depreciated. Luggage does; a refunded
+        // booking and a medical bill do not — they are reimbursed at cost.
+        const depreciable =
+          settlementBasis === SettlementBasis.INDEMNITY &&
+          (!isTravel ||
+            type === TravelClaimType.LUGGAGE_DAMAGE ||
+            type === TravelClaimType.LUGGAGE_LOSS);
+        const depreciation = depreciable ? between(0.1, 0.35) : 0;
+
+        // Round the deduction to sen *before* subtracting it, exactly as
+        // `calculateQuantum` does. Computing the total in floating point and
+        // rounding once at the end left nine worksheets a sen away from the
+        // sum of their own lines — which is the first thing an insured
+        // contesting a figure adds up by hand.
+        const depreciationAmount = Number((assessed * depreciation).toFixed(2));
+        const recommended = Math.max(assessed - depreciationAmount - excess, 0);
 
         await prisma.quantumWorksheet.create({
           data: {
@@ -1188,14 +1323,11 @@ async function main() {
             revision: 1,
             basis: settlementBasis,
             assessedLoss: money(assessed),
-            depreciationRate:
-              settlementBasis === SettlementBasis.INDEMNITY
-                ? new Prisma.Decimal(depreciation.toFixed(4))
-                : null,
+            depreciationRate: depreciable ? new Prisma.Decimal(depreciation.toFixed(4)) : null,
             sumInsured: money((isTravel ? AMOUNT_BAND[type!][1] : PROPERTY_BAND[category]![1]) * 2),
             averageCondition: false,
             excess: money(excess),
-            adjustedLoss: money(afterDepreciation),
+            adjustedLoss: money(assessed - depreciationAmount),
             underinsured: false,
             averageApplied: false,
             recommended: money(recommended),
@@ -1206,7 +1338,7 @@ async function main() {
                 ? [{
                     key: 'depreciation',
                     label: 'Less: depreciation',
-                    amount: (-(assessed - afterDepreciation)).toFixed(2),
+                    amount: (-depreciationAmount).toFixed(2),
                     basis: `Indemnity basis, ${(depreciation * 100).toFixed(1)}% for age and wear`,
                   }]
                 : []),
@@ -1276,7 +1408,12 @@ async function main() {
       // A claim that reached SCHEDULED was scheduled for something. Without a
       // session row the dashboard shows a scheduled count beside an empty
       // upcoming list, which is the kind of disagreement a demo dies on.
-      if (scheduledAt && mode !== AssessmentMode.DESK_REVIEW && mode !== AssessmentMode.EXPERT_REFERRAL) {
+      // A Session is a video room. Only a video assessment has one: a desk
+      // review holds no interview at all, an expert referral leaves the firm,
+      // and a site visit is attended in person — recording a Daily.co room
+      // against any of them both misdescribes the work and, per §2.5, claims a
+      // per-minute cost the fast track exists to avoid.
+      if (scheduledAt && mode === AssessmentMode.VIDEO) {
         const held = Boolean(assessedAt);
         await prisma.session.create({
           data: {
@@ -1286,7 +1423,7 @@ async function main() {
             roomId: BigInt(claimSeq * 1000 + intBetween(0, 999)),
             roomUrl: `https://trueclaim.daily.co/${claimNumber.toLowerCase()}`,
             status: held ? 'COMPLETED' : 'SCHEDULED',
-            scheduledTime: scheduledAt,
+            scheduledTime: appointmentAt,
             startedAt: held ? assessedAt : null,
             endedAt: held ? addHours(assessedAt!, 1) : null,
             durationSeconds: held ? intBetween(900, 3300) : null,

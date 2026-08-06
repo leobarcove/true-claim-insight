@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, Clock, FileQuestion, Inbox, Mail, MessageSquare, Phone, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
+import { getCategoryConfig } from '@/lib/category-config';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { Badge } from '@/components/ui/badge';
@@ -73,7 +74,7 @@ export function CasesListPage() {
     <div className="flex flex-col h-full">
       <Header
         title="Cases"
-        description="Travel claim requests awaiting vetting and conversion"
+        description="Notifications of loss awaiting vetting and conversion"
       >
         {canCreate && (
           <Link to="/cases/new">
@@ -175,11 +176,14 @@ export function CasesListPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
+                        {/* Travel carries a subtype; a fire or burglary case is
+                            named by its line. Reading the travel field alone
+                            left every property row blank. */}
                         {caseRow.travelClaimType
                           ? TRAVEL_CLAIM_TYPE_LABELS[
                               caseRow.travelClaimType as keyof typeof TRAVEL_CLAIM_TYPE_LABELS
                             ]
-                          : '—'}
+                          : getCategoryConfig(caseRow.category).label}
                       </TableCell>
                       <TableCell>
                         <InfoTooltip

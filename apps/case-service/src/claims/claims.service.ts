@@ -944,7 +944,18 @@ export class ClaimsService {
   }
 
   /**
-   * Get tenant-wide claim statistics
+   * Tenant-wide operating figures for the dashboard.
+   *
+   * Every number here is dated by the event it claims to describe. The first
+   * version dated completions by `updatedAt`, so editing a claim settled in
+   * March counted it as completed this week — and a bulk data fix moved the
+   * headline figure to 832 out of a 980-claim book. A turnaround number that
+   * moves when nothing turned around is worse than no number.
+   *
+   * Cases, claims and sessions are counted separately and labelled as
+   * themselves. They are different things at different stages of the funnel:
+   * a case is intake the firm may still reject, a claim is the engagement, a
+   * session is one appointment inside it.
    */
   async getStats(tenantContext: TenantContext, createdById?: string) {
     let where = this.tenantService.buildClaimTenantFilter(tenantContext);
@@ -955,6 +966,14 @@ export class ClaimsService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Month-to-date is only comparable with the same span of the month before.
+    const sameDayLastMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes()
+    );
     const startOfWeek = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
     startOfWeek.setHours(0, 0, 0, 0);
 
@@ -964,8 +983,9 @@ export class ClaimsService {
       completedThisMonth,
       completedLastMonth,
       completedThisWeek,
-      upcomingScheduled,
+      upcomingAssessments,
       totalAssigned,
+      totalCases,
       statusBreakdown,
     ] = await Promise.all([
       // Total claims in tenant
@@ -981,50 +1001,38 @@ export class ClaimsService {
         },
       }),
 
-      // Completed this month in tenant
+      // Closed this month. `closedAt`, not `updatedAt` — the file closing is
+      // the event, and it is also what PD 12.8 retention runs from.
+      this.prisma.claim.count({ where: { ...where, closedAt: { gte: startOfMonth } } }),
+
+      // Closed by this day of last month, for the change figure beside it.
+      // Comparing six days against a whole month reported a 92% collapse in a
+      // book that was performing normally — the sort of number that starts a
+      // conversation about the wrong thing.
       this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfMonth },
-        },
+        where: { ...where, closedAt: { gte: startOfLastMonth, lt: sameDayLastMonth } },
       }),
 
-      // Completed last month in tenant
+      // Closed this week.
+      this.prisma.claim.count({ where: { ...where, closedAt: { gte: startOfWeek } } }),
+
+      // The adjuster's diary: claims with an appointment still to come. Counted
+      // the same way the panel beside it lists them, so the two cannot
+      // disagree — the card used to say "19" while the list said "none".
+      //
+      // Claims rather than video rooms on purpose. A site visit is an
+      // appointment too, and a diary that only showed video calls would hide
+      // every property inspection the router now schedules.
       this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: {
-            gte: startOfLastMonth,
-            lt: startOfMonth,
-          },
-        },
+        where: { ...where, scheduledAssessmentTime: { gte: now } },
       }),
 
-      // Completed this week in tenant
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfWeek },
-        },
-      }),
+      this.prisma.claim.count({ where: { ...where, status: 'ASSIGNED' } }),
 
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          scheduledAssessmentTime: {
-            gte: now,
-          },
-        },
-      }),
-
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          status: 'ASSIGNED',
-        },
+      // Intake volume. A case is not a claim: the firm vets it first and may
+      // reject it, so the two counts differ and are shown as themselves.
+      this.prisma.case.count({
+        where: tenantContext?.tenantId ? { tenantId: tenantContext.tenantId } : {},
       }),
 
       // Status breakdown
@@ -1047,11 +1055,14 @@ export class ClaimsService {
       stats: {
         totalClaims,
         activeClaims,
+        totalCases,
         completedThisMonth,
         completedThisWeek,
-        averagePerDay: completedThisWeek / 7,
-        inProgress: upcomingScheduled, // Upcoming scheduled sessions
-        totalAssigned, // Total assigned claims
+        // Over the days of the month elapsed, not a fixed seven. Dividing a
+        // part-month by a whole week understates the rate every time.
+        averagePerDay: parseFloat((completedThisMonth / now.getDate()).toFixed(1)),
+        inProgress: upcomingAssessments,
+        totalAssigned,
         monthlyChange: parseFloat(monthlyChange.toFixed(1)),
       },
       statusBreakdown: statusBreakdown.reduce(

@@ -32,6 +32,8 @@ export class QuantumService {
 
     const input: QuantumInput = {
       basis: dto.basis,
+      // Qualifies the basis findings; the arithmetic does not branch on it.
+      category: claim.category,
       assessedLoss: new D(dto.assessedLoss),
       sumInsured: new D(dto.sumInsured),
       depreciationRate: dec(dto.depreciationRate),
@@ -138,7 +140,7 @@ export class QuantumService {
   private async loadClaim(claimId: string, tenantContext: TenantContext) {
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
-      select: { id: true, tenantId: true },
+      select: { id: true, tenantId: true, category: true },
     });
 
     // Existence check, not an access check: confirming a claim exists in

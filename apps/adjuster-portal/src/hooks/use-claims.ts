@@ -42,11 +42,14 @@ export interface ClaimListResponse {
 export interface ClaimStats {
   totalAssigned: number;
   pendingReview: number;
+  /** Claims with an appointment still to come, in any assessment mode. */
   inProgress: number;
   completedThisMonth: number;
   completedThisWeek: number;
   averagePerDay: number;
   totalClaims: number;
+  /** Intake volume. A rejected case never becomes a claim, so this exceeds totalClaims. */
+  totalCases: number;
   activeClaims: number;
   monthlyChange: number;
   statusBreakdown: Record<string, number>;

@@ -264,3 +264,54 @@ describe('quantum — arithmetic and presentation', () => {
     expect(rendered).toContain('29000.00');
   });
 });
+
+describe('quantum — settlement basis against what is being settled', () => {
+  const travel = {
+    assessedLoss: D('2000'),
+    sumInsured: D('10000'),
+    averageCondition: false,
+    category: 'TRAVEL',
+  };
+
+  it('questions a reinstatement basis on a travel loss', () => {
+    // A lost bag is not reinstated. The basis is usually set out of habit from
+    // property work, and the figure it produces is too high by the wear.
+    const result = calculateQuantum({ ...travel, basis: 'REINSTATEMENT' });
+    expect(result.warnings.some(w => /Reinstatement is a property basis/.test(w))).toBe(true);
+  });
+
+  it('does not refuse it — some travel policies pay new-for-old', () => {
+    // A finding, not a block: baggage under an age limit can be replaced new.
+    const result = calculateQuantum({ ...travel, basis: 'REINSTATEMENT' });
+    expect(result.recommended.toFixed(2)).toBe('2000.00');
+  });
+
+  it('says nothing about a reinstatement basis on a fire loss', () => {
+    const result = calculateQuantum({
+      ...travel,
+      category: 'FIRE',
+      basis: 'REINSTATEMENT',
+    });
+    expect(result.warnings.some(w => /property basis/.test(w))).toBe(false);
+  });
+
+  it('does not ask a travel claim to justify having no depreciation', () => {
+    // A delayed flight is reimbursed at what it cost. Raising the property
+    // question on every travel claim would empty "matters outstanding".
+    const result = calculateQuantum({ ...travel, basis: 'INDEMNITY' });
+    expect(result.warnings.some(w => /no depreciation applied/.test(w))).toBe(false);
+  });
+
+  it('still asks it of a property claim', () => {
+    const result = calculateQuantum({ ...travel, category: 'FIRE', basis: 'INDEMNITY' });
+    expect(result.warnings.some(w => /no depreciation applied/.test(w))).toBe(true);
+  });
+
+  it('still asks it when the category is unknown', () => {
+    // Absent category must not silence a finding — the safe reading is that
+    // this is a property loss until something says otherwise.
+    const { category: _omitted, ...noCategory } = travel;
+    const result = calculateQuantum({ ...noCategory, basis: 'INDEMNITY' });
+    expect(result.warnings.some(w => /no depreciation applied/.test(w))).toBe(true);
+  });
+});

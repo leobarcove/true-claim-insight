@@ -48,6 +48,16 @@ export interface QuantumInput {
   basis: SettlementBasis;
 
   /**
+   * The claim's category, where known.
+   *
+   * The arithmetic does not branch on it — a deduction is a deduction. It
+   * qualifies two *findings*, because both only make sense against what is
+   * being settled: reinstatement is a property concept, and a travel loss
+   * reimbursed at cost has nothing to depreciate.
+   */
+  category?: string;
+
+  /**
    * Depreciation as a rate (0–1) of the assessed loss. Indemnity basis only —
    * supplying it on a reinstatement policy is a caller error, not a silent
    * no-op, because it usually means the basis was set wrongly.
@@ -158,9 +168,25 @@ export function calculateQuantum(input: QuantumInput): QuantumResult {
       amount: deduction.negated(),
       basis: `Indemnity basis, ${input.depreciationRate.times(100).toFixed(1)}% for age and wear`,
     });
-  } else if (input.basis === 'INDEMNITY') {
+  } else if (input.basis === 'INDEMNITY' && input.category !== 'TRAVEL') {
+    // Not raised on travel: a delayed flight or an overseas medical bill is
+    // reimbursed at what it cost, and there is nothing there to depreciate.
+    // Raising it on every such claim would empty "matters outstanding" of
+    // meaning, which is the failure mode §3.6 calls false comfort.
     warnings.push(
       'Indemnity basis with no depreciation applied — confirm this is intended'
+    );
+  }
+
+  if (input.category === 'TRAVEL' && input.basis === 'REINSTATEMENT') {
+    // Not refused. Some travel policies do pay new-for-old on baggage under an
+    // age limit, so a reinstatement basis can be right — but it is the unusual
+    // reading, and on a lost bag it is more often a basis set out of habit from
+    // property work. Surfaced the same way as `averageApplies`: put in front of
+    // an adjuster to confirm, never applied or overridden silently.
+    warnings.push(
+      'Reinstatement is a property basis — a travel loss is normally settled at ' +
+        'its value at the time of loss. Confirm the policy pays new-for-old'
     );
   }
 
