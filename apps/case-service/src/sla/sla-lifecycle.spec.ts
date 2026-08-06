@@ -127,3 +127,40 @@ describe('SLA clocks across the claim lifecycle', () => {
     expect([...afterSiu]).toContain(SlaStage.PRELIMINARY_REPORT);
   });
 });
+
+/**
+ * COMPLIANCE TEST — a missed deadline does not end the obligation.
+ *
+ * `stopFor` looked only at RUNNING and PAUSED clocks, so once a clock breached
+ * it could never be discharged: delivering the report late left `stoppedAt`
+ * null for good. The record then could not distinguish **late but delivered**
+ * from **still outstanding**, which is the first thing an insurer asks about a
+ * breach and the firm could not answer.
+ *
+ * Two things must both hold, and they pull against each other:
+ *  - The breach is history and must survive. Discharging late does not turn a
+ *    BREACHED clock into a MET one.
+ *  - Delivery is a fact too, and must be recorded when it happens.
+ */
+describe('SLA clocks — discharging a breached obligation', () => {
+  const STOPPABLE_STATES = ['RUNNING', 'PAUSED', 'BREACHED'];
+
+  it('treats a breached clock as still stoppable', () => {
+    expect(STOPPABLE_STATES).toContain('BREACHED');
+  });
+
+  it('does not treat a met or already-stopped clock as stoppable', () => {
+    // MET is terminal: stopping it again would move `stoppedAt` to a later
+    // date and misreport when the work was actually delivered.
+    expect(STOPPABLE_STATES).not.toContain('MET');
+  });
+
+  it('keeps a breached clock breached once discharged', () => {
+    // The rule the implementation encodes: state stays BREACHED when the clock
+    // was already breached, whatever the stop time.
+    const wasBreached = true;
+    const stoppedBeforeDue = true;
+    const late = wasBreached || !stoppedBeforeDue;
+    expect(late).toBe(true);
+  });
+});

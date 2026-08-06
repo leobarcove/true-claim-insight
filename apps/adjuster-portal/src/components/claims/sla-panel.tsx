@@ -61,8 +61,20 @@ function position(clock: SlaClock): string {
     return `Met, due ${due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
   }
 
+  if (clock.state === 'BREACHED') {
+    // Missing the deadline and still owing the work are different states, and
+    // an insurer asks about the difference first. A discharged breach says when
+    // it was delivered; a live one keeps counting.
+    if (clock.stoppedAt) {
+      const late = Math.abs(workingDaysBetween(new Date(clock.stoppedAt), due));
+      return `Delivered ${late} working day${late === 1 ? '' : 's'} late`;
+    }
+    const overdue = Math.abs(workingDaysBetween(new Date(), due));
+    return `${overdue} working day${overdue === 1 ? '' : 's'} overdue, still outstanding`;
+  }
+
   const days = workingDaysBetween(new Date(), due);
-  if (clock.state === 'BREACHED' || days < 0) {
+  if (days < 0) {
     const late = Math.abs(days);
     return `${late} working day${late === 1 ? '' : 's'} overdue`;
   }
