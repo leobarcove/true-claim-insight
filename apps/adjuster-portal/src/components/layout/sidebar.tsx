@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Inbox,
   MailQuestion,
+  MessagesSquare,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -59,6 +60,19 @@ const navigation: NavItem[] = [
     name: 'FNOL intake',
     href: '/intake',
     icon: MailQuestion,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
+    // Beside FNOL intake for the same reason: both are places a claimant is
+    // waiting on the firm. A conversation with an agent needed is more urgent
+    // than an unparsed email, so it sits above Claims rather than under Admin.
+    name: 'Conversations',
+    href: '/conversations',
+    icon: MessagesSquare,
     permissions: [
       PERMISSIONS.CLAIMS_VIEW_OWN,
       PERMISSIONS.CLAIMS_VIEW_BASIC,

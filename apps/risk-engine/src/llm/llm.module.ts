@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { LLM_PROVIDER, LlmProvider } from './llm-provider.interface';
 import { OllamaGpuLlmProvider } from './ollama-gpu-llm.provider';
 import { GeminiLlmProvider } from './gemini-llm.provider';
+import { AnswerNormaliserController } from './answer-normaliser.controller';
+import { AnswerNormaliserService } from './answer-normaliser.service';
 
 /**
  * LLM module — registers both providers and binds LLM_PROVIDER to the
@@ -16,7 +18,9 @@ import { GeminiLlmProvider } from './gemini-llm.provider';
  */
 @Global()
 @Module({
+  controllers: [AnswerNormaliserController],
   providers: [
+    AnswerNormaliserService,
     OllamaGpuLlmProvider,
     GeminiLlmProvider,
     {
@@ -35,6 +39,6 @@ import { GeminiLlmProvider } from './gemini-llm.provider';
       },
     },
   ],
-  exports: [LLM_PROVIDER, OllamaGpuLlmProvider, GeminiLlmProvider],
+  exports: [LLM_PROVIDER, OllamaGpuLlmProvider, GeminiLlmProvider, AnswerNormaliserService],
 })
 export class LlmModule {}

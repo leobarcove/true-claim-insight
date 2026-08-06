@@ -20,6 +20,7 @@ import { ClaimsModule } from './claims/claims.module';
 import { QuantumProxyModule } from './quantum/quantum.module';
 import { BillingProxyModule } from './billing/billing.module';
 import { SlaProxyModule } from './sla/sla.module';
+import { ConversationsProxyModule } from './conversations/conversations.module';
 import { IngestionProxyModule } from './ingestion/ingestion.module';
 import { TenantConfigModule } from './tenant-config/tenant-config.module';
 import { RetentionModule } from './retention/retention.module';
@@ -75,6 +76,7 @@ import configuration from './config/configuration';
     QuantumProxyModule,
     SlaProxyModule,
     BillingProxyModule,
+    ConversationsProxyModule,
     IngestionProxyModule,
     TenantConfigModule,
     RetentionModule,

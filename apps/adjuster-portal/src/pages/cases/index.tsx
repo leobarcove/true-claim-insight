@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Clock, FileQuestion, Inbox, Mail, MessageSquare, Phone, Plus } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  FileQuestion,
+  Inbox,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  Phone,
+  Plus,
+  Send,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
 import { getCategoryConfig } from '@/lib/category-config';
@@ -38,12 +49,30 @@ export const caseStatusConfig: Record<
   ABANDONED: { label: 'Abandoned', variant: 'secondary' },
 };
 
+/**
+ * One entry per CaseChannel. Keyed by the Prisma enum value, which is a
+ * string-literal union rather than a TS enum, so this cannot be a
+ * Record<CaseChannel, …> that would fail to compile when a channel is added.
+ * `unknownChannel` below is the guard instead: a new channel shows as itself
+ * rather than being silently mislabelled as web chat.
+ */
 const channelIcons: Record<string, { icon: any; label: string }> = {
   WEB_CHAT: { icon: MessageSquare, label: 'Web chat' },
   STAFF: { icon: Phone, label: 'Staff capture' },
   EMAIL: { icon: Mail, label: 'Email FNOL' },
-  WHATSAPP: { icon: MessageSquare, label: 'WhatsApp' },
+  WHATSAPP: { icon: MessageCircle, label: 'WhatsApp' },
+  TELEGRAM: { icon: Send, label: 'Telegram' },
+  MESSENGER: { icon: MessageCircle, label: 'Messenger' },
 };
+
+/**
+ * Fallback for a channel this screen does not know yet.
+ *
+ * Deliberately not `channelIcons.WEB_CHAT`, which is what this used to do: a
+ * Telegram case would render as "Web chat", and an operator reading the queue
+ * would have no way to tell. Showing the raw enum value is uglier and honest.
+ */
+const unknownChannel = (channel: string) => ({ icon: FileQuestion, label: channel });
 
 const QUEUE_TABS = ['SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED', 'REFERRED_TO_EXPERT', 'CONVERTED', 'REJECTED'];
 
@@ -156,7 +185,8 @@ export function CasesListPage() {
               </TableHeader>
               <TableBody>
                 {cases.map(caseRow => {
-                  const channel = channelIcons[String(caseRow.channel)] || channelIcons.WEB_CHAT;
+                  const channel =
+                    channelIcons[String(caseRow.channel)] ?? unknownChannel(String(caseRow.channel));
                   const ChannelIcon = channel.icon;
                   const status = caseStatusConfig[String(caseRow.status)];
                   const completeness = caseRow.completeness;

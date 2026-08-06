@@ -8,9 +8,16 @@ import {
   TravelClaimType,
   DocumentType,
   PolicySource,
+  FlowStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CSP_ADJUSTING_WORKING_DAYS, CSP_SUPPLEMENTARY_WORKING_DAYS } from '@tci/shared-types';
+import {
+  CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_LABELS,
+  validateFlowDefinition,
+  type CaseFlow,
+} from '@tci/shared-types';
 import { EncryptionService, EnvKeyProvider } from '@tci/crypto';
 import { PrismaKeyStore } from '../src/key-store';
 
@@ -127,6 +134,76 @@ const MALAYSIA_CARS: Record<string, string[]> = {
 };
 
 const prisma = new PrismaClient();
+
+/** `FLIGHT_DELAY` → `travel-flight-delay`. Stable across versions. */
+const flowKey = (travelClaimType: string) =>
+  `travel-${travelClaimType.toLowerCase().replace(/_/g, '-')}`;
+
+/**
+ * Publish the built-in travel flows as platform-default FlowDefinition rows.
+ *
+ * These are the same five flows `CASE_FLOWS` has always held, moved from code
+ * into data so a flow can be versioned, overlaid per channel and locale, and
+ * eventually edited without a deploy. Seeding them as `tenantId: null` makes
+ * them available to every tenant; a tenant that later needs its own wording
+ * adds an overlay, and one that needs its own structure gets its own row that
+ * shadows the default.
+ *
+ * Each flow goes through the publish gate first. A seed that writes a broken
+ * flow is worse than one that fails: it produces a conversation that dead-ends
+ * in production, and nothing about a stalled Case says which flow did it.
+ */
+async function seedFlowDefinitions(createdByUserId: string) {
+  let published = 0;
+
+  for (const [travelClaimType, flow] of Object.entries(CASE_FLOWS) as Array<
+    [string, CaseFlow]
+  >) {
+    // Passing the flow as its own reference is not a tautology: it checks that
+    // every step marked `system: true` is actually reachable from the entry,
+    // which a miswired branch can break.
+    const problems = validateFlowDefinition(flow, flow);
+    if (problems.length > 0) {
+      throw new Error(
+        `Flow ${travelClaimType} failed the publish gate:\n` +
+          problems.map(problem => `  - [${problem.kind}] ${problem.detail}`).join('\n')
+      );
+    }
+
+    const key = flowKey(travelClaimType);
+    const existing = await prisma.flowDefinition.findFirst({
+      where: { tenantId: null, key, version: 1 },
+    });
+
+    const payload = {
+      name: TRAVEL_CLAIM_TYPE_LABELS[travelClaimType as keyof typeof TRAVEL_CLAIM_TYPE_LABELS],
+      category: ClaimCategory.TRAVEL,
+      travelClaimType: travelClaimType as TravelClaimType,
+      entryStepId: flow.entryStepId,
+      steps: flow.steps as unknown as object,
+      status: FlowStatus.PUBLISHED,
+      publishedByUserId: createdByUserId,
+      publishedAt: new Date(),
+    };
+
+    if (existing) {
+      // Re-running the seed refreshes the built-ins in place. Safe because
+      // version 1 is ours; an author's edits live on a new version, which this
+      // never touches.
+      await prisma.flowDefinition.update({ where: { id: existing.id }, data: payload });
+    } else {
+      await prisma.flowDefinition.create({
+        data: { ...payload, tenantId: null, key, version: 1, createdByUserId },
+      });
+      published += 1;
+    }
+  }
+
+  console.log(
+    `🧭 Intake flows: ${Object.keys(CASE_FLOWS).length} published as platform defaults` +
+      ` (${published} new).`
+  );
+}
 
 async function main() {
   console.log('🌱 Seeding database with demo data...');
@@ -586,6 +663,8 @@ async function main() {
     });
     console.log('🎓 Demo adjuster competency seeded (senior in TRAVEL).');
   }
+
+  await seedFlowDefinitions(superAdmin.id);
 
   console.log('✅ Seeding completed.');
   console.log(

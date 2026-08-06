@@ -122,6 +122,52 @@ gateway; case-service reads it to decide whether a gate blocks. The
 data-ownership test enforces that split, and refused the first placement of
 this service in case-service.
 
+### Intake flows as data, and conversational channels (added 6 Aug 2026)
+
+The guided intake conversation used to be hardcoded TypeScript, with one branch
+expressed as a JS closure. That is unauthorable — a closure serialises to
+nothing — so wording changes needed a deploy, and a second channel would have
+meant forking the flow.
+
+Structure now lives in `FlowDefinition` (versioned, tenant-scoped, `tenantId =
+null` as the platform default) and wording in `FlowOverlay` (sparse, per channel
+and per locale). The split is enforced by shape rather than convention: an
+overlay type has no `next` and no `answerType`, so a channel cannot diverge into
+asking different questions or storing different values. A choice override may
+relabel a value the base step already defines, never add one — adding one would
+change what can be stored, which is structure.
+
+Two rules generalise beyond travel, and both matter as fire and flood arrive:
+
+- **Mark what the rest of the system reads by name.** `system: true` protects
+  `incident-date` (CSP deadline flags), `trip-start` (promoted to
+  `Claim.tripStartDate`) and `bank-account-number` (keys the redaction set). An
+  author removing one gets a refused publish rather than a flow that runs
+  perfectly while a regulatory clock quietly stops.
+- **Pin the version on the record, not the tenant.** `Case.flowDefinitionId` +
+  `flowVersion` mean publishing an edit cannot rewrite an intake in flight.
+  Overlays need no pin, because copy cannot move the cursor or invalidate an
+  answer — which is what makes live copy correction safe.
+
+Multi-way branching is a `switch` rule rather than nested binary branches,
+specifically for the property lines: a cause-of-loss list fanning out to
+per-peril steps reads as a table in an editor and as an unreadable ladder if
+expressed as nested `branch`es.
+
+Channels sit behind `ChannelAdapter` (Telegram first; web chat needs no adapter
+because the PWA renders the flow directly). An adapter knows how to *say* things
+on one platform and nothing about what to say — deciding the next question,
+validating and advancing the Case all happen once, above that line, against the
+pinned flow. `ChannelCapabilities` records what each platform can physically
+render, including `retainsPlaintext`, which is how the payout-details exposure on
+messaging channels is tracked rather than assumed away (MASTER_PLAN §3.4).
+
+The load-bearing detail: a channel answer goes through
+`CasesService.patchAnswer`, not a fast path around it. Every compliance control
+lives in that method — answer redaction, policy promotion, deadline warnings,
+the audit row — and `assertAccess` is what proves a messaging sender cannot
+reach another claimant's case.
+
 ## FraudSignalProvider plugin pattern
 
 > **The pattern generalised.** `FraudSignalProvider` was the first instance of

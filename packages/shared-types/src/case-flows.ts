@@ -62,6 +62,37 @@ export type AnswerType =
   | 'document'
   | 'confirm';
 
+/** One predicate against a previously captured answer. */
+export interface NextCondition {
+  stepId: string;
+  op: 'eq' | 'neq' | 'in' | 'notIn' | 'exists' | 'gt' | 'lt';
+  /** Absent for `exists`; an array for `in` / `notIn`. */
+  value?: AnswerValue | AnswerValue[];
+}
+
+/**
+ * Where a step leads. Declarative rather than a callback, because a flow has
+ * to survive a round trip through a database column and a visual editor — a
+ * JS closure serialises to nothing and cannot be authored in a form.
+ *
+ * `branch` takes an array of conditions ANDed together. `switch` exists
+ * separately because multi-way routing (a cause-of-loss list fanning out to
+ * per-peril steps, which fire and flood will need) chains into an unreadable
+ * ladder when expressed as nested binary branches, and renders as a plain
+ * table in the editor when it is its own rule.
+ */
+export type NextRule =
+  | { type: 'step'; stepId: string }
+  | { type: 'end' }
+  | { type: 'branch'; when: NextCondition[]; then: string | null; else: string | null }
+  | {
+      type: 'switch';
+      /** Step whose answer selects the destination. */
+      on: string;
+      cases: Array<{ value: AnswerValue; goto: string }>;
+      default: string | null;
+    };
+
 export interface FlowStep {
   id: string;
   /** Bot bubble copy shown to the claimant (British English). */
@@ -74,8 +105,20 @@ export interface FlowStep {
   documentType?: DocumentType;
   optional?: boolean;
   validation?: { min?: number; max?: number; pattern?: string };
-  /** Next step id, a branching function, or null when this is the final step. */
-  next: string | null | ((answers: CaseAnswers) => string | null);
+  /**
+   * Load-bearing outside the conversation: something elsewhere reads this
+   * answer by step id. `incident-date` drives the CSP deadline flags,
+   * `trip-start` is promoted to Claim.tripStartDate on conversion, and
+   * `bank-account-number` keys the redaction set.
+   *
+   * Copy stays editable; the id and the step's existence do not. The publish
+   * gate refuses a flow that has dropped one, because nothing else would
+   * notice — the conversation runs, the claim looks healthy, and a regulatory
+   * clock silently stops being computed.
+   */
+  system?: boolean;
+  /** Where this step leads. */
+  next: NextRule;
 }
 
 export interface CaseFlow {
@@ -115,6 +158,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     prompt: 'When did your trip begin?',
     label: 'Trip start date',
     answerType: 'date',
+    system: true, // promoted to Claim.tripStartDate on conversion
   },
   {
     id: 'trip-end',
@@ -133,6 +177,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     prompt: 'When did the incident happen? Please give the date and approximate time.',
     label: 'Incident date and time',
     answerType: 'datetime',
+    system: true, // drives computeDeadlineFlags — notifiedLate / outOfWindow
   },
 ];
 
@@ -151,6 +196,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     label: 'Bank account number',
     answerType: 'text',
     validation: { pattern: '^[0-9]{6,20}$' },
+    system: true, // keys SENSITIVE_ANSWER_STEPS — the redaction set is by step id
   },
   {
     id: 'bank-account-holder',
@@ -164,6 +210,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
       'Thank you. Please review your details in the summary below, then confirm to submit your claim request.',
     label: 'Review and confirm',
     answerType: 'confirm',
+    system: true, // resolveNextStep and submit() both special-case this id
   },
 ];
 
@@ -189,14 +236,17 @@ const documentStep = (
 const buildFlow = (
   travelClaimType: TravelClaimType,
   middle: Array<Omit<FlowStep, 'next'>>,
-  overrides: Record<string, FlowStep['next']> = {}
+  overrides: Record<string, NextRule> = {}
 ): CaseFlow => {
   const ordered = [...commonPrefix, ...middle, ...commonSuffix];
-  const steps: FlowStep[] = ordered.map((step, index) => ({
-    ...step,
-    next:
-      step.id in overrides ? overrides[step.id] : (ordered[index + 1]?.id ?? null),
-  }));
+  const steps: FlowStep[] = ordered.map((step, index) => {
+    if (step.id in overrides) return { ...step, next: overrides[step.id] };
+    const following = ordered[index + 1]?.id;
+    return {
+      ...step,
+      next: following ? { type: 'step', stepId: following } : { type: 'end' },
+    };
+  });
   return { travelClaimType, entryStepId: steps[0].id, steps };
 };
 
@@ -408,11 +458,14 @@ const tripCancellationFlow = buildFlow(
   ],
   {
     // Medical evidence is only requested when the reason is illness or death.
-    'estimated-amount': answers =>
-      answers['cancellation-reason'] === 'ILLNESS' ||
-      answers['cancellation-reason'] === 'DEATH_OF_RELATIVE'
-        ? 'doc-medical-report'
-        : 'doc-booking-invoice',
+    'estimated-amount': {
+      type: 'branch',
+      when: [
+        { stepId: 'cancellation-reason', op: 'in', value: ['ILLNESS', 'DEATH_OF_RELATIVE'] },
+      ],
+      then: 'doc-medical-report',
+      else: 'doc-booking-invoice',
+    },
   }
 );
 
@@ -487,6 +540,73 @@ export const getFlow = (type: TravelClaimTypeLike): CaseFlow =>
 export const getStep = (flow: CaseFlow, stepId: string): FlowStep | undefined =>
   flow.steps.find(step => step.id === stepId);
 
+/** Evaluate one condition against the answers captured so far. */
+const testCondition = (condition: NextCondition, answers: CaseAnswers): boolean => {
+  const actual = answers[condition.stepId];
+  switch (condition.op) {
+    case 'exists':
+      return actual !== undefined && actual !== null && actual !== '';
+    case 'eq':
+      return actual === condition.value;
+    case 'neq':
+      return actual !== condition.value;
+    case 'in':
+      return Array.isArray(condition.value) && condition.value.includes(actual);
+    case 'notIn':
+      return Array.isArray(condition.value) && !condition.value.includes(actual);
+    case 'gt':
+      return Number(actual) > Number(condition.value);
+    case 'lt':
+      return Number(actual) < Number(condition.value);
+    default:
+      return false;
+  }
+};
+
+/**
+ * Resolve a NextRule to a step id, or null for the end of the flow.
+ *
+ * Exported because the publish gate walks rules statically and the chat
+ * gateway evaluates them per turn — both need the same semantics, and a second
+ * implementation is how a branch comes to behave differently in validation
+ * than it does in the conversation.
+ */
+export const evaluateNext = (rule: NextRule, answers: CaseAnswers): string | null => {
+  switch (rule.type) {
+    case 'end':
+      return null;
+    case 'step':
+      return rule.stepId;
+    case 'branch':
+      return rule.when.every(condition => testCondition(condition, answers))
+        ? rule.then
+        : rule.else;
+    case 'switch': {
+      const actual = answers[rule.on];
+      const matched = rule.cases.find(entry => entry.value === actual);
+      return matched ? matched.goto : rule.default;
+    }
+    default:
+      return null;
+  }
+};
+
+/** Every step id a rule can reach — for static validation, ignoring answers. */
+export const ruleTargets = (rule: NextRule): string[] => {
+  switch (rule.type) {
+    case 'step':
+      return [rule.stepId];
+    case 'branch':
+      return [rule.then, rule.else].filter((id): id is string => id !== null);
+    case 'switch':
+      return [...rule.cases.map(entry => entry.goto), rule.default].filter(
+        (id): id is string => id !== null
+      );
+    default:
+      return [];
+  }
+};
+
 /**
  * Resolve the next unanswered step after `stepId`. Steps whose answers are
  * already present (e.g. pre-filled by a SYSTEM-initiated case) are skipped.
@@ -502,8 +622,7 @@ export const resolveNextStep = (
   while (current) {
     if (visited.has(current.id)) return null; // guard against miswired cycles
     visited.add(current.id);
-    const nextId =
-      typeof current.next === 'function' ? current.next(answers) : current.next;
+    const nextId = evaluateNext(current.next, answers);
     if (!nextId) return null;
     const nextStep = getStep(flow, nextId);
     if (!nextStep) return null;
@@ -549,7 +668,24 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
     }
     case 'date':
     case 'datetime': {
-      const date = new Date(String(value));
+      const text = String(value).trim();
+
+      // Slash and dot forms are refused outright rather than handed to
+      // `new Date()`, which reads them month-first. "06/07/2026" would parse
+      // happily as 7 June when a Malaysian claimant meant 6 July — a wrong
+      // incident date that moves the CSP deadline flags with nothing to see.
+      //
+      // Channels where the claimant types free text convert to ISO first, via
+      // `parseTextDate` in channel-capabilities. Everything else already sends
+      // ISO: the PWA's date control, the staff form and the FNOL parser.
+      if (/^\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4}/.test(text)) {
+        return {
+          valid: false,
+          error: 'Please give the date as DD/MM/YYYY, for example 16/06/2026.',
+        };
+      }
+
+      const date = new Date(text);
       if (Number.isNaN(date.getTime())) {
         return { valid: false, error: 'Please provide a valid date.' };
       }

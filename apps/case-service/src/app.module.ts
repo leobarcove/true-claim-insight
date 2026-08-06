@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ClaimsModule } from './claims/claims.module';
 import { AdjustersModule } from './adjusters/adjusters.module';
 import { CasesModule } from './cases/cases.module';
+import { ChatModule } from './chat/chat.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FloodClaimsModule } from './flood-claims/flood-claims.module';
 import { PoliciesModule } from './policies/policies.module';
@@ -85,6 +86,7 @@ import { AuditModule } from './common/audit/audit.module';
     ClaimsModule,
     AdjustersModule,
     CasesModule,
+    ChatModule,
     DocumentsModule,
     FloodClaimsModule,
     PoliciesModule,

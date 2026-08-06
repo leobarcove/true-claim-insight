@@ -8,42 +8,41 @@ datasource db {
 }
 
 model User {
-  id               String             @id @default(uuid())
-  email            String             @unique
-  password         String
-  fullName         String
-  phoneNumber      String
-  role             UserRole
-  licenseNumber    String?
-  avatarUrl  String?
-  tenantId         String? // Deprecated: kept for backward compatibility
-  currentTenantId  String? // Active tenant context for current session
-  isVerified       Boolean            @default(false)
-  lastLoginAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  adjuster         Adjuster?
-  siuClaims        Claim[]            @relation("SIUInvestigator")
-  tenant           Tenant?            @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
-  currentTenant    Tenant?            @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
-  userTenants      UserTenant[]       // Many-to-many relationship with tenants
-  tenantAccessLogs TenantAccessLog[]
-  sessions         Session[]
-  documents        Document[]
-  documentAnalyses DocumentAnalysis[]
-  trinityChecks    TrinityCheck[]
-  deceptionScores  DeceptionScore[]
-  riskAssessments  RiskAssessment[]
-  videoUploads     VideoUpload[]
-  claimants        Claimant[]
-  otpCodes         OtpCode[]
-  vehicleMakes     VehicleMake[]
-  vehicleModels    VehicleModel[]
-  claimNotes       ClaimNote[]
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  fullName           String
+  phoneNumber        String
+  role               UserRole
+  licenseNumber      String?
+  avatarUrl          String?
+  tenantId           String? // Deprecated: kept for backward compatibility
+  currentTenantId    String? // Active tenant context for current session
+  isVerified         Boolean             @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  adjuster           Adjuster?
+  siuClaims          Claim[]             @relation("SIUInvestigator")
+  tenant             Tenant?             @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
+  currentTenant      Tenant?             @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
+  userTenants        UserTenant[] // Many-to-many relationship with tenants
+  tenantAccessLogs   TenantAccessLog[]
+  sessions           Session[]
+  documents          Document[]
+  documentAnalyses   DocumentAnalysis[]
+  trinityChecks      TrinityCheck[]
+  deceptionScores    DeceptionScore[]
+  riskAssessments    RiskAssessment[]
+  videoUploads       VideoUpload[]
+  claimants          Claimant[]
+  otpCodes           OtpCode[]
+  vehicleMakes       VehicleMake[]
+  vehicleModels      VehicleModel[]
+  claimNotes         ClaimNote[]
   sessionClientInfos SessionClientInfo[]
-  auditTrails      AuditTrail[]
-  claims           Claim[]
-
+  auditTrails        AuditTrail[]
+  claims             Claim[]
 
   @@index([tenantId])
   @@index([currentTenantId])
@@ -52,18 +51,18 @@ model User {
 }
 
 model UserTenant {
-  id             String    @id @default(uuid())
+  id             String           @id @default(uuid())
   userId         String
   tenantId       String
   role           UserRole // Role specific to this tenant
-  isDefault      Boolean   @default(false) // Default tenant for this user
+  isDefault      Boolean          @default(false) // Default tenant for this user
   status         UserTenantStatus @default(ACTIVE)
-  joinedAt       DateTime  @default(now())
+  joinedAt       DateTime         @default(now())
   lastAccessedAt DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tenantId])
   @@index([userId])
@@ -73,16 +72,16 @@ model UserTenant {
 }
 
 model TenantAccessLog {
-  id            String   @id @default(uuid())
-  userId        String
-  fromTenantId  String?
-  toTenantId    String
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fromTenant    Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
-  toTenant      Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  userId       String
+  fromTenantId String?
+  toTenantId   String
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromTenant   Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
+  toTenant     Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])
@@ -90,129 +89,131 @@ model TenantAccessLog {
 }
 
 model Tenant {
-  id                  String            @id @default(uuid())
-  name                String
-  type                TenantType
-  subscriptionTier    SubscriptionTier  @default(BASIC)
-  settings            Json              @default("{}")
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  adjusters           Adjuster[]
-  claims              Claim[]           @relation("InsurerClaims")
-  users               User[]            @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
-  currentUsers        User[]            @relation("UserCurrentTenant") // Users currently in this tenant context
-  userTenants         UserTenant[]      // Many-to-many relationship with users
-  tenantAccessLogsFrom TenantAccessLog[] @relation("TenantAccessFrom")
-  tenantAccessLogsTo   TenantAccessLog[] @relation("TenantAccessTo")
-  sessions            Session[]
-  claimNotes          ClaimNote[]
-  deceptionScores     DeceptionScore[]
-  riskAssessments     RiskAssessment[]
-  documents           Document[]
-  documentAnalyses    DocumentAnalysis[]
-  trinityChecks       TrinityCheck[]
-  auditLogs           AuditTrail[]
-  videoUploads        VideoUpload[]
-  sessionClientInfos  SessionClientInfo[]
-  claimants           Claimant[]
-  otpCodes            OtpCode[]
-  vehicleMakes        VehicleMake[]
-  vehicleModels       VehicleModel[]
-  ownedClaims         Claim[]
-  floodClaims         FloodClaim[]
-  travelClaims        TravelClaim[]
+  id                   String                @id @default(uuid())
+  name                 String
+  type                 TenantType
+  subscriptionTier     SubscriptionTier      @default(BASIC)
+  settings             Json                  @default("{}")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  adjusters            Adjuster[]
+  claims               Claim[]               @relation("InsurerClaims")
+  users                User[]                @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
+  currentUsers         User[]                @relation("UserCurrentTenant") // Users currently in this tenant context
+  userTenants          UserTenant[] // Many-to-many relationship with users
+  tenantAccessLogsFrom TenantAccessLog[]     @relation("TenantAccessFrom")
+  tenantAccessLogsTo   TenantAccessLog[]     @relation("TenantAccessTo")
+  sessions             Session[]
+  claimNotes           ClaimNote[]
+  deceptionScores      DeceptionScore[]
+  riskAssessments      RiskAssessment[]
+  documents            Document[]
+  documentAnalyses     DocumentAnalysis[]
+  trinityChecks        TrinityCheck[]
+  auditLogs            AuditTrail[]
+  videoUploads         VideoUpload[]
+  sessionClientInfos   SessionClientInfo[]
+  claimants            Claimant[]
+  otpCodes             OtpCode[]
+  vehicleMakes         VehicleMake[]
+  vehicleModels        VehicleModel[]
+  ownedClaims          Claim[]
+  floodClaims          FloodClaim[]
+  travelClaims         TravelClaim[]
   evidenceRequirements EvidenceRequirement[]
-  cases               Case[]
-  policies            Policy[]
+  cases                Case[]
+  policies             Policy[]
+  slaPolicies          SlaPolicy[]
+  authorityLimits      AuthorityLimit[]
+  assignmentsAsInsurer Assignment[]          @relation("AssignmentInsurer")
+  assignmentsAsHandler Assignment[]          @relation("AssignmentHandlingFirm")
+  feeScales            FeeScale[]
+  feeNotesAsInsurer    FeeNote[]             @relation("FeeNoteInsurer")
+  flowDefinitions      FlowDefinition[]
 
   @@map("tenants")
-  slaPolicies      SlaPolicy[]
-  authorityLimits  AuthorityLimit[]
-  assignmentsAsInsurer  Assignment[] @relation("AssignmentInsurer")
-  assignmentsAsHandler  Assignment[] @relation("AssignmentHandlingFirm")
-  feeScales        FeeScale[]
-  feeNotesAsInsurer FeeNote[] @relation("FeeNoteInsurer")
 }
 
 model Adjuster {
-  id                String         @id @default(uuid())
-  userId            String         @unique
-  tenantId          String
-  licenseNumber     String         @unique
-  bcillaCertified   Boolean        @default(false)
-  amlaMember        Boolean        @default(false)
-  status            AdjusterStatus @default(ACTIVE)
-  licenseVerifiedAt DateTime?
+  id                   String                @id @default(uuid())
+  userId               String                @unique
+  tenantId             String
+  licenseNumber        String                @unique
+  bcillaCertified      Boolean               @default(false)
+  amlaMember           Boolean               @default(false)
+  status               AdjusterStatus        @default(ACTIVE)
+  licenseVerifiedAt    DateTime?
   /// When this person began adjusting employment with the firm. PD 12.3: a new
   /// adjusting employee is closely supervised by a senior for at least one year
   /// before conducting adjusting work independently — supervision status is
   /// derived from this date, so it cannot silently be forgotten.
-  adjustingSince    DateTime?
+  adjustingSince       DateTime?
   /// PD 12.1(a): full-time is the requirement; anything else blocks assignment
   /// in registered mode. Null = not yet recorded, which reads as a gap.
-  employmentType    EmploymentType?
+  employmentType       EmploymentType?
   /// Schedule 2 minimum qualification, as held (free text until the Order's
   /// schedule is transcribed).
-  qualification     String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  tenant            Tenant         @relation(fields: [tenantId], references: [id])
-  user              User           @relation(fields: [userId], references: [id])
-  claims            Claim[]
-
-  @@index([tenantId])
-  @@map("adjusters")
-  authoredReports   AdjusterReport[] @relation("ReportAuthor")
-  reviewedReports   AdjusterReport[] @relation("ReportReviewer")
-  signedReports     AdjusterReport[] @relation("ReportSigner")
-  authorityLimits   AuthorityLimit[]
-  competencies      AdjusterCompetency[]
+  qualification        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  user                 User                  @relation(fields: [userId], references: [id])
+  claims               Claim[]
+  authoredReports      AdjusterReport[]      @relation("ReportAuthor")
+  reviewedReports      AdjusterReport[]      @relation("ReportReviewer")
+  signedReports        AdjusterReport[]      @relation("ReportSigner")
+  authorityLimits      AuthorityLimit[]
+  competencies         AdjusterCompetency[]
   conflictDeclarations ConflictDeclaration[]
   conflictAttestations ConflictAttestation[]
   cpdRecords           CpdRecord[]
   backgroundScreenings BackgroundScreening[]
   qualityReviews       WorkQualityReview[]
   timeEntries          TimeEntry[]
+
+  @@index([tenantId])
+  @@map("adjusters")
 }
 
 model Claimant {
-  id            String    @id @default(uuid())
+  id                   String                @id @default(uuid())
   /// Blind index (HMAC-SHA256 of the normalised NRIC with a secret pepper).
   /// Carries the uniqueness that plaintext `nric` used to, and is the only way
   /// to look a claimant up by NRIC. HMAC not a bare hash: a Malaysian NRIC is
   /// 12 structured digits, so an unpeppered rainbow table is trivial.
-  nricHash      String?   @unique
+  nricHash             String?               @unique
   /// Encrypted NRIC (v<n>:<iv>:<ciphertext>:<tag>).
-  nricEncrypted String?
+  nricEncrypted        String?
   /// Last 4 digits, clear, so screens can identify a person without decrypting.
-  nricLast4     String?
-  fullName      String?
-  dateOfBirth   DateTime?
-  phoneNumber   String    @unique
-  email         String?
-  kycStatus     KycStatus @default(PENDING)
-  kycVerifiedAt DateTime?
+  nricLast4            String?
+  fullName             String?
+  dateOfBirth          DateTime?
+  phoneNumber          String                @unique
+  email                String?
+  kycStatus            KycStatus             @default(PENDING)
+  kycVerifiedAt        DateTime?
   /// When identity was irreversibly destroyed under PD 12.8 / PDPA s.10(2).
   /// The row survives so claims still resolve and the firm's record of what it
   /// assessed stays coherent; the person is simply no longer identifiable from
   /// it. Set once and never cleared — anonymisation cannot be undone, which is
   /// what distinguishes it from pseudonymisation.
-  anonymisedAt  DateTime?
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  tenantId      String?   // Organization ownership
-  userId        String?   // Creator/Link to User record
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
-  user          User?     @relation(fields: [userId], references: [id])
-  claims        Claim[]
-  cases         Case[]
+  anonymisedAt         DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  tenantId             String? // Organization ownership
+  userId               String? // Creator/Link to User record
+  tenant               Tenant?               @relation(fields: [tenantId], references: [id])
+  user                 User?                 @relation(fields: [userId], references: [id])
+  claims               Claim[]
+  cases                Case[]
+  consents             Consent[]
+  conversationBindings ConversationBinding[]
 
   @@index([phoneNumber])
   @@index([tenantId])
   @@index([userId])
   @@map("claimants")
-  consents         Consent[]
 }
 
 model OtpCode {
@@ -223,8 +224,8 @@ model OtpCode {
   verified    Boolean  @default(false)
   attempts    Int      @default(0)
   createdAt   DateTime @default(now())
-  tenantId    String?  // Associated tenant if known
-  userId      String?  // Associated user if known
+  tenantId    String? // Associated tenant if known
+  userId      String? // Associated user if known
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   user        User?    @relation(fields: [userId], references: [id])
 
@@ -236,8 +237,8 @@ model OtpCode {
 }
 
 model Claim {
-  id                      String      @id @default(uuid())
-  claimNumber             String      @unique
+  id                      String         @id @default(uuid())
+  claimNumber             String         @unique
   claimantId              String
   /// Encrypted NRIC snapshot for this claim; see Claimant.nricEncrypted.
   nricEncrypted           String?
@@ -247,10 +248,10 @@ model Claim {
   policyNumber            String
   // Coarse-grained category drives the polymorphic sub-table relation and
   // determines which evidence checklist + fraud providers apply.
-  category                ClaimCategory @default(MOTOR)
+  category                ClaimCategory  @default(MOTOR)
   // Motor-specific subtype. Required when category=MOTOR, otherwise nullable.
   claimType               ClaimType?
-  status                  ClaimStatus @default(SUBMITTED)
+  status                  ClaimStatus    @default(SUBMITTED)
   incidentDate            DateTime
   incidentTime            DateTime?
   incidentLocation        Json
@@ -267,12 +268,12 @@ model Claim {
   sumInsured              Decimal?
   workshopName            String?
   estimatedLossAmount     Decimal?
-  estimatedRepairCost     Decimal?    @db.Decimal(12, 2)
+  estimatedRepairCost     Decimal?       @db.Decimal(12, 2)
   sstAmount               Decimal?
-  isPdpaCompliant         Boolean     @default(false)
+  isPdpaCompliant         Boolean        @default(false)
   slaDeadline             DateTime?
-  complianceNotes         Json?       @default("{}")
-  priority                Priority    @default(NORMAL)
+  complianceNotes         Json?          @default("{}")
+  priority                Priority       @default(NORMAL)
   scheduledAssessmentTime DateTime?
   siuInvestigatorId       String?
   approvedAmount          Decimal?
@@ -288,19 +289,19 @@ model Claim {
   legalHoldAt             DateTime?
   legalHoldReason         String?
   legalHoldByUserId       String?
-  tenantId                String?     // Standardized tenant ownership
-  userId                  String?     // Standardized creator/owner
-  createdById             String?     // Keeping for backward compatibility
+  tenantId                String? // Standardized tenant ownership
+  userId                  String? // Standardized creator/owner
+  createdById             String? // Keeping for backward compatibility
   updatedById             String?
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
   notes                   ClaimNote[]
-  adjuster                Adjuster?   @relation(fields: [adjusterId], references: [id])
-  claimant                Claimant    @relation(fields: [claimantId], references: [id])
-  tenant                  Tenant?     @relation(fields: [tenantId], references: [id])
-  user                    User?       @relation(fields: [userId], references: [id])
-  insurerTenant           Tenant?     @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
-  siuInvestigator         User?       @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
+  adjuster                Adjuster?      @relation(fields: [adjusterId], references: [id])
+  claimant                Claimant       @relation(fields: [claimantId], references: [id])
+  tenant                  Tenant?        @relation(fields: [tenantId], references: [id])
+  user                    User?          @relation(fields: [userId], references: [id])
+  insurerTenant           Tenant?        @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
+  siuInvestigator         User?          @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
   documents               Document[]
   sessions                Session[]
   videoUploads            VideoUpload[]
@@ -317,8 +318,16 @@ model Claim {
   /// history is in AssessmentModeDecision; this is the cursor.
   assessmentMode AssessmentMode?
 
-  quantumWorksheets QuantumWorksheet[]
+  quantumWorksheets       QuantumWorksheet[]
   assessmentModeDecisions AssessmentModeDecision[]
+  slaClocks               SlaClock[]
+  reports                 AdjusterReport[]
+  assignment              Assignment?
+  conflictAttestations    ConflictAttestation[]
+  documentsCompleteAt     DateTime?
+  timeEntries             TimeEntry[]
+  disbursements           Disbursement[]
+  feeNotes                FeeNote[]
 
   @@index([claimantId])
   @@index([adjusterId])
@@ -328,14 +337,6 @@ model Claim {
   @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
-  slaClocks               SlaClock[]
-  reports                 AdjusterReport[]
-  assignment              Assignment?
-  conflictAttestations    ConflictAttestation[]
-  documentsCompleteAt     DateTime?
-  timeEntries             TimeEntry[]
-  disbursements           Disbursement[]
-  feeNotes                FeeNote[]
 }
 
 // ============================================================================
@@ -349,39 +350,39 @@ model Claim {
 //  - metMalaysiaEventRef: named storm/monsoon event linkage
 // ============================================================================
 model FloodClaim {
-  id                       String         @id @default(uuid())
-  claimId                  String         @unique
-  tenantId                 String?
+  id       String  @id @default(uuid())
+  claimId  String  @unique
+  tenantId String?
 
   // Incident specifics
-  incidentStart            DateTime
-  incidentEnd              DateTime?
-  waterDepthCm             Int?
-  durationHours            Int?
-  source                   FloodSource?
+  incidentStart DateTime
+  incidentEnd   DateTime?
+  waterDepthCm  Int?
+  durationHours Int?
+  source        FloodSource?
 
   // Property + geography
-  propertyType             PropertyType?
-  propertyFloorLevel       Int?
-  propertyElevationMeters  Float?
-  postcode                 String?
-  state                    String?
+  propertyType            PropertyType?
+  propertyFloorLevel      Int?
+  propertyElevationMeters Float?
+  postcode                String?
+  state                   String?
 
   // External verification — written by FraudSignalProvider plugins
-  parametricTriggerMet     Boolean?
-  metMalaysiaEventRef      String?
-  jpsGaugeId               String?
+  parametricTriggerMet Boolean?
+  metMalaysiaEventRef  String?
+  jpsGaugeId           String?
 
   // Damage breakdown (claimant-declared, validated by inspection)
-  buildingDamageRm         Decimal?       @db.Decimal(12, 2)
-  contentsDamageRm         Decimal?       @db.Decimal(12, 2)
-  vehicleDamageRm          Decimal?       @db.Decimal(12, 2)
+  buildingDamageRm Decimal? @db.Decimal(12, 2)
+  contentsDamageRm Decimal? @db.Decimal(12, 2)
+  vehicleDamageRm  Decimal? @db.Decimal(12, 2)
 
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  claim                    Claim          @relation(fields: [claimId], references: [id])
-  tenant                   Tenant?        @relation(fields: [tenantId], references: [id])
+  claim  Claim   @relation(fields: [claimId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([incidentStart])
@@ -395,11 +396,11 @@ model FloodClaim {
 // FloodClaim polymorphic sub-table pattern.
 // ============================================================================
 model TravelClaim {
-  id                 String          @id @default(uuid())
-  claimId            String          @unique
-  tenantId           String?
-  travelClaimType    TravelClaimType
-  policyId           String?         // carried from the source Case
+  id              String          @id @default(uuid())
+  claimId         String          @unique
+  tenantId        String?
+  travelClaimType TravelClaimType
+  policyId        String? // carried from the source Case
 
   // Trip context
   tripStartDate      DateTime?
@@ -414,23 +415,23 @@ model TravelClaim {
   delayHours         Float?
 
   // Luggage damage / loss
-  baggageTagNumber   String?
+  baggageTagNumber String?
 
   // Medical (form + expert routing only — never auto-assessed)
-  treatmentCountry   String?
-  hospitalName       String?
-  referredToExpert   Boolean         @default(false)
+  treatmentCountry String?
+  hospitalName     String?
+  referredToExpert Boolean @default(false)
 
   // Trip cancellation
   cancellationReason String?
 
-  estimatedAmountRm  Decimal?        @db.Decimal(12, 2)
+  estimatedAmountRm Decimal? @db.Decimal(12, 2)
 
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  claim              Claim           @relation(fields: [claimId], references: [id])
-  tenant             Tenant?         @relation(fields: [tenantId], references: [id])
+  claim  Claim   @relation(fields: [claimId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@map("travel_claims")
@@ -451,35 +452,35 @@ model TravelClaim {
 /// Multiple rows may coexist so a key can be rotated gradually: every
 /// ciphertext carries the version that produced it.
 model EncryptionKey {
-  id              String    @id @default(uuid())
-  version         Int       @unique
-  wrappedDataKey  String    // DEK encrypted by the master key
-  algorithm       String    @default("aes-256-gcm")
-  createdAt       DateTime  @default(now())
-  retiredAt       DateTime? // set when no longer used for new writes
+  id             String    @id @default(uuid())
+  version        Int       @unique
+  wrappedDataKey String // DEK encrypted by the master key
+  algorithm      String    @default("aes-256-gcm")
+  createdAt      DateTime  @default(now())
+  retiredAt      DateTime? // set when no longer used for new writes
 
   @@map("encryption_keys")
 }
 
 model Policy {
-  id               String       @id @default(uuid())
-  tenantId         String       // Insurer tenant (e.g. MSIG)
-  policyNumber     String
-  insuredName      String
+  id                   String       @id @default(uuid())
+  tenantId             String // Insurer tenant (e.g. MSIG)
+  policyNumber         String
+  insuredName          String
   insuredNricEncrypted String?
-  insuredNricLast4 String?
-  insuredPhone     String?
-  planTier         String?
-  tripStartDate    DateTime?
-  tripEndDate      DateTime?
-  destination      String?
-  coverageSnapshot Json?        // benefits/limits exactly as supplied
-  source           PolicySource @default(MANUAL)
-  externalRef      String?      // insurer API id / scrape reference (future)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  tenant           Tenant       @relation(fields: [tenantId], references: [id])
-  cases            Case[]
+  insuredNricLast4     String?
+  insuredPhone         String?
+  planTier             String?
+  tripStartDate        DateTime?
+  tripEndDate          DateTime?
+  destination          String?
+  coverageSnapshot     Json? // benefits/limits exactly as supplied
+  source               PolicySource @default(MANUAL)
+  externalRef          String? // insurer API id / scrape reference (future)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  tenant               Tenant       @relation(fields: [tenantId], references: [id])
+  cases                Case[]
 
   @@unique([tenantId, policyNumber])
   @@index([tenantId, insuredPhone])
@@ -493,45 +494,58 @@ model Policy {
 // case and converts it into a Claim (+ TravelClaim) — the insurer handback.
 // ============================================================================
 model Case {
-  id                    String           @id @default(uuid())
-  caseNumber            String           @unique        // CSE-2026-000001 via case_number_seq
-  tenantId              String
-  channel               CaseChannel      @default(WEB_CHAT)
-  initiatedBy           CaseInitiator    @default(CLAIMANT)
-  status                CaseStatus       @default(DRAFT)
-  category              ClaimCategory    @default(TRAVEL)
-  travelClaimType       TravelClaimType?
-  claimantId            String?
-  createdByUserId       String?          // staff capture / email logging
-  policyId              String?
-  policyNumberRaw       String?          // as typed/extracted, pre-match
-  needsPolicyReview     Boolean          @default(false) // no auto-match found
-  currentStepId         String?          // conversational cursor for resume
-  answers               Json             @default("{}") // Record<stepId, value>; pre-filled for SYSTEM cases
-  incidentDate          DateTime?        // promoted for queue + deadline calc
-  destination           String?          // promoted for queue display
-  sourceMeta            Json?            // EMAIL: {from, subject, receivedAt}; WHATSAPP later
-  bankName              String?          // not an identifier; stored in the clear
+  id                         String                @id @default(uuid())
+  caseNumber                 String                @unique // CSE-2026-000001 via case_number_seq
+  tenantId                   String
+  channel                    CaseChannel           @default(WEB_CHAT)
+  initiatedBy                CaseInitiator         @default(CLAIMANT)
+  status                     CaseStatus            @default(DRAFT)
+  category                   ClaimCategory         @default(TRAVEL)
+  travelClaimType            TravelClaimType?
+  claimantId                 String?
+  createdByUserId            String? // staff capture / email logging
+  policyId                   String?
+  policyNumberRaw            String? // as typed/extracted, pre-match
+  needsPolicyReview          Boolean               @default(false) // no auto-match found
+  currentStepId              String? // conversational cursor for resume
+  /// Which flow version this conversation is walking, pinned at creation.
+  ///
+  /// Without the pin, publishing an edit rewrites every intake already in
+  /// flight: a claimant three steps in is asked something the earlier steps
+  /// never set up, or `currentStepId` points at a step that no longer exists
+  /// and the conversation dead-ends. Nothing throws and nobody is told — the
+  /// same silent-loss shape as dropping an unparseable FNOL email.
+  ///
+  /// Null on rows created before flows became data; those walk CASE_FLOWS.
+  flowDefinitionId           String?
+  flowVersion                Int?
+  answers                    Json                  @default("{}") // Record<stepId, value>; pre-filled for SYSTEM cases
+  incidentDate               DateTime? // promoted for queue + deadline calc
+  destination                String? // promoted for queue display
+  sourceMeta                 Json? // EMAIL: {from, subject, receivedAt}; WHATSAPP later
+  bankName                   String? // not an identifier; stored in the clear
   /// Encrypted payout account number (v<n>:<iv>:<ciphertext>:<tag>).
   /// Never expose to a claimant; decrypt only for payout/operator review.
   bankAccountNumberEncrypted String?
   /// Last 4 digits kept in the clear so operator screens can display an
   /// account without decrypting anything.
-  bankAccountLast4      String?
-  bankAccountHolderName String?
-  notifiedLate          Boolean          @default(false) // notified >24h after incident
-  outOfWindow           Boolean          @default(false) // notified >30 days after incident
-  reviewNote            String?          // info request / expert note / reject reason
-  convertedClaimId      String?          @unique
-  submittedAt           DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  tenant                Tenant           @relation(fields: [tenantId], references: [id])
-  claimant              Claimant?        @relation(fields: [claimantId], references: [id])
-  policy                Policy?          @relation(fields: [policyId], references: [id])
-  convertedClaim        Claim?           @relation(fields: [convertedClaimId], references: [id])
-  documents             CaseDocument[]
-  inboundMessage        InboundMessage?
+  bankAccountLast4           String?
+  bankAccountHolderName      String?
+  notifiedLate               Boolean               @default(false) // notified >24h after incident
+  outOfWindow                Boolean               @default(false) // notified >30 days after incident
+  reviewNote                 String? // info request / expert note / reject reason
+  convertedClaimId           String?               @unique
+  submittedAt                DateTime?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  tenant                     Tenant                @relation(fields: [tenantId], references: [id])
+  claimant                   Claimant?             @relation(fields: [claimantId], references: [id])
+  policy                     Policy?               @relation(fields: [policyId], references: [id])
+  convertedClaim             Claim?                @relation(fields: [convertedClaimId], references: [id])
+  flowDefinition             FlowDefinition?       @relation(fields: [flowDefinitionId], references: [id])
+  documents                  CaseDocument[]
+  inboundMessage             InboundMessage?
+  conversationBindings       ConversationBinding[]
 
   @@index([tenantId, status])
   @@index([claimantId])
@@ -545,10 +559,10 @@ model CaseDocument {
   tenantId         String
   documentType     DocumentType
   fileName         String
-  storagePath      String                   // same StorageService bucket as claim documents
+  storagePath      String // same StorageService bucket as claim documents
   mimeType         String?
   sizeBytes        Int?
-  stepId           String?                  // which intake step produced it
+  stepId           String? // which intake step produced it
   // Local-LLM document validation hook (name match, completeness).
   // Slice 1 sets SKIPPED; the validation service fills these in later.
   validationStatus DocumentValidationStatus @default(SKIPPED)
@@ -581,29 +595,29 @@ model CaseDocument {
 // encrypt them. `parsed` holds non-identifying extraction only.
 // ============================================================================
 model InboundMessage {
-  id           String               @id @default(uuid())
+  id          String               @id @default(uuid())
   /// RFC 5322 Message-ID — the idempotency key.
-  messageId    String               @unique
+  messageId   String               @unique
   /// Resolved from the recipient mailbox. Null when the mailbox maps to no
   /// known tenant: the message is still recorded, for the operator queue.
-  tenantId     String?
-  fromAddress  String
-  toAddress    String?
-  subject      String?
-  receivedAt   DateTime
-  status       InboundMessageStatus @default(PENDING)
-  caseId       String?              @unique
+  tenantId    String?
+  fromAddress String
+  toAddress   String?
+  subject     String?
+  receivedAt  DateTime
+  status      InboundMessageStatus @default(PENDING)
+  caseId      String?              @unique
   /// Operator-facing reason for NEEDS_REVIEW or FAILED.
-  error        String?
-  attempts     Int                  @default(0)
+  error       String?
+  attempts    Int                  @default(0)
   /// Deterministic extraction output — policy number, dates, flight number,
   /// destination. Never personal identifiers; see the note above.
-  parsed       Json?
-  processedAt  DateTime?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  parsed      Json?
+  processedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
-  case         Case?                @relation(fields: [caseId], references: [id])
+  case Case? @relation(fields: [caseId], references: [id])
 
   @@index([status, receivedAt])
   @@index([tenantId])
@@ -632,17 +646,17 @@ enum InboundMessageStatus {
 // year.
 // ============================================================================
 model AssessmentModeDecision {
-  id      String @id @default(uuid())
-  claimId String
+  id       String @id @default(uuid())
+  claimId  String
   tenantId String
 
-  mode AssessmentMode
+  mode        AssessmentMode
   /// Absent on the opening decision; set when a trigger escalated the claim.
-  trigger EscalationTrigger?
+  trigger     EscalationTrigger?
   /// True only where all four §2.4 fast-track conditions held.
-  fastTracked Boolean @default(false)
+  fastTracked Boolean            @default(false)
   /// Why, in an adjuster's terms — carried verbatim into the report.
-  reasons String[]
+  reasons     String[]
 
   decidedByUserId String?
   createdAt       DateTime @default(now())
@@ -696,16 +710,16 @@ model QuantumWorksheet {
 
   // ---- inputs, as assessed -------------------------------------------------
   basis            SettlementBasis
-  assessedLoss     Decimal  @db.Decimal(12, 2)
+  assessedLoss     Decimal         @db.Decimal(12, 2)
   /// Rate, not an amount — 0.2500 is 25%. Indemnity basis only.
-  depreciationRate Decimal? @db.Decimal(5, 4)
-  betterment       Decimal? @db.Decimal(12, 2)
-  sumInsured       Decimal  @db.Decimal(12, 2)
+  depreciationRate Decimal?        @db.Decimal(5, 4)
+  betterment       Decimal?        @db.Decimal(12, 2)
+  sumInsured       Decimal         @db.Decimal(12, 2)
   /// Without this, underinsurance is unknown rather than absent.
-  valueAtRisk      Decimal? @db.Decimal(12, 2)
-  averageCondition Boolean  @default(false)
-  salvage          Decimal? @db.Decimal(12, 2)
-  excess           Decimal? @db.Decimal(12, 2)
+  valueAtRisk      Decimal?        @db.Decimal(12, 2)
+  averageCondition Boolean         @default(false)
+  salvage          Decimal?        @db.Decimal(12, 2)
+  excess           Decimal?        @db.Decimal(12, 2)
 
   // ---- what the calculator produced ---------------------------------------
   adjustedLoss       Decimal  @db.Decimal(12, 2)
@@ -757,31 +771,31 @@ enum SettlementBasis {
 // would put personal data somewhere the encryption work did not reach.
 // ============================================================================
 model NotificationLog {
-  id        String              @id @default(uuid())
-  tenantId  String
-  channel   NotificationChannel @default(EMAIL)
+  id         String              @id @default(uuid())
+  tenantId   String
+  channel    NotificationChannel @default(EMAIL)
   /// Template identifier from the code registry in notifications/templates.ts.
-  template  String
+  template   String
   /// Where it was sent. Personal data, held in the clear exactly as
   /// `Claimant.email` is: evidencing that a person was told requires knowing
   /// which person.
-  recipient String
-  subject   String
-  status    NotificationStatus  @default(QUEUED)
+  recipient  String
+  subject    String
+  status     NotificationStatus  @default(QUEUED)
   /// Stops one event notifying twice. The SLA sweep re-evaluates every 15
   /// minutes and a worker restart replays jobs, so "already sent" has to be a
   /// database fact rather than something the producer remembers.
-  dedupeKey String?             @unique
-  attempts  Int                 @default(0)
-  error     String?
+  dedupeKey  String?             @unique
+  attempts   Int                 @default(0)
+  error      String?
   /// What it was about, so an operator can answer "was the claimant told?"
   /// from the claim rather than by searching a mailbox.
   entityType String?
   entityId   String?
-  queuedAt  DateTime            @default(now())
-  sentAt    DateTime?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  queuedAt   DateTime            @default(now())
+  sentAt     DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
 
   @@index([tenantId, status])
   @@index([entityType, entityId])
@@ -813,21 +827,21 @@ enum NotificationStatus {
 // individual signals with severity + evidence.
 // ============================================================================
 model FraudSignal {
-  id          String         @id @default(uuid())
-  claimId     String
+  id         String         @id @default(uuid())
+  claimId    String
   // Free-form provider id (e.g. "MetMalaysiaRainfall", "RepeatClaimantGraph",
   // "HumeBehavioural"). Kept as string rather than enum so plugins can register
   // without schema migrations.
-  provider    String
-  category    FraudCategory
-  signalType  String
-  severity    SignalSeverity
-  confidence  Float
-  message     String?
-  rawData     Json           @default("{}")
-  createdAt   DateTime       @default(now())
+  provider   String
+  category   FraudCategory
+  signalType String
+  severity   SignalSeverity
+  confidence Float
+  message    String?
+  rawData    Json           @default("{}")
+  createdAt  DateTime       @default(now())
 
-  claim       Claim          @relation(fields: [claimId], references: [id])
+  claim Claim @relation(fields: [claimId], references: [id])
 
   @@index([claimId])
   @@index([provider])
@@ -842,21 +856,21 @@ model FraudSignal {
 // without code changes. Null tenantId = global default.
 // ============================================================================
 model EvidenceRequirement {
-  id           String        @id @default(uuid())
-  tenantId     String?
-  category     ClaimCategory
+  id              String           @id @default(uuid())
+  tenantId        String?
+  category        ClaimCategory
   // Travel subtype refinement — null for non-travel categories, letting each
   // travel claim type (flight delay, luggage loss, ...) have its own checklist.
   travelClaimType TravelClaimType?
-  documentType DocumentType
-  isMandatory  Boolean       @default(true)
-  description  String?
-  sortOrder    Int           @default(0)
+  documentType    DocumentType
+  isMandatory     Boolean          @default(true)
+  description     String?
+  sortOrder       Int              @default(0)
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant       Tenant?       @relation(fields: [tenantId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, category, travelClaimType, documentType])
   @@index([category])
@@ -869,9 +883,9 @@ model ClaimNote {
   content    String
   isPrivate  Boolean   @default(false)
   createdAt  DateTime  @default(now())
-  tenantId   String?   // Organization ownership
-  userId     String?   // Creator (linked to User)
-  authorId   String    // Generic author ID (can be user or claimant)
+  tenantId   String? // Organization ownership
+  userId     String? // Creator (linked to User)
+  authorId   String // Generic author ID (can be user or claimant)
   authorType ActorType
   claim      Claim     @relation(fields: [claimId], references: [id])
   tenant     Tenant?   @relation(fields: [tenantId], references: [id])
@@ -884,27 +898,27 @@ model ClaimNote {
 }
 
 model Session {
-  id              String           @id @default(uuid())
+  id              String              @id @default(uuid())
   claimId         String
   tenantId        String? // Tenant context for this session
   roomId          BigInt
-  status          SessionStatus    @default(SCHEDULED)
+  status          SessionStatus       @default(SCHEDULED)
   scheduledTime   DateTime?
   startedAt       DateTime?
   endedAt         DateTime?
   durationSeconds Int?
   recordingUrl    String?
-  analysisStatus  AnalysisStatus   @default(PENDING)
-  screenshots     Json             @default("[]")
-  createdAt       DateTime         @default(now())
+  analysisStatus  AnalysisStatus      @default(PENDING)
+  screenshots     Json                @default("[]")
+  createdAt       DateTime            @default(now())
   roomUrl         String?
   riskAssessments RiskAssessment[]
   deceptionScores DeceptionScore[]
   clientInfos     SessionClientInfo[]
-  claim           Claim            @relation(fields: [claimId], references: [id])
-  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
-  userId          String?          // User who scheduled/initiated
-  user            User?            @relation(fields: [userId], references: [id])
+  claim           Claim               @relation(fields: [claimId], references: [id])
+  tenant          Tenant?             @relation(fields: [tenantId], references: [id])
+  userId          String? // User who scheduled/initiated
+  user            User?               @relation(fields: [userId], references: [id])
 
   @@index([claimId])
   @@index([tenantId])
@@ -919,8 +933,8 @@ model DeceptionScore {
   visualBehavior        Decimal  @db.Decimal(5, 4)
   expressionMeasurement Decimal  @db.Decimal(5, 4)
   createdAt             DateTime @default(now())
-  tenantId              String?  // Denormalized for reporting
-  userId                String?  // Who triggered analysis
+  tenantId              String? // Denormalized for reporting
+  userId                String? // Who triggered analysis
   session               Session  @relation(fields: [sessionId], references: [id])
   tenant                Tenant?  @relation(fields: [tenantId], references: [id])
   user                  User?    @relation(fields: [userId], references: [id])
@@ -941,8 +955,8 @@ model RiskAssessment {
   rawResponse    Json?
   contextData    Json?
   createdAt      DateTime       @default(now())
-  tenantId       String?        // Denormalized for reporting
-  userId         String?        // Who triggered analysis
+  tenantId       String? // Denormalized for reporting
+  userId         String? // Who triggered analysis
   session        Session        @relation(fields: [sessionId], references: [id])
   tenant         Tenant?        @relation(fields: [tenantId], references: [id])
   user           User?          @relation(fields: [userId], references: [id])
@@ -953,40 +967,40 @@ model RiskAssessment {
 }
 
 model Document {
-  id           String       @id @default(uuid())
-  claimId      String
-  type         DocumentType
-  filename     String
-  storageUrl   String
-  fileSize     Int?
-  mimeType     String?
-  status       DocumentStatus @default(QUEUED)
-  metadata     Json         @default("{}")
+  id                   String            @id @default(uuid())
+  claimId              String
+  type                 DocumentType
+  filename             String
+  storageUrl           String
+  fileSize             Int?
+  mimeType             String?
+  status               DocumentStatus    @default(QUEUED)
+  metadata             Json              @default("{}")
   // ===== Digital signature lifecycle =====
   // Set on every Document so we can show a "not requested" badge on the UI
   // for non-signable docs (photos, receipts) as well as track the lifecycle
   // for consent forms. The provider abstraction (Stub today, SigningCloud
   // later) writes these columns through case-service's SignaturesService.
-  signatureStatus      SignatureStatus @default(NOT_REQUESTED)
-  signatureRequestId   String?         // External provider reference (SigningCloud envelope id)
-  signatureUrl         String?         // URL the signer (claimant) opens to sign
-  signatureRequestedAt DateTime?       // When the signing request was created
-  signedAt             DateTime?       // When the claimant completed signing
-  signedStorageUrl     String?         // URL of the countersigned PDF (signed PDF stored separately)
+  signatureStatus      SignatureStatus   @default(NOT_REQUESTED)
+  signatureRequestId   String? // External provider reference (SigningCloud envelope id)
+  signatureUrl         String? // URL the signer (claimant) opens to sign
+  signatureRequestedAt DateTime? // When the signing request was created
+  signedAt             DateTime? // When the claimant completed signing
+  signedStorageUrl     String? // URL of the countersigned PDF (signed PDF stored separately)
   documentHash         String?
   /// Soft delete (PD 12.8). A "deleted" document is hidden from ordinary use but
   /// retained — row and stored file — until the retention sweep purges it after
   /// the claim's retention period, and never while a legal hold stands.
-  deletedAt       DateTime?
-  deletedByUserId String?
-  deleteReason    String?
-  createdAt    DateTime     @default(now())
-  tenantId     String?      // Organization ownership
-  userId       String?      // Uploader ID
-  claim        Claim             @relation(fields: [claimId], references: [id])
-  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
-  user         User?             @relation(fields: [userId], references: [id])
-  analysis     DocumentAnalysis?
+  deletedAt            DateTime?
+  deletedByUserId      String?
+  deleteReason         String?
+  createdAt            DateTime          @default(now())
+  tenantId             String? // Organization ownership
+  userId               String? // Uploader ID
+  claim                Claim             @relation(fields: [claimId], references: [id])
+  tenant               Tenant?           @relation(fields: [tenantId], references: [id])
+  user                 User?             @relation(fields: [userId], references: [id])
+  analysis             DocumentAnalysis?
 
   @@index([claimId])
   @@index([signatureStatus])
@@ -994,29 +1008,29 @@ model Document {
 }
 
 enum SignatureStatus {
-  NOT_REQUESTED  // Default — signing has not been initiated
-  PENDING        // Signing request created, signer has not yet completed
-  SIGNED         // Signer completed; signedStorageUrl populated
-  EXPIRED        // Request expired before signer completed
-  CANCELLED      // Request explicitly cancelled
+  NOT_REQUESTED // Default — signing has not been initiated
+  PENDING // Signing request created, signer has not yet completed
+  SIGNED // Signer completed; signedStorageUrl populated
+  EXPIRED // Request expired before signer completed
+  CANCELLED // Request explicitly cancelled
 }
 
 model DocumentAnalysis {
-  id            String   @id @default(uuid())
-  documentId    String   @unique
-  rawText       String?  // OCR text
-  extractedData Json?    // Normalized data from LLM
-  visionData    Json?    // Vision analysis result from VLM
-  modelUsed     String?
-  confidence    Float?
-  processingTime Int?    // in ms
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  tenantId      String?  // Organization ownership
-  userId        String?  // Who triggered analysis
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
-  user          User?    @relation(fields: [userId], references: [id])
+  id             String   @id @default(uuid())
+  documentId     String   @unique
+  rawText        String? // OCR text
+  extractedData  Json? // Normalized data from LLM
+  visionData     Json? // Vision analysis result from VLM
+  modelUsed      String?
+  confidence     Float?
+  processingTime Int? // in ms
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenantId       String? // Organization ownership
+  userId         String? // Who triggered analysis
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  user           User?    @relation(fields: [userId], references: [id])
 
   @@map("document_analyses")
 }
@@ -1025,18 +1039,18 @@ model TrinityCheck {
   id                String   @id @default(uuid())
   claimId           String
   claim             Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  score             Float?   // 0.0 to 100.0
-  status            String   // PASS, FAIL, WARNING, REVIEW_NEEDED
+  score             Float? // 0.0 to 100.0
+  status            String // PASS, FAIL, WARNING, REVIEW_NEEDED
   summary           String?
-  checkResults      Json     // Detailed pass/fail for each rule
-  riskFactors       Json     // Identified risks
+  checkResults      Json // Detailed pass/fail for each rule
+  riskFactors       Json // Identified risks
   reasoning         String?  @db.Text
   reasoningInsights Json?
   reportUrl         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  tenantId          String?  // Organization ownership
-  userId            String?  // Triggered by
+  tenantId          String? // Organization ownership
+  userId            String? // Triggered by
   tenant            Tenant?  @relation(fields: [tenantId], references: [id])
   user              User?    @relation(fields: [userId], references: [id])
 
@@ -1057,8 +1071,8 @@ model AuditTrail {
   newValues  Json?
   metadata   Json?
   createdAt  DateTime   @default(now())
-  tenantId   String?    // Tenant context for this audit event
-  userId     String?    // User context
+  tenantId   String? // Tenant context for this audit event
+  userId     String? // User context
   tenant     Tenant?    @relation(fields: [tenantId], references: [id])
   user       User?      @relation(fields: [userId], references: [id])
 
@@ -1111,7 +1125,6 @@ enum UserTenantStatus {
   PENDING_APPROVAL
 }
 
-
 // Coarse-grained claim category drives polymorphic sub-tables, evidence
 // checklists, and which FraudSignalProvider plugins apply.
 enum ClaimCategory {
@@ -1121,7 +1134,7 @@ enum ClaimCategory {
   LIGHTNING
   BURGLARY
   PERSONAL_ACCIDENT
-  HOH                 // Houseowner / Householder umbrella (multi-peril)
+  HOH // Houseowner / Householder umbrella (multi-peril)
   TRAVEL
   OTHER
 }
@@ -1137,13 +1150,13 @@ enum TravelClaimType {
 }
 
 enum CaseStatus {
-  DRAFT              // created, intake in progress
-  IN_PROGRESS        // answers being captured
-  SUBMITTED          // claimant/staff finished review + submit
-  UNDER_REVIEW       // operator opened it (vetting)
-  INFO_REQUESTED     // operator asked for more info — claimant can amend
+  DRAFT // created, intake in progress
+  IN_PROGRESS // answers being captured
+  SUBMITTED // claimant/staff finished review + submit
+  UNDER_REVIEW // operator opened it (vetting)
+  INFO_REQUESTED // operator asked for more info — claimant can amend
   REFERRED_TO_EXPERT // MEDICAL: routed to human expert, awaiting outcome
-  CONVERTED          // Claim created (handback to insurer)
+  CONVERTED // Claim created (handback to insurer)
   REJECTED
   ABANDONED
 }
@@ -1153,17 +1166,28 @@ enum CaseChannel {
   STAFF
   EMAIL
   WHATSAPP
+  TELEGRAM
+  MESSENGER
+}
+
+/// Publication state of a FlowDefinition. DRAFT is editable and unusable;
+/// PUBLISHED is usable and immutable; ARCHIVED is neither, but is retained
+/// because Cases pin the version they walked.
+enum FlowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 
 enum CaseInitiator {
   CLAIMANT
   STAFF
-  SYSTEM   // future proactive detection (e.g. flight-delay feed)
+  SYSTEM // future proactive detection (e.g. flight-delay feed)
 }
 
 enum PolicySource {
-  MANUAL   // keyed in from insurer emails
-  API      // insurer API integration (future)
+  MANUAL // keyed in from insurer emails
+  API // insurer API integration (future)
   FILE_FEED // structured file drop from the insurer (SFTP or agreed inbox schema)
 }
 
@@ -1205,14 +1229,14 @@ enum PropertyType {
 // Shift Technology-inspired signal taxonomy. Each detector tags its output
 // with one category so the adjuster UI can group them sensibly.
 enum FraudCategory {
-  PARAMETRIC      // External trigger verification (rainfall, lightning strikes)
-  IDENTITY        // eKYC, deepfake, liveness checks
-  BEHAVIOURAL     // Hume voice/face, Parselmouth voice stress, attention
-  DOCUMENT        // OCR + forgery + duplicate-receipt detection
-  NETWORK         // Graph: repeat claimants, linked accounts, shared addresses
-  ENVIRONMENTAL   // Weather, satellite, geo, timezone evidence
-  INVENTORY       // Contents inventory validation, market-value checks
-  POLICY          // Policy timing anomalies (new policy + immediate claim)
+  PARAMETRIC // External trigger verification (rainfall, lightning strikes)
+  IDENTITY // eKYC, deepfake, liveness checks
+  BEHAVIOURAL // Hume voice/face, Parselmouth voice stress, attention
+  DOCUMENT // OCR + forgery + duplicate-receipt detection
+  NETWORK // Graph: repeat claimants, linked accounts, shared addresses
+  ENVIRONMENTAL // Weather, satellite, geo, timezone evidence
+  INVENTORY // Contents inventory validation, market-value checks
+  POLICY // Policy timing anomalies (new policy + immediate claim)
 }
 
 enum SignalSeverity {
@@ -1288,24 +1312,24 @@ enum DocumentType {
   OTHER_DOCUMENT
   CLAIMANT_SCREENSHOT
   // Non-motor evidence types
-  BOMBA_REPORT          // Fire & Rescue Department report (fire claims)
+  BOMBA_REPORT // Fire & Rescue Department report (fire claims)
   FLOOD_AUTHORITY_REPORT // NADMA / JPS / local council flood notice
-  WEATHER_REPORT        // MetMalaysia weather/rainfall/lightning record
-  UTILITY_SURGE_REPORT  // TNB / utility company surge incident (lightning)
-  INVENTORY_LIST        // Contents inventory for fire/flood/burglary
-  PROOF_OF_OWNERSHIP    // Receipts, serial numbers, photos predating loss
-  MEDICAL_REPORT        // PA / injury claims
-  PROPERTY_TITLE        // Geran / property ownership
-  UTILITY_BILL          // Address proof
+  WEATHER_REPORT // MetMalaysia weather/rainfall/lightning record
+  UTILITY_SURGE_REPORT // TNB / utility company surge incident (lightning)
+  INVENTORY_LIST // Contents inventory for fire/flood/burglary
+  PROOF_OF_OWNERSHIP // Receipts, serial numbers, photos predating loss
+  MEDICAL_REPORT // PA / injury claims
+  PROPERTY_TITLE // Geran / property ownership
+  UTILITY_BILL // Address proof
   // Travel evidence types
   BOARDING_PASS
-  FLIGHT_ITINERARY               // e-ticket / booking confirmation
-  AIRLINE_DELAY_CONFIRMATION     // airline delay/cancellation notice
-  PROPERTY_IRREGULARITY_REPORT   // PIR (luggage damage/loss)
+  FLIGHT_ITINERARY // e-ticket / booking confirmation
+  AIRLINE_DELAY_CONFIRMATION // airline delay/cancellation notice
+  PROPERTY_IRREGULARITY_REPORT // PIR (luggage damage/loss)
   BAGGAGE_TAG
   PASSPORT
   OVERSEAS_MEDICAL_BILL
-  TRAVEL_BOOKING_INVOICE         // bookings, cancellation/refund proof
+  TRAVEL_BOOKING_INVOICE // bookings, cancellation/refund proof
 }
 
 enum ActorType {
@@ -1334,17 +1358,17 @@ model VideoUpload {
   filename       String
   fileSize       Int
   mimeType       String
-  duration       Float?            // in seconds
+  duration       Float? // in seconds
   processedUntil Float             @default(0) // seconds processed so far
   status         VideoUploadStatus @default(PENDING)
   /// Soft delete (PD 12.8): recordings are claim evidence, so "delete" hides
   /// rather than destroys until the retention sweep is entitled to purge.
   deletedAt      DateTime?
-  uploadedBy     String?           // user ID (deprecated, use userId)
-  userId         String?           // Who uploaded
+  uploadedBy     String? // user ID (deprecated, use userId)
+  userId         String? // Who uploaded
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-  tenantId       String?           // Organization ownership
+  tenantId       String? // Organization ownership
   claim          Claim             @relation(fields: [claimId], references: [id])
   tenant         Tenant?           @relation(fields: [tenantId], references: [id])
   user           User?             @relation(fields: [userId], references: [id])
@@ -1361,15 +1385,14 @@ enum VideoUploadStatus {
   FAILED
 }
 
-
 model VehicleMake {
   id        String         @id @default(uuid())
   name      String
   models    VehicleModel[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
-  tenantId  String?        // Organization ownership
-  userId    String?        // Creator
+  tenantId  String? // Organization ownership
+  userId    String? // Creator
   tenant    Tenant?        @relation(fields: [tenantId], references: [id])
   user      User?          @relation(fields: [userId], references: [id])
 
@@ -1386,8 +1409,8 @@ model VehicleModel {
   make      VehicleMake @relation(fields: [makeId], references: [id], onDelete: Cascade)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
-  tenantId  String?     // Organization ownership
-  userId    String?     // Creator
+  tenantId  String? // Organization ownership
+  userId    String? // Creator
   tenant    Tenant?     @relation(fields: [tenantId], references: [id])
   user      User?       @relation(fields: [userId], references: [id])
 
@@ -1399,9 +1422,9 @@ model VehicleModel {
 }
 
 model SessionClientInfo {
-  id               String   @id @default(uuid())
+  id               String  @id @default(uuid())
   sessionId        String
-  session          Session  @relation(fields: [sessionId], references: [id])
+  session          Session @relation(fields: [sessionId], references: [id])
   latitude         Float?
   longitude        Float?
   ipv4             String?
@@ -1412,22 +1435,22 @@ model SessionClientInfo {
   platform         String?
   screenResolution String?
   timezone         String?
-  
+
   // ISP Info
-  city             String?
-  region           String?
-  country          String?
-  postalCode       String?
-  isp              String?
-  organisation     String?
-  asn              String?
-  
-  metadata         Json?    @default("{}")
-  createdAt        DateTime @default(now())
-  tenantId         String?  // Organization info
-  userId           String?  // Associated user session
-  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
-  user             User?    @relation(fields: [userId], references: [id])
+  city         String?
+  region       String?
+  country      String?
+  postalCode   String?
+  isp          String?
+  organisation String?
+  asn          String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  tenantId  String? // Organization info
+  userId    String? // Associated user session
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([sessionId])
   @@index([tenantId])
@@ -1443,18 +1466,18 @@ model SessionClientInfo {
 /// Firm-side stages are ours to meet; insurer-side stages are measured only, so
 /// the firm can evidence where a delay actually originated.
 enum SlaStage {
-  ACK_TO_INSURER      /// firm acknowledges an appointment — 1 working day
-  PRELIMINARY_REPORT  /// market practice, per-insurer target
-  FINAL_REPORT        /// CSP 10.13: 14 working days non-motor, from complete documents
+  ACK_TO_INSURER /// firm acknowledges an appointment — 1 working day
+  PRELIMINARY_REPORT /// market practice, per-insurer target
+  FINAL_REPORT /// CSP 10.13: 14 working days non-motor, from complete documents
   SUPPLEMENTARY_CLAIM /// 5 working days
-  INSURER_DECISION    /// insurer side: 7 working days — monitored, not owned
-  INSURER_PAYMENT     /// insurer side: 14 working days non-motor — monitored
+  INSURER_DECISION /// insurer side: 7 working days — monitored, not owned
+  INSURER_PAYMENT /// insurer side: 14 working days non-motor — monitored
 }
 
 enum SlaClockState {
   RUNNING
-  PAUSED   /// stopped by a dependency outside the firm's control
-  MET      /// completed on or before the deadline
+  PAUSED /// stopped by a dependency outside the firm's control
+  MET /// completed on or before the deadline
   BREACHED /// deadline passed while still running
 }
 
@@ -1511,18 +1534,18 @@ model SlaClock {
   /// Deadline in working days from startedAt, per the policy's calendar.
   dueAt     DateTime
 
-  pausedAt DateTime?
+  pausedAt                    DateTime?
   /// Working days that remained when the clock was paused. The deadline is
   /// recomputed from the resume date, so a pause never silently consumes time.
   remainingWorkingDaysAtPause Int?
   pauseReason                 String?
 
-  stoppedAt   DateTime?
-  breachedAt  DateTime?
+  stoppedAt       DateTime?
+  breachedAt      DateTime?
   /// Set when the due-soon warning has fired, so it fires once.
-  warnedAt    DateTime?
+  warnedAt        DateTime?
   /// Raised on each escalation step after a breach.
-  escalationLevel Int @default(0)
+  escalationLevel Int       @default(0)
 
   metadata  Json?    @default("{}")
   createdAt DateTime @default(now())
@@ -1551,10 +1574,10 @@ enum AdjusterReportType {
 }
 
 enum AdjusterReportStatus {
-  DRAFT     /// being written by the author
+  DRAFT /// being written by the author
   IN_REVIEW /// submitted, awaiting sign-off
-  SIGNED    /// signed by a qualified adjusting employee
-  ISSUED    /// released to the insurer — immutable from here
+  SIGNED /// signed by a qualified adjusting employee
+  ISSUED /// released to the insurer — immutable from here
   WITHDRAWN /// superseded or retracted, retained for the record
 }
 
@@ -1579,7 +1602,7 @@ model AdjusterReport {
   status  AdjusterReportStatus @default(DRAFT)
 
   /// Increments per claim and type; a superseding report carries the next number.
-  version     Int     @default(1)
+  version      Int     @default(1)
   supersedesId String? @unique
 
   /// Section key → { heading, body, aiAssisted }. The template registry defines
@@ -1616,18 +1639,18 @@ model AdjusterReport {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  claim      Claim           @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  author     Adjuster        @relation("ReportAuthor", fields: [authorAdjusterId], references: [id])
-  reviewer   Adjuster?       @relation("ReportReviewer", fields: [reviewerAdjusterId], references: [id])
-  signedBy   Adjuster?       @relation("ReportSigner", fields: [signedByAdjusterId], references: [id])
-  supersedes AdjusterReport? @relation("ReportSupersession", fields: [supersedesId], references: [id])
-  supersededBy AdjusterReport? @relation("ReportSupersession")
+  claim          Claim               @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  author         Adjuster            @relation("ReportAuthor", fields: [authorAdjusterId], references: [id])
+  reviewer       Adjuster?           @relation("ReportReviewer", fields: [reviewerAdjusterId], references: [id])
+  signedBy       Adjuster?           @relation("ReportSigner", fields: [signedByAdjusterId], references: [id])
+  supersedes     AdjusterReport?     @relation("ReportSupersession", fields: [supersedesId], references: [id])
+  supersededBy   AdjusterReport?     @relation("ReportSupersession")
+  qualityReviews WorkQualityReview[]
 
   @@index([claimId])
   @@index([status])
   @@index([authorAdjusterId])
   @@map("adjuster_reports")
-  qualityReviews WorkQualityReview[]
 }
 
 // ============================================================================
@@ -1646,7 +1669,7 @@ model AdjusterReport {
 /// — deliberate and explicit rather than implied by an absent row, because
 /// "no limit configured" and "no limit intended" must not look the same.
 model AuthorityLimit {
-  id       String  @id @default(uuid())
+  id       String @id @default(uuid())
   tenantId String
 
   /// Applies to everyone holding this role. Mutually exclusive with adjusterId.
@@ -1681,8 +1704,8 @@ model AuthorityLimit {
 // ============================================================================
 
 enum ConsentPurpose {
-  CLAIM_PROCESSING     /// handling the claim itself
-  BIOMETRIC_ANALYSIS   /// voice and facial analysis — sensitive personal data
+  CLAIM_PROCESSING /// handling the claim itself
+  BIOMETRIC_ANALYSIS /// voice and facial analysis — sensitive personal data
   CROSS_BORDER_TRANSFER /// s.129(3)(a) basis for offshore processors
 }
 
@@ -1746,12 +1769,12 @@ model Consent {
   /// Exactly which wording, in which language, the subject agreed to.
   noticeId String
 
-  grantedAt   DateTime  @default(now())
-  withdrawnAt DateTime?
+  grantedAt        DateTime  @default(now())
+  withdrawnAt      DateTime?
   withdrawalReason String?
 
-  capturedVia ConsentChannel @default(WEB_FORM)
-  ipAddress   String?
+  capturedVia      ConsentChannel @default(WEB_FORM)
+  ipAddress        String?
   /// Staff member who captured it, when not self-served.
   capturedByUserId String?
 
@@ -1789,11 +1812,11 @@ enum AssignmentChannel {
 }
 
 enum AssignmentStatus {
-  RECEIVED     /// logged, acknowledgement outstanding
+  RECEIVED /// logged, acknowledgement outstanding
   ACKNOWLEDGED /// ack sent to the insurer — stops the CSP clock
-  ACCEPTED     /// work under way; a claim has been opened
-  DECLINED     /// refused, with a reason
-  COMPLETED    /// closed out
+  ACCEPTED /// work under way; a claim has been opened
+  DECLINED /// refused, with a reason
+  COMPLETED /// closed out
 }
 
 /// An insurer's instruction to handle a matter.
@@ -1811,7 +1834,7 @@ model Assignment {
   id String @id @default(uuid())
 
   /// Who appointed the firm.
-  insurerTenantId String
+  insurerTenantId  String
   /// The adjusting firm instructed.
   handlingTenantId String
 
@@ -1834,7 +1857,7 @@ model Assignment {
 
   /// When the instruction arrived — the moment the CSP clock starts from, which
   /// is not the same as when the row was written.
-  receivedAt DateTime @default(now())
+  receivedAt     DateTime  @default(now())
   /// When the acknowledgement went back to the insurer.
   acknowledgedAt DateTime?
   declinedAt     DateTime?
@@ -1848,15 +1871,15 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  insurer       Tenant @relation("AssignmentInsurer", fields: [insurerTenantId], references: [id])
-  handlingFirm  Tenant @relation("AssignmentHandlingFirm", fields: [handlingTenantId], references: [id])
-  claim         Claim? @relation(fields: [claimId], references: [id])
+  insurer      Tenant     @relation("AssignmentInsurer", fields: [insurerTenantId], references: [id])
+  handlingFirm Tenant     @relation("AssignmentHandlingFirm", fields: [handlingTenantId], references: [id])
+  claim        Claim?     @relation(fields: [claimId], references: [id])
+  slaClocks    SlaClock[]
 
   @@unique([insurerTenantId, externalRef])
   @@index([handlingTenantId, status])
   @@index([status, receivedAt])
   @@map("assignments")
-  slaClocks     SlaClock[]
 }
 
 // ============================================================================
@@ -1869,11 +1892,11 @@ model Assignment {
 /// longer — but never shorter: the PD 12.8 seven-year floor is enforced in code
 /// and asserted by test, so no row can quietly undercut it.
 model RetentionPolicy {
-  id         String  @id @default(uuid())
+  id          String  @id @default(uuid())
   /// e.g. DOCUMENT, VIDEO_UPLOAD. One row per kind.
-  entityType String  @unique
+  entityType  String  @unique
   /// Years after claim closure before a purge becomes permissible.
-  retainYears Int    @default(7)
+  retainYears Int     @default(7)
   isActive    Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -1907,9 +1930,9 @@ model TransferRecord {
   /// What was sent, in words a regulator can read.
   dataDescription String
   /// Why it was sent.
-  purpose String
+  purpose         String
   /// s.129 basis relied on, e.g. "CONSENT s.129(3)(a)". Null = none established.
-  lawfulBasis String?
+  lawfulBasis     String?
 
   /// Which service initiated the transfer.
   sourceService String
@@ -1942,9 +1965,9 @@ model AdjusterCompetency {
   category   ClaimCategory
 
   /// Years of adjusting experience in this subject matter (12.4(a)).
-  yearsInSubject Int
+  yearsInSubject          Int
   /// Relevant cases handled (12.4(b)(i)) — an input to recognition, kept current.
-  casesHandled   Int @default(0)
+  casesHandled            Int     @default(0)
   /// 12.4(b)(ii): satisfactory performance across relevant cases.
   performanceSatisfactory Boolean @default(false)
 
@@ -1995,10 +2018,10 @@ model ConflictDeclaration {
   id         String @id @default(uuid())
   adjusterId String
 
-  partyType    ConflictPartyType
-  interestType ConflictInterestType
+  partyType     ConflictPartyType
+  interestType  ConflictInterestType
   /// The party's name as declared (e.g. an insurer or workshop name).
-  partyName    String
+  partyName     String
   /// When the party is a tenant on the platform, the id enables automatic
   /// screening against a claim's insurer — a name match alone is weaker.
   partyTenantId String?
@@ -2026,11 +2049,11 @@ model ConflictDeclaration {
 /// The per-claim attestation (PD 12.1(d)): the assigned adjuster confirms, for
 /// this specific claim, that no undeclared conflict exists — or declares one.
 model ConflictAttestation {
-  id         String  @id @default(uuid())
+  id         String @id @default(uuid())
   claimId    String
   adjusterId String
 
-  hasConflict Boolean @default(false)
+  hasConflict Boolean  @default(false)
   note        String?
   attestedAt  DateTime @default(now())
 
@@ -2060,8 +2083,8 @@ model CpdRecord {
   year  Int
   hours Decimal @db.Decimal(5, 1)
 
-  programmeName String
-  provider      String
+  programmeName      String
+  provider           String
   /// Qualifies per PD 12.11 (AMLA-the-association or a BNM-specified institution).
   providerRecognised Boolean @default(false)
 
@@ -2109,8 +2132,8 @@ model BackgroundScreening {
   id         String @id @default(uuid())
   adjusterId String
 
-  checkType ScreeningCheckType
-  outcome   ScreeningOutcome
+  checkType    ScreeningCheckType
+  outcome      ScreeningOutcome
   /// Required when the outcome is FINDINGS.
   findingsNote String?
 
@@ -2167,7 +2190,7 @@ model ComplianceEvent {
 
   type     ComplianceEventType
   severity ComplianceEventSeverity
-  status   ComplianceEventStatus @default(OPEN)
+  status   ComplianceEventStatus   @default(OPEN)
 
   title   String
   details String?
@@ -2281,7 +2304,7 @@ model WorkQualityReview {
   reportId   String
   adjusterId String
 
-  rating QualityRating
+  rating   QualityRating
   /// Required for any rating below SATISFACTORY — the finding is the value.
   findings String?
   notes    String?
@@ -2324,7 +2347,7 @@ model BnmNotification {
   /// When the change occurred — the 7-working-day clock runs from here.
   occurredAt DateTime
   /// occurredAt + 7 working days (KL calendar).
-  dueAt DateTime
+  dueAt      DateTime
 
   /// When BNM was actually notified, with the submission reference.
   notifiedAt       DateTime?
@@ -2347,7 +2370,7 @@ model BnmNotification {
 
 enum FeeBasis {
   SCALE /// banded on the assessed amount
-  TIME  /// hourly
+  TIME /// hourly
   FIXED /// flat per engagement
 }
 
@@ -2393,7 +2416,7 @@ model TimeEntry {
   adjusterId String
 
   workedOn    DateTime
-  hours       Decimal @db.Decimal(5, 2)
+  hours       Decimal  @db.Decimal(5, 2)
   description String
 
   recordedByUserId String
@@ -2447,12 +2470,12 @@ model FeeNote {
   /// without its derivation is unanswerable in a dispute.
   computation Json
 
-  issuedAt DateTime?
-  dueAt    DateTime?
-  paidAt   DateTime?
+  issuedAt         DateTime?
+  dueAt            DateTime?
+  paidAt           DateTime?
   paymentReference String?
-  disputedAt    DateTime?
-  disputeReason String?
+  disputedAt       DateTime?
+  disputeReason    String?
 
   createdByUserId String
   createdAt       DateTime @default(now())
@@ -2472,4 +2495,273 @@ enum EmploymentType {
   FULL_TIME
   PART_TIME
   CONTRACT
+}
+
+// ============================================================================
+// Intake flow authoring — one structure, many channels and locales
+// ============================================================================
+
+/// A versioned intake flow: the *structure* of the guided Case conversation.
+///
+/// Structure only — step ids, order, branching, answer types, validation, and
+/// which steps the rest of the system depends on by name. Channel- and
+/// locale-specific wording lives in FlowOverlay, whose shape cannot express
+/// structure. So a WhatsApp conversation and a web conversation can never ask
+/// different questions in a different order; only phrase them differently.
+///
+/// A channel that genuinely needs a shorter conversation (typing twenty answers
+/// into WhatsApp is miserable) gets its own FlowDefinition and is pointed at
+/// it. That is flow *selection* per channel, which is supported. It is not a
+/// clone, which drifts and remembers nothing about where it came from.
+///
+/// Immutable once PUBLISHED, for the reason ConsentNotice is: an operator
+/// asking why a claimant answered as they did needs the exact flow they walked.
+/// Editing in place would make every earlier Case unreproducible.
+model FlowDefinition {
+  id       String     @id @default(uuid())
+  /// Null is a platform default available to every tenant; a tenant row
+  /// shadows the default for that tenant alone.
+  tenantId String?
+  /// Stable identity across versions, e.g. "travel-flight-delay". The resolver
+  /// selects the highest PUBLISHED version for a key.
+  key      String
+  version  Int
+  status   FlowStatus @default(DRAFT)
+
+  category        ClaimCategory    @default(TRAVEL)
+  travelClaimType TravelClaimType?
+
+  /// Human label for the editor list.
+  name        String
+  /// Step the conversation opens on. Must exist in `steps` — checked by the
+  /// publish gate, which cannot be expressed as a database constraint.
+  entryStepId String
+  /// FlowStep[] — structure plus default (en) copy. Validated against the
+  /// shared-types schema on publish, not on every write: a DRAFT is allowed to
+  /// be incomplete while someone is still building it.
+  steps       Json
+
+  publishedByUserId String?
+  publishedAt       DateTime?
+  archivedAt        DateTime?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id])
+  overlays FlowOverlay[]
+  cases    Case[]
+
+  /// Postgres treats NULLs as distinct, so this does not constrain the
+  /// platform-default rows (tenantId IS NULL). The migration adds a partial
+  /// unique index for those — same approach as SlaClock's running-clock guard.
+  @@unique([tenantId, key, version])
+  @@index([key, status])
+  @@index([tenantId, status])
+  @@map("flow_definitions")
+}
+
+/// Channel- and locale-specific wording for one FlowDefinition.
+///
+/// Sparse by design: only the steps that actually differ. An absent step, or an
+/// absent overlay, inherits from the definition — so correcting a typo in the
+/// base corrects it everywhere that did not deliberately override it. That is
+/// the property a per-channel clone cannot have.
+///
+/// Deliberately unable to express structure. There is no `next`, no
+/// `answerType`, no ordering here, so a channel cannot diverge into asking
+/// different questions. The guarantee is in the shape of the data, not in a
+/// rule that the bulk-import tool someone writes in eighteen months can bypass.
+///
+/// Not versioned, and that is not an oversight. Because an overlay can only
+/// change wording, it cannot move `currentStepId` or invalidate a stored
+/// answer — so copy is safe to correct live, with conversations in flight.
+/// Only the structure needs pinning, which is why the pin lives on
+/// FlowDefinition and Case rather than here.
+model FlowOverlay {
+  id               String       @id @default(uuid())
+  flowDefinitionId String
+  /// Null applies to every channel; a channel-specific row wins over it.
+  channel          CaseChannel?
+  /// `en` or `ms`. Null applies to every locale; a locale-specific row wins
+  /// over it — and wins over a channel row too. Showing Malay copy in the
+  /// wrong tone is cosmetic; showing English to a Malay speaker is a
+  /// comprehension failure, and PDPA s.7 treats language as substantive.
+  locale           String?
+
+  /// Record<stepId, { prompt?, label?, choices?: Array<{value, label}> }>.
+  /// A choice override may only relabel a value the base step already
+  /// defines — adding or removing a value would change what can be stored,
+  /// which is structure. Enforced by the resolver and the publish gate.
+  overrides Json
+
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  definition FlowDefinition @relation(fields: [flowDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([flowDefinitionId, channel, locale])
+  @@index([flowDefinitionId])
+  @@map("flow_overlays")
+}
+
+// ============================================================================
+// Conversational channels — Telegram first, the contract is channel-agnostic
+// ============================================================================
+
+/// Binds a messaging-platform user to a Claimant and the Case they are filling.
+///
+/// The web chat does not need this: a claimant is authenticated and already
+/// holds a caseId. A Telegram message arrives with nothing but an opaque chat
+/// id, so this table is what turns an anonymous sender into someone whose claim
+/// we may discuss — and it is the only thing standing between a stranger and
+/// another person's claim details. Nothing is served until `verifiedAt` is set.
+///
+/// `activeCaseId` is what makes a conversation resumable: the claimant closes
+/// Telegram mid-intake, comes back a day later, and the next message continues
+/// where the Case left off rather than starting again.
+model ConversationBinding {
+  id             String      @id @default(uuid())
+  channel        CaseChannel
+  /// Telegram chat id, WhatsApp wa_id, Messenger PSID. Opaque, per channel.
+  platformUserId String
+  /// Null until OTP verification succeeds.
+  claimantId     String?
+  /// The Case this conversation is currently filling, if any.
+  activeCaseId   String?
+  /// Resolved once the claimant is known; drives which flow they are offered.
+  tenantId       String?
+
+  /// Phone the claimant is verifying, pending OTP. On Telegram this arrives
+  /// via request_contact, so it is Telegram-verified before we even send the
+  /// code — the code proves possession now rather than at signup.
+  pendingPhone String?
+  verifiedAt   DateTime?
+  /// Counts failed OTP attempts so a binding can be rate-limited rather than
+  /// letting a stranger grind codes against a known phone number.
+  otpAttempts  Int       @default(0)
+
+  /// Whether the bot is answering, or a human has taken the conversation.
+  ///
+  /// In HANDOVER the gateway records inbound messages and sends nothing
+  /// automated. Without this the bot would answer over the agent mid-sentence,
+  /// which reads to the claimant as one confused party rather than two.
+  mode           ConversationMode @default(BOT)
+  /// Operator currently handling it. Null in BOT mode, or unassigned handover.
+  assignedUserId String?
+  handoverAt     DateTime?
+  /// Why a human stepped in — the field that makes bot performance reviewable.
+  handoverReason String?
+  resolvedAt     DateTime?
+
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  claimant   Claimant?             @relation(fields: [claimantId], references: [id])
+  activeCase Case?                 @relation(fields: [activeCaseId], references: [id])
+  messages   ConversationMessage[]
+
+  @@unique([channel, platformUserId])
+  @@index([claimantId])
+  @@index([activeCaseId])
+  @@index([mode, handoverAt])
+  @@map("conversation_bindings")
+}
+
+/// One inbound message from a messaging channel, recorded before it is handled.
+///
+/// Written insert-first on `platformMessageId`, so a unique violation *is* the
+/// "already seen" branch and the database is the arbiter rather than the
+/// worker. Exactly the same reasoning as InboundMessage for FNOL email: a
+/// platform that retries delivery (all of them do) must not produce two answers
+/// to one question, and two workers racing the same update must produce one.
+///
+/// The row is written before the turn is interpreted, so a message nobody could
+/// parse still leaves a trace. A claimant who typed something believes they
+/// answered; silently dropping it is invisible.
+/// One message in a conversation, in either direction.
+///
+/// Both directions in one table because a transcript is a single ordered list.
+/// Two tables would mean a merge-sort on every read, and an operator scrolling a
+/// conversation is the whole point of storing this — the read shape should be
+/// the cheap one.
+///
+/// Inbound rows are written insert-first on `platformMessageId`, so a unique
+/// violation *is* the "already seen" branch and the database arbitrates rather
+/// than the worker. Outbound rows have no such key until the platform returns
+/// one, which is why the column is nullable and the uniqueness is a partial
+/// index added in the migration.
+model ConversationMessage {
+  id        String           @id @default(uuid())
+  channel   CaseChannel
+  direction MessageDirection
+
+  /// Inbound: the platform's update id — the idempotency key. Outbound: the id
+  /// the platform returned, kept so a delivery can be traced. Null when none
+  /// was given.
+  platformMessageId String?
+  bindingId         String?
+
+  /// Raw text, if the message carried any.
+  text     String?
+  /// Platform reference for an attachment, resolved lazily — media is fetched
+  /// only when a document step is actually expecting one.
+  mediaRef String?
+  /// Step this message answered or asked, once known. Null when the turn was
+  /// consumed by identity binding (phone share, OTP) rather than by the flow.
+  stepId   String?
+
+  /// Set on an outbound message a human sent. Null means the bot said it.
+  ///
+  /// This distinction is the point of the transcript: reviewing how the bot
+  /// performs is impossible if its words and an agent's are indistinguishable,
+  /// and an agent speaking to a claimant on the firm's behalf is a
+  /// claims-handling act that must be attributable.
+  sentByUserId String?
+
+  status ConversationMessageStatus @default(PENDING)
+  /// Why this message could not be handled — shown in the operator queue.
+  error  String?
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  binding ConversationBinding? @relation(fields: [bindingId], references: [id])
+
+  /// Uniqueness on (channel, platformMessageId) is a partial index in the
+  /// migration, because Postgres treats NULLs as distinct and outbound rows
+  /// legitimately have none.
+  @@index([bindingId, createdAt])
+  @@index([status, createdAt])
+  @@map("conversation_messages")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum ConversationMessageStatus {
+  PENDING
+  PROCESSED
+  /// Consumed by identity binding rather than by the flow — phone share, OTP.
+  ONBOARDING
+  /// Could not be interpreted as an answer to the current step. The claimant
+  /// is told; the row stays so an operator can see what they actually sent.
+  UNPARSEABLE
+  /// Arrived while a human had the conversation. Recorded, deliberately not
+  /// answered — see ConversationMode.HANDOVER.
+  AWAITING_AGENT
+  FAILED
+}
+
+/// Who is answering a conversation.
+enum ConversationMode {
+  BOT
+  /// A human has it. The bot stands down entirely until resolved, then the
+  /// flow resumes at the step the Case is pinned to.
+  HANDOVER
 }

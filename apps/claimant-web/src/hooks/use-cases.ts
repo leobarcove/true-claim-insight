@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
-import type { CaseStatus, FlowStep, TravelClaimType } from '@tci/shared-types';
+import type { CaseFlow, CaseStatus, FlowStep, TravelClaimType } from '@tci/shared-types';
 
 export const caseKeys = {
   all: ['cases'] as const,
   mine: () => [...caseKeys.all, 'mine'] as const,
   detail: (id: string) => [...caseKeys.all, 'detail', id] as const,
+  flow: (id: string) => [...caseKeys.all, 'flow', id] as const,
 };
 
 export interface ClaimantCase {
@@ -49,6 +50,28 @@ export function useClaimantCase(caseId: string | undefined) {
       return data.data;
     },
     enabled: !!caseId,
+  });
+}
+
+/**
+ * The flow this case is walking, as the server resolved it.
+ *
+ * Fetched rather than read from the bundled CASE_FLOWS because the server walks
+ * the version pinned on the case. Once a flow is edited and republished, the
+ * bundle and the pin diverge — and the claimant must see the conversation they
+ * started, not the one that happens to be current.
+ *
+ * A flow is immutable for the life of a case, so this never needs refetching.
+ */
+export function useCaseFlow(caseId: string | undefined) {
+  return useQuery({
+    queryKey: caseKeys.flow(caseId || ''),
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<CaseFlow>>(`/cases/${caseId}/flow`);
+      return data.data;
+    },
+    enabled: !!caseId,
+    staleTime: Infinity,
   });
 }
 
