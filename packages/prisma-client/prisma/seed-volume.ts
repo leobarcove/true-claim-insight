@@ -141,6 +141,11 @@ function malaysianName(): string {
 const DESTINATIONS = ['Bangkok', 'Singapore', 'Tokyo', 'Seoul', 'Jakarta', 'Ho Chi Minh City', 'Taipei', 'Hong Kong', 'Bali', 'Melbourne', 'London', 'Dubai', 'Osaka', 'Manila', 'Phuket'];
 const AIRLINES = ['MH', 'AK', 'D7', 'OD', 'FY', 'SQ', 'TR', 'VJ'];
 
+/** Risk addresses for property losses — a fire claim with no address is not assessable. */
+const STREETS = ['Ampang', 'Bukit Bintang', 'Tun Razak', 'Sultan Ismail', 'Pudu', 'Kuchai Lama', 'Genting Klang', 'Cheras'];
+const TOWNS = ['Kuala Lumpur', 'Petaling Jaya', 'Shah Alam', 'Klang', 'Johor Bahru', 'Ipoh', 'Georgetown', 'Seremban'];
+const STATES = ['Selangor', 'Kuala Lumpur', 'Johor', 'Perak', 'Penang', 'Negeri Sembilan'];
+
 /**
  * Malaysian travel seasonality, by ISO month.
  *
@@ -369,12 +374,15 @@ async function wipePreviousRun() {
   await prisma.notificationLog.deleteMany({ where: { entityType: 'CASE' } });
 
   // Cases first: a case points at the claim it converted into.
-  if (caseIds.length) await prisma.case.deleteMany({ where: { id: { in: caseIds } } });
+  if (caseIds.length) {
+    await prisma.caseDocument.deleteMany({ where: { caseId: { in: caseIds } } });
+    await prisma.case.deleteMany({ where: { id: { in: caseIds } } });
+  }
   if (claimIds.length) await prisma.claim.deleteMany({ where: { id: { in: claimIds } } });
 
   await prisma.assignment.deleteMany({ where: { externalRef: { startsWith: 'MSIG-APP-' } } });
   await prisma.claimant.deleteMany({ where: { id: { in: claimantIds } } });
-  await prisma.policy.deleteMany({ where: { policyNumber: { startsWith: 'MSIG-TRV-2026-' } } });
+  await prisma.policy.deleteMany({ where: { policyNumber: { startsWith: 'MSIG-' } } });
 
 }
 
@@ -403,11 +411,21 @@ async function main() {
   // One per claimant-ish, under the insurer. A minority of claims will not
   // match one, which is what puts cases into the operator's policy-review queue.
   const policyCount = 420;
-  const policies: { id: string; policyNumber: string; insuredName: string }[] = [];
+  const policies: { id: string; policyNumber: string; insuredName: string; category: ClaimCategory }[] = [];
 
   for (let i = 0; i < policyCount; i += 1) {
     const insuredName = malaysianName();
-    const policyNumber = `MSIG-TRV-2026-${String(i + 1).padStart(5, '0')}`;
+    // The policy prefix names the class. A fire loss on a travel policy number
+    // is the first thing an insurer's claims head would query.
+    const line = weighted<[ClaimCategory, string]>([
+      [[ClaimCategory.TRAVEL, 'TRV'], 62],
+      [[ClaimCategory.FIRE, 'FIR'], 13],
+      [[ClaimCategory.FLOOD, 'FLD'], 10],
+      [[ClaimCategory.BURGLARY, 'BGL'], 8],
+      [[ClaimCategory.LIGHTNING, 'LTG'], 4],
+      [[ClaimCategory.HOH, 'HOH'], 3],
+    ]);
+    const policyNumber = `MSIG-${line[1]}-2026-${String(i + 1).padStart(5, '0')}`;
     const issued = addDays(START, -intBetween(30, 400));
 
     const policy = await prisma.policy.create({
@@ -430,7 +448,7 @@ async function main() {
       },
       select: { id: true, policyNumber: true, insuredName: true },
     });
-    policies.push(policy);
+    policies.push({ ...policy, category: line[0] });
   }
   console.log(`  policies              ${policies.length}`);
 
@@ -492,6 +510,7 @@ async function main() {
     modeDecisions: 0,
     sessions: 0,
     documents: 0,
+    caseDocuments: 0,
   };
 
   // Start above anything already present. The wipe removes this seeder's own
@@ -511,13 +530,12 @@ async function main() {
     const target = Math.round(CLAIMS_PER_MONTH * weight * monthFraction(month, TODAY));
 
     for (let i = 0; i < target; i += 1) {
-      const category = weighted(CATEGORY_MIX);
-      const isTravel = category === ClaimCategory.TRAVEL;
-
-      // The claimant IS the insured. A policy matched to a different person is
-      // a red flag an adjuster would act on, not a demo detail — so identity
-      // is resolved from the policy rather than picked independently.
+      // The claimant IS the insured, and the claim's line follows the policy
+      // it was made under. Both are resolved from the policy rather than rolled
+      // independently — a mismatch on either is something an adjuster acts on.
       const policy = chance(0.88) ? pick(policies) : null;
+      const category = policy ? policy.category : weighted(CATEGORY_MIX);
+      const isTravel = category === ClaimCategory.TRAVEL;
       const claimant = policy
         ? claimantByName.get(policy.insuredName) ?? pick(claimants)
         : pick(claimants);
@@ -667,6 +685,33 @@ async function main() {
       if (caseStatus === CaseStatus.ABANDONED) totals.abandoned += 1;
       if (askedForInfo) totals.infoRequested += 1;
 
+      // Case-level evidence. Distinct from claim documents on purpose: the
+      // operator vets a CASE before it converts, and the checklist on that
+      // screen reads `case_documents`. Seeding only claim documents left the
+      // checklist at 0/3 — and left the evidence-completeness signal that
+      // drives the fast-track router reading nothing at all.
+      const caseEvidence = EVIDENCE_BY_CATEGORY[category] ?? EVIDENCE_BY_CATEGORY.DEFAULT!;
+      const caseComplete = caseStatus !== CaseStatus.INFO_REQUESTED && chance(0.75);
+      const caseUploads = caseComplete
+        ? caseEvidence
+        : caseEvidence.slice(0, Math.max(caseEvidence.length - 2, 0));
+
+      for (const [docType, filename] of caseUploads) {
+        await prisma.caseDocument.create({
+          data: {
+            caseId: caseRow.id,
+            tenantId: firm.id,
+            documentType: docType,
+            fileName: filename,
+            storagePath: `seed://cases/${caseRow.id}/${filename}`,
+            mimeType: filename.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+            sizeBytes: intBetween(48_000, 2_400_000),
+            createdAt: addHours(submittedAt, intBetween(1, 40)),
+          },
+        });
+        totals.caseDocuments += 1;
+      }
+
       // FNOL email provenance for the email channel, plus a tail that would
       // not parse — which is what populates the operator's review queue.
       if (channel === CaseChannel.EMAIL) {
@@ -769,7 +814,14 @@ async function main() {
           category,
           status,
           incidentDate,
-          incidentLocation: { destination, country: destination },
+          incidentLocation: isTravel
+            ? { destination, country: destination }
+            : {
+                address: `${intBetween(1, 220)} Jalan ${pick(STREETS)}`,
+                city: pick(TOWNS),
+                state: pick(STATES),
+                postcode: String(intBetween(10000, 98000)),
+              },
           description: isTravel
             ? describeIncident(type!, destination, flightNumber)
             : pick(PROPERTY_NARRATIVE[category] ?? ['Non-motor property loss.']),
@@ -890,25 +942,44 @@ async function main() {
       if (reportAt) {
         const assessed = amount * between(0.7, 1.05);
         const excess = pick([0, 100, 250, 500]);
-        const recommended = Math.max(assessed - excess, 0);
+        // Property is usually reinstatement; contents and older risks settle on
+        // indemnity, where depreciation for age and wear applies.
+        const settlementBasis = chance(0.75)
+          ? SettlementBasis.REINSTATEMENT
+          : SettlementBasis.INDEMNITY;
+        const depreciation = settlementBasis === SettlementBasis.INDEMNITY ? between(0.1, 0.35) : 0;
+        const afterDepreciation = assessed * (1 - depreciation);
+        const recommended = Math.max(afterDepreciation - excess, 0);
 
         await prisma.quantumWorksheet.create({
           data: {
             claimId: claim.id,
             tenantId: firm.id,
             revision: 1,
-            basis: chance(0.75) ? SettlementBasis.REINSTATEMENT : SettlementBasis.INDEMNITY,
+            basis: settlementBasis,
             assessedLoss: money(assessed),
+            depreciationRate:
+              settlementBasis === SettlementBasis.INDEMNITY
+                ? new Prisma.Decimal(depreciation.toFixed(4))
+                : null,
             sumInsured: money((isTravel ? AMOUNT_BAND[type!][1] : PROPERTY_BAND[category]![1]) * 2),
             averageCondition: false,
             excess: money(excess),
-            adjustedLoss: money(assessed),
+            adjustedLoss: money(afterDepreciation),
             underinsured: false,
             averageApplied: false,
             recommended: money(recommended),
             cappedAtSumInsured: false,
             lines: [
               { key: 'assessed-loss', label: 'Assessed loss', amount: assessed.toFixed(2), basis: 'Cost to reinstate or repair, as assessed' },
+              ...(depreciation > 0
+                ? [{
+                    key: 'depreciation',
+                    label: 'Less: depreciation',
+                    amount: (-(assessed - afterDepreciation)).toFixed(2),
+                    basis: `Indemnity basis, ${(depreciation * 100).toFixed(1)}% for age and wear`,
+                  }]
+                : []),
               ...(excess > 0
                 ? [{ key: 'excess', label: 'Less: excess', amount: (-excess).toFixed(2), basis: 'Policy excess borne by the insured, applied after average' }]
                 : []),
@@ -1065,7 +1136,8 @@ async function main() {
   console.log(`  assessment decisions  ${totals.modeDecisions}`);
   console.log(`  quantum worksheets    ${totals.worksheets}`);
   console.log(`  fraud signals         ${totals.fraudSignals}`);
-  console.log(`  evidence documents    ${totals.documents}`);
+  console.log(`  case evidence         ${totals.caseDocuments}`);
+  console.log(`  claim documents       ${totals.documents}`);
   console.log(`  video sessions        ${totals.sessions}`);
   console.log(`  SLA clocks            ${totals.slaClocks} (${totals.breaches} breached)`);
   console.log(`  inbound FNOL emails   ${totals.inbound} (${totals.needsReview} awaiting review)`);
