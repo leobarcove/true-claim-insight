@@ -160,8 +160,10 @@ export class VideoService {
 
   async streamUpload(uploadId: string, res: any, req: any) {
     const range = req.headers.range;
+    // The one route that built its headers by hand, and so was the one route
+    // still unauthenticated after the others were fixed.
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/stream`, {
-      headers: range ? { range } : undefined,
+      headers: { ...this.buildHeaders(), ...(range ? { range } : {}) },
     });
 
     if (!response.ok && response.status !== 206) {
@@ -263,8 +265,21 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
+  /**
+   * Headers for every call to video-service — identity *and* the internal key.
+   *
+   * This module calls with `fetch` rather than through `InternalHttpModule`,
+   * whose whole purpose is that no gateway call site can forget the key (§4.3
+   * A1). Forgetting it here is exactly the failure that module exists to
+   * prevent: video-service fails closed, so the Sessions screen, room
+   * creation, joining, ending and every upload returned 502 "Invalid internal
+   * credentials". One builder, used by every call, so the key cannot be
+   * omitted from one of them.
+   */
   private buildHeaders(tenantId?: string, userId?: string, userRole?: string): Record<string, string> {
     const headers: Record<string, string> = {};
+    const internalKey = this.configService.get<string>('INTERNAL_API_KEY');
+    if (internalKey) headers['x-internal-key'] = internalKey;
     if (tenantId) headers['X-Tenant-Id'] = tenantId;
     if (userId) headers['X-User-Id'] = userId;
     if (userRole) headers['X-User-Role'] = userRole;
