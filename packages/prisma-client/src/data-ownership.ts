@@ -61,6 +61,8 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // The firm's own working on what a loss is worth — claims context, and the
   // same service that owns the claim it hangs off.
   quantumWorksheet: 'claims',
+  // How a claim was examined and why — an adjusting decision, claims context.
+  assessmentModeDecision: 'claims',
   // How long claim records live; platform-wide but written by case-service.
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.

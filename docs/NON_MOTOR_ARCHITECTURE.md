@@ -271,7 +271,11 @@ orderings drift apart and the figures stop being comparable.
   value. Critical for fire/burglary; defer until UI lands.
 - **Tier triage / auto-settlement** — rule engine that promotes
   PARAMETRIC + low-value claims directly to APPROVED without an
-  adjuster. Add when ≥1 real parametric provider is live.
+  adjuster. Add when ≥1 real parametric provider is live. *Note (6 Aug
+  2026): the assessment-mode router now decides how a claim is examined
+  — desk review, video, site visit or expert — but it never decides the
+  claim itself. Auto-settlement remains deliberately unbuilt; the firm
+  recommends and the insurer decides.*
 - **Subrogation tracking** — `Claim.subrogationFlag` enum.
 - **SIU auto-escalation rules** — currently status `ESCALATED_SIU`
   exists but transition rules are manual. Wire to `FraudSignal.severity

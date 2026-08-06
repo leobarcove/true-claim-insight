@@ -21,6 +21,7 @@ import { ConflictsService } from '../adjusters/conflicts.service';
 import { canSign, canTransition, countersignDecision, type AdjusterStanding } from './report-authority';
 import { ReportPdfGenerator } from './report-pdf.generator';
 import { renderQuantumSection } from '../quantum/quantum-section';
+import { describeMode } from '../assessment/assessment-mode';
 
 /** Which SLA stage a report type discharges when issued. */
 const STAGE_FOR_TYPE: Partial<Record<AdjusterReportType, SlaStage>> = {
@@ -132,6 +133,22 @@ export class ReportsService {
 
     if (worksheet && sections.quantum) {
       sections.quantum = { body: renderQuantumSection(worksheet) };
+    }
+
+    // PD 12.6 requires the method to be disclosed, and the assessment mode is a
+    // method: "desk review on documents alone" and "site inspection" reach the
+    // same figure by different means. Pre-filled from the recorded decision so
+    // the report states the level actually used, with the reasons that held
+    // when it was set.
+    const modeDecision = await this.prisma.assessmentModeDecision.findFirst({
+      where: { claimId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (modeDecision && sections.methodology) {
+      sections.methodology = {
+        body: describeMode(modeDecision.mode, modeDecision.reasons),
+      };
     }
 
     try {

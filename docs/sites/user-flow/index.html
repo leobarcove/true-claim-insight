@@ -332,8 +332,8 @@ TPA schedule or adjuster fee scale`"]
     style CASE stroke:#17966A,stroke-width:2.5px
     style CONV stroke:#17966A,stroke-width:2.5px
     style ING stroke:#17966A,stroke-width:2.5px
-    style MODE stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
-    style DESK stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
+    style MODE stroke:#17966A,stroke-width:2.5px
+    style DESK stroke:#17966A,stroke-width:2.5px
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
     style INFO stroke:#C77A2E,stroke-width:2.5px
     style EXP stroke:#C77A2E,stroke-width:2.5px
@@ -343,11 +343,11 @@ TPA schedule or adjuster fee scale`"]
           <strong>The firm recommends; the insurer decides.</strong> Nothing in this system
           settles a claim. Step 7 is a handback, and the adjuster report says so on its face.
         </p>
-        <p class="note warn">
-          <strong>Step 4 is not built.</strong> The assessment-mode router and its
-          desk-review fast-track are specified in <code>MASTER_PLAN.md</code> §2.4 but exist
-          nowhere in the codebase — no <code>AssessmentMode</code> field, no routing logic.
-          Today a claim proceeds to assessment without a mode being selected for it.
+        <p class="note">
+          <strong>Step 4 decides how the claim is examined.</strong> Four conditions must all
+          hold for desk review, and the mode is disclosed in the report as a PD 12.6
+          <em>method</em> — "desk review on documents alone" and "site inspection" reach the
+          same figure by different means.
         </p>
       </section>
 
@@ -829,11 +829,12 @@ never deleted`"]
           Four conditions must all hold before a claim takes the desk-review route, and any
           one of three triggers pulls it back out mid-flight.
         </p>
-        <p class="note warn">
-          <strong>None of this is built.</strong> This is the design recorded in
-          <code>MASTER_PLAN.md</code> §2.4, drawn so the intended rules are reviewable — not a
-          description of current behaviour. There is no fast-track logic, no tenant limit
-          configuration and no mode field in the schema.
+        <p class="note">
+          <strong>Configuration gaps fail closed.</strong> A category with no limit configured
+          is not fast-tracked, and an unknown estimated amount is not treated as a small one —
+          both refuse the fast track rather than passing a test against nothing. Medical is
+          excluded ahead of the economic checks, so a small medical claim cannot slip through
+          on value.
         </p>
         <div class="plate"><pre class="mermaid">
 flowchart TD
@@ -861,8 +862,8 @@ video → site → expert`"]
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
 
-    style FAST stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
-    style OUT stroke:#C77A2E,stroke-width:2.5px,stroke-dasharray:5 4
+    style FAST stroke:#17966A,stroke-width:2.5px
+    style OUT stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
           Mode changes are audited and disclosed in the report's methodology section. The
@@ -939,8 +940,6 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
-              <tr><td>Assessment-mode router (diagram 01, step 4)</td><td><span class="chip plan">Planned</span></td><td>Nothing — scheduled work</td></tr>
-              <tr><td>Small-claims fast-track (diagram 10, in full)</td><td><span class="chip plan">Planned</span></td><td>Depends on the mode router</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>

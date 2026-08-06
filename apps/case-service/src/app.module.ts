@@ -21,6 +21,7 @@ import { RetentionModule } from './retention/retention.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { QuantumModule } from './quantum/quantum.module';
+import { AssessmentModule } from './assessment/assessment.module';
 import { ExportModule } from './export/export.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { BillingModule } from './billing/billing.module';
@@ -72,6 +73,7 @@ import { AuditModule } from './common/audit/audit.module';
     IngestionModule,
     NotificationsModule,
     QuantumModule,
+    AssessmentModule,
     ExportModule,
     ComplianceModule,
     BillingModule,
