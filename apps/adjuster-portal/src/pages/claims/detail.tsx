@@ -72,6 +72,7 @@ import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-det
 import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
 import { QuantumWorksheetPanel } from '@/components/claims/quantum-worksheet';
 import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
+import { SlaPanel } from '@/components/claims/sla-panel';
 import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
 const statusConfig: Record<
@@ -1234,6 +1235,8 @@ export function ClaimDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            <SlaPanel claimId={claimId} />
+
             {/* Session button */}
             {canManageSessions &&
               (() => {
