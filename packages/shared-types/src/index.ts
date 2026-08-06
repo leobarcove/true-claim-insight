@@ -683,6 +683,7 @@ export {
   getFlow,
   getStep,
   evaluateNext,
+  branchInputSteps,
   ruleTargets,
   resolveNextStep,
   validateAnswer,

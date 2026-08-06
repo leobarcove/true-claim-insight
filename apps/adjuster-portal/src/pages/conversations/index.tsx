@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Bot, Loader2, MessageSquare, Send, User, UserCheck } from 'lucide-react';
 
 import { Header } from '@/components/layout/header';
@@ -82,8 +82,46 @@ const time = (iso: string) =>
   });
 
 export function ConversationsPage() {
-  const [filter, setFilter] = useState<ConversationMode | 'ALL'>('ALL');
-  const [selectedId, setSelectedId] = useState<string | undefined>();
+  /**
+   * Tab and open thread live in the URL, not component state.
+   *
+   * An inbox is something people link each other to — "have a look at this
+   * one" is the normal way a conversation reaches a second pair of eyes. Held
+   * in useState, a refresh dropped you back to the first row and a pasted link
+   * opened someone else's thread.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = (searchParams.get('tab') as ConversationMode | 'ALL') || 'ALL';
+  const selectedId = searchParams.get('conversation') || undefined;
+
+  const setFilter = (value: ConversationMode | 'ALL') => {
+    setSearchParams(
+      current => {
+        const next = new URLSearchParams(current);
+        if (value === 'ALL') next.delete('tab');
+        else next.set('tab', value);
+        // Changing tab drops the open thread: it may not be in the new list,
+        // and showing a thread the list does not contain is confusing.
+        next.delete('conversation');
+        return next;
+      },
+      { replace: false }
+    );
+  };
+
+  const selectConversation = (id: string, replace = false) => {
+    setSearchParams(
+      current => {
+        const next = new URLSearchParams(current);
+        next.set('conversation', id);
+        return next;
+      },
+      // `replace` for the automatic first-row selection, so the back button
+      // does not have to walk through a choice nobody made.
+      { replace }
+    );
+  };
+
   const [draft, setDraft] = useState('');
   const [reason, setReason] = useState('');
   const { toast } = useToast();
@@ -102,9 +140,35 @@ export function ConversationsPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [thread?.messages.length]);
 
+  // Half-typed text belongs to the thread it was typed in. Now that switching
+  // threads is a navigation, a leftover draft could be sent to the wrong
+  // claimant.
+  useEffect(() => {
+    setDraft('');
+    setReason('');
+  }, [selectedId]);
+
   // Selecting nothing on an inbox is a dead screen; open whatever is waiting.
   useEffect(() => {
-    if (!selectedId && conversations?.length) setSelectedId(conversations[0].id);
+    if (!selectedId && conversations?.length) selectConversation(conversations[0].id, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, selectedId]);
+
+  // A thread that leaves the filtered list — resolved while you were reading it,
+  // say — must not leave a stale id in the URL pointing at nothing.
+  useEffect(() => {
+    if (!selectedId || !conversations) return;
+    if (!conversations.some(conversation => conversation.id === selectedId)) {
+      setSearchParams(
+        current => {
+          const next = new URLSearchParams(current);
+          next.delete('conversation');
+          return next;
+        },
+        { replace: true }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selectedId]);
 
   const waitingTotal = useMemo(
@@ -193,7 +257,7 @@ export function ConversationsPage() {
               key={conversation.id}
               conversation={conversation}
               selected={conversation.id === selectedId}
-              onSelect={() => setSelectedId(conversation.id)}
+              onSelect={() => selectConversation(conversation.id)}
             />
           ))}
         </div>
