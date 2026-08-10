@@ -96,10 +96,6 @@ export class UpdateClaimDto {
   @IsOptional()
   estimatedRepairCost?: number;
 
-  @ApiPropertyOptional({ example: true })
-  @IsBoolean()
-  @IsOptional()
-  isPdpaCompliant?: boolean;
 
   @ApiPropertyOptional({ example: '2025-12-25' })
   @IsDateString()

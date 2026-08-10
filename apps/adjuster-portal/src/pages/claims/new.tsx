@@ -1,17 +1,46 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ClaimSubmissionWizard } from '@tci/ui-components';
 import { ArrowLeft } from 'lucide-react';
+import type { ClaimCategory } from '@tci/shared-types';
 import { Button } from '@/components/ui';
 import { Header } from '@/components/layout/header';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/hooks/use-toast';
+import { CategoryPicker } from '@/components/claims/non-motor/category-picker';
+import { FloodFNOLForm } from '@/components/claims/non-motor/flood-fnol-form';
+import { categoryConfig } from '@/lib/category-config';
+
+// Valid category keys for URL query param parsing. Sourced from the
+// registry so a new category gets accepted automatically.
+const VALID_CATEGORIES = new Set(Object.keys(categoryConfig));
+
+function parseCategoryParam(raw: string | null): ClaimCategory | null {
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  return VALID_CATEGORIES.has(upper) ? (upper as ClaimCategory) : null;
+}
 
 export function NewClaimPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Category lives in the URL (?category=flood) so the link is shareable.
+  // Reading from searchParams on every render keeps it in sync with
+  // back/forward navigation without needing a separate useEffect.
+  const category = parseCategoryParam(searchParams.get('category'));
+
+  const setCategory = (next: ClaimCategory | null) => {
+    if (next) {
+      setSearchParams({ category: next.toLowerCase() }, { replace: false });
+    } else {
+      // Drop the param entirely when going back to the picker.
+      setSearchParams({}, { replace: false });
+    }
+  };
 
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
@@ -49,7 +78,10 @@ export function NewClaimPage() {
         policeReportNumber: data.policeReportNumber || '',
         policeReportDate: data.policeReportDate || '',
         policeStation: data.policeStation || '',
-        isPdpaCompliant: true,
+        // PDPA consent is NOT asserted here. It is only true once a Consent
+        // record exists for the claimant (see docs/MASTER_PLAN.md Phase 1);
+        // hardcoding it displayed a "PDPA Consented" badge for consent that
+        // had never been obtained.
       };
 
       console.log('Submitting claim payload:', payload);
@@ -140,7 +172,7 @@ export function NewClaimPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <Header
         title="Create New Claim"
         description="Assist a claimant by initiating their claim file."
@@ -151,20 +183,32 @@ export function NewClaimPage() {
         </Button>
       </Header>
 
-      <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="mx-auto">
+      {/* AppLayout's main area already provides the single scrollable region.
+          Don't add overflow-auto here — that nests a second scrollbar inside
+          the layout's scrollbar, which looks especially broken on tall forms
+          like the flood FNOL. */}
+      <div className="p-6 space-y-6">
+        <div className="mx-auto max-w-4xl">
           <div className="bg-card rounded-lg border shadow-sm p-8">
             {isSubmitting ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 <p className="text-muted-foreground">Submitting claim details...</p>
               </div>
-            ) : (
+            ) : !category ? (
+              <CategoryPicker onSelect={setCategory} />
+            ) : category === 'MOTOR' ? (
               <ClaimSubmissionWizard
                 mode="AGENT"
                 onSuccess={handleSuccess}
-                onCancel={() => navigate(-1)}
+                onCancel={() => setCategory(null)}
               />
+            ) : category === 'FLOOD' ? (
+              <FloodFNOLForm onCancel={() => setCategory(null)} />
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                Coming soon: {category} claims
+              </div>
             )}
           </div>
         </div>

@@ -332,6 +332,15 @@ export function VideoSessionsPage() {
                     ? 'No live sessions available yet.'
                     : 'No manual uploads available yet.'}
               </p>
+              {/* This list is built from recordings held by the video provider,
+                  not from our own session records — a session whose recording
+                  the provider does not hold never appears. Saying so stops an
+                  empty page reading as "this firm has held no assessments". */}
+              <p className="text-xs text-muted-foreground mt-3 max-w-md mx-auto">
+                Sessions appear here once the video provider has a recording for
+                them. Scheduled and completed assessments are listed on each
+                claim and in the schedule.
+              </p>
             </Card>
           ) : viewMode === 'table' ? (
             /* Table View */

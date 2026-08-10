@@ -1,0 +1,130 @@
+import { Prisma } from '@prisma/client';
+
+/**
+ * Typed reader for `Tenant.settings` — gateway copy.
+ *
+ * Deliberately duplicated from case-service rather than shared. The two
+ * services read the same column for different reasons: case-service to decide
+ * whether a gate blocks, the gateway to render and write the configuration.
+ * Extracting it to a package would couple the identity and claims contexts
+ * through a type, and the shape is small enough that drift is caught by the
+ * validating DTO next to this file.
+ *
+ * Original:
+ *
+ * The column is free-form JSON, which is how it came to hold nothing at all. The
+ * settings that gate regulated behaviour need to be read the same way everywhere,
+ * with a safe default when absent — a missing flag must never accidentally
+ * enable a control the firm is not yet authorised to operate under, nor disable
+ * one it is.
+ */
+export interface TenantSettings {
+  /**
+   * Is this firm a BNM-registered adjuster?
+   *
+   * The whole point of the flag (docs/MASTER_PLAN.md §1): the regulated machinery
+   * — qualified-author restriction, senior countersign, COI screening — is built
+   * and shipped now, but only *blocks* once registration is real. Operating as a
+   * TPA, the same checks run and are recorded as advisory, so the firm arrives at
+   * registration with a working system and a history of compliance rather than a
+   * rebuild.
+   *
+   * Defaults to false. Claiming registered status the firm does not hold would be
+   * a far worse error than running a gate advisorily.
+   */
+  licensedMode?: boolean;
+
+  /** Malaysian state whose working-day calendar applies to this firm's claims. */
+  calendarState?: string;
+
+  /**
+   * Claim categories this firm is willing to settle on a desk review, and the
+   * value ceiling for each (MASTER_PLAN §2.4).
+   *
+   * Both absent by default, and absence means **no fast track** rather than an
+   * unlimited one: a firm that has not decided its ceilings has not decided to
+   * skip interviews either. Limits are decimal strings for the same reason the
+   * quantum DTO uses them — a JSON number is a float, and this one gates how a
+   * claim is examined.
+   */
+  fastTrackCategories?: string[];
+  fastTrackLimits?: Record<string, string>;
+
+  /**
+   * Claim categories this firm attends in person, and the value at or above
+   * which it does so (MASTER_PLAN §2.4).
+   *
+   * Absent by default for the mirror-image reason of the fast track: that one
+   * governs when the firm spends *less* than standard, this one when it spends
+   * more. Neither is inferred on the firm's behalf. Only lines with a physical
+   * risk address belong here — a travel loss happened overseas.
+   */
+  siteVisitCategories?: string[];
+  siteVisitThresholds?: Record<string, string>;
+
+  /** Display name on white-labelled claimant-facing output. */
+  brandingName?: string;
+}
+
+export function tenantSettings(settings: unknown): TenantSettings {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return {};
+  return settings as TenantSettings;
+}
+
+/** Is the firm operating as a BNM-registered adjuster? Defaults to no. */
+export function isLicensedMode(settings: unknown): boolean {
+  return tenantSettings(settings).licensedMode === true;
+}
+
+/**
+ * The firm's desk-review policy, in the shape the router expects.
+ *
+ * A category listed with no limit is deliberately left without one here too —
+ * the router treats that as a configuration gap and refuses the fast track,
+ * which is safer than inventing a ceiling on the firm's behalf.
+ */
+export function fastTrackPolicy(settings: unknown): {
+  categories: string[];
+  limits: Record<string, Prisma.Decimal>;
+} {
+  const parsed = tenantSettings(settings);
+  const limits: Record<string, Prisma.Decimal> = {};
+
+  for (const [category, value] of Object.entries(parsed.fastTrackLimits ?? {})) {
+    try {
+      limits[category] = new Prisma.Decimal(value);
+    } catch {
+      // A malformed ceiling is dropped rather than defaulted. The category then
+      // has no limit, and the router refuses to fast-track it — the same
+      // outcome as never configuring it, which is the safe reading.
+    }
+  }
+
+  return { categories: parsed.fastTrackCategories ?? [], limits };
+}
+
+/**
+ * The firm's site-visit policy, in the shape the router expects.
+ *
+ * Same handling as `fastTrackPolicy`, including dropping a malformed threshold
+ * rather than defaulting it — an unparseable number here would otherwise decide
+ * to send an adjuster somewhere.
+ */
+export function inspectionPolicy(settings: unknown): {
+  categories: string[];
+  thresholds: Record<string, Prisma.Decimal>;
+} {
+  const parsed = tenantSettings(settings);
+  const thresholds: Record<string, Prisma.Decimal> = {};
+
+  for (const [category, value] of Object.entries(parsed.siteVisitThresholds ?? {})) {
+    try {
+      thresholds[category] = new Prisma.Decimal(value);
+    } catch {
+      // Dropped: the category then has no threshold and is never routed to a
+      // site visit, the same outcome as never configuring it.
+    }
+  }
+
+  return { categories: parsed.siteVisitCategories ?? [], thresholds };
+}

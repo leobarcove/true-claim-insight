@@ -1,0 +1,1231 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>True Claim Insight — TPA user flows</title>
+<meta name="description" content="Eleven flow diagrams covering the claim journey, from a claimant's first notification of loss through to the fee note. Transcribed from the running code.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="logo.png">
+
+<style>
+  :root {
+    --paper:#F6F8F6; --surface:#FFFFFF; --surface-2:#F0F4F1;
+    --ink:#0C1613; --ink-2:#4A5C55; --ink-3:#6E8078;
+    --rule:#DCE5E0; --rule-strong:#C3D1CA;
+    --emerald:#0B744E; --emerald-soft:#E7F2EC;
+    --clay:#A85A1B; --clay-soft:#FBF0E4;
+    --slate:#3B5BA9; --slate-soft:#EAEFF9;
+    --rose:#A33B32; --rose-soft:#FAEBEA;
+
+    --font-display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --step-0: clamp(.95rem,.92rem + .15vw,1.02rem);
+    --step-1: clamp(1.12rem,1.05rem + .3vw,1.28rem);
+    --step-2: clamp(1.45rem,1.3rem + .7vw,1.85rem);
+    --step-3: clamp(2rem,1.6rem + 1.8vw,3.1rem);
+
+    --rail: 16.5rem;
+    --measure: 64ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0A100E; --surface:#121A17; --surface-2:#172220;
+      --ink:#E8EFEA; --ink-2:#A6B8AF; --ink-3:#7D9188;
+      --rule:#24312C; --rule-strong:#33443D;
+      --emerald:#35C88D; --emerald-soft:#102820;
+      --clay:#DB9E60; --clay-soft:#2A1F13;
+      --slate:#8FA9E4; --slate-soft:#151D2D;
+      --rose:#E08C84; --rose-soft:#2B1715;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0A100E; --surface:#121A17; --surface-2:#172220;
+    --ink:#E8EFEA; --ink-2:#A6B8AF; --ink-3:#7D9188;
+    --rule:#24312C; --rule-strong:#33443D;
+    --emerald:#35C88D; --emerald-soft:#102820;
+    --clay:#DB9E60; --clay-soft:#2A1F13;
+    --slate:#8FA9E4; --slate-soft:#151D2D;
+    --rose:#E08C84; --rose-soft:#2B1715;
+  }
+
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-body); font-size:var(--step-0); line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .skip { position:absolute; left:-9999px; top:0; z-index:100;
+    background:var(--emerald); color:#fff; padding:.6rem 1rem; border-radius:0 0 .4rem 0; }
+  .skip:focus { left:0; }
+  :is(a,button):focus-visible { outline:2px solid var(--emerald); outline-offset:3px; border-radius:2px; }
+
+  .shell { display:grid; grid-template-columns:var(--rail) minmax(0,1fr); }
+  @media (max-width:960px) { .shell { grid-template-columns:1fr; } }
+
+  .rail {
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+    border-right:1px solid var(--rule); padding:2rem 1.25rem 2rem;
+    background:var(--surface); display:flex; flex-direction:column; gap:1.75rem;
+  }
+  @media (max-width:960px) {
+    .rail { position:static; height:auto; border-right:0; border-bottom:1px solid var(--rule); }
+  }
+
+  .mark { display:flex; align-items:center; gap:.6rem; }
+  .mark img { width:1.7rem; height:1.7rem; flex:none; }
+  .mark b { font-family:var(--font-display); font-size:1.02rem; font-weight:600; letter-spacing:-.01em; }
+
+  .rail nav { display:flex; flex-direction:column; gap:1.4rem; }
+  .rail h2 { font-family:var(--font-mono); font-size:.66rem; font-weight:600;
+    letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); margin:0 0 .55rem; }
+  .rail ol { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+  .rail a { display:grid; grid-template-columns:1.45rem 1fr; gap:.5rem; align-items:baseline;
+    padding:.34rem .5rem; border-radius:.35rem; color:var(--ink-2);
+    text-decoration:none; font-size:.86rem; line-height:1.35; }
+  .rail a span:first-child { font-family:var(--font-mono); font-size:.72rem;
+    color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .rail a:hover { background:var(--surface-2); color:var(--ink); }
+  .rail a.on { background:var(--emerald-soft); color:var(--emerald); font-weight:600; }
+  .rail a.on span:first-child { color:var(--emerald); }
+
+  .themer { margin-top:auto; background:none; border:1px solid var(--rule); color:var(--ink-2);
+    border-radius:.4rem; padding:.45rem .7rem; cursor:pointer; text-align:left;
+    font-family:var(--font-mono); font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; }
+  .themer:hover { border-color:var(--rule-strong); color:var(--ink); }
+
+  main { padding:0 clamp(1.1rem,4vw,4.5rem) 6rem; min-width:0; }
+  .wrap { max-width:74rem; margin:0 auto; }
+
+  .masthead { padding:clamp(3rem,7vw,5.5rem) 0 2.5rem; border-bottom:1px solid var(--rule); }
+  .eyebrow { font-family:var(--font-mono); font-size:.7rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--emerald); margin:0 0 1.1rem;
+    display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+  .eyebrow::before { content:""; width:1.8rem; height:1px; background:var(--emerald); }
+  h1 { font-family:var(--font-display); font-size:var(--step-3); line-height:1.04;
+    letter-spacing:-.025em; font-weight:600; margin:0 0 1.1rem; text-wrap:balance; max-width:20ch; }
+  .standfirst { font-size:var(--step-1); line-height:1.55; color:var(--ink-2);
+    max-width:var(--measure); margin:0 0 2rem; text-wrap:pretty; }
+
+  .facts { display:flex; flex-wrap:wrap; border-top:1px solid var(--rule); }
+  .fact { padding:.9rem 1.6rem .9rem 0; margin-right:1.6rem; border-right:1px solid var(--rule); }
+  .fact:last-child { border-right:0; margin-right:0; }
+  .fact dt { font-family:var(--font-mono); font-size:.66rem; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 .2rem; }
+  .fact dd { margin:0; font-size:.88rem; color:var(--ink); }
+
+  .legend { margin:2.5rem 0 0; padding:1.15rem 1.35rem; border:1px solid var(--rule);
+    border-radius:.7rem; background:var(--surface);
+    display:flex; flex-wrap:wrap; gap:.6rem 1.75rem; align-items:center; }
+  .legend p { margin:0; font-family:var(--font-mono); font-size:.66rem;
+    letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3); }
+  .key { display:flex; align-items:center; gap:.5rem; font-size:.83rem; color:var(--ink-2); }
+  /* Ring, not fill — the diagrams mark category with a border so the node
+     interior keeps whatever the active Mermaid theme gives it. */
+  .swatch { width:.9rem; height:.9rem; border-radius:.25rem; flex:none;
+    border:2.5px solid; background:transparent; }
+  .swatch.ok { border-color:#17966A; }
+  .swatch.plan { border-color:#C77A2E; }
+  .swatch.ext { border-color:#5C7FCB; }
+  .swatch.no { border-color:#C05A50; }
+
+  section { padding:clamp(2.75rem,5vw,4.25rem) 0; border-bottom:1px solid var(--rule);
+    scroll-margin-top:1.5rem; }
+  section:last-of-type { border-bottom:0; }
+
+  .head { display:flex; gap:1.1rem; align-items:baseline; margin:0 0 .9rem; }
+  .num { font-family:var(--font-mono); font-size:.78rem; color:var(--emerald);
+    font-variant-numeric:tabular-nums; padding-top:.35rem; flex:none; }
+  h3 { font-family:var(--font-display); font-size:var(--step-2); line-height:1.18;
+    letter-spacing:-.02em; font-weight:600; margin:0; text-wrap:balance; }
+  .lede { color:var(--ink-2); max-width:var(--measure); margin:0 0 1.75rem 2.9rem; text-wrap:pretty; }
+  @media (max-width:640px) { .lede { margin-left:0; } }
+
+  .plate { background:var(--surface); border:1px solid var(--rule); border-radius:.7rem;
+    padding:1.5rem 1.25rem; overflow-x:auto; margin:0 0 1.5rem;
+    box-shadow:0 1px 2px rgba(12,22,19,.05), 0 8px 24px -18px rgba(12,22,19,.3); }
+  .plate .mermaid { display:flex; justify-content:center; min-width:min-content; }
+  .plate .mermaid svg { height:auto; }
+  .plate .mermaid[data-failed] { color:var(--rose); font-family:var(--font-mono); font-size:.8rem; }
+
+  .note { border-left:2px solid var(--emerald); padding:.15rem 0 .15rem 1.1rem;
+    margin:0 0 1.1rem; color:var(--ink-2); max-width:var(--measure); }
+  .note strong { color:var(--ink); font-weight:600; }
+  .note.warn { border-left-color:var(--clay); }
+  p { max-width:var(--measure); text-wrap:pretty; }
+
+  code { font-family:var(--font-mono); font-size:.86em; background:var(--surface-2);
+    border:1px solid var(--rule); padding:.08em .36em; border-radius:.25rem;
+    color:var(--ink); word-break:break-word; }
+
+  .tablewrap { overflow-x:auto; border:1px solid var(--rule); border-radius:.7rem; background:var(--surface); }
+  table { border-collapse:collapse; width:100%; font-size:.9rem; min-width:34rem; }
+  th, td { text-align:left; padding:.75rem 1.1rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  thead th { font-family:var(--font-mono); font-size:.66rem; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--ink-3); font-weight:600; background:var(--surface-2); }
+  tbody tr:last-child td { border-bottom:0; }
+
+  .chip { display:inline-block; font-family:var(--font-mono); font-size:.68rem;
+    letter-spacing:.05em; padding:.16rem .5rem; border-radius:.3rem; border:1px solid; white-space:nowrap; }
+  .chip.plan { color:var(--clay); background:var(--clay-soft); border-color:var(--clay); }
+  .chip.gate { color:var(--slate); background:var(--slate-soft); border-color:var(--slate); }
+  .chip.fail { color:var(--rose); background:var(--rose-soft); border-color:var(--rose); }
+  .chip.pass { color:var(--pine, #2d6a4f); background:var(--pine-soft, #e8f4ea); border-color:var(--pine, #2d6a4f); }
+
+  footer { padding:3rem 0 0; margin-top:1rem; border-top:1px solid var(--rule);
+    color:var(--ink-3); font-size:.83rem; }
+
+  @media (prefers-reduced-motion:no-preference) { html { scroll-behavior:smooth; } }
+
+  @media print {
+    .rail, .themer { display:none; }
+    .shell { grid-template-columns:1fr; }
+    body { background:#fff; color:#000; }
+    section { break-inside:avoid; }
+    .plate { break-inside:avoid; box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="mark">
+      <img src="logo.png" alt="" width="192" height="192" decoding="async">
+      <b>True Claim Insight</b>
+    </div>
+
+    <nav aria-label="Sections">
+      <div>
+        <h2>The claim journey</h2>
+        <ol>
+          <li><a href="#s1"><span>01</span><span>End to end</span></a></li>
+          <li><a href="#s2"><span>02</span><span>Case state machine</span></a></li>
+          <li><a href="#s3"><span>03</span><span>Claimant submits</span></a></li>
+          <li><a href="#s4"><span>04</span><span>Vetting &amp; info requests</span></a></li>
+          <li><a href="#s5"><span>05</span><span>Assignment</span></a></li>
+          <li><a href="#s6"><span>06</span><span>Claim state machine</span></a></li>
+          <li><a href="#s7"><span>07</span><span>Assessment &amp; sign-off</span></a></li>
+          <li><a href="#s8"><span>08</span><span>CSP clocks</span></a></li>
+        </ol>
+      </div>
+      <div>
+        <h2>Supporting flows</h2>
+        <ol>
+          <li><a href="#s9"><span>09</span><span>FNOL email intake</span></a></li>
+          <li><a href="#s9b"><span>9b</span><span>Telegram intake</span></a></li>
+          <li><a href="#s9c"><span>9c</span><span>How a flow is authored</span></a></li>
+          <li><a href="#s10"><span>10</span><span>Small-claims fast-track</span></a></li>
+        </ol>
+      </div>
+      <div>
+        <h2>Reference</h2>
+        <ol>
+          <li><a href="#s11"><span>11</span><span>Who may do what</span></a></li>
+          <li><a href="#gaps"><span>12</span><span>Not yet built</span></a></li>
+        </ol>
+      </div>
+    </nav>
+
+    <button class="themer" id="themer" type="button">
+      <span id="themerLabel">Dark</span> theme
+    </button>
+  </aside>
+
+  <main id="main">
+    <div class="wrap">
+
+      <header class="masthead">
+        <p class="eyebrow">System reference · Non-motor · Malaysia</p>
+        <h1>How a claim moves through the platform</h1>
+        <p class="standfirst">
+          Eleven flows covering a claimant's first notification through to the fee note — the
+          intake funnel, the regulated engagement, and the clocks running underneath both.
+          Every state machine here is transcribed from the running code, so a diagram and the
+          server disagreeing is a defect in one of them, not a matter of interpretation.
+        </p>
+        <dl class="facts">
+          <div class="fact"><dt>Operating model</dt><dd>TPA, white-label</dd></div>
+          <div class="fact"><dt>Source of truth</dt><dd><code>docs/USER_FLOWS.md</code></dd></div>
+          <div class="fact"><dt>Claim lines</dt><dd>Travel &amp; Group PA, property</dd></div>
+          <div class="fact"><dt>Regulatory frame</dt><dd>FSA 2013 · BNM PD 032-29 · CSP</dd></div>
+        </dl>
+
+        <div class="legend">
+          <p>Colour key</p>
+          <span class="key"><span class="swatch ok"></span> Built and running</span>
+          <span class="key"><span class="swatch plan"></span> Planned, not built</span>
+          <span class="key"><span class="swatch ext"></span> Outside the firm</span>
+          <span class="key"><span class="swatch no"></span> Refused by a control</span>
+        </div>
+      </header>
+
+      <section id="s1">
+        <div class="head"><span class="num">01</span><h3>The whole journey, end to end</h3></div>
+        <p class="lede">
+          Five intake channels converge on a single Case funnel. A vetted Case converts into a
+          Claim, which is the regulated engagement — and where the firm's professional
+          obligations attach.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    subgraph INTAKE["1 · Notification of loss"]
+        C1["`Claimant
+PWA`"]
+        C5["`Claimant
+Telegram`"]
+        C2["`Agent or broker
+email`"]
+        C3["`Insurer forwards
+FNOL`"]
+        C4["`Staff capture
+portal`"]
+    end
+
+    C1 --> CASE
+    C5 --> BIND["`Verify the sender
+phone share + OTP`"]
+    BIND --> CASE
+    C2 --> ING["`FNOL email ingestion
+deterministic parse + policy match`"]
+    C3 --> ING
+    C4 --> CASE
+    ING --> CASE
+
+    CASE["`**Case** — pre-claim intake funnel
+channel · answers · documents · consent`"]
+
+    CASE --> VET{"2 · Operator vets"}
+    VET -->|"detail missing"| INFO["`INFO_REQUESTED
+claimant amends`"]
+    INFO --> CASE
+    VET -->|"medical"| EXP["`REFERRED_TO_EXPERT
+never auto-assessed`"]
+    VET -->|"not covered"| REJ["REJECTED"]
+    VET -->|"vetted"| CONV
+    EXP --> CONV
+
+    CONV["`3 · convert to **Claim**
+the insurer-facing handback record`"]
+
+    CONV --> MODE{"4 · Assessment-mode router"}
+    MODE -->|"`small claim, evidence in,
+no fraud signal`"| DESK["`DESK_REVIEW fast-track
+documents only, no interview`"]
+    MODE -->|"standard"| VIDEO["`Video assessment
+Daily.co + risk-analyzer`"]
+    MODE -->|"`property loss at or over
+the firm's threshold`"| SITE["`Site visit or expert
+*appointment held, claimant not told*`"]
+
+    DESK --> ASSESS
+    VIDEO --> ASSESS
+    SITE --> ASSESS
+
+    ASSESS["`5 · Assessment
+evidence checklist · quantum · fraud signals`"]
+    ASSESS --> REPORT["`6 · Adjuster report
+PD 12.6 disclosure · sign-off`"]
+    REPORT --> HANDBACK["`7 · Handback to insurer
+the insurer decides the claim`"]
+    HANDBACK --> BILL["`8 · Fee note
+TPA schedule or adjuster fee scale`"]
+
+    style CASE stroke:#17966A,stroke-width:2.5px
+    style CONV stroke:#17966A,stroke-width:2.5px
+    style ING stroke:#17966A,stroke-width:2.5px
+    style MODE stroke:#17966A,stroke-width:2.5px
+    style DESK stroke:#17966A,stroke-width:2.5px
+    style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
+    style INFO stroke:#C77A2E,stroke-width:2.5px
+    style EXP stroke:#C77A2E,stroke-width:2.5px
+    style SITE stroke:#17966A,stroke-width:2.5px
+    style REJ stroke:#C05A50,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          <strong>The firm recommends; the insurer decides.</strong> Nothing in this system
+          settles a claim. Step 7 is a handback, and the adjuster report says so on its face.
+        </p>
+        <p class="note">
+          <strong>Step 4 decides how the claim is examined.</strong> Four conditions must all
+          hold for desk review, and the mode is disclosed in the report as a PD 12.6
+          <em>method</em> — "desk review on documents alone" and "site inspection" reach the
+          same figure by different means.
+        </p>
+      </section>
+
+      <section id="s2">
+        <div class="head"><span class="num">02</span><h3>Case intake — the exact state machine</h3></div>
+        <p class="lede">
+          Every transition below is the whole of <code>CASE_STATUS_TRANSITIONS</code>. Anything
+          not drawn here is refused server-side, not merely discouraged in the interface.
+        </p>
+        <div class="plate"><pre class="mermaid">
+stateDiagram-v2
+    [*] --> DRAFT: case created
+
+    DRAFT --> IN_PROGRESS: first answer captured
+    DRAFT --> SUBMITTED: one-page staff form
+    DRAFT --> ABANDONED
+
+    IN_PROGRESS --> SUBMITTED: claimant reviews and submits
+    IN_PROGRESS --> ABANDONED
+
+    SUBMITTED --> UNDER_REVIEW: operator opens it
+    SUBMITTED --> INFO_REQUESTED
+    SUBMITTED --> REFERRED_TO_EXPERT
+    SUBMITTED --> CONVERTED
+    SUBMITTED --> REJECTED
+
+    UNDER_REVIEW --> INFO_REQUESTED: detail missing
+    UNDER_REVIEW --> REFERRED_TO_EXPERT: medical
+    UNDER_REVIEW --> CONVERTED: vetted
+    UNDER_REVIEW --> REJECTED
+
+    INFO_REQUESTED --> SUBMITTED: claimant amends and resubmits
+    INFO_REQUESTED --> ABANDONED
+
+    REFERRED_TO_EXPERT --> CONVERTED: expert outcome received
+    REFERRED_TO_EXPERT --> REJECTED
+
+    CONVERTED --> [*]
+    REJECTED --> [*]
+    ABANDONED --> [*]
+
+    note right of REFERRED_TO_EXPERT
+        MEDICAL cases cannot reach CONVERTED
+        by any other route. Conversion refuses.
+    end note
+
+    note right of INFO_REQUESTED
+        The only backward edge in the machine.
+        Answers are editable only here and in
+        DRAFT / IN_PROGRESS.
+    end note
+        </pre></div>
+      </section>
+
+      <section id="s3">
+        <div class="head"><span class="num">03</span><h3>A claimant submits a case</h3></div>
+        <p class="lede">
+          Conversational intake: one question at a time, resumable through
+          <code>currentStepId</code>, with the question set chosen by travel claim type.
+        </p>
+        <div class="plate"><pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor CL as Claimant
+    participant PWA as Claimant PWA
+    participant GW as API Gateway
+    participant CS as case-service
+    participant ST as Storage
+
+    CL->>PWA: Start a claim
+    PWA->>GW: POST /auth/claimant/send-otp
+    GW-->>CL: OTP by SMS
+    CL->>PWA: Enter OTP
+    PWA->>GW: POST /auth/claimant/verify-otp
+    GW-->>PWA: JWT — sub IS the claimant id
+
+    PWA->>CL: Show PDPA notice, EN / BM
+    CL->>PWA: Consent
+    PWA->>CS: POST /consent — against approved wording v1
+
+    PWA->>CS: POST /cases with travelClaimType
+    CS-->>PWA: Case DRAFT + first step
+
+    loop One step at a time
+        PWA->>CL: Ask step prompt
+        CL->>PWA: Answer
+        PWA->>CS: PATCH /cases/:id/answers
+        CS->>CS: validateAnswer against the flow rule
+        alt bank account number
+            CS->>CS: encrypt, mask in answers, last4 in the clear
+        end
+        CS-->>PWA: next step + completeness
+    end
+
+    loop Required documents
+        CL->>PWA: Upload evidence
+        PWA->>CS: POST /cases/:id/documents
+        CS->>ST: store file
+        CS->>CS: stamp documentsCompleteAt on the last mandatory item
+    end
+
+    CL->>PWA: Review and submit
+    PWA->>CS: POST /cases/:id/submit
+    CS->>CS: policy auto-match, then CSP 24h / 30-day flags
+    CS-->>CL: Case SUBMITTED — reference number
+        </pre></div>
+        <p class="note">
+          <strong>Two flags are computed at submission, both advisory.</strong>
+          <code>notifiedLate</code> marks notification more than 24 hours after the incident;
+          <code>outOfWindow</code> marks more than 30 days. They surface as warnings to the
+          operator and never auto-reject — the deadline is the insurer's to enforce, not the
+          intake form's.
+        </p>
+      </section>
+
+      <section id="s4">
+        <div class="head"><span class="num">04</span><h3>Vetting, and the request-for-information loop</h3></div>
+        <p class="lede">
+          The operator's pass over a submitted case: match the policy, check the evidence
+          checklist, route medical claims to a human, and ask for anything missing.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    S["Case SUBMITTED"] --> OPEN["`Operator opens it
+→ UNDER_REVIEW`"]
+    OPEN --> Q1{"Policy matched?"}
+
+    Q1 -->|no| LINK["`needsPolicyReview = true
+operator links policy by hand`"]
+    LINK --> Q2
+    Q1 -->|yes| Q2{"`Evidence checklist
+complete?`"}
+
+    Q2 -->|no| REQ
+    Q2 -->|yes| Q3{"Claim type?"}
+
+    REQ["`**INFO_REQUESTED**
+reviewNote carries the ask`"]
+    REQ --> NOTIFY["`Notify claimant
+by email`"]
+    NOTIFY --> AMEND["`Claimant reopens intake,
+adds the missing item`"]
+    AMEND --> RESUB["Resubmit → SUBMITTED"]
+    RESUB --> OPEN
+
+    Q3 -->|MEDICAL| EXPERT["`**REFERRED_TO_EXPERT**
+form + routing only,
+no automated assessment`"]
+    Q3 -->|other| Q4{"`Covered under
+the policy?`"}
+
+    EXPERT --> EOUT{"Expert outcome"}
+    EOUT -->|proceed| CONVERT
+    EOUT -->|decline| REJECT
+
+    Q4 -->|no| REJECT["`**REJECTED**
+reason recorded`"]
+    Q4 -->|yes| CONVERT["`**convert to Claim**`"]
+
+    style REQ stroke:#C77A2E,stroke-width:2.5px
+    style NOTIFY stroke:#17966A,stroke-width:2.5px
+    style EXPERT stroke:#C77A2E,stroke-width:2.5px
+    style CONVERT stroke:#17966A,stroke-width:2.5px
+    style REJECT stroke:#C05A50,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          The loop <code>INFO_REQUESTED → SUBMITTED → UNDER_REVIEW</code> may run any number of
+          times. Every pass writes an audit row carrying before and after values.
+        </p>
+      </section>
+
+      <section id="s5">
+        <div class="head"><span class="num">05</span><h3>Insurer-appointed entry — the Assignment</h3></div>
+        <p class="lede">
+          Under TPA operation a Case converts into a Claim. Under insurer appointment the
+          Assignment comes first and the Case is optional — this is where the regulated
+          engagement actually begins.
+        </p>
+        <div class="plate"><pre class="mermaid">
+stateDiagram-v2
+    [*] --> RECEIVED: insurer instructs the firm
+
+    RECEIVED --> ACKNOWLEDGED: ack sent
+    RECEIVED --> DECLINED: conflict or capacity
+
+    ACKNOWLEDGED --> ACCEPTED: claim opened
+    ACKNOWLEDGED --> DECLINED
+
+    ACCEPTED --> COMPLETED: closed out
+
+    DECLINED --> [*]
+    COMPLETED --> [*]
+
+    note right of RECEIVED
+        Starts the ACK_TO_INSURER clock:
+        one working day, per CSP.
+        Before Assignment existed the clock
+        measured from nothing, so it could be
+        neither met nor missed.
+    end note
+
+    note right of ACCEPTED
+        Registered mode gates here: conflict
+        declared, competency matched,
+        rotation checked.
+    end note
+        </pre></div>
+        <p class="note">
+          <strong>The acknowledgement is now sent, not just recorded.</strong> Acknowledging
+          emails the appointing contact and stops the CSP clock in the same act, so the
+          one-working-day obligation is discharged by the system rather than by remembering.
+        </p>
+      </section>
+
+      <section id="s6">
+        <div class="head"><span class="num">06</span><h3>Claim lifecycle — the exact state machine</h3></div>
+        <p class="lede">
+          Transcribed from <code>CLAIM_STATUS_TRANSITIONS</code>. Every early state may also go
+          straight to <code>CLOSED</code>, <code>APPROVED</code> or <code>REJECTED</code> — an
+          insurer can withdraw at any point.
+        </p>
+        <div class="plate"><pre class="mermaid">
+stateDiagram-v2
+    [*] --> SUBMITTED: converted case or accepted assignment
+
+    SUBMITTED --> ASSIGNED: adjuster assigned
+    ASSIGNED --> SCHEDULED: assessment booked
+    SCHEDULED --> IN_ASSESSMENT: assessment starts
+    IN_ASSESSMENT --> REPORT_PENDING: evidence complete
+    REPORT_PENDING --> APPROVED
+    REPORT_PENDING --> REJECTED
+
+    IN_ASSESSMENT --> ESCALATED_SIU: fraud signal
+    REPORT_PENDING --> ESCALATED_SIU
+    ESCALATED_SIU --> APPROVED
+    ESCALATED_SIU --> REJECTED
+    ESCALATED_SIU --> CLOSED
+
+
+    APPROVED --> CLOSED
+    REJECTED --> CLOSED
+
+    CLOSED --> IN_ASSESSMENT: supplementary claim
+
+    DOCUMENTS_PENDING
+    PENDING_ASSIGNMENT
+    UNDER_REVIEW
+
+    note right of CLOSED
+        The reopen edge exists because the
+        supplementary endpoint really does
+        reopen, and starts a five-working-day
+        CSP clock. The machine tells the truth
+        about what the endpoint does.
+    end note
+
+    note left of REPORT_PENDING
+        Reached only once the evidence checklist
+        is complete. Registered mode blocks the
+        move. TPA mode records it.
+    end note
+        </pre></div>
+        <p class="note warn">
+          <strong>Three statuses exist but nothing reaches them.</strong>
+          <code>DOCUMENTS_PENDING</code>, <code>PENDING_ASSIGNMENT</code> and
+          <code>UNDER_REVIEW</code> are defined in <code>ClaimStatus</code> and shown above
+          detached, because no transition leads to any of them. A recorded Phase 1 lifecycle
+          gap, pinned by a test so it cannot be quietly forgotten.
+        </p>
+      </section>
+
+      <section id="s7">
+        <div class="head"><span class="num">07</span><h3>Assessment and report sign-off</h3></div>
+        <p class="lede">
+          The adjuster's path from assignment to an issued report — with the three controls
+          that can refuse it: authority, consent, and professional qualification.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    A["Claim ASSIGNED"] --> AUTH{"Authority check"}
+    AUTH -->|"no AuthorityLimit row"| BLOCK["`Refused — an absent limit means
+no authority, not unlimited`"]
+    AUTH -->|"limit present"| SCHED["Schedule assessment"]
+
+    SCHED --> MODE{"Assessment mode"}
+    MODE -->|desk review| DESK["Documents only"]
+    MODE -->|video| VID["Daily.co room"]
+    MODE -->|site| SITE["Physical inspection"]
+
+    VID --> CONSENT{"`Biometric consent
+on record?`"}
+    CONSENT -->|no| NOAN["`No prosody or attention analysis.
+Fails closed — including when
+case-service is unreachable`"]
+    CONSENT -->|yes| ANALYSE["`risk-analyzer:
+Hume · MediaPipe · Parselmouth`"]
+    ANALYSE --> XFER["`TransferRecord written:
+recipient · country · basis`"]
+
+    DESK --> EV
+    NOAN --> EV
+    XFER --> EV
+    SITE --> EV
+
+    EV["`Evidence checklist
+per line; travel by subtype`"] --> COMPLETE{"`All mandatory
+items in?`"}
+    COMPLETE -->|no| CHASE["Chase claimant"]
+    CHASE --> EV
+    COMPLETE -->|yes| STAMP["`documentsCompleteAt stamped
+→ FINAL_REPORT clock starts,
+14 working days (CSP 10.13)`"]
+
+    STAMP --> QUANT["`Quantum worksheet
+average · betterment · excess`"]
+    QUANT --> DRAFT["Report DRAFT"]
+
+    DRAFT --> SECTIONS{"`PD 12.6 sections
+all present?`"}
+    SECTIONS -->|"any blank"| REFUSE["`Cannot submit — facts,
+assumptions, methodology, sources`"]
+    REFUSE --> DRAFT
+    SECTIONS -->|complete| REVIEW["IN_REVIEW"]
+
+    REVIEW --> SIGN{"`Signer is an
+adjusting employee?`"}
+    SIGN -->|"no, e.g. firm admin"| REFUSE2["Refused — PD 12.7"]
+    SIGN -->|yes| MODEQ{"licensedMode?"}
+
+    MODEQ -->|"on — registered"| COUNTER["`Countersign required,
+self-sign refused`"]
+    MODEQ -->|"off — TPA"| RECORD["`Countersign basis recorded,
+not enforced`"]
+
+    COUNTER --> SIGNED["SIGNED"]
+    RECORD --> SIGNED
+    SIGNED --> ISSUED["`ISSUED — immutable.
+Stops the SLA clock.
+Corrections supersede`"]
+
+    style BLOCK stroke:#C05A50,stroke-width:2.5px
+    style REFUSE stroke:#C05A50,stroke-width:2.5px
+    style REFUSE2 stroke:#C05A50,stroke-width:2.5px
+    style NOAN stroke:#C77A2E,stroke-width:2.5px
+    style QUANT stroke:#17966A,stroke-width:2.5px
+    style ISSUED stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          <strong>The report cites a worksheet revision.</strong> Creating a report pre-fills
+          the PD 12.6 quantum section from the current worksheet and records which revision it
+          used, so the figure in the report and the workings behind it cannot silently diverge.
+          A draft citing a superseded revision reports itself as outdated; an issued report
+          keeps the figure it was signed against.
+        </p>
+        <p class="note">
+          <strong>Segregation of duties.</strong> The assessor cannot decide their own claim
+          unless an <code>AuthorityLimit</code> expressly permits it, and never above its
+          monetary ceiling. The basis is written onto the audit row, so the question
+          "on whose authority?" has an answer years later.
+        </p>
+      </section>
+
+      <section id="s8">
+        <div class="head"><span class="num">08</span><h3>The CSP clocks running underneath</h3></div>
+        <p class="lede">
+          Turnaround obligations run in parallel with the workflow. The firm's own stages
+          escalate; the insurer's stages are measured but never escalated against the firm.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart LR
+    subgraph FIRM["The firm's turnaround — escalated"]
+        direction TB
+        A["`ACK_TO_INSURER
+1 working day`"]
+        P["`PRELIMINARY_REPORT
+per-insurer target`"]
+        F["`FINAL_REPORT
+14 working days non-motor,
+from complete documents`"]
+        S["`SUPPLEMENTARY_CLAIM
+5 working days`"]
+        A --> P --> F
+        F -.-> S
+    end
+
+    subgraph INSURER["Insurer side — measured, never escalated"]
+        direction TB
+        D["`INSURER_DECISION
+7 working days`"]
+        Y["`INSURER_PAYMENT
+14 working days`"]
+        D --> Y
+    end
+
+    F --> D
+
+    SWEEP["Sweep every 15 minutes"] --> BR{"Past due?"}
+    BR -->|yes| ESC["`BREACHED
+level 1 → 2 at 2 working days
+→ 3 at 5`"]
+    ESC --> CE["`Level 3 raises a ComplianceEvent
+PD 11.2 d — Board escalation`"]
+    BR -->|"due soon"| WARN["One warning per clock"]
+
+    style D stroke:#5C7FCB,stroke-width:2.5px
+    style Y stroke:#5C7FCB,stroke-width:2.5px
+    style CE stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          <strong>The escalation now reaches a person.</strong> A firm-owned breach emails the
+          operations address, deduplicated per clock and per level so a breach left open over
+          a weekend sends once rather than every fifteen minutes. Insurer-side stages are
+          measured and never escalated against the firm, so they send nothing.
+        </p>
+      </section>
+
+      <section id="s9">
+        <div class="head"><span class="num">09</span><h3>FNOL email intake</h3></div>
+        <p class="lede">
+          An emailed first notification becomes a matched, vetted Case without manual keying.
+          The primary intake channel for the pilot.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    POLL["`Poll mailbox every 5 min,
+only when intake is enabled`"] --> FETCH["`Fetch messages without
+the TciIngested keyword`"]
+    FETCH --> INS{"`Insert InboundMessage
+by RFC Message-ID`"}
+
+    INS -->|"unique violation"| DUP["`Already seen — acknowledge, skip.
+The database is the arbiter,
+not the worker`"]
+    INS -->|"inserted"| PARSE["`Deterministic parse
+no LLM`"]
+
+    PARSE --> GAP{"`Claim type and
+mandatory facts found?`"}
+    GAP -->|no| REVIEW["`**NEEDS_REVIEW**
+operator queue`"]
+    GAP -->|yes| CREATE["`Create the Case
+channel EMAIL · initiatedBy SYSTEM`"]
+
+    CREATE --> MATCH{"`Policy number
+matches?`"}
+    MATCH -->|yes| LINKED["policyId set"]
+    MATCH -->|no| FLAG["needsPolicyReview = true"]
+
+    LINKED --> ATT["Attach email documents"]
+    FLAG --> ATT
+    ATT --> DONE["`**PROCESSED** → Case in the funnel`"]
+
+    REVIEW --> OPS{"Operator"}
+    OPS -->|"fixed the cause"| RETRY["`Retry — re-reads the email
+from the mailbox`"]
+    RETRY --> PARSE
+    OPS -->|"not an FNOL"| IGN["`IGNORED — audited,
+never deleted`"]
+
+    style DUP stroke:#5C7FCB,stroke-width:2.5px
+    style REVIEW stroke:#C77A2E,stroke-width:2.5px
+    style DONE stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          The operator queue is now a screen — <em>FNOL intake</em> in the portal, with
+          <code>NEEDS_REVIEW</code> and <code>FAILED</code> leading the filters. Until it
+          existed, the row was written and nobody could see it.
+        </p>
+        <p class="note">
+          The row is written <strong>before</strong> parsing, so an email nobody could
+          understand still leaves a trace. A claimant who emailed you believes they have
+          notified you — silently dropped intake is invisible, because nobody goes looking for
+          a claim that was never created.
+        </p>
+      </section>
+
+      <section id="s9b">
+        <div class="head"><span class="num">9b</span><h3>Telegram intake</h3></div>
+        <p class="lede">
+          The same flow, the same Case, a different surface. Nothing about a claim is said
+          until the sender proves who they are.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    MSG["`Message arrives
+long-polling · no public surface`"] --> INS{"`Insert InboundTurn
+by platform message id`"}
+
+    INS -->|"unique violation"| DUP["`Already seen — skip.
+Platforms retry delivery;
+the database arbitrates`"]
+    INS -->|"inserted"| BIND{"`Binding verified?`"}
+
+    BIND -->|no| ONB["`Ask for the number
+Telegram request_contact`"]
+    ONB --> OTP{"`One-time code`"}
+    OTP -->|"wrong · 5 strikes"| LOCK["`Paused —
+contact support`"]
+    OTP -->|correct| VER["`Bound to Claimant`"]
+    VER --> BIND
+
+    BIND -->|yes| CASE{"`Claim in progress?`"}
+    CASE -->|no| PICK["`Choose a claim type
+inline keyboard`"]
+    PICK --> NEW["`Case created
+channel TELEGRAM`"]
+    NEW --> ASK
+    CASE -->|yes| ANS["`patchAnswer — the same
+method the PWA calls`"]
+    ANS --> ASK["`Ask the next step
+from the pinned flow`"]
+
+    style DUP stroke:#5C7FCB,stroke-width:2.5px
+    style LOCK stroke:#C77A2E,stroke-width:2.5px
+    style ASK stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          The answer goes through <code>CasesService.patchAnswer</code> rather than a second
+          write path. That is what keeps the masking of the bank account number, the policy
+          match, the deadline warnings and the audit row — and it is why a Telegram sender
+          provably cannot reach another claimant's case: the same <code>assertAccess</code>
+          check runs as in the browser.
+        </p>
+        <p class="note">
+          Telegram vouches for a shared number, and the code is still sent. Platform
+          verification happened at signup; it says nothing about who holds the handset today.
+        </p>
+        <p class="note">
+          Every message is stored in both directions, and an outbound one records whether the
+          bot or a named agent sent it. That single distinction is what makes bot performance
+          reviewable — and it is why the operator inbox can show three voices rather than two.
+          When an agent takes over, the bot stands down entirely until the conversation is
+          handed back.
+        </p>
+      </section>
+
+      <section id="s9c">
+        <div class="head"><span class="num">9c</span><h3>How a flow is authored</h3></div>
+        <p class="lede">
+          One structure, many channels and languages. What can differ per channel is wording —
+          and only wording, by the shape of the data rather than by a rule.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart LR
+    DEF["`**FlowDefinition**
+step ids · order · branching
+validation · system steps`"]
+    OV["`**FlowOverlay** — sparse
+prompt · label · choice labels
+per channel, per locale`"]
+
+    DEF --> RES["`Resolve
+base ← channel ← locale
+← channel+locale`"]
+    OV --> RES
+    RES --> ASK["`What the claimant reads`"]
+
+    DEF --> GATE{"`Publish gate`"}
+    GATE -->|"unknown target · cycle
+unreachable · missing system step"| NO["Refused"]
+    GATE -->|clean| PUB["`PUBLISHED — immutable`"]
+    PUB --> PIN["`Case pins the version
+at creation`"]
+
+    style NO stroke:#C77A2E,stroke-width:2.5px
+    style PUB stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          An overlay has no <code>next</code> and no <code>answerType</code>. A channel
+          therefore <em>cannot</em> diverge into asking different questions — the guarantee is
+          in the type, not in a convention a later import tool could bypass. A channel that
+          genuinely needs a shorter conversation gets its own definition and is pointed at it;
+          it does not get a clone that drifts.
+        </p>
+        <p class="note">
+          Locale outranks channel when both overlay the same step. Wrong tone is cosmetic;
+          wrong language is a comprehension failure, and PDPA s.7 treats the language of a
+          claimant-facing notice as substantive.
+        </p>
+        <p class="note">
+          Overlays are deliberately unversioned. Because they carry only copy, they cannot move
+          the conversational cursor or invalidate a stored answer — so a typo can be corrected
+          live, with conversations in flight. Only structure needs pinning, which is why the
+          pin sits on the definition and the Case.
+        </p>
+        <p class="note">
+          <strong>The rules decide; a model only reads.</strong> Nothing here is an LLM choosing
+          what to ask. When a claimant's answer defeats deterministic parsing, a model may be
+          asked to interpret that one message into a value — and that value passes the same
+          validation as a typed one before it goes anywhere. The model never sees the flow,
+          never picks the next question, never writes to a claim. It is off by default, and
+          bounded that way so every question asked stays traceable to a published flow version
+          rather than to a model's judgement on the day.
+        </p>
+      </section>
+
+      <section id="s10">
+        <div class="head"><span class="num">10</span><h3>Small-claims fast-track</h3></div>
+        <p class="lede">
+          Four conditions must all hold before a claim takes the desk-review route, and any
+          one of three triggers pulls it back out mid-flight.
+        </p>
+        <p class="note">
+          <strong>The thresholds are the firm's, set per tenant.</strong> Categories and
+          per-category ceilings live in firm configuration, alongside licensed mode and the
+          working-day calendar — so a white-labelled insurer's claims are routed on that
+          insurer's rules rather than a platform default.
+        </p>
+        <p class="note">
+          <strong>Configuration gaps fail closed.</strong> A category with no limit configured
+          is not fast-tracked, and an unknown estimated amount is not treated as a small one —
+          both refuse the fast track rather than passing a test against nothing. Medical is
+          excluded ahead of the economic checks, so a small medical claim cannot slip through
+          on value.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart TD
+    IN["Claim opened"] --> C1{"`Category in the tenant's
+fast-track list?`"}
+    C1 -->|no| STD["Standard mode"]
+    C1 -->|yes| C2{"`Estimated amount within
+the tenant's limit?`"}
+    C2 -->|no| STD
+    C2 -->|yes| C3{"`Any open fraud signal
+at MEDIUM or above?`"}
+    C3 -->|yes| STD
+    C3 -->|no| C4{"`Evidence checklist
+complete?`"}
+    C4 -->|no| STD
+    C4 -->|yes| FAST["`**DESK_REVIEW**
+fast-track SLA · single adjuster
+short-form report`"]
+
+    FAST --> TRIG{"`Escalation trigger
+mid-flight?`"}
+    TRIG -->|"`fraud flag · amount revised up ·
+extraction inconsistency`"| UP["`Escalate one level:
+video → site → expert`"]
+    TRIG -->|none| OUT["Complete on fast-track"]
+    UP --> STD
+
+    style FAST stroke:#17966A,stroke-width:2.5px
+    style OUT stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          Mode changes are audited and disclosed in the report's methodology section. The
+          assessment mode <em>is</em> a method under PD 12.6, and a reader is entitled to know
+          which one produced the figure.
+        </p>
+      </section>
+
+      <section id="s11">
+        <div class="head"><span class="num">11</span><h3>Who may do what</h3></div>
+        <p class="lede">
+          Roles are tenant-scoped. Adjusting firms and insurers are separate tenants, and a
+          record belonging to another tenant is indistinguishable from one that does not exist.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart LR
+    subgraph EXT["Outside the firm"]
+        CLM["`CLAIMANT
+own case only`"]
+    end
+
+    subgraph FIRM["Adjusting firm"]
+        SUP["`SUPPORT_DESK
+vet · request info
+no fraud or behavioural data`"]
+        ADJ["`ADJUSTER
+assess · author reports`"]
+        FA["`FIRM_ADMIN
+config · audited reveals
+cannot sign reports`"]
+    end
+
+    subgraph INS["Insurer tenant"]
+        SIU["SIU_INVESTIGATOR"]
+        CO["`COMPLIANCE_OFFICER
+legal holds`"]
+        SR["SHARIAH_REVIEWER"]
+    end
+
+    SA["SUPER_ADMIN"]
+
+    CLM -->|"submit · amend · upload"| CASE["Case"]
+    SUP -->|"vet"| CASE
+    FA -->|"link policy · reveal payout"| CASE
+    ADJ -->|"assess"| CLAIM["Claim"]
+    SIU -->|"escalated only"| CLAIM
+    CO -->|"hold · compliance events"| CLAIM
+    SA -->|"cross-tenant"| CLAIM
+
+    style CLM stroke:#C77A2E,stroke-width:2.5px
+    style SIU stroke:#5C7FCB,stroke-width:2.5px
+    style CO stroke:#5C7FCB,stroke-width:2.5px
+    style SR stroke:#5C7FCB,stroke-width:2.5px
+    style CASE stroke:#17966A,stroke-width:2.5px
+    style CLAIM stroke:#17966A,stroke-width:2.5px
+        </pre></div>
+        <p class="note">
+          Cross-tenant access raises <code>ForbiddenException</code>. Treating it as an
+          existence check rather than an access check matters: a "403 Forbidden" would confirm
+          the record exists, which is itself a disclosure.
+        </p>
+      </section>
+
+      <section id="gaps">
+        <div class="head"><span class="num">12</span><h3>Drawn here, but not yet built</h3></div>
+        <p class="lede">
+          A flow diagram is persuasive precisely because it looks like a specification, and an
+          unmarked planned step reads exactly like a shipped one. These are the steps above
+          that do not yet run. The three that ran headlessly — report, handback and fee note —
+          now have screens; what is left is listed here.
+        </p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
+              <tr><td>Automated eKYC</td><td><span class="chip plan">Partial</span></td><td>The gate is built: <code>REPORT_PENDING</code>, <code>APPROVED</code> and <code>REJECTED</code> refuse on an unverified claimant in registered mode and record the advisory as a TPA. Verification is an audited manual act with a mandatory basis — no verification vendor integrated</td></tr>
+              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
+              <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
+              <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td>video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>; case-service writes <code>claimant</code>. The list only shrinks</td></tr>
+              <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
+              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip plan">Planned</span></td><td>Every claim runs the one CSP target of 14 working days. A shorter promise on fast-tracked claims is a commercial commitment per insurer, not a regulatory one</td></tr>
+              <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
+              <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
+              <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
+              <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
+              <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
+              <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip plan">Partial</span></td><td>Routing, the appointment and the claimant notification are all live — <code>PATCH /claims/:id/appointment</code> books the visit, audits it and emails the claimant the date, Malaysian time and address. What is still missing is a <code>SiteVisit</code> record of what was found on the ground</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Generated from <code>docs/USER_FLOWS.md</code>, which is transcribed from
+          <code>CASE_STATUS_TRANSITIONS</code>, <code>CLAIM_STATUS_TRANSITIONS</code> and the
+          Prisma schema. Read <code>docs/MASTER_PLAN.md</code> §2 for the narrative these
+          diagrams formalise, and §3 for the compliance matrix they implement.
+        </p>
+      </footer>
+
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const root = document.documentElement;
+  const btn = document.getElementById('themer');
+  const label = document.getElementById('themerLabel');
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
+  const isDark = () => (root.dataset.theme ? root.dataset.theme === 'dark' : mq.matches);
+
+  const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+  // Two full palettes rather than an inversion: node interiors follow the page,
+  // while every categorised node keeps its coloured ring from the diagram source.
+  const LIGHT = {
+    background:'#FFFFFF', mainBkg:'#F1F6F3', primaryColor:'#F1F6F3',
+    primaryTextColor:'#0C1613', primaryBorderColor:'#9BB0A7',
+    secondaryColor:'#EAEFF9', tertiaryColor:'#FBF0E4',
+    lineColor:'#7E948B', textColor:'#0C1613',
+    clusterBkg:'#F7FAF8', clusterBorder:'#C3D1CA',
+    nodeBorder:'#9BB0A7', edgeLabelBackground:'#FFFFFF',
+    actorBkg:'#F1F6F3', actorBorder:'#0B744E', actorTextColor:'#0C1613',
+    actorLineColor:'#9BB0A7', signalColor:'#4A5C55', signalTextColor:'#0C1613',
+    labelBoxBkgColor:'#F1F6F3', labelBoxBorderColor:'#9BB0A7', labelTextColor:'#0C1613',
+    loopTextColor:'#0C1613', noteBkgColor:'#FBF0E4', noteTextColor:'#0C1613', noteBorderColor:'#C77A2E',
+    altBackground:'#F7FAF8', sequenceNumberColor:'#FFFFFF'
+  };
+
+  const DARK = {
+    background:'#121A17', mainBkg:'#1C2A25', primaryColor:'#1C2A25',
+    primaryTextColor:'#E8EFEA', primaryBorderColor:'#4A5F56',
+    secondaryColor:'#1A2333', tertiaryColor:'#2A2015',
+    lineColor:'#7D9188', textColor:'#E8EFEA',
+    clusterBkg:'#172220', clusterBorder:'#33443D',
+    nodeBorder:'#4A5F56', edgeLabelBackground:'#121A17',
+    actorBkg:'#1C2A25', actorBorder:'#35C88D', actorTextColor:'#E8EFEA',
+    actorLineColor:'#4A5F56', signalColor:'#A6B8AF', signalTextColor:'#E8EFEA',
+    labelBoxBkgColor:'#1C2A25', labelBoxBorderColor:'#4A5F56', labelTextColor:'#E8EFEA',
+    loopTextColor:'#E8EFEA', noteBkgColor:'#2A1F13', noteTextColor:'#E8EFEA', noteBorderColor:'#DB9E60',
+    altBackground:'#172220', sequenceNumberColor:'#0A100E'
+  };
+
+  // Keep the original source: mermaid.run() replaces the element's contents,
+  // so re-rendering on a theme change needs the text it started with.
+  const blocks = [...document.querySelectorAll('pre.mermaid')];
+  blocks.forEach(b => { b.dataset.src = b.textContent; });
+
+  let rendering = false;
+
+  async function draw() {
+    if (rendering) return;
+    rendering = true;
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',   // our own content; enables <br/> and <b> in labels
+      theme: 'base',
+      themeVariables: { fontFamily: MONO, fontSize: '13px', ...(isDark() ? DARK : LIGHT) },
+      flowchart: { htmlLabels: true, curve: 'basis', useMaxWidth: false, padding: 14 },
+      sequence: { useMaxWidth: false, actorMargin: 42, wrap: false },
+      state: { useMaxWidth: false }
+    });
+
+    for (const b of blocks) {
+      b.removeAttribute('data-processed');
+      b.removeAttribute('data-failed');
+      b.innerHTML = b.dataset.src;
+    }
+
+    try {
+      await mermaid.run({ nodes: blocks, suppressErrors: true });
+    } catch (err) {
+      // A diagram that will not parse should say so plainly rather than
+      // leave a blank plate that reads as "nothing here".
+      for (const b of blocks) {
+        if (!b.querySelector('svg')) {
+          b.setAttribute('data-failed', '');
+          b.textContent = 'This diagram could not be rendered: ' + err.message;
+        }
+      }
+    }
+    rendering = false;
+  }
+
+  function syncLabel() { label.textContent = isDark() ? 'Light' : 'Dark'; }
+
+  btn.addEventListener('click', async () => {
+    root.dataset.theme = isDark() ? 'light' : 'dark';
+    syncLabel();
+    await draw();
+  });
+
+  mq.addEventListener('change', async () => {
+    if (!root.dataset.theme) { syncLabel(); await draw(); }
+  });
+
+  syncLabel();
+  await draw();
+
+  // Scrollspy — highlights the section currently in view.
+  const links = new Map(
+    [...document.querySelectorAll('.rail a')].map(a => [a.getAttribute('href').slice(1), a])
+  );
+  const visible = new Set();
+
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (e.isIntersecting) visible.add(e.target.id);
+      else visible.delete(e.target.id);
+    }
+    let top = null;
+    for (const id of links.keys()) { if (visible.has(id)) { top = id; break; } }
+    for (const [id, a] of links) a.classList.toggle('on', id === top);
+  }, { rootMargin: '-10% 0px -70% 0px' });
+
+  document.querySelectorAll('section[id]').forEach(s => io.observe(s));
+</script>
+</body>
+</html>

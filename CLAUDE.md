@@ -18,7 +18,10 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 - **Firm Admins** - Manage adjusting firm operations
 - **Support Desk** - Handle customer enquiries
 
-**MVP scope:** Motor insurance claims (Own Damage, Third-Party Property) in Malaysia
+**MVP scope:** **Non-motor** claims in Malaysia — travel first (written under the
+PA class), then fire, flood and other property lines. Motor code in the repo is
+legacy and must not be extended; see "Standing decisions" below and
+`docs/MASTER_PLAN.md` §1.
 
 ## Tech Stack Rules
 
@@ -45,20 +48,39 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 
 ### Infrastructure
 
-- **AWS Malaysia** (ap-southeast-5) for data sovereignty
-- **Docker 27.x** + **Kubernetes (EKS) 1.31+** for deployment
-- **Turborepo 2.3.x** monorepo structure
+- **Turborepo 2.3.x** monorepo structure (actual)
+- **Target:** AWS Malaysia (ap-southeast-5) for data sovereignty. **Staging** is decided and artefacted: a single EC2 instance in ap-southeast-5 running `deploy/staging/` (Docker Compose + Caddy; synthetic data only). Production remains a target — no Kubernetes/Terraform exists, `AWS_REGION` is still read by no code — so treat *production* data residency as an open commitment, not a property of the system (`docs/MASTER_PLAN.md` §3.4, §4.3 A5, §8)
 
 ### Third-Party Integrations
 
-| Provider       | Purpose              |
-| -------------- | -------------------- |
-| Daily.co       | Video calls          |
-| Innov8tif/CTOS | eKYC (OCR, Liveness) |
-| Clearspeed     | Voice risk analysis  |
-| Hive AI        | Deepfake detection   |
-| MediaPipe      | Attention tracking   |
-| SigningCloud   | Digital signatures   |
+| Provider       | Purpose              | Status |
+| -------------- | -------------------- | ------ |
+| Daily.co       | Video calls          | **integrated** |
+| Telegram Bot API | Conversational intake | **integrated — offshore; see caveat below** |
+| Hume AI        | Voice/face prosody analysis | **integrated** (risk-analyzer) |
+| MediaPipe / Parselmouth | Attention & voice-stress analysis | **integrated** (risk-analyzer) |
+| Google Gemini  | Document extraction + intake answer normalisation (fallback only, off by default) | **integrated — offshore; see caveat below** |
+| n8n OCR webhook | Claim-document OCR extraction | **integrated — offshore, hosting unverified; disabled unless `OCR_WEBHOOK_URL` is set** |
+| Supabase Storage | Document storage   | **integrated**, with local-filesystem fallback |
+| Innov8tif/CTOS | eKYC (OCR, Liveness) | not integrated |
+| Clearspeed     | Voice risk analysis  | not integrated |
+| Hive AI        | Deepfake detection   | not integrated |
+| SigningCloud   | Digital signatures   | not integrated — provider interface exists with a stub |
+
+⚠️ **Data residency caveat.** Gemini, Hume, Daily.co and Telegram all process
+claimant personal data outside Malaysia, and no cross-border transfer basis has
+been established. Gemini now receives free text a claimant typed, not only
+document images, when deterministic parsing of an intake answer fails
+(`CHAT_LLM_NORMALISER_ENABLED`, off by default) — synthetic and internal-tester
+data only until a basis exists (`docs/MASTER_PLAN.md` §6.3, §6.18).
+
+Messaging channels are additionally *retentive*: whatever a claimant types —
+including payout details — persists in the platform's own message history,
+beyond our retention sweep and anonymisation job. That is a decided trade,
+recorded in `docs/MASTER_PLAN.md` §3.4, not an oversight.
+
+Do not describe the system as keeping data in-country until the in-country LLM
+path is real (`docs/MASTER_PLAN.md` §3.4, risk 15).
 
 ## Coding Standards
 
@@ -71,29 +93,43 @@ Remote claims assessment platform for Loss Adjusters and Claimants in Malaysia's
 ### Project Structure
 
 ```
+**This reflects what actually exists.** Do not add a service to this tree before
+it exists — see `docs/MASTER_PLAN.md` §4.3 A8 for why (documenting phantom
+services misled an architecture review).
+
+```
 true-claim-insight/
 ├── apps/
-│   ├── api-gateway/          # NestJS - routing, auth
-│   ├── case-service/         # NestJS - claims lifecycle
-│   ├── video-service/        # NestJS - Daily.co rooms
-│   ├── identity-service/     # NestJS - eKYC
-│   ├── risk-engine/          # NestJS - AI scoring
-│   ├── document-service/     # NestJS - reports, signing
-│   ├── adjuster-portal/      # React - adjuster web app
-│   ├── claimant-web/         # React PWA - claimant app
-│   └── insurer-dashboard/    # React - insurer portal
+│   ├── api-gateway/          # NestJS - edge: auth, proxying; also owns otp/claimants/master-data/users
+│   ├── case-service/         # NestJS - claims + cases + policies + documents + signatures + adjusters + FNOL email ingestion + intake flows + chat channels
+│   ├── video-service/        # NestJS - Daily.co rooms, recordings, uploads
+│   ├── risk-engine/          # NestJS - Trinity rules, fraud signals, LLM extraction
+│   ├── risk-analyzer/        # Python FastAPI - Hume / Parselmouth / MediaPipe analysis
+│   ├── adjuster-portal/      # React - adjuster + operator web app
+│   └── claimant-web/         # React PWA - claimant app
 ├── packages/
-│   ├── shared-types/         # TypeScript interfaces (@tci/shared-types)
+│   ├── shared-types/         # TypeScript interfaces + intake flows, overlay resolver, publish gate, channel capabilities (@tci/shared-types)
 │   ├── ui-components/        # Shared React components (@tci/ui-components)
-│   └── prisma-client/        # Prisma schema + client (@tci/prisma-client)
-├── infrastructure/
-│   ├── terraform/
-│   └── kubernetes/
+│   ├── crypto/               # Envelope encryption: KeyProvider/KeyStore (@tci/crypto)
+│   └── prisma-client/        # Prisma schema + client, shared writers, ownership map (@tci/prisma-client)
+├── .github/workflows/        # CI: typecheck + compliance tests
 └── docs/
+    ├── MASTER_PLAN.md        # Regulatory + build plan — read this first
+    ├── MARKET_RESEARCH_TPA_REVENUE.md
     ├── REQUIREMENTS.md       # Business requirements
     ├── ARCHITECTURE.md       # Technical architecture
     └── PROGRESS.md           # Task tracking
 ```
+
+**Not built (previously documented as if they existed):** `identity-service`
+(eKYC), `document-service` (reports/signing — reports are planned for
+case-service instead), `insurer-dashboard`, and the `infrastructure/`
+terraform + kubernetes tree. Deployment artefacts exist for **staging only**:
+`deploy/staging/` (multi-target Dockerfile, Compose stack, Caddy edge, secrets
+bootstrap) targeting one EC2 instance in ap-southeast-5. There is still no
+production deployment (no Kubernetes, no Terraform, no CI deploy); local
+development runs on the host with `docker-compose` providing Postgres, Redis
+and Mailhog only.
 
 ### Code Guidelines
 
@@ -123,7 +159,11 @@ true-claim-insight/
 1. **Do not run `php artisan migrate` on remote server**
 2. **Always perform cleanup for unused files after verification**
 3. **Use British English** (colour, behaviour, organisation)
-4. **Data sovereignty** - All data must stay in Malaysia region
+4. **Data sovereignty is a target, not a fact.** Gemini, Hume, Daily.co and Telegram
+   process claimant personal data offshore today and no cross-border basis is
+   established — see the caveat above. Do not write code or copy that asserts
+   in-country processing until it is true. AWS Malaysia (`ap-southeast-5`) is
+   the destination, not the current state.
 5. **Multi-tenant isolation** - Adjusting firms and insurers are separate tenants
 
 ## Multi-Tenant Architecture
@@ -196,10 +236,38 @@ async findOne(id: string, tenantContext?: TenantContext) {
 
 ## Documentation References
 
+**Read `docs/MASTER_PLAN.md` first.** It is the source of truth for what this
+platform is, what it must comply with, and what is built versus planned:
+
+| Section | Contains |
+| --- | --- |
+| §1 | Operating model, target claim lines (in/out of scope), the TPA→registered-adjuster trajectory |
+| §2 | End-to-end claim journey, and §2.5 the per-claim COGS ceiling the assessment mode enforces |
+| §3 | Compliance matrix — every binding BNM/FSA/PDPA requirement → system control → phase, with current PASS/PARTIAL/FAIL verdicts, plus §3.6 false-comfort findings |
+| §4 | Domain model, and §4.3 the architecture assessment (blocking defects A1–A3, material A4–A8) |
+| §5 | Phased roadmap (Phase 0 → 6) |
+| §6 | Risks and **decided positions** — e.g. no portal scraping, AI disclosed not downplayed |
+| §8 | **Progress record — what has actually shipped, with commit refs.** Update it whenever work completes |
+| §9 | Feasibility: funding, effort estimates, go/no-go gates G1–G11 |
+
+Supporting documents:
+
+- **Market and cost analysis:** `docs/MARKET_RESEARCH_TPA_REVENUE.md` (fee pool, year-1 P&L, the three revenue paths — governs §5 sequencing and §9)
 - **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
 - **Business requirements:** `docs/REQUIREMENTS.md`
 - **Technical architecture:** `docs/ARCHITECTURE.md`
-- **Task progress:** `docs/PROGRESS.md`
+- **Task progress:** `docs/PROGRESS.md` (older; the plan's §8 progress record is more current)
+
+### Standing decisions that constrain any change
+
+These are settled. Re-open them explicitly rather than drifting from them.
+
+1. **Target lines are non-motor**, excluding motor, Individual PA and Medical & Health. Travel is in scope because Malaysian travel insurance is written under the PA class. Motor code in the repo is legacy — do not extend it.
+2. **TPA now, BNM registration when volume supports two senior adjusters.** Build the regulated machinery early but ship it inert behind `licensedMode`, so registration is a capability flip rather than a rebuild.
+3. **Data ownership is declared and enforced.** See `packages/prisma-client/src/data-ownership.ts` and the test that scans for cross-context writes. The exception list may shrink, never grow.
+4. **Personal data is encrypted at rest** with the master key behind a `KeyProvider` (`packages/crypto`), so moving to AWS KMS re-wraps one row and touches no data. Only the gateway and case-service hold a key.
+5. **Ciphertext and blind indexes never leave the server.** `SENSITIVE_FIELD_OMIT` (in `@tci/prisma-client`) is passed to every `PrismaClient`, so those columns are absent from query results by default; a path that genuinely decrypts opts back in with `omit: { <field>: false }`. Add any new encrypted or hashed personal-data column to that map — `sensitive-fields.spec.ts` reads the Prisma schema and fails if you forget. A `…Last4` tail is what screens display.
+6. **Prefer the durable design over the quick fix**, and never leave a partial migration — say so and scope it separately instead.
 
 ## Development Commands
 
@@ -226,23 +294,34 @@ pnpm build
 
 ## API Ports (Development)
 
-| Service          | Port |
-| ---------------- | ---- |
-| API Gateway      | 3000 |
-| Case Service     | 3001 |
-| Video Service    | 3002 |
-| Identity Service | 3003 |
-| Risk Engine      | 3004 |
-| Document Service | 3005 |
-| Adjuster Portal  | 4000 |
-| Claimant Web     | 4001 |
+| Service         | Port | Notes |
+| --------------- | ---- | ----- |
+| API Gateway     | 3000 | |
+| Case Service    | 3001 | |
+| Video Service   | 3002 | |
+| Risk Engine     | 3004 | |
+| Risk Analyzer   | 3005 | Python / FastAPI (uvicorn) |
+| Adjuster Portal | 4000 | |
+| Claimant Web    | 4001 | |
+
+There is no service on 3003. `identity-service` and `document-service` do not
+exist — see the "Not built" note above. Port 3005 belongs to `risk-analyzer`.
 
 ## Test Credentials (Local Development)
 
-After running migrations, register a test user or use:
+All seeded users share the same password: `DemoPass123!`
 
-| Role     | Email                   | Password      |
-| -------- | ----------------------- | ------------- |
-| Adjuster | ahmad@adjustingfirm.com | SecureP@ss123 |
+| Role                | Email                    | Tenant                    |
+| ------------------- | ------------------------ | ------------------------- |
+| SUPER_ADMIN         | superadmin@tci.com       | —                         |
+| FIRM_ADMIN          | admin@pacific.com        | Pacific (adjusting firm)  |
+| ADJUSTER            | adjuster@pacific.com     | Pacific (adjusting firm)  |
+| FIRM_ADMIN          | admin@allianz.com        | Allianz (insurer)         |
+| SIU_INVESTIGATOR    | siu@allianz.com          | Allianz                   |
+| COMPLIANCE_OFFICER  | compliance@allianz.com   | Allianz                   |
+| SUPPORT_DESK        | support@allianz.com      | Allianz                   |
+| SHARIAH_REVIEWER    | shariah@allianz.com      | Allianz                   |
 
-**Note:** You must first register the user via `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs
+Use `adjuster@pacific.com` to log in to the adjuster-portal (http://localhost:4000).
+
+**Source of truth:** `packages/prisma-client/prisma/seed.ts`. To register additional users, use `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs.

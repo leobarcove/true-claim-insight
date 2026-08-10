@@ -8,6 +8,7 @@ import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { OtpService } from './otp.service';
+import { AuditService } from '../common/audit/audit.service';
 
 export interface JwtPayload {
   sub: string;
@@ -59,7 +60,8 @@ export class AuthService {
     private readonly claimantsService: ClaimantsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly otpService: OtpService
+    private readonly otpService: OtpService,
+    private readonly audit: AuditService
   ) {}
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
     // Check if user already exists
@@ -144,6 +146,15 @@ export class AuthService {
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
+      // A failed sign-in is security evidence, so it is recorded — but against
+      // the attempted email only. The password never reaches the audit trail,
+      // which is append-only and therefore impossible to redact afterwards.
+      await this.audit.record({
+        entityType: 'AUTH',
+        entityId: loginDto.email,
+        action: 'LOGIN_FAILED',
+        metadata: { reason: 'invalid credentials' },
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -175,6 +186,16 @@ export class AuthService {
       (user as any).tenant?.name ||
       (user as any).currentTenant?.name ||
       '';
+
+    await this.audit.record({
+      entityType: 'AUTH',
+      entityId: user.id,
+      action: 'LOGIN_SUCCEEDED',
+      actorId: user.id,
+      userId: user.id,
+      tenantId: activeTenantId ?? null,
+      metadata: { role: user.role },
+    });
 
     this.logger.log(`User logged in: ${user.email}`);
 

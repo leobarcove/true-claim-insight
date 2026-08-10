@@ -1,13 +1,19 @@
-fastapi>=0.104.0
-uvicorn>=0.24.0
-python-multipart>=0.0.6
-praat-parselmouth>=0.4.3
-scipy>=1.11.0
-soundfile>=0.12.0
-mediapipe>=0.10.9
-opencv-python>=4.8.0
-numpy>=1.26.0
-pydantic>=2.5.0
-hume>=0.5.0
-httpx>=0.25.0
-fpdf2>=2.7.4
+# Exact pins, taken from the working venv on 31 Jul 2026. These were >=
+# floors until the staging container resolved hume 0.14.0, whose restructure
+# removed hume.expression_measurement and crashed the service on boot —
+# while the venv quietly ran the tested 0.13.11. Upgrade deliberately:
+# bump a pin, run the analyzer, then commit.
+fastapi==0.125.0
+uvicorn==0.38.0
+python-multipart==0.0.21
+praat-parselmouth==0.4.7
+scipy==1.15.3
+soundfile==0.13.1
+mediapipe==0.10.21
+opencv-python==4.11.0.86
+numpy==1.26.4
+pydantic==2.12.5
+hume==0.13.11
+httpx==0.28.1
+fpdf2==2.8.7
+python-dotenv==1.2.2

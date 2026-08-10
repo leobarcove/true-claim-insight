@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ConfigService } from '@nestjs/config';
@@ -75,12 +75,18 @@ export class VideoService {
     });
 
     const result = await this.handleResponse(response);
-    try {
-      this.logger.log(`Session ${id} ended. Generating consent form...`);
-      this.riskService.generateConsentForm(id, tenantId, userId, userRole);
-    } catch (error: any) {
-      this.logger.error(`Failed to generate consent form for session ${id}: ${error.message}`);
-    }
+    this.logger.log(`Session ${id} ended. Generating consent form...`);
+    // Fire-and-forget by design (PDF generation is slow), but rejections must be caught
+    // here or Node will terminate the process via unhandledRejection.
+    this.riskService
+      .generateConsentForm(id, tenantId, userId, userRole)
+      .then(() => this.logger.log(`Consent form generated for session ${id}`))
+      .catch((error: Error) =>
+        this.logger.error(
+          `Failed to generate consent form for session ${id}: ${error.message}`,
+          error.stack
+        )
+      );
 
     return result;
   }
@@ -154,8 +160,10 @@ export class VideoService {
 
   async streamUpload(uploadId: string, res: any, req: any) {
     const range = req.headers.range;
+    // The one route that built its headers by hand, and so was the one route
+    // still unauthenticated after the others were fixed.
     const response = await fetch(`${this.baseUrl}/uploads/${uploadId}/stream`, {
-      headers: range ? { range } : undefined,
+      headers: { ...this.buildHeaders(), ...(range ? { range } : {}) },
     });
 
     if (!response.ok && response.status !== 206) {
@@ -257,8 +265,30 @@ export class VideoService {
     return this.handleResponse(response);
   }
 
+  /**
+   * Headers for every call to video-service — identity *and* the internal key.
+   *
+   * This module calls with `fetch` rather than through `InternalHttpModule`,
+   * whose whole purpose is that no gateway call site can forget the key (§4.3
+   * A1). Forgetting it here is exactly the failure that module exists to
+   * prevent: video-service fails closed, so the Sessions screen, room
+   * creation, joining, ending and every upload returned 502 "Invalid internal
+   * credentials". One builder, used by every call, so the key cannot be
+   * omitted from one of them.
+   */
   private buildHeaders(tenantId?: string, userId?: string, userRole?: string): Record<string, string> {
     const headers: Record<string, string> = {};
+    const internalKey = this.configService.get<string>('INTERNAL_API_KEY');
+    if (!internalKey) {
+      // Fail closed here, not at the receiver. Attaching the key only when
+      // present meant a misconfigured gateway sent credential-less requests
+      // and relied wholly on video-service refusing them — the caller-side
+      // half of the A1 posture was missing (found 10 Aug 2026).
+      throw new ServiceUnavailableException(
+        'INTERNAL_API_KEY is not configured — refusing to call video-service without it'
+      );
+    }
+    headers['x-internal-key'] = internalKey;
     if (tenantId) headers['X-Tenant-Id'] = tenantId;
     if (userId) headers['X-User-Id'] = userId;
     if (userRole) headers['X-User-Role'] = userRole;

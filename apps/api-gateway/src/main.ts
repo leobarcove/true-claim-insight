@@ -44,8 +44,13 @@ async function bootstrap() {
     },
   });
 
-  // CORS configuration - allow both adjuster portal and claimant web
-  const allowedOrigins = [
+  // CORS configuration. Staging/production set CORS_ORIGINS (comma-separated,
+  // e.g. the Caddy-served frontend origins); the localhost pair is the dev
+  // fallback. Behind the staging edge the frontends are same-origin, so this
+  // list only matters for cross-origin callers.
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean) ?? [
     'http://localhost:4000', // adjuster-portal
     'http://localhost:4001', // claimant-web
   ];

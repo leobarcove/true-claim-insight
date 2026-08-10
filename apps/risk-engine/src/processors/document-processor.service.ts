@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
-import { GpuClientService } from '../llm/gpu-client.service';
+import { LLM_PROVIDER, LlmProvider } from '../llm/llm-provider.interface';
 import { TrinityCheckEngine } from '../trinity/trinity.engine';
 import { DocumentStatus, DocumentType } from '@tci/shared-types';
 import { ExtractionService } from './extraction/extraction.service';
@@ -12,6 +12,7 @@ import * as path from 'path';
 import { EventsGateway } from '../trinity/events.gateway';
 import { StorageService } from '../common/services/storage.service';
 import { TrinityReportGenerator } from '../trinity/trinity-report.generator';
+import { TransferRegister } from '@tci/prisma-client';
 
 const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 
@@ -19,15 +20,23 @@ const roundTo56 = (n: number) => Math.max(56, Math.round(n / 56) * 56);
 export class DocumentProcessorService {
   private readonly logger = new Logger(DocumentProcessorService.name);
 
+  private transfers!: TransferRegister;
+
   constructor(
     private prisma: PrismaService,
-    private gpu: GpuClientService,
+    @Inject(LLM_PROVIDER) private gpu: LlmProvider,
     private trinity: TrinityCheckEngine,
     private events: EventsGateway,
     private extractionService: ExtractionService,
     private storage: StorageService,
     private reportGenerator: TrinityReportGenerator
-  ) {}
+  ) {
+    this.transfers = new TransferRegister(this.prisma, 'risk-engine', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for document extraction`,
+        error instanceof Error ? error.message : String(error)
+      )
+    );}
 
   async updateDocumentStatus(documentId: string, status: any, claimId?: string) {
     this.logger.log(`Updating document ${documentId} status to: ${status}`);
@@ -87,22 +96,38 @@ export class DocumentProcessorService {
 
       const normalizer = getNormalizer(docType);
       if (normalizer) {
+        // Gemini processes the document image offshore; the local (Ollama)
+        // provider does not leave the machine, so only the offshore path is a
+        // s.129 transfer. No consent gate here yet — the register records the
+        // honest state: no basis established for this path (see §3.4).
+        if (this.gpu.name === 'Gemini') {
+          await this.transfers.record({
+            provider: 'GOOGLE_GEMINI',
+            purpose: `Text extraction from a ${docType} document image`,
+            claimId: doc.claimId,
+            metadata: { documentId: doc.id, filename: doc.filename },
+          });
+        }
+        // Let the active LLM provider pick its own model name. Hardcoding
+        // ollama-specific identifiers (qwen2.5vl, qwen2.5, deepseek-r1)
+        // breaks when the provider is Gemini. We record what the provider
+        // actually used in modelUsed for analytics.
         if (isImage) {
-          modelUsed = 'qwen2.5vl:7b';
           const prompt = this.extractionService.getPrompt(docType);
           const optimizedBuffer = await this.preprocessImage(fileBuffer, docType, doc.filename);
-          const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename, modelUsed);
+          const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename);
           visionData = resp.output || resp;
           resultData = this.extractionService.normalize(docType, visionData);
+          modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
         } else {
           const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
           rawText = ocrResp.text || '';
 
-          modelUsed = 'qwen2.5:7b';
           const prompt = this.extractionService.getPrompt(docType, rawText);
-          const llmResp = await this.gpu.generateJson(prompt, modelUsed);
+          const llmResp = await this.gpu.generateJson(prompt);
           const rawResult = llmResp.output || llmResp;
           resultData = this.extractionService.normalize(docType, rawResult);
+          modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
         }
 
         await this.prisma.documentAnalysis.upsert({
@@ -349,8 +374,11 @@ export class DocumentProcessorService {
     `;
 
     try {
-      const model = 'deepseek-r1:14b';
-      const resp = await this.gpu.reasoningJson(prompt, model);
+      // Default to the provider's preferred reasoning model. Ollama
+      // backs this with deepseek-r1; Gemini uses its configured default
+      // (gemini-2.5-flash). To explicitly upgrade reasoning quality on
+      // the Gemini path, set GEMINI_MODEL=gemini-2.5-pro in env.
+      const resp = await this.gpu.reasoningJson(prompt);
       const result = resp.output || resp;
 
       await this.prisma.trinityCheck.update({
@@ -359,7 +387,9 @@ export class DocumentProcessorService {
           reasoning: result.reasoning,
           status: (report as any).status || 'COMPLETED',
           reasoningInsights: {
-            model,
+            // Record which provider+model produced this reasoning so
+            // analytics can compare quality across LLM backends.
+            model: `${this.gpu.name}:${this.gpu.defaultModel}`,
             flags: result.red_flags,
             insights: result.insights,
             recommendation: result.recommendation,

@@ -16,6 +16,10 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Inbox,
+  MailQuestion,
+  MessagesSquare,
+  Receipt,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -41,6 +45,42 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   {
+    name: 'Cases',
+    href: '/cases',
+    icon: Inbox,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
+    // Sits next to Cases because that is what an inbound email becomes. An
+    // operator working the intake funnel should not have to know the queue
+    // exists somewhere else.
+    name: 'FNOL intake',
+    href: '/intake',
+    icon: MailQuestion,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
+    // Beside FNOL intake for the same reason: both are places a claimant is
+    // waiting on the firm. A conversation with an agent needed is more urgent
+    // than an unparsed email, so it sits above Claims rather than under Admin.
+    name: 'Conversations',
+    href: '/conversations',
+    icon: MessagesSquare,
+    permissions: [
+      PERMISSIONS.CLAIMS_VIEW_OWN,
+      PERMISSIONS.CLAIMS_VIEW_BASIC,
+      PERMISSIONS.CLAIMS_VIEW_ALL,
+    ],
+  },
+  {
     name: 'Claims',
     href: '/claims',
     icon: FileText,
@@ -61,6 +101,14 @@ const navigation: NavItem[] = [
     href: '/schedule',
     icon: Calendar,
     roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'],
+  },
+  {
+    // The firm's own money. Restricted to those who may raise a note, which is
+    // the same line the server draws on drafting and issuing one.
+    name: 'Fee notes',
+    href: '/billing',
+    icon: Receipt,
+    permissions: [PERMISSIONS.BILLING_MANAGE],
   },
   {
     name: 'Documents',
@@ -113,7 +161,7 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProps) {
   const location = useLocation();
-  const { user, userTenants } = useAuthStore();
+  const { user, userTenants, tenantsKnown } = useAuthStore();
   const logoutMutation = useLogout();
   const { theme, setTheme } = useTheme();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
@@ -137,7 +185,10 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
     setIsLogoutDialogOpen(false);
   };
 
-  const isAwaitingActivation = userTenants.length === 0 && user?.role !== 'SUPER_ADMIN';
+  // Mirrors dashboard.tsx: only collapse the navigation once the empty tenant
+  // list is confirmed, never on a merely-unknown one.
+  const isAwaitingActivation =
+    tenantsKnown && userTenants.length === 0 && user?.role !== 'SUPER_ADMIN';
 
   const filterNavItems = (
     items: NavItem[],

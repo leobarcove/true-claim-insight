@@ -1,0 +1,29 @@
+# Keep the build context lean — the staging images build from the repo root.
+node_modules
+**/node_modules
+.git
+.turbo
+**/.turbo
+**/dist
+# Incremental-build state must never enter the context: with dist excluded
+# but tsbuildinfo present, tsc concludes "already built" and emits nothing,
+# so dependent packages fail to resolve @tci/* imports in the container.
+**/*.tsbuildinfo
+**/coverage
+apps/risk-analyzer/venv
+apps/risk-analyzer/app/__pycache__
+# Runtime data dirs only — NEVER wildcard these: src/uploads is a real
+# source module in video-service, and **/uploads once excluded it from the
+# build context, failing the container build while local builds passed.
+apps/case-service/storage
+apps/risk-engine/storage
+apps/risk-analyzer/storage
+apps/video-service/uploads
+.env
+.env.*
+!.env.example
+deploy/staging/.env.staging
+screenshots
+docs
+*.log
+.DS_Store

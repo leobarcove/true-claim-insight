@@ -19,6 +19,9 @@ import ffprobeStatic = require('ffprobe-static');
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
+import { AuditService } from '../common/audit/audit.service';
+import { ConsentGateService } from '../common/consent/consent-gate.service';
+import { TransferRegister } from '@tci/prisma-client';
 
 const execAsync = promisify(exec);
 
@@ -36,6 +39,7 @@ const tempDir = path.resolve(process.cwd(), 'uploads/temp');
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
   private readonly analyzerUrl: string;
+  private transfers!: TransferRegister;
   private preparationPromises = new Map<string, Promise<any>>();
   private segmentProcessingMap = new Map<string, Promise<any>>();
   private signedUrlCache = new Map<string, { url: string; expires: number }>();
@@ -43,8 +47,17 @@ export class UploadsService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly audit: AuditService,
+    private readonly consentGate: ConsentGateService
   ) {
+    this.transfers = new TransferRegister(this.prisma, 'video-service', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for claim ${entry.claimId} — ` +
+          'the s.129 register is now incomplete',
+        error instanceof Error ? error.message : String(error)
+      )
+    );
     this.analyzerUrl = this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005');
     this.logger.log(`Local Storage initialized: ${uploadDir}`);
     this.logger.log(`Temp Storage initialized: ${tempDir}`);
@@ -437,6 +450,8 @@ export class UploadsService {
     const targetEnd = endTime && endTime > startTime ? endTime : startTime + defaultDuration;
     const cacheKey = `${uploadId}-${targetStart}-${targetEnd}`;
 
+    await this.assertAnalysisPermitted(uploadId);
+
     if (this.segmentProcessingMap.has(cacheKey)) {
       return this.segmentProcessingMap.get(cacheKey);
     }
@@ -488,7 +503,37 @@ export class UploadsService {
     return processPromise;
   }
 
+
+  /**
+   * Consent and transfer bookkeeping before any recording is analysed.
+   *
+   * The gate fails closed (sensitive data, offshore recipient); the transfer
+   * record is written after the gate passes, carrying the consent basis — the
+   * only s.129 basis the platform currently operates.
+   */
+  private async assertAnalysisPermitted(uploadId: string) {
+    const upload = await this.prisma.videoUpload.findUnique({
+      where: { id: uploadId },
+      include: { claim: { select: { id: true, claimantId: true } } },
+    });
+    if (!upload?.claim) {
+      throw new NotFoundException('Upload or its claim not found');
+    }
+
+    await this.consentGate.assertBiometricConsent(upload.claim.claimantId, upload.claim.id);
+
+    await this.transfers.record({
+      provider: 'HUME_AI',
+      purpose: 'Behavioural analysis of a video assessment recording',
+      lawfulBasis: 'CONSENT s.129(3)(a) — live BIOMETRIC_ANALYSIS consent verified',
+      claimId: upload.claim.id,
+      claimantId: upload.claim.claimantId,
+      metadata: { uploadId },
+    });
+  }
+
   async processVideo(uploadId: string, tenantContext: TenantContext) {
+    await this.assertAnalysisPermitted(uploadId);
     const upload = await this.getUpload(uploadId, tenantContext);
 
     if (upload.status === 'PROCESSING') {
@@ -712,11 +757,13 @@ export class UploadsService {
       claimId: upload.claimId,
       claimant: {
         name: upload.claim.claimant?.fullName || 'N/A',
-        nric:
-          upload.claim.claimant?.nric ||
-          upload.claim.nric ||
-          upload.claim.claimant?.nricHash ||
-          'N/A',
+        // This service holds no encryption key by design (MASTER_PLAN §4.3 A2):
+        // it shows the clear display tail. Restoring the full NRIC to generated
+        // documents needs the audited case-service identity endpoint — tracked
+        // as an open item, see the NRIC row in the plan's progress record.
+        nric: upload.claim.claimant?.nricLast4
+          ? `••••${upload.claim.claimant.nricLast4}`
+          : 'N/A',
         phone: upload.claim.claimant?.phoneNumber || 'N/A',
         email: upload.claim.claimant?.email || 'N/A',
       },
@@ -806,7 +853,7 @@ export class UploadsService {
   async getClaimUploads(claimId: string, tenantContext: TenantContext) {
     await this.tenantService.validateClaimAccess(claimId, tenantContext);
     const uploads = await this.prisma.videoUpload.findMany({
-      where: { claimId },
+      where: { claimId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     return Promise.all(
@@ -820,7 +867,7 @@ export class UploadsService {
 
     const [uploads, total] = await Promise.all([
       this.prisma.videoUpload.findMany({
-        where,
+        where: { ...where, deletedAt: null },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -875,32 +922,34 @@ export class UploadsService {
     }));
   }
 
+  /**
+   * "Delete" a recording — a soft delete, by design.
+   *
+   * Every VideoUpload belongs to a claim, so every recording is claim evidence
+   * and PD 12.8's seven-year retention applies. The file and the row both stay;
+   * the recording drops out of listings. Actual destruction belongs to
+   * case-service's retention sweep once the claim's retention period has run —
+   * this service holds no retention policy and must not improvise one.
+   */
   async deleteUpload(uploadId: string, tenantContext: TenantContext) {
     const upload = await this.getUpload(uploadId, tenantContext);
 
-    // Cleanup
-    const { apiUrl, key } = this.getSupabaseConfig();
-    const bucketName = 'tci-uploads';
-    const publicPathPart = `/storage/v1/object/public/${bucketName}/`;
+    await this.audit.record({
+      entityType: 'VIDEO_UPLOAD',
+      entityId: uploadId,
+      action: 'RECORDING_SOFT_DELETED',
+      oldValues: {
+        claimId: upload.claimId ?? null,
+        videoUrl: upload.videoUrl,
+        createdAt: upload.createdAt,
+      },
+      metadata: { note: 'hidden from listings; file and row retained per PD 12.8' },
+    });
 
-    if (upload.videoUrl.includes(publicPathPart)) {
-      const storagePath = upload.videoUrl.split(publicPathPart).pop();
-      if (storagePath) {
-        await fetch(`${apiUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${key}` },
-        });
-      }
-    } else {
-      // Local file
-      try {
-        await fs.unlink(upload.videoUrl);
-      } catch (error: any) {
-        this.logger.error(`Failed to delete video file: ${error.message}`);
-      }
-    }
-
-    await this.prisma.videoUpload.delete({ where: { id: uploadId } });
+    await this.prisma.videoUpload.update({
+      where: { id: uploadId },
+      data: { deletedAt: new Date() },
+    });
     return { success: true };
   }
 

@@ -4,6 +4,7 @@ import { WelcomePage } from '@/pages/welcome';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
 import { SubmitClaimPage } from '@/pages/claims/submit';
+import { CaseIntakePage } from '@/pages/cases/new';
 import { ClaimantVideoCallPage } from '@/pages/video/call';
 import { VideoAssessmentWizard } from '@/pages/video/video-wizard';
 import { ClaimDetailsPage } from '@/pages/claims/details';
@@ -66,6 +67,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SubmitClaimPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/cases/new"
+                element={
+                  <ProtectedRoute>
+                    <CaseIntakePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/cases/:id"
+                element={
+                  <ProtectedRoute>
+                    <CaseIntakePage />
                   </ProtectedRoute>
                 }
               />

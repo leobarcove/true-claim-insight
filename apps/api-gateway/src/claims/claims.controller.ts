@@ -6,19 +6,23 @@ import {
   Body,
   Param,
   Req,
+  Res,
   Delete,
   UseGuards,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { unwrapEnvelope } from '../common/unwrap-envelope';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { firstValueFrom } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 import { ClaimantsService } from '../claimants/claimants.service';
+import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 
 @ApiTags('Claims')
 @ApiBearerAuth()
@@ -101,16 +105,26 @@ export class ClaimsController {
 
     return this.httpService.get(endpoint, { headers, params: req.query }).pipe(
       map(response => {
+        // Flattened, not recomputed. This map used to redefine three of the
+        // figures on the way through — `totalAssigned` was fed the *active*
+        // count and `inProgress` the SCHEDULED bucket — so the dashboard could
+        // not agree with the service that produced them, and a fix in one place
+        // did not reach the screen. Each field now carries the value it is
+        // named for, and a new figure appears here or it does not appear at all.
         const data = response.data.data;
+        const stats = data.stats ?? {};
         return {
-          totalAssigned: data.stats?.activeClaims || 0,
-          pendingReview: data.statusBreakdown?.REPORT_PENDING || 0,
-          inProgress: data.statusBreakdown?.SCHEDULED || 0,
-          completedThisMonth: data.stats?.completedThisMonth || 0,
-          completedThisWeek: data.stats?.completedThisWeek || 0,
-          averagePerDay: data.stats?.averagePerDay || 0,
-          totalClaims: data.stats?.totalClaims || 0,
-          statusBreakdown: data.statusBreakdown || {},
+          totalAssigned: stats.totalAssigned ?? 0,
+          activeClaims: stats.activeClaims ?? 0,
+          totalCases: stats.totalCases ?? 0,
+          pendingReview: data.statusBreakdown?.REPORT_PENDING ?? 0,
+          inProgress: stats.inProgress ?? 0,
+          completedThisMonth: stats.completedThisMonth ?? 0,
+          completedThisWeek: stats.completedThisWeek ?? 0,
+          averagePerDay: stats.averagePerDay ?? 0,
+          totalClaims: stats.totalClaims ?? 0,
+          monthlyChange: stats.monthlyChange ?? 0,
+          statusBreakdown: data.statusBreakdown ?? {},
         };
       }),
       catchError(e => {
@@ -163,6 +177,59 @@ export class ClaimsController {
       );
   }
 
+  @Get(':id/export/archive')
+  @ApiOperation({ summary: 'Claim file as ZIP (sealed bundle + binaries + report PDFs)' })
+  async exportArchive(@Param('id') id: string, @Req() req: any, @Res() reply: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.caseServiceUrl}/api/v1/claims/${id}/export/archive`, {
+          headers,
+          responseType: 'arraybuffer',
+        })
+      );
+      return reply
+        .header('Content-Type', 'application/zip')
+        .header('Content-Disposition', response.headers['content-disposition'] ?? 'attachment')
+        .header('X-Bundle-Sha256', response.headers['x-bundle-sha256'] ?? '')
+        .send(Buffer.from(response.data));
+    } catch (e: any) {
+      throw new HttpException(
+        e.response?.data ? JSON.parse(Buffer.from(e.response.data).toString() || '{}') : 'Failed to export archive',
+        e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get(':id/export')
+  @ApiOperation({ summary: 'Complete claim file (FSA s.143) — compliance roles, audited' })
+  exportFile(@Param('id') id: string, @Req() req: any) {
+    // Role enforcement lives in case-service; the gateway only forwards
+    // identity. The audit interceptor records this read by pattern.
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/export`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to export claim file',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a claim by ID' })
   findOne(@Param('id') id: string, @Req() req: any) {
@@ -207,9 +274,13 @@ export class ClaimsController {
       );
   }
 
-  @Patch(':id/status')
-  @ApiOperation({ summary: 'Update claim status' })
-  updateStatus(@Param('id') id: string, @Body('status') status: string, @Req() req: any) {
+  @Patch(':id/appointment')
+  @ApiOperation({ summary: 'Arrange the assessment and tell the claimant when' })
+  scheduleAssessment(
+    @Param('id') id: string,
+    @Body('scheduledFor') scheduledFor: string,
+    @Req() req: any
+  ) {
     const headers = {
       Authorization: req.headers.authorization,
       'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
@@ -218,7 +289,30 @@ export class ClaimsController {
     };
 
     return this.httpService
-      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/status`, { status }, { headers })
+      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/appointment`, { scheduledFor }, { headers })
+      .pipe(
+        map(response => unwrapEnvelope(response.data)),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to arrange the assessment',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Patch(':id/status')
+  @ApiOperation({ summary: 'Update claim status' })
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateClaimStatusDto, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+
+    return this.httpService
+      .patch(`${this.caseServiceUrl}/api/v1/claims/${id}/status`, { status: dto.status }, { headers })
       .pipe(
         map(response => response.data.data),
         catchError(e => {
@@ -247,6 +341,117 @@ export class ClaimsController {
         catchError(e => {
           throw new HttpException(
             e.response?.data || 'Failed to assign adjuster',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  // ============================================================
+  // Non-motor claim endpoints (Flood is the first concrete type)
+  // ============================================================
+
+  @Post('flood')
+  @ApiOperation({ summary: 'Create a new flood claim' })
+  async createFlood(@Body() body: any, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+
+    // Same claimant-resolution pattern as the motor POST /claims route:
+    // if the caller passes claimantNric + claimantPhone instead of an id,
+    // upsert the Claimant and substitute the resulting id.
+    let claimantId = body.claimantId;
+    if (!claimantId && body.claimantNric && body.claimantPhone) {
+      const claimant = await this.claimantsService.findOrCreate({
+        nric: body.claimantNric,
+        phoneNumber: body.claimantPhone,
+        fullName: body.claimantName,
+      });
+      claimantId = claimant.id;
+    }
+
+    const payload = { ...body, claimantId };
+    delete payload.claimantNric;
+    delete payload.claimantPhone;
+    delete payload.claimantName;
+
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/flood`, payload, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to create flood claim',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get('flood')
+  @ApiOperation({ summary: 'List flood claims' })
+  listFlood(@Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/flood`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to list flood claims',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get('flood/:id')
+  @ApiOperation({ summary: 'Get a flood claim with sub-table data' })
+  getFlood(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/flood/${id}`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch flood claim',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get(':id/evidence-checklist')
+  @ApiOperation({ summary: 'Get evidence checklist for a claim (any category)' })
+  getEvidenceChecklist(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/evidence-checklist`, { headers })
+      .pipe(
+        map(response => response.data.data),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch evidence checklist',
             e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
           );
         })

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantService } from '../tenant/tenant.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -6,6 +12,35 @@ import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 import { DocumentStatus } from '@tci/shared-types';
+import { ClaimCategory, ClaimStatus, ConsentPurpose, SlaStage } from '@prisma/client';
+import { EncryptionService } from '@tci/crypto';
+import { SlaService } from '../sla/sla.service';
+import { SLA_TRANSITIONS } from '../sla/sla-transitions';
+import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
+import { evidenceSubtypeFilter, resolveRequirements } from './evidence-requirements';
+import { assignmentEligibility } from '../adjusters/adjuster-competency';
+import { screeningStanding } from '../adjusters/background-screening';
+import { rotationAdvisory } from '../adjusters/rotation';
+import { conflictRefusalReason, screenConflicts } from '../adjusters/conflict-screening';
+import { checkAuthority, type AuthorityDecision } from './claim-authority';
+import { AuditService } from '../common/audit/audit.service';
+import { ConsentService } from '../consent/consent.service';
+import { isLicensedMode } from '../tenant/tenant-settings';
+import { NotificationsService } from '../notifications/notifications.service';
+import { render } from '../notifications/templates';
+
+/**
+ * Statuses a claim may not reach on an unverified claimant.
+ *
+ * The point the firm commits an opinion: writing the report, and the decisions
+ * that follow it. Intake is deliberately absent — someone reporting a loss
+ * should never be turned away for not having been verified yet.
+ */
+const IDENTITY_GATED_STATUSES: ClaimStatus[] = [
+  ClaimStatus.REPORT_PENDING,
+  ClaimStatus.APPROVED,
+  ClaimStatus.REJECTED,
+];
 
 @Injectable()
 export class ClaimsService {
@@ -13,8 +48,173 @@ export class ClaimsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly encryption: EncryptionService,
+    private readonly sla: SlaService,
+    private readonly consent: ConsentService,
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService
   ) {}
+
+  /**
+   * Real consent standing for a claim, for display and for gating.
+   *
+   * Replaces the `isPdpaCompliant` boolean, which the client set and nothing
+   * verified — a claimant ticking a box in a browser is not evidence that a
+   * lawful basis exists. This reads the actual consent records instead, so the
+   * portal badge reports what is true rather than what was asserted.
+   */
+  private async consentStanding(claimantId: string | null | undefined) {
+    if (!claimantId) return { claimProcessing: false, biometric: false, crossBorder: false };
+
+    const [claimProcessing, biometric, crossBorder] = await Promise.all([
+      this.consent.hasConsent(claimantId, ConsentPurpose.CLAIM_PROCESSING),
+      this.consent.hasConsent(claimantId, ConsentPurpose.BIOMETRIC_ANALYSIS),
+      this.consent.hasConsent(claimantId, ConsentPurpose.CROSS_BORDER_TRANSFER),
+    ]);
+    return { claimProcessing, biometric, crossBorder };
+  }
+
+  private async isLicensedMode(tenantId: string | null | undefined): Promise<boolean> {
+    if (!tenantId) return false;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    return isLicensedMode(tenant?.settings);
+  }
+
+  /**
+   * Refuse a transition the actor is not authorised to make.
+   *
+   * Returns the decision so its basis can be written onto the audit row: an
+   * examiner asking why a particular person was allowed to approve a particular
+   * amount gets an answer from the record rather than from reasoning about
+   * configuration as it stands today.
+   */
+  private async assertAuthority(
+    claim: { id: string; adjusterId?: string | null; category?: string | null; tenantId?: string | null; approvedAmount?: unknown; estimatedLossAmount?: unknown },
+    targetStatus: ClaimStatus,
+    tenantContext?: TenantContext
+  ): Promise<AuthorityDecision> {
+    if (!tenantContext) {
+      // No identity, no authority. Internal callers must supply a context.
+      return { allowed: true, basis: 'no tenant context (internal call)' };
+    }
+
+    const [actorAdjuster, limits] = await Promise.all([
+      this.prisma.adjuster.findFirst({ where: { userId: tenantContext.userId } }),
+      this.prisma.authorityLimit.findMany({
+        where: { tenantId: tenantContext.tenantId, isActive: true },
+      }),
+    ]);
+
+    const toNumber = (value: unknown): number | null =>
+      value === null || value === undefined ? null : Number(value);
+
+    const decision = checkAuthority({
+      targetStatus,
+      actorRole: tenantContext.userRole,
+      actorAdjusterId: actorAdjuster?.id ?? null,
+      claimAdjusterId: claim.adjusterId ?? null,
+      claimCategory: claim.category ?? null,
+      amount: toNumber(claim.approvedAmount) ?? toNumber(claim.estimatedLossAmount),
+      limits: limits.map(limit => ({
+        role: limit.role,
+        adjusterId: limit.adjusterId,
+        category: limit.category,
+        maxApprovalAmount: limit.maxApprovalAmount === null ? null : Number(limit.maxApprovalAmount),
+        canApproveOwnAssessment: limit.canApproveOwnAssessment,
+      })),
+    });
+
+    if (!decision.allowed) {
+      this.logger.warn(
+        `Authority refused: user ${tenantContext.userId} (${tenantContext.userRole}) ` +
+          `→ ${targetStatus} on claim ${claim.id}: ${decision.basis}`
+      );
+      throw new ForbiddenException(decision.reason);
+    }
+
+    return decision;
+  }
+
+  /**
+   * Reopen a closed claim for a supplementary claim (CSP: 5 working days).
+   *
+   * The one legal exit from CLOSED, and a deliberate act rather than a status
+   * edit: it starts the SUPPLEMENTARY_CLAIM clock, so the five-working-day
+   * response obligation is measured from the moment the supplementary arrived.
+   * Retention note: reopening does not disturb `closedAt` history — the clock
+   * anchor becomes the *new* closure when the claim closes again.
+   */
+  async reopenSupplementary(id: string, reason: string, tenantContext: TenantContext) {
+    if (!reason?.trim()) {
+      throw new BadRequestException('The supplementary claim must be described.');
+    }
+    const claim = await this.prisma.claim.findUnique({ where: { id } });
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.status !== 'CLOSED') {
+      throw new BadRequestException(
+        `Only a CLOSED claim can take a supplementary claim; this one is ${claim.status}.`
+      );
+    }
+    if (claim.legalHoldAt) {
+      // A held claim can still be reopened — the hold protects records, not work.
+      this.logger.log(`Reopening claim ${id} under legal hold; records remain protected`);
+    }
+
+    await this.prisma.claim.update({
+      where: { id },
+      data: { status: 'IN_ASSESSMENT', closedAt: null, updatedAt: new Date() },
+    });
+
+    await this.sla.startQuietly(id, SlaStage.SUPPLEMENTARY_CLAIM, claim.tenantId);
+
+    await this.createAuditTrail(
+      id,
+      'SUPPLEMENTARY_REOPENED',
+      { reason },
+      tenantContext,
+      { oldValues: { status: 'CLOSED' }, newValues: { status: 'IN_ASSESSMENT' } }
+    );
+
+    this.logger.log(`Claim ${claim.claimNumber} reopened for a supplementary claim`);
+    return this.findOne(id, tenantContext);
+  }
+
+  /**
+   * Start, pause, resume and stop the SLA clocks a status change implies.
+   *
+   * The mapping lives in SLA_TRANSITIONS so it is reviewable as a whole. Every
+   * call is fail-soft: a clock that cannot be written is logged, never raised,
+   * because refusing a legitimate claim transition over a missing deadline row
+   * would be the worse failure.
+   */
+  private async applySlaTransition(
+    claimId: string,
+    status: ClaimStatus,
+    tenantId?: string | null
+  ): Promise<void> {
+    const transition = SLA_TRANSITIONS[status];
+    if (!transition) return;
+
+    for (const stage of transition.start ?? []) {
+      await this.sla.startQuietly(claimId, stage, tenantId);
+    }
+    for (const { stage, reason } of transition.pause ?? []) {
+      await this.sla.runQuietly(`pause ${stage} on ${claimId}`, () =>
+        this.sla.pause(claimId, stage, reason)
+      );
+    }
+    for (const stage of transition.resume ?? []) {
+      await this.sla.runQuietly(`resume ${stage} on ${claimId}`, () =>
+        this.sla.resume(claimId, stage)
+      );
+    }
+    for (const stage of transition.stop ?? []) {
+      await this.sla.runQuietly(`stop ${stage} on ${claimId}`, () =>
+        this.sla.stop(claimId, stage)
+      );
+    }
+  }
 
   /**
    * Create a new claim
@@ -31,7 +231,7 @@ export class ClaimsService {
         incidentLocation: createClaimDto.incidentLocation as any,
         description: createClaimDto.description,
         claimantId: createClaimDto.claimantId,
-        nric: createClaimDto.nric,
+        ...(await this.encryptedNric(createClaimDto.nric)),
         insurerTenantId: tenantContext.tenantId,
         tenantId: tenantContext.tenantId, // Standardized field
         userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext.userId, // Standardized field
@@ -46,7 +246,6 @@ export class ClaimsService {
         policeReportDate: createClaimDto.policeReportDate
           ? new Date(createClaimDto.policeReportDate)
           : null,
-        isPdpaCompliant: createClaimDto.isPdpaCompliant ?? false,
         createdById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
         updatedById: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
       },
@@ -207,6 +406,11 @@ export class ClaimsService {
               riskFactors: true,
             },
           },
+          /* The subtype is what an adjuster scans a travel book by — a trip
+             cancellation and a medical expense claim need different evidence
+             and different reserves. `Claim.claimType` is motor-only, so
+             without this the list column has nothing to show. */
+          travelClaim: { select: { travelClaimType: true } },
         },
       }),
       this.prisma.claim.count({ where }),
@@ -261,6 +465,13 @@ export class ClaimsService {
         notes: {
           orderBy: { createdAt: 'desc' },
         },
+        // Non-motor polymorphic sub-tables. floodClaim is null for non-flood
+        // categories; the UI checks `claim.category` to decide which panel
+        // to render. Add fire/lightning/burglary includes as those tables land.
+        floodClaim: true,
+        fraudSignals: {
+          orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
+        },
       } as any,
     });
 
@@ -314,6 +525,9 @@ export class ClaimsService {
     const result = {
       ...claim,
       sessions,
+      // Real consent standing, read from the consent records rather than the
+      // self-declared `isPdpaCompliant` flag the client used to set.
+      consent: await this.consentStanding(claim.claimantId),
     };
 
     return tenantContext ? this.tenantService.redactClaim(result, tenantContext) : result;
@@ -324,6 +538,10 @@ export class ClaimsService {
    */
   async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
     const existingClaim = await this.findOne(id, tenantContext);
+
+    // Unredacted pre-image, captured BEFORE the write so the audit trail records
+    // true previous values (findOne's result is redacted by role).
+    const preImage = await this.prisma.claim.findUnique({ where: { id } });
 
     // RESTRICTION: Non-admins cannot edit APPROVED or CLOSED claims
     const isFinalStatus = ['APPROVED', 'REJECTED', 'CLOSED'].includes(existingClaim.status);
@@ -355,7 +573,6 @@ export class ClaimsService {
           : undefined,
         workshopName: updateClaimDto.workshopName,
         estimatedRepairCost: updateClaimDto.estimatedRepairCost,
-        isPdpaCompliant: updateClaimDto.isPdpaCompliant,
         slaDeadline: updateClaimDto.slaDeadline ? new Date(updateClaimDto.slaDeadline) : undefined,
         updatedById: tenantContext?.userId,
         updatedAt: new Date(),
@@ -379,10 +596,9 @@ export class ClaimsService {
     await this.createAuditTrail(
       id,
       'CLAIM_UPDATED',
-      {
-        changes: updateClaimDto,
-      },
-      tenantContext
+      { fields: Object.keys(updateClaimDto) },
+      tenantContext,
+      this.diffFields(preImage ?? {}, updateClaimDto as Record<string, any>)
     );
 
     return this.findOne(id, tenantContext);
@@ -391,16 +607,75 @@ export class ClaimsService {
   /**
    * Update claim status with tenant validation
    */
-  async updateStatus(id: string, status: string, tenantContext?: TenantContext) {
+  async updateStatus(id: string, status: ClaimStatus, tenantContext?: TenantContext) {
     const existingClaim = await this.findOne(id, tenantContext);
 
     // Validate status transition
     this.validateStatusTransition(existingClaim.status, status);
 
+    // Segregation of duties and monetary authority (§4.3 A3). Enforced here
+    // rather than in the controller: a role decorator cannot know whether this
+    // person assessed this claim, or what they are authorised to approve.
+    const authority = await this.assertAuthority(existingClaim, status as ClaimStatus, tenantContext);
+
+    // §3.6 #8: the checklist finally gates. Moving to REPORT_PENDING with
+    // mandatory evidence missing blocks in registered mode and is recorded as
+    // an advisory as a TPA — the same licence-flip shape as the people gates.
+    if (status === 'REPORT_PENDING') {
+      const complete = await this.refreshDocumentsComplete(id);
+      if (!complete) {
+        if (await this.isLicensedMode(existingClaim.tenantId)) {
+          throw new BadRequestException(
+            'Mandatory evidence is incomplete; the report stage cannot begin without it ' +
+              '(the CSP final-report window runs from complete documents).'
+          );
+        }
+        this.logger.warn(`Claim ${id} moved to REPORT_PENDING with incomplete mandatory evidence (advisory while TPA)`);
+      }
+    }
+
+    // Identity, on the same licence-flip shape. A claim cannot be reported on
+    // or decided for someone the firm never established the identity of: it is
+    // the firm's own AMLA exposure, and an insurer settling on our
+    // recommendation is relying on us for it.
+    //
+    // Deliberately at REPORT_PENDING and the decisions rather than at intake —
+    // taking a notification from someone before verifying them is normal, and
+    // refusing it would turn a compliance control into a barrier to reporting a
+    // loss. The line is drawn where the firm commits an opinion.
+    if (IDENTITY_GATED_STATUSES.includes(status as ClaimStatus)) {
+      const claimant = existingClaim.claimantId
+        ? await this.prisma.claimant.findUnique({
+            where: { id: existingClaim.claimantId },
+            select: { kycStatus: true },
+          })
+        : null;
+
+      if (claimant?.kycStatus !== 'VERIFIED') {
+        const standing = claimant?.kycStatus ?? 'no claimant record';
+        if (await this.isLicensedMode(existingClaim.tenantId)) {
+          throw new BadRequestException(
+            `The claimant's identity is not verified (${standing}). A claim cannot be ` +
+              'reported on or decided until it is.'
+          );
+        }
+        this.logger.warn(
+          `Claim ${id} → ${status} with unverified identity (${standing}) — advisory while TPA`
+        );
+        await this.createAuditTrail(id, 'IDENTITY_UNVERIFIED_AT_DECISION', {
+          status,
+          kycStatus: standing,
+        }, tenantContext);
+      }
+    }
+
     await this.prisma.claim.update({
       where: { id },
       data: {
         status: status as any,
+        // Closure anchors the PD 12.8 retention period; nothing belonging to
+        // this claim may be purged before closedAt + the retention years.
+        ...(status === 'CLOSED' ? { closedAt: new Date() } : {}),
         updatedAt: new Date(),
       },
     });
@@ -411,9 +686,18 @@ export class ClaimsService {
       {
         from: existingClaim.status,
         to: status,
+        // Recorded whether or not it was contested, so an approval never has to
+        // be reconstructed from who happened to be logged in at the time.
+        authorityBasis: authority.basis,
       },
-      tenantContext
+      tenantContext,
+      { oldValues: { status: existingClaim.status }, newValues: { status } }
     );
+
+    // SLA clocks follow the status. Fail-soft on purpose: a deadline that could
+    // not be recorded must not block an adjuster from progressing the claim, and
+    // the gap is visible in the claim's SLA history.
+    await this.applySlaTransition(id, status as ClaimStatus, existingClaim.tenantId);
 
     this.logger.log(
       `Claim ${existingClaim.claimNumber} status: ${existingClaim.status} -> ${status}`
@@ -444,6 +728,69 @@ export class ClaimsService {
       this.tenantService.validateTenantAccess(adjuster.tenantId, tenantContext, 'Adjuster');
     }
 
+    // PD 12.1 / 12.2(b): a suspended adjuster is refused in every mode; licence
+    // verification and category competency block once registered and are
+    // recorded advisories while a TPA — the licence flip, applied to people.
+    const competency = claim.category
+      ? await this.prisma.adjusterCompetency.findUnique({
+          where: { adjusterId_category: { adjusterId, category: claim.category } },
+        })
+      : null;
+    const licensedMode = await this.isLicensedMode(claim.tenantId);
+    const screenings = await this.prisma.backgroundScreening.findMany({
+      where: { adjusterId },
+    });
+    const eligibility = assignmentEligibility({
+      adjusterStatus: adjuster.status,
+      licenseVerifiedAt: adjuster.licenseVerifiedAt,
+      competency,
+      screeningComplete: screeningStanding(screenings, adjuster.adjustingSince).complete,
+      employmentType: adjuster.employmentType,
+      licensedMode,
+    });
+    if (!eligibility.allowed) {
+      throw new BadRequestException(eligibility.reason);
+    }
+    // PD 11.2(b): rotation is monitored, never blocked — a hard rule would
+    // regularly force the less qualified adjuster onto a claim.
+    if (claim.insurerTenantId) {
+      const recent = await this.prisma.claim.findMany({
+        where: { insurerTenantId: claim.insurerTenantId, adjusterId: { not: null }, id: { not: claimId } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { adjusterId: true },
+      });
+      const rotation = rotationAdvisory(recent.map(c => c.adjusterId), adjusterId);
+      if (rotation) eligibility.advisories.push(rotation);
+    }
+
+    if (eligibility.advisories.length) {
+      this.logger.warn(
+        `Assignment advisories for adjuster ${adjusterId} on claim ${claimId}: ` +
+          eligibility.advisories.join('; ')
+      );
+    }
+
+    // PD 10.3 / 12.1(d): screen the standing declarations against this claim's
+    // parties. A matched, unresolved conflict blocks in EVERY mode — this is a
+    // conflict the firm has on record, and assigning through it is a choice
+    // 12.1(d) does not offer. The screen result is audited either way, so
+    // "clear" is distinguishable from "never screened".
+    const declarations = await this.prisma.conflictDeclaration.findMany({
+      where: { adjusterId, resolvedAt: null },
+    });
+    const screening = screenConflicts(declarations, {
+      insurerTenantId: claim.insurerTenantId ?? null,
+      workshopName: claim.workshopName ?? null,
+    });
+    if (!screening.clear) {
+      this.logger.warn(
+        `COI block: adjuster ${adjusterId} on claim ${claimId} — ` +
+          screening.matches.map(m => m.partyName).join(', ')
+      );
+      throw new BadRequestException(conflictRefusalReason(screening.matches));
+    }
+
     const updatedClaim = await this.prisma.claim.update({
       where: { id: claimId },
       data: {
@@ -472,9 +819,21 @@ export class ClaimsService {
       {
         adjusterId,
         adjusterName: adjuster.user.fullName,
+        // Advisories are part of the record: when registration turns these into
+        // hard gates, the firm can show how long it operated clean before.
+        ...(eligibility.advisories.length ? { eligibilityAdvisories: eligibility.advisories } : {}),
+        coiScreen: { declarationsScreened: screening.screened, conflicts: 0 },
       },
-      tenantContext
+      tenantContext,
+      {
+        oldValues: { adjusterId: claim.adjusterId ?? null, status: claim.status },
+        newValues: { adjusterId, status: 'ASSIGNED' },
+      }
     );
+
+    // Assignment sets the claim to ASSIGNED directly rather than through
+    // updateStatus, so the clocks for that status are applied here too.
+    await this.applySlaTransition(claimId, ClaimStatus.ASSIGNED, claim.tenantId);
 
     this.logger.log(`Adjuster ${adjuster.user.fullName} assigned to claim ${claim.claimNumber}`);
 
@@ -508,6 +867,190 @@ export class ClaimsService {
   }
 
   /**
+   * Return the evidence checklist for a claim: required document types for
+   * the claim's category (from EvidenceRequirement config), each annotated
+   * with whether the claimant has uploaded one yet.
+   *
+   * Resolution order for requirements (most specific wins for a documentType):
+   *   1. Tenant-specific + subtype-specific
+   *   2. Tenant-specific + subtype-generic (travelClaimType IS NULL)
+   *   3. Global + subtype-specific
+   *   4. Global + subtype-generic
+   *
+   * Subtype scoping matters for TRAVEL: each travel claim type has its own
+   * checklist, so a flight-delay claim must not be asked for a Property
+   * Irregularity Report. Rows with travelClaimType IS NULL apply to every
+   * subtype of that category.
+   */
+  /**
+   * Recompute evidence completeness and, on the transition to complete, set
+   * `documentsCompleteAt` and start the FINAL_REPORT clock — CSP para 10.13
+   * runs the fourteen-working-day non-motor window from *complete documents*,
+   * and until this event
+   * existed the clock could only anchor on REPORT_PENDING as a proxy.
+   *
+   * Set-once: a later upload does not move an anchor already set, and a
+   * deletion does not unset it — the documents *were* complete, and the clock
+   * that started from that fact stays honest.
+   */
+  async refreshDocumentsComplete(claimId: string): Promise<boolean> {
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
+    if (!claim || claim.documentsCompleteAt) return Boolean(claim?.documentsCompleteAt);
+
+    const checklist = await this.getEvidenceChecklist(claimId);
+    const mandatory = checklist.filter(item => item.isMandatory);
+    const complete = mandatory.length > 0 && mandatory.every(item => item.uploaded.length > 0);
+    if (!complete) return false;
+
+    const completeAt = new Date();
+    await this.prisma.claim.update({
+      where: { id: claimId },
+      data: { documentsCompleteAt: completeAt },
+    });
+    await this.createAuditTrail(claimId, 'DOCUMENTS_COMPLETE', {
+      mandatoryTypes: mandatory.map(item => item.documentType),
+    });
+    // The CSP anchor: idempotent, so REPORT_PENDING's later start is a no-op.
+    await this.sla.startQuietly(claimId, SlaStage.FINAL_REPORT, claim.tenantId);
+    this.logger.log(`Claim ${claim.claimNumber}: mandatory evidence complete; final-report clock anchored`);
+    return true;
+  }
+
+  /**
+   * Arrange the assessment, and tell the claimant.
+   *
+   * The router has decided *how* a claim is examined since 6 Aug; nothing set
+   * *when*. `scheduledAssessmentTime` was read in three places and written by
+   * nobody, so the firm's diary was empty and a property claimant learned an
+   * adjuster was coming when one arrived at the door.
+   *
+   * Notifying is the point of the endpoint, not a side effect: an appointment
+   * nobody told the claimant about is not an appointment. It is enqueued after
+   * the write and never throws — a mail failure must not lose the booking.
+   */
+  async scheduleAssessment(
+    id: string,
+    when: Date,
+    tenantContext: TenantContext
+  ) {
+    const claim = await this.prisma.claim.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        claimNumber: true,
+        tenantId: true,
+        assessmentMode: true,
+        incidentLocation: true,
+        status: true,
+        claimant: { select: { fullName: true, email: true } },
+        adjuster: { select: { user: { select: { fullName: true } } } },
+      },
+    });
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('This claim does not belong to your organisation');
+    }
+
+    if (Number.isNaN(when.getTime())) {
+      throw new BadRequestException('An appointment needs a valid date and time.');
+    }
+    if (when.getTime() < Date.now()) {
+      // A booking in the past is a data-entry slip every time, and it would
+      // send the claimant a message about a visit that has already not happened.
+      throw new BadRequestException('An appointment cannot be arranged in the past.');
+    }
+    if (claim.assessmentMode === 'DESK_REVIEW' || claim.assessmentMode === 'EXPERT_REFERRAL') {
+      throw new BadRequestException(
+        `A ${claim.assessmentMode.toLowerCase().replace('_', ' ')} has no appointment to arrange.`
+      );
+    }
+
+    const updated = await this.prisma.claim.update({
+      where: { id },
+      data: { scheduledAssessmentTime: when, status: 'SCHEDULED', updatedAt: new Date() },
+    });
+
+    await this.createAuditTrail(id, 'ASSESSMENT_SCHEDULED', {
+      scheduledFor: when.toISOString(),
+      mode: claim.assessmentMode,
+    }, tenantContext);
+
+    const location = claim.incidentLocation as { address?: string; city?: string } | null;
+    await this.notifications.enqueue({
+      tenantId: claim.tenantId!,
+      template: 'claim.assessment-scheduled',
+      recipient: claim.claimant?.email ?? undefined,
+      entityType: 'CLAIM',
+      entityId: id,
+      message: render('claim.assessment-scheduled', {
+        claimNumber: claim.claimNumber,
+        claimantName: claim.claimant?.fullName ?? undefined,
+        when,
+        mode: claim.assessmentMode === 'SITE_VISIT' ? 'SITE_VISIT' : 'VIDEO',
+        address: location?.address
+          ? [location.address, location.city].filter(Boolean).join(', ')
+          : undefined,
+        adjusterName: claim.adjuster?.user?.fullName ?? undefined,
+      }),
+    });
+
+    return updated;
+  }
+
+  async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {
+    const claim = await this.findOne(id, tenantContext);
+
+    // The travel subtype lives on the TravelClaim sub-table, not on Claim.
+    const travelClaim =
+      claim.category === ClaimCategory.TRAVEL
+        ? await this.prisma.travelClaim.findUnique({
+            where: { claimId: id },
+            select: { travelClaimType: true },
+          })
+        : null;
+    const subtype = travelClaim?.travelClaimType ?? null;
+
+    // Match rows for this subtype plus the subtype-generic rows. Shared with
+    // the assessment router's completeness check — the two must never again
+    // answer "which documents apply?" differently.
+    const subtypeFilter = evidenceSubtypeFilter(subtype);
+
+    const [tenantReqs, globalReqs, uploadedDocs] = await Promise.all([
+      claim.tenantId
+        ? this.prisma.evidenceRequirement.findMany({
+            where: { tenantId: claim.tenantId, category: claim.category, ...subtypeFilter },
+            orderBy: { sortOrder: 'asc' },
+          })
+        : Promise.resolve([]),
+      this.prisma.evidenceRequirement.findMany({
+        where: { tenantId: null, category: claim.category, ...subtypeFilter },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.document.findMany({
+        where: { claimId: id },
+        select: { id: true, type: true, filename: true, createdAt: true },
+      }),
+    ]);
+
+    const requirements = resolveRequirements(globalReqs, tenantReqs);
+
+    const uploadedByType = new Map<string, typeof uploadedDocs>();
+    for (const d of uploadedDocs) {
+      if (!uploadedByType.has(d.type)) uploadedByType.set(d.type, []);
+      uploadedByType.get(d.type)!.push(d);
+    }
+
+    return requirements.map(req => ({
+      documentType: req.documentType,
+      isMandatory: req.isMandatory,
+      description: req.description,
+      sortOrder: req.sortOrder,
+      uploaded: uploadedByType.get(req.documentType) ?? [],
+      satisfied: (uploadedByType.get(req.documentType)?.length ?? 0) > 0,
+    }));
+  }
+
+  /**
    * Get claim timeline/audit trail with tenant validation
    */
   async getTimeline(id: string, tenantContext?: TenantContext) {
@@ -526,7 +1069,18 @@ export class ClaimsService {
   }
 
   /**
-   * Get tenant-wide claim statistics
+   * Tenant-wide operating figures for the dashboard.
+   *
+   * Every number here is dated by the event it claims to describe. The first
+   * version dated completions by `updatedAt`, so editing a claim settled in
+   * March counted it as completed this week — and a bulk data fix moved the
+   * headline figure to 832 out of a 980-claim book. A turnaround number that
+   * moves when nothing turned around is worse than no number.
+   *
+   * Cases, claims and sessions are counted separately and labelled as
+   * themselves. They are different things at different stages of the funnel:
+   * a case is intake the firm may still reject, a claim is the engagement, a
+   * session is one appointment inside it.
    */
   async getStats(tenantContext: TenantContext, createdById?: string) {
     let where = this.tenantService.buildClaimTenantFilter(tenantContext);
@@ -537,6 +1091,14 @@ export class ClaimsService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Month-to-date is only comparable with the same span of the month before.
+    const sameDayLastMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes()
+    );
     const startOfWeek = new Date(now.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
     startOfWeek.setHours(0, 0, 0, 0);
 
@@ -546,8 +1108,9 @@ export class ClaimsService {
       completedThisMonth,
       completedLastMonth,
       completedThisWeek,
-      upcomingScheduled,
+      upcomingAssessments,
       totalAssigned,
+      totalCases,
       statusBreakdown,
     ] = await Promise.all([
       // Total claims in tenant
@@ -563,50 +1126,38 @@ export class ClaimsService {
         },
       }),
 
-      // Completed this month in tenant
+      // Closed this month. `closedAt`, not `updatedAt` — the file closing is
+      // the event, and it is also what PD 12.8 retention runs from.
+      this.prisma.claim.count({ where: { ...where, closedAt: { gte: startOfMonth } } }),
+
+      // Closed by this day of last month, for the change figure beside it.
+      // Comparing six days against a whole month reported a 92% collapse in a
+      // book that was performing normally — the sort of number that starts a
+      // conversation about the wrong thing.
       this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfMonth },
-        },
+        where: { ...where, closedAt: { gte: startOfLastMonth, lt: sameDayLastMonth } },
       }),
 
-      // Completed last month in tenant
+      // Closed this week.
+      this.prisma.claim.count({ where: { ...where, closedAt: { gte: startOfWeek } } }),
+
+      // The adjuster's diary: claims with an appointment still to come. Counted
+      // the same way the panel beside it lists them, so the two cannot
+      // disagree — the card used to say "19" while the list said "none".
+      //
+      // Claims rather than video rooms on purpose. A site visit is an
+      // appointment too, and a diary that only showed video calls would hide
+      // every property inspection the router now schedules.
       this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: {
-            gte: startOfLastMonth,
-            lt: startOfMonth,
-          },
-        },
+        where: { ...where, scheduledAssessmentTime: { gte: now } },
       }),
 
-      // Completed this week in tenant
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          status: { in: ['APPROVED', 'REJECTED', 'CLOSED'] },
-          updatedAt: { gte: startOfWeek },
-        },
-      }),
+      this.prisma.claim.count({ where: { ...where, status: 'ASSIGNED' } }),
 
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          scheduledAssessmentTime: {
-            gte: now,
-          },
-        },
-      }),
-
-      this.prisma.claim.count({
-        where: {
-          ...where,
-          status: 'ASSIGNED',
-        },
+      // Intake volume. A case is not a claim: the firm vets it first and may
+      // reject it, so the two counts differ and are shown as themselves.
+      this.prisma.case.count({
+        where: tenantContext?.tenantId ? { tenantId: tenantContext.tenantId } : {},
       }),
 
       // Status breakdown
@@ -629,11 +1180,14 @@ export class ClaimsService {
       stats: {
         totalClaims,
         activeClaims,
+        totalCases,
         completedThisMonth,
         completedThisWeek,
-        averagePerDay: completedThisWeek / 7,
-        inProgress: upcomingScheduled, // Upcoming scheduled sessions
-        totalAssigned, // Total assigned claims
+        // Over the days of the month elapsed, not a fixed seven. Dividing a
+        // part-month by a whole week understates the rate every time.
+        averagePerDay: parseFloat((completedThisMonth / now.getDate()).toFixed(1)),
+        inProgress: upcomingAssessments,
+        totalAssigned,
         monthlyChange: parseFloat(monthlyChange.toFixed(1)),
       },
       statusBreakdown: statusBreakdown.reduce(
@@ -692,13 +1246,51 @@ export class ClaimsService {
   }
 
   /**
+   * JSON-safe value for audit storage (Prisma Json rejects Date/Decimal).
+   */
+  private auditSafe(value: unknown): any {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object' && 'toNumber' in (value as any)) {
+      return Number((value as any).toNumber());
+    }
+    if (Array.isArray(value)) return value.map(v => this.auditSafe(v));
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, this.auditSafe(v)])
+      );
+    }
+    return value;
+  }
+
+  /**
+   * Before/after pair scoped to the fields actually being changed. Recording
+   * the whole row would bloat the trail and copy PII; recording only the
+   * changed fields is what makes the trail evidential (PD 12.8, FSA s.146).
+   */
+  private diffFields(before: Record<string, any>, after: Record<string, any>) {
+    const oldValues: Record<string, any> = {};
+    const newValues: Record<string, any> = {};
+    for (const key of Object.keys(after)) {
+      if (after[key] === undefined) continue;
+      const from = this.auditSafe(before?.[key]);
+      const to = this.auditSafe(after[key]);
+      if (JSON.stringify(from) === JSON.stringify(to)) continue; // unchanged
+      oldValues[key] = from;
+      newValues[key] = to;
+    }
+    return { oldValues, newValues };
+  }
+
+  /**
    * Create audit trail entry
    */
   private async createAuditTrail(
     entityId: string,
     action: string,
     metadata: any,
-    tenantContext?: TenantContext
+    tenantContext?: TenantContext,
+    changes?: { oldValues?: Record<string, any>; newValues?: Record<string, any> }
   ) {
     let actorType:
       | 'CLAIMANT'
@@ -715,41 +1307,50 @@ export class ClaimsService {
       actorType = tenantContext.userRole as typeof actorType;
     }
 
-    await this.prisma.auditTrail.create({
-      data: {
-        entityId,
-        entityType: 'CLAIM',
-        action,
-        metadata,
-        tenantId: tenantContext?.tenantId,
-        userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
-        actorId: tenantContext?.userId,
-        actorType,
-      },
+    // Shared fail-soft writer: the bespoke create failed requests over its own
+    // bookkeeping (seen live on the document soft-delete) and produced rows in
+    // service-local shapes. One writer, one shape, failures loud but non-fatal.
+    await this.audit.record({
+      entityId,
+      entityType: 'CLAIM',
+      action,
+      metadata,
+      oldValues: changes?.oldValues,
+      newValues: changes?.newValues,
+      tenantId: tenantContext?.tenantId,
+      userId: tenantContext?.userRole === 'CLAIMANT' ? null : tenantContext?.userId,
+      actorId: tenantContext?.userId,
+      actorType,
     });
+
   }
 
   /**
    * Validate status transitions
    */
-  private validateStatusTransition(currentStatus: string, newStatus: string) {
-    const validTransitions: Record<string, string[]> = {
-      SUBMITTED: ['ASSIGNED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      ASSIGNED: ['SCHEDULED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      SCHEDULED: ['IN_ASSESSMENT', 'CANCELLED', 'CLOSED', 'APPROVED', 'REJECTED'],
-      IN_ASSESSMENT: ['REPORT_PENDING', 'ESCALATED_SIU', 'CLOSED', 'APPROVED', 'REJECTED'],
-      REPORT_PENDING: ['APPROVED', 'REJECTED', 'ESCALATED_SIU'],
-      APPROVED: ['CLOSED'],
-      REJECTED: ['CLOSED'],
-      ESCALATED_SIU: ['APPROVED', 'REJECTED', 'CLOSED'],
-      CANCELLED: ['CLOSED'],
-    };
-
-    const allowed = validTransitions[currentStatus] || [];
+  private validateStatusTransition(currentStatus: ClaimStatus, newStatus: ClaimStatus) {
+    // No `|| []` fallback: every ClaimStatus now has an explicit entry, so a
+    // missing key is a compile error rather than a silent "no transitions
+    // allowed" that reads identically to a deliberately terminal state.
+    const allowed = CLAIM_STATUS_TRANSITIONS[currentStatus];
     if (!allowed.includes(newStatus)) {
       throw new BadRequestException(
         `Invalid status transition from ${currentStatus} to ${newStatus}`
       );
     }
   }
+
+  /**
+   * Encrypted NRIC snapshot for a claim: ciphertext plus a clear tail for
+   * display. No blind index here — lookups go through the Claimant record,
+   * which is the identity authority.
+   */
+  private async encryptedNric(nric: string | null | undefined) {
+    if (!nric) return {};
+    return {
+      nricEncrypted: await this.encryption.encrypt(nric),
+      nricLast4: this.encryption.lastDigits(nric),
+    };
+  }
+
 }
