@@ -245,10 +245,11 @@ white-label engagement, with a multi-panel ambition thereafter. *Verbal, non-bin
 yet contracted — treat as a qualified prospect, not secured revenue. Client name withheld in
 this copy pending their consent to be named.*
 
-**Platform.** A working multi-tenant claims system, not a prototype: 221 commits across seven
-services (NestJS/Fastify APIs, React adjuster portal, claimant PWA) on PostgreSQL via Prisma,
-with 59 data models and 590 automated tests running in CI. *(Figures re-verified against the
-repository 10 August 2026.)*
+**Platform.** A working multi-tenant claims system, not a prototype: more than 220 commits
+across seven services (NestJS/Fastify APIs, React adjuster portal, claimant PWA) on PostgreSQL
+via Prisma, with 59 data models and 590 automated tests running in CI. *(Figures re-verified
+against the repository 10 August 2026; the commit figure is a floor, not a count, because an
+exact number is stale by the commit that records it.)*
 
 | Capability | State |
 | --- | --- |
