@@ -60,6 +60,7 @@ legacy and must not be extended; see "Standing decisions" below and
 | Hume AI        | Voice/face prosody analysis | **integrated** (risk-analyzer) |
 | MediaPipe / Parselmouth | Attention & voice-stress analysis | **integrated** (risk-analyzer) |
 | Google Gemini  | Document extraction + intake answer normalisation (fallback only, off by default) | **integrated — offshore; see caveat below** |
+| n8n OCR webhook | Claim-document OCR extraction | **integrated — offshore, hosting unverified; disabled unless `OCR_WEBHOOK_URL` is set** |
 | Supabase Storage | Document storage   | **integrated**, with local-filesystem fallback |
 | Innov8tif/CTOS | eKYC (OCR, Liveness) | not integrated |
 | Clearspeed     | Voice risk analysis  | not integrated |

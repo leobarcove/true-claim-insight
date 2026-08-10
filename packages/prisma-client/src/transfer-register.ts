@@ -30,6 +30,16 @@ export const OFFSHORE_PROVIDERS = {
     country: 'United States',
     what: 'Claim document and recording storage (when the cloud path is active)',
   },
+  TELEGRAM: {
+    provider: 'TELEGRAM',
+    country: 'United Arab Emirates (distributed infrastructure)',
+    what: 'Claimant conversation content during Telegram intake — every message both ways, retained in Telegram’s own message history beyond our retention sweep',
+  },
+  N8N_OCR_WEBHOOK: {
+    provider: 'N8N_OCR_WEBHOOK',
+    country: 'Unverified — third-party n8n workflow, hosting region not established',
+    what: 'Claim document images (MyKad, receipts, damage photos) posted for OCR extraction when OCR_WEBHOOK_URL is configured',
+  },
 } as const;
 
 export type OffshoreProviderKey = keyof typeof OFFSHORE_PROVIDERS;

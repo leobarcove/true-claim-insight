@@ -40,9 +40,13 @@ describe('video-service client — internal authentication', () => {
     expect(headers['X-User-Role']).toBe('ADJUSTER');
   });
 
-  it('omits the key rather than sending an empty one when unconfigured', () => {
-    // An empty string would be a *wrong* key rather than a missing one, and
-    // the downstream log would say "invalid" where "not configured" is true.
-    expect(build(undefined)).not.toHaveProperty('x-internal-key');
+  it('refuses to build headers at all when the key is unconfigured', () => {
+    // Fail closed at the caller, not only at the receiver. This test once
+    // asserted the opposite — that an unconfigured gateway merely *omitted*
+    // the key and sent the request anyway, leaving video-service's guard as
+    // the only thing standing (10 Aug 2026 audit, finding 7). A misconfigured
+    // gateway must refuse loudly with "not configured", never send a
+    // credential-less request that logs downstream as "invalid".
+    expect(() => build(undefined)).toThrow(/INTERNAL_API_KEY is not configured/);
   });
 });

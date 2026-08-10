@@ -49,8 +49,15 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
       this.logger.log('TELEGRAM_BOT_TOKEN not set — Telegram channel is off.');
       return;
     }
-    if (this.config.get('TELEGRAM_POLLING_ENABLED') === 'false') {
-      this.logger.log('Telegram polling disabled by configuration.');
+    // Opt-in, not opt-out. Long-polling is a fleet-wide singleton — two
+    // pollers on one token each receive half the updates, which presents as
+    // claimants being intermittently ignored rather than as an outage. A
+    // default of "on wherever a token is present" is how a second environment
+    // silently halves the first; every default fails closed (§4.2).
+    if (this.config.get('TELEGRAM_POLLING_ENABLED') !== 'true') {
+      this.logger.log(
+        'Telegram polling is off — set TELEGRAM_POLLING_ENABLED=true on exactly one instance per bot token.'
+      );
       return;
     }
     this.running = true;

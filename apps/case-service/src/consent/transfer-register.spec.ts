@@ -10,15 +10,20 @@ import { OFFSHORE_PROVIDERS, TransferRegister } from '@tci/prisma-client';
  */
 describe('Cross-border transfer register (s.129)', () => {
   it('declares every offshore provider the platform integrates', () => {
-    // From the integration table in CLAUDE.md: Daily.co, Hume, Gemini and
-    // Supabase all process claimant data outside Malaysia. If an integration is
-    // added without a registry entry, its transfers cannot be recorded — update
-    // this list and the registry together.
+    // From the integration table in CLAUDE.md: Daily.co, Hume, Gemini,
+    // Supabase and Telegram all process claimant data outside Malaysia, and
+    // the OCR webhook does whenever OCR_WEBHOOK_URL is set. If an integration
+    // is added without a registry entry, its transfers cannot be recorded —
+    // update this list and the registry together. (Telegram and the OCR
+    // webhook were exactly that omission until 10 Aug 2026: integrated,
+    // offshore, and unrecordable because this very test pinned them out.)
     expect(Object.keys(OFFSHORE_PROVIDERS).sort()).toEqual([
       'DAILY_CO',
       'GOOGLE_GEMINI',
       'HUME_AI',
+      'N8N_OCR_WEBHOOK',
       'SUPABASE',
+      'TELEGRAM',
     ]);
   });
 

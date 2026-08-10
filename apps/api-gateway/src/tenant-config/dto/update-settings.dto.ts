@@ -37,23 +37,24 @@ export const CALENDAR_STATES = [
   'Sarawak',
 ] as const;
 
-@ValidatorConstraint({ name: 'fastTrackLimits', async: false })
-class FastTrackLimitsRule implements ValidatorConstraintInterface {
+@ValidatorConstraint({ name: 'categoryAmountMap', async: false })
+class CategoryAmountMapRule implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
     if (value === undefined || value === null) return true;
     if (typeof value !== 'object' || Array.isArray(value)) return false;
 
     return Object.entries(value as Record<string, unknown>).every(([category, limit]) => {
       if (!Object.values(ClaimCategory).includes(category as ClaimCategory)) return false;
-      // Decimal string, not a number: this ceiling decides whether a claim is
-      // examined by desk review or by interview, and a float is the wrong
-      // representation for a threshold that turns on equality at the boundary.
+      // Decimal string, not a number: these thresholds decide whether a claim
+      // is examined by desk review, by interview or in person, and a float is
+      // the wrong representation for a value that turns on equality at the
+      // boundary.
       return typeof limit === 'string' && /^\d+(\.\d{1,2})?$/.test(limit);
     });
   }
 
-  defaultMessage(): string {
-    return 'fastTrackLimits must map a valid claim category to a decimal amount string, e.g. { "TRAVEL": "5000.00" }';
+  defaultMessage(args?: { property?: string }): string {
+    return `${args?.property ?? 'the map'} must map a valid claim category to a decimal amount string, e.g. { "TRAVEL": "5000.00" }`;
   }
 }
 
@@ -94,8 +95,28 @@ export class UpdateTenantSettingsDto {
   @ApiPropertyOptional({ example: { TRAVEL: '5000.00', FIRE: '50000.00' } })
   @IsOptional()
   @IsObject()
-  @Validate(FastTrackLimitsRule)
+  @Validate(CategoryAmountMapRule)
   fastTrackLimits?: Record<string, string>;
+
+  /**
+   * Categories the firm attends in person (§2.4 inspection policy). Absent
+   * means no automatic site visit — the mirror of the fast track, and until
+   * 10 Aug 2026 these two fields were readable by the router but writable by
+   * nobody: they appeared in neither this DTO nor the read response, so the
+   * seed was the only author of a spending decision.
+   */
+  @ApiPropertyOptional({ enum: ClaimCategory, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(ClaimCategory, { each: true })
+  siteVisitCategories?: ClaimCategory[];
+
+  /** Per-category amount at or above which a listed category is inspected. */
+  @ApiPropertyOptional({ example: { FIRE: '20000.00', FLOOD: '20000.00' } })
+  @IsOptional()
+  @IsObject()
+  @Validate(CategoryAmountMapRule)
+  siteVisitThresholds?: Record<string, string>;
 
   /** Display name on white-labelled claimant-facing output. */
   @ApiPropertyOptional()

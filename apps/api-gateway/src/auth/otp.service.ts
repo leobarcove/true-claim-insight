@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../config/prisma.service';
 
 @Injectable()
@@ -11,10 +12,14 @@ export class OtpService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Generate a 6-digit OTP code
+   * Generate a 6-digit OTP code.
+   *
+   * CSPRNG, not Math.random(): an OTP is a credential, and a predictable
+   * generator turns "we texted you a secret" into "we texted you a guessable
+   * number".
    */
   private generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return randomInt(100000, 1000000).toString();
   }
 
   /**
@@ -114,11 +119,11 @@ export class OtpService {
       data: { attempts: { increment: 1 } },
     });
 
-    // TEMP: dev code
-    const isDevCode = code === '123123';
-
-    // Verify code
-    if (!isDevCode && otpRecord.code !== code) {
+    // No dev bypass. A hardcoded universal code ('123123', removed 10 Aug
+    // 2026) verified any phone number in any environment, including staging.
+    // Local development does not need one: the real code is printed to the
+    // console above until an SMS transport exists.
+    if (otpRecord.code !== code) {
       const remainingAttempts = this.MAX_ATTEMPTS - otpRecord.attempts - 1;
       throw new BadRequestException(`Invalid code. ${remainingAttempts} attempts remaining.`);
     }

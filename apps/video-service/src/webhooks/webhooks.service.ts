@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ConsentGateService } from '../common/consent/consent-gate.service';
 import { PrismaService } from '../config/prisma.service';
 
 @Injectable()
@@ -9,7 +10,8 @@ export class WebhooksService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly consentGate: ConsentGateService
   ) {
     this.riskEngineUrl = this.configService.get<string>('RISK_ENGINE_URL', 'http://localhost:3004');
   }
@@ -60,6 +62,35 @@ export class WebhooksService {
       return;
     }
 
+    // Consent gate before anything is sent for analysis: the recording reaches
+    // Hume via risk-engine, and voice/facial data is sensitive personal data
+    // going offshore. Same gate as the uploads path — a webhook must not be
+    // the one entrance that skips it. A refusal is not a failure: the
+    // recording is kept and analysis stays PENDING until a basis exists.
+    const claim = await this.prisma.claim.findUnique({
+      where: { id: session.claimId },
+      select: { claimantId: true },
+    });
+    try {
+      await this.consentGate.assertBiometricConsent(claim?.claimantId, session.claimId);
+    } catch (error) {
+      this.logger.warn(
+        `Analysis not triggered for session ${sessionId}: ${(error as Error).message}`
+      );
+      return;
+    }
+
+    // The internal key is required, not optional: risk-engine fails closed
+    // without it, and calling anyway would mark the session FAILED for what is
+    // actually a local misconfiguration.
+    const internalKey = this.configService.get<string>('INTERNAL_API_KEY');
+    if (!internalKey) {
+      this.logger.error(
+        `INTERNAL_API_KEY is not configured — cannot call risk-engine for session ${sessionId}`
+      );
+      return;
+    }
+
     // Update status to PROCESSING
     await this.prisma.session.update({
       where: { id: sessionId },
@@ -71,8 +102,10 @@ export class WebhooksService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-internal-key': internalKey,
           'x-tenant-id': session.tenantId || 'system',
-          'x-user-id': 'system',
+          'x-user-id': 'service:video-service',
+          'x-user-role': 'SUPER_ADMIN',
         },
         body: JSON.stringify({ sessionId }),
       });

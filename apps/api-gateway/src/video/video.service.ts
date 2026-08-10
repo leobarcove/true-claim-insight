@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ConfigService } from '@nestjs/config';
@@ -279,7 +279,16 @@ export class VideoService {
   private buildHeaders(tenantId?: string, userId?: string, userRole?: string): Record<string, string> {
     const headers: Record<string, string> = {};
     const internalKey = this.configService.get<string>('INTERNAL_API_KEY');
-    if (internalKey) headers['x-internal-key'] = internalKey;
+    if (!internalKey) {
+      // Fail closed here, not at the receiver. Attaching the key only when
+      // present meant a misconfigured gateway sent credential-less requests
+      // and relied wholly on video-service refusing them — the caller-side
+      // half of the A1 posture was missing (found 10 Aug 2026).
+      throw new ServiceUnavailableException(
+        'INTERNAL_API_KEY is not configured — refusing to call video-service without it'
+      );
+    }
+    headers['x-internal-key'] = internalKey;
     if (tenantId) headers['X-Tenant-Id'] = tenantId;
     if (userId) headers['X-User-Id'] = userId;
     if (userRole) headers['X-User-Role'] = userRole;
