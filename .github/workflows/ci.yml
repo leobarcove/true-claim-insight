@@ -19,9 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose. package.json's "packageManager":
+      # "pnpm@9.15.0" is the single source of truth, and action-setup@v4
+      # ERRORS OUT when both are given — which it had been doing on every run
+      # since the workflow was written, so no job ever reached a test.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -55,9 +57,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose. package.json's "packageManager":
+      # "pnpm@9.15.0" is the single source of truth, and action-setup@v4
+      # ERRORS OUT when both are given — which it had been doing on every run
+      # since the workflow was written, so no job ever reached a test.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
