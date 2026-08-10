@@ -32,12 +32,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # shared-types is consumed as compiled output by the other packages.
-      - name: Build shared packages
-        run: pnpm --filter @tci/shared-types build
-
       - name: Generate Prisma client
         run: pnpm --filter @tci/prisma-client exec prisma generate
+
+      # ALL four workspace packages, not just shared-types. The apps import
+      # @tci/crypto and @tci/prisma-client as compiled output (AuditWriter,
+      # SENSITIVE_FIELD_OMIT, TransferRegister, EncryptionService), and a
+      # developer machine always has their dist/ lying around from an earlier
+      # build — so this gap was invisible locally and fatal on a fresh
+      # checkout. Prisma generate runs first: prisma-client's own tsc needs
+      # the generated types.
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
 
       - name: Typecheck all apps
         run: |
