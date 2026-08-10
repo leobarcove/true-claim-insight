@@ -104,6 +104,13 @@ Supplementary claims: 5 working days (CSP). Steps 6, 13, 17 are firm-side SLA cl
 
 ### 2.2 Step → module map (existing vs planned)
 
+> **Dated snapshot — the 30 July 2026 baseline, kept deliberately.** The
+> "Existing" column describes the codebase as this plan was written; §8 records
+> what has shipped since (reports, billing, the SLA engine, the router,
+> notifications and more are now built). Read this table for what the plan
+> started from, never for what exists today — the 10 Aug audit found readers
+> doing exactly that.
+
 | # | Step | Existing (build on) | Planned (fills gap) |
 |---|---|---|---|
 | 1–2 | FNOL via agent / insurer / broker / white-label | **Cases** intake: transition table, channels, policy matching, bank details | WhatsApp channel (Ph 5); AGENT/BROKER/INSURER_FORWARDED channel tags so all four channels land in one Case funnel |
@@ -333,7 +340,7 @@ Conventions respected: kebab-case, British English, polymorphic subtables off `C
 | Entity | Change |
 |---|---|
 | `Tenant` | Promote `settings` to structured config: fee scales, SlaPolicy set, fast-track thresholds, assessment-mode matrix, branding, LLM provider policy, `licensedMode` |
-| `Claim` | Add assignmentId, assessmentMode, `documentsCompleteAt` (starts 10-day clock), reserve amount; server-side status transition guards (adopt the Cases transition-table pattern) |
+| `Claim` | Add assignmentId, assessmentMode, `documentsCompleteAt` (starts the final-report clock — **14** working days non-motor per CSP 10.13; this cell said 10, the motor figure, until 10 Aug 2026), reserve amount; server-side status transition guards (adopt the Cases transition-table pattern). *Shipped note: the Assignment link landed as a relation held on the Assignment side, not an `assignmentId` column* |
 | `Adjuster` | Wire dead fields; employmentType (FULL_TIME required in licensed mode); seniority via AdjusterCompetency; capacity config replaces hardcoded 10 |
 | `AuditTrail` | oldValues/newValues; append-only (revoke UPDATE/DELETE at DB level); implement interceptor TODO; extend coverage to cases/policies/video/auth |
 | `EvidenceRequirement` | Fix travel bug (claims.service.ts:534); in-scope requirement sets (fire/flood/burglary/HOH: bomba report, police report, purchase invoices, valuation/quantum surveyor docs, inventory list, Group PA: employer confirmation + medical certificate); emit checklist-complete event |
@@ -445,7 +452,7 @@ Split into three shippable stages (§9.3–9.4): ~13–19 engineer-weeks in tota
 **Exit:** every mutation audited with before/after; consent is a record, not a badge; no single-firm assumption remains in the code; the firm can answer "who did what, when, and on whose instruction" — the questions an insurer's vendor assessment asks. PDPA rows and s.146 readiness green.
 
 #### Phase 1b — "Promise and keep turnaround" (~4–6 weeks) · unblocks the value proposition
-- SLA engine: BullMQ on existing Redis, Malaysian working-day calendar (national + state holidays), clocks for ACK ≤1 day / preliminary / final ≤10 days from `documentsCompleteAt`, pause-on-awaiting-documents, breach escalation — **prod**
+- SLA engine: BullMQ on existing Redis, Malaysian working-day calendar (national + state holidays), clocks for ACK ≤1 day / preliminary / final ≤**14** days from `documentsCompleteAt` (CSP 10.13 non-motor — this line carried the 10-day motor figure until 10 Aug 2026; the build was corrected to 14 on 6 Aug, `c5b2127`), pause-on-awaiting-documents, breach escalation — **prod**
 - Assessment-mode router + small-claims fast-track profile (per-tenant thresholds), **enforcing the §2.5 COGS ceiling** — a `DESK_REVIEW` claim must be structurally incapable of invoking video, biometric or per-minute vendors without a recorded escalation trigger — **prod**
 - Fix travel checklist bug (`claims.service.ts:534`); in-scope evidence requirement sets; checklist-complete event that starts the final-report clock — **prod**
 
@@ -509,12 +516,12 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 ## 6. Key risks & open decisions
 
-1. **Uncommitted travel work** on `feature/non-motor-claims-ui`, no remote — commit + push first (Phase 0 item 1).
+1. ~~**Uncommitted travel work** on `feature/non-motor-claims-ui`, no remote — commit + push first (Phase 0 item 1).~~ *Resolved in Phase 0 (`e404fc5`): committed and pushed, and the branch has had a remote since.*
 2. **Dual Case/Claim lifecycle** — keep the boundary (Case = pre-claim intake funnel; Claim = regulated engagement); adopt Case's transition-table pattern for Claim guards (Ph 1); revisit only if Assignment-without-Case proves awkward.
 3. **Offshore LLM** — local (Ollama) default for PII docs from Ph 2; Gemini only under explicit per-tenant policy for non-PII. Until then: do not demo AI extraction on real claimant documents. **Widened for demo, 6 Aug 2026 — recorded, not silently assumed.** Gemini now also normalises free text a claimant types during conversational intake (`CHAT_LLM_NORMALISER_ENABLED`, off by default). That is claimant personal data, so it sits outside the "non-PII only" line above. It is bounded three ways: fallback-only, so a deterministic parse is always tried first and most turns never reach a model; the model returns a *value*, never a decision, and that value must pass the same `validateAnswer` as a typed answer; and every call writes a `TransferRecord` with `lawfulBasis: null`, because none is established. **Conditions before this faces a real claimant:** a lawful basis (consent-gate or the in-country model), counsel's view on FSA 2013 secrecy (item 15), and the AI-scope assessment (item 16). Synthetic and internal-tester data only until then.
 4. **Merimen dependency** — market's appointment rail but access is insurer-sponsored/uncertain. Assignment is channel-agnostic from Ph 2 (manual/email works); Merimen is an ingestion adapter (Ph 5), never a schema assumption. **Ask MSIG early which channel they will use.**
-5. **Single-firm assumption — fix it now, it is a foundations item.** `resolveCaseTenant` currently resolves a claimant self-serve case to "the first `ADJUSTING_FIRM` tenant found". That is the one place the codebase assumes a single adjusting firm, and it is the cheapest possible moment to remove it. The rest of the platform is already genuinely multi-tenant (`Tenant` with ADJUSTING_FIRM/INSURER types, `UserTenant` m:n, tenant-scoped queries and redaction), so the fix is small: resolve the **handling firm explicitly** — from the insurer's panel configuration, the intake channel, or the `Assignment` — instead of picking one arbitrarily. **Phase 1a.** Doing this does not build a SaaS product; it merely stops foreclosing Path B (§6.14) for the sake of one convenience shortcut.
-6. **No queue/scheduler exists** — BullMQ on existing Redis, one shared worker pattern; decide first because Phases 1–2 all sit on it.
+5. **Single-firm assumption — fix it now, it is a foundations item.** *(Resolved in Phase 1a, see §8: `resolveCaseTenant` now refuses that shortcut — insurer panel nomination falls back to `HANDLING_FIRM_TENANT_ID`, and no configuration refuses intake rather than guessing. The text below stands as the reasoning of record.)* `resolveCaseTenant` previously resolved a claimant self-serve case to "the first `ADJUSTING_FIRM` tenant found". That is the one place the codebase assumes a single adjusting firm, and it is the cheapest possible moment to remove it. The rest of the platform is already genuinely multi-tenant (`Tenant` with ADJUSTING_FIRM/INSURER types, `UserTenant` m:n, tenant-scoped queries and redaction), so the fix is small: resolve the **handling firm explicitly** — from the insurer's panel configuration, the intake channel, or the `Assignment` — instead of picking one arbitrarily. **Phase 1a.** Doing this does not build a SaaS product; it merely stops foreclosing Path B (§6.14) for the sake of one convenience shortcut.
+6. ~~**No queue/scheduler exists**~~ — *decided 30 July and built (see §8): BullMQ on the existing Redis under the `tci:` prefix, with the `sla`, `notifications`, `retention` and later `ingestion` queues live.* The original note stands as the reasoning: one shared worker pattern, decided first because Phases 1–2 all sit on it.
 7. **Regulatory interpretation** — have the Order's registration requirements and PD applicability confirmed by counsel before the licensed-mode flip (Ph 5). The system makes the facts demonstrable; it is not the legal opinion.
 8. **MSIG is verbal** — keep Phases 1–2 client-agnostic; MSIG-specific behaviour lives only in tenant config.
 9. **Stub debt** (signature provider, rainfall data, doc validation) — each scheduled; nothing ships "prod" while its stub is load-bearing for that phase's exit criteria.
@@ -1353,6 +1360,16 @@ code actually does or running it — none from re-reading this document's own
 assertions. And the counterpart lesson is new: a progress record that must be
 updated "after every completed item" drifted within one working day of the rule
 being ignored. The audit is the correction, not the substitute.
+
+**Addendum, same day — the third pass.** The first passes audited §3 and §8,
+the sections that *claim* current state. A sweep over the planning sections
+found the same staleness class hiding in planning tense: §6 items 1, 5 and 6
+still describing resolved risks as live, the §2.2 baseline table presenting
+30 July as today, and two surviving 10-day final-report references (§4.2 and
+the Phase 1b spec) that the 6 Aug 14-day correction (`c5b2127`) never swept —
+it corrected the code, the seed and §3.2, and missed the two sentences that
+had specified the wrong number in the first place. All annotated rather than
+rewritten, so the reasoning stays and the tense no longer lies.
 
 ---
 
