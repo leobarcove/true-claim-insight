@@ -134,7 +134,4 @@ export class CreateClaimDto {
   @IsOptional()
   policeReportDate?: string;
 
-  @ApiPropertyOptional({ example: false })
-  @IsOptional()
-  isPdpaCompliant?: boolean;
 }

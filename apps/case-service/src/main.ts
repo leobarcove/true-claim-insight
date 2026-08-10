@@ -6,6 +6,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { join } from 'path';
+import { mkdirSync } from 'fs';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -39,6 +42,18 @@ async function bootstrap() {
       fileSize: 50 * 1024 * 1024, // 50MB
     },
   });
+
+  // Local filesystem fallback: when SUPABASE_URL is empty, StorageService writes
+  // to apps/case-service/storage/ and we serve it under /storage/* for the UI.
+  if (!configService.get<string>('supabase.url')) {
+    const localStorageRoot = join(process.cwd(), 'storage');
+    mkdirSync(localStorageRoot, { recursive: true });
+    await app.register(fastifyStatic, {
+      root: localStorageRoot,
+      prefix: '/storage/',
+      decorateReply: false,
+    });
+  }
 
   // API versioning
   app.enableVersioning({

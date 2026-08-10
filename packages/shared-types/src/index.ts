@@ -36,6 +36,161 @@ export enum ClaimType {
   WINDSCREEN = 'WINDSCREEN',
 }
 
+// Coarse-grained category drives polymorphic sub-tables, evidence checklists,
+// and which FraudSignalProvider plugins apply.
+export enum ClaimCategory {
+  MOTOR = 'MOTOR',
+  FLOOD = 'FLOOD',
+  FIRE = 'FIRE',
+  LIGHTNING = 'LIGHTNING',
+  BURGLARY = 'BURGLARY',
+  PERSONAL_ACCIDENT = 'PERSONAL_ACCIDENT',
+  HOH = 'HOH',
+  TRAVEL = 'TRAVEL',
+  OTHER = 'OTHER',
+}
+
+// Travel-specific subtype — only meaningful when category=TRAVEL.
+// Exactly the five categories agreed for the MSIG TPA scope.
+export enum TravelClaimType {
+  FLIGHT_DELAY = 'FLIGHT_DELAY',
+  LUGGAGE_DAMAGE = 'LUGGAGE_DAMAGE',
+  LUGGAGE_LOSS = 'LUGGAGE_LOSS',
+  TRIP_CANCELLATION = 'TRIP_CANCELLATION',
+  MEDICAL = 'MEDICAL',
+}
+
+// Pre-claim intake (Case) lifecycle. Cases are TPA-internal vetting records;
+// conversion creates the insurer-facing Claim.
+export enum CaseStatus {
+  DRAFT = 'DRAFT',
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  INFO_REQUESTED = 'INFO_REQUESTED',
+  REFERRED_TO_EXPERT = 'REFERRED_TO_EXPERT',
+  CONVERTED = 'CONVERTED',
+  REJECTED = 'REJECTED',
+  ABANDONED = 'ABANDONED',
+}
+
+export enum CaseChannel {
+  WEB_CHAT = 'WEB_CHAT',
+  STAFF = 'STAFF',
+  EMAIL = 'EMAIL',
+  WHATSAPP = 'WHATSAPP',
+  TELEGRAM = 'TELEGRAM',
+  MESSENGER = 'MESSENGER',
+}
+
+export enum CaseInitiator {
+  CLAIMANT = 'CLAIMANT',
+  STAFF = 'STAFF',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum PolicySource {
+  MANUAL = 'MANUAL',
+  API = 'API',
+  FILE_FEED = 'FILE_FEED',
+}
+
+export enum DocumentValidationStatus {
+  PENDING = 'PENDING',
+  PASSED = 'PASSED',
+  FLAGGED = 'FLAGGED',
+  SKIPPED = 'SKIPPED',
+}
+
+export enum FloodSource {
+  RIVER_OVERFLOW = 'RIVER_OVERFLOW',
+  FLASH_FLOOD = 'FLASH_FLOOD',
+  COASTAL_SURGE = 'COASTAL_SURGE',
+  DRAINAGE_FAILURE = 'DRAINAGE_FAILURE',
+  RAINWATER_INGRESS = 'RAINWATER_INGRESS',
+  DAM_RELEASE = 'DAM_RELEASE',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export enum PropertyType {
+  RESIDENTIAL = 'RESIDENTIAL',
+  COMMERCIAL = 'COMMERCIAL',
+  INDUSTRIAL = 'INDUSTRIAL',
+  MIXED_USE = 'MIXED_USE',
+  AGRICULTURAL = 'AGRICULTURAL',
+  OTHER = 'OTHER',
+}
+
+export enum FraudCategory {
+  PARAMETRIC = 'PARAMETRIC',
+  IDENTITY = 'IDENTITY',
+  BEHAVIOURAL = 'BEHAVIOURAL',
+  DOCUMENT = 'DOCUMENT',
+  NETWORK = 'NETWORK',
+  ENVIRONMENTAL = 'ENVIRONMENTAL',
+  INVENTORY = 'INVENTORY',
+  POLICY = 'POLICY',
+}
+
+export enum SignalSeverity {
+  INFO = 'INFO',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export interface FloodClaim {
+  id: string;
+  claimId: string;
+  tenantId?: string;
+  incidentStart: string;
+  incidentEnd?: string;
+  waterDepthCm?: number;
+  durationHours?: number;
+  source?: FloodSource;
+  propertyType?: PropertyType;
+  propertyFloorLevel?: number;
+  propertyElevationMeters?: number;
+  postcode?: string;
+  state?: string;
+  parametricTriggerMet?: boolean;
+  metMalaysiaEventRef?: string;
+  jpsGaugeId?: string;
+  buildingDamageRm?: number | string;
+  contentsDamageRm?: number | string;
+  vehicleDamageRm?: number | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FraudSignal {
+  id: string;
+  claimId: string;
+  provider: string;
+  category: FraudCategory;
+  signalType: string;
+  severity: SignalSeverity;
+  confidence: number;
+  message?: string;
+  rawData?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface EvidenceRequirementResolved {
+  documentType: string;
+  isMandatory: boolean;
+  description?: string;
+  sortOrder: number;
+  satisfied: boolean;
+  uploaded: Array<{
+    id: string;
+    type: string;
+    filename: string;
+    createdAt: string;
+  }>;
+}
+
 export enum ClaimStatus {
   SUBMITTED = 'SUBMITTED',
   DOCUMENTS_PENDING = 'DOCUMENTS_PENDING',
@@ -50,6 +205,91 @@ export enum ClaimStatus {
   ESCALATED_SIU = 'ESCALATED_SIU',
   CLOSED = 'CLOSED',
 }
+
+/**
+ * How a claim is examined. Chosen by the assessment-mode router from value,
+ * complexity and fraud signal (MASTER_PLAN §2.4) — the per-claim COGS ceiling
+ * in §2.5 depends on most claims landing on DESK_REVIEW.
+ *
+ * Mirrors the `AssessmentMode` enum in the Prisma schema.
+ */
+export enum AssessmentMode {
+  /** Documents only, no interview — the fast track. */
+  DESK_REVIEW = 'DESK_REVIEW',
+  VIDEO = 'VIDEO',
+  SITE_VISIT = 'SITE_VISIT',
+  EXPERT_REFERRAL = 'EXPERT_REFERRAL',
+}
+
+export const ASSESSMENT_MODE_LABELS: Record<AssessmentMode, string> = {
+  [AssessmentMode.DESK_REVIEW]: 'Desk review',
+  [AssessmentMode.VIDEO]: 'Video assessment',
+  [AssessmentMode.SITE_VISIT]: 'Site visit',
+  [AssessmentMode.EXPERT_REFERRAL]: 'Expert referral',
+};
+
+/**
+ * Turnaround ceilings from the Claims Settlement Practices policy document
+ * (BNM/RH/PD 029-69, issued 1 July 2024).
+ *
+ * **Paragraph 10.13** — a registered adjuster or in-house assessor must
+ * complete the adjusting work or claims assessment within **10 working days
+ * for motor** or **14 working days for non-motor**, measured from receipt of
+ * *all completed and relevant documents*, except in exceptional circumstances.
+ * Para 10.14 gives those: complex lines (marine cargo, aviation, transit, CAR,
+ * liability, engineering, business interruption), motor damage needing longer
+ * to inspect, catastrophe and large-event losses, and suspected fraud.
+ *
+ * Two things worth stating because they are easy to get wrong:
+ *
+ *  - **The measurement runs from complete documents**, not from assignment.
+ *    That is why `documentsCompleteAt` exists and anchors the clock.
+ *  - **The PD binds time, not method.** It contemplates "desktop assessment
+ *    and/or field inspection" (footnote 2) and qualifies field inspection as
+ *    "where applicable" (footnote 22). Nothing requires a video interview, on
+ *    any line — which is what makes the desk-review fast track in
+ *    MASTER_PLAN §2.4 a compliant choice rather than a shortcut.
+ *
+ * These are ceilings. A firm may promise an insurer something tighter, and a
+ * per-tenant `SlaPolicy` row is how it does so — but the regulatory line is
+ * recorded here so a breach report can distinguish missing our own promise
+ * from missing the regulation.
+ */
+export const CSP_ADJUSTING_WORKING_DAYS = {
+  /** Out of scope for this platform (MASTER_PLAN §1); recorded for completeness. */
+  MOTOR: 10,
+  NON_MOTOR: 14,
+} as const;
+
+/** Supplementary claim response, CSP para 10.17 / 11.x. */
+export const CSP_SUPPLEMENTARY_WORKING_DAYS = 5;
+
+/**
+ * Statuses from which an adjuster may still recommend approval or rejection.
+ *
+ * The authority is `CLAIM_STATUS_TRANSITIONS` in case-service, which is typed
+ * against the Prisma enum so a schema change breaks its compile. This is the
+ * same fact stated where the portal can read it, and
+ * `claim-transitions.spec.ts` asserts the two agree for every status — a
+ * duplicated rule with a test holding it is honest; a duplicated rule without
+ * one is how the button below came to offer an action the server refuses.
+ *
+ * `CLOSED` is absent deliberately. A closed claim reopens only through the
+ * supplementary endpoint, which starts the CSP five-working-day clock; letting
+ * Approve reach it would decide a claim without that clock ever running.
+ */
+export const CLAIM_DECIDABLE_STATUSES: ClaimStatus[] = [
+  ClaimStatus.SUBMITTED,
+  ClaimStatus.ASSIGNED,
+  ClaimStatus.SCHEDULED,
+  ClaimStatus.IN_ASSESSMENT,
+  ClaimStatus.REPORT_PENDING,
+  ClaimStatus.ESCALATED_SIU,
+];
+
+/** Whether Approve/Reject is a transition the server will accept. */
+export const canDecideClaim = (status: ClaimStatus | string): boolean =>
+  (CLAIM_DECIDABLE_STATUSES as string[]).includes(status);
 
 export enum Priority {
   LOW = 'LOW',
@@ -92,6 +332,26 @@ export enum DocumentType {
   POLICY_DOCUMENT = 'POLICY_DOCUMENT',
   NRIC = 'NRIC',
   OTHER_DOCUMENT = 'OTHER_DOCUMENT',
+  CLAIMANT_SCREENSHOT = 'CLAIMANT_SCREENSHOT',
+  // Non-motor evidence types
+  BOMBA_REPORT = 'BOMBA_REPORT',
+  FLOOD_AUTHORITY_REPORT = 'FLOOD_AUTHORITY_REPORT',
+  WEATHER_REPORT = 'WEATHER_REPORT',
+  UTILITY_SURGE_REPORT = 'UTILITY_SURGE_REPORT',
+  INVENTORY_LIST = 'INVENTORY_LIST',
+  PROOF_OF_OWNERSHIP = 'PROOF_OF_OWNERSHIP',
+  MEDICAL_REPORT = 'MEDICAL_REPORT',
+  PROPERTY_TITLE = 'PROPERTY_TITLE',
+  UTILITY_BILL = 'UTILITY_BILL',
+  // Travel evidence types
+  BOARDING_PASS = 'BOARDING_PASS',
+  FLIGHT_ITINERARY = 'FLIGHT_ITINERARY',
+  AIRLINE_DELAY_CONFIRMATION = 'AIRLINE_DELAY_CONFIRMATION',
+  PROPERTY_IRREGULARITY_REPORT = 'PROPERTY_IRREGULARITY_REPORT',
+  BAGGAGE_TAG = 'BAGGAGE_TAG',
+  PASSPORT = 'PASSPORT',
+  OVERSEAS_MEDICAL_BILL = 'OVERSEAS_MEDICAL_BILL',
+  TRAVEL_BOOKING_INVOICE = 'TRAVEL_BOOKING_INVOICE',
 }
 
 export enum DocumentStatus {
@@ -126,11 +386,30 @@ export enum UserRole {
 
 // ============ INTERFACES ============
 
+/**
+ * Where the loss happened.
+ *
+ * Property lines carry a Malaysian risk address. Travel lines cannot: the loss
+ * happened at a destination abroad, which is why `address` is optional and why
+ * `describeLocation` exists — reading `.address` directly rendered an empty
+ * Location field on every travel claim.
+ */
 export interface Location {
-  address: string;
+  address?: string;
+  /** Travel: the place the loss occurred. */
+  destination?: string;
+  country?: string;
   latitude?: number;
   longitude?: number;
 }
+
+/** The location in one line, whichever shape it arrived in. */
+export const describeLocation = (location?: Location | null): string | null => {
+  if (!location) return null;
+  if (location.address) return location.address;
+  const parts = [location.destination, location.country].filter(Boolean);
+  return parts.length ? Array.from(new Set(parts)).join(', ') : null;
+};
 
 export interface Tenant {
   id: string;
@@ -180,8 +459,21 @@ export interface Claim {
   adjusterId?: string;
   insurerTenantId?: string;
   policyNumber: string;
-  claimType: ClaimType;
+  category: ClaimCategory;
+  /** Motor only. Non-motor lines carry their subtype on the sub-table. */
+  claimType?: ClaimType | null;
   status: ClaimStatus;
+  /**
+   * How this claim is being examined, chosen by the assessment-mode router
+   * (MASTER_PLAN §2.4). Null on claims created before routing existed.
+   */
+  assessmentMode?: AssessmentMode | null;
+  // Non-motor polymorphic sub-table (populated when category=FLOOD)
+  floodClaim?: FloodClaim | null;
+  /** Populated when category=TRAVEL; the list query selects the subtype only. */
+  travelClaim?: { travelClaimType?: TravelClaimType | null } | null;
+  // Fraud signals attached to this claim, newest/highest severity first
+  fraudSignals?: FraudSignal[];
   incidentDate: string;
   incidentTime?: string;
   incidentLocation: Location;
@@ -204,7 +496,17 @@ export interface Claim {
   sstAmount?: number;
   excessAmount?: number;
   approvedAmount?: number;
-  isPdpaCompliant: boolean;
+  /**
+   * Consent standing, read from the consent records.
+   *
+   * Replaces `isPdpaCompliant`, a boolean the client set and nothing verified —
+   * a claimant ticking a box is not evidence that a lawful basis exists.
+   */
+  consent?: {
+    claimProcessing: boolean;
+    biometric: boolean;
+    crossBorder: boolean;
+  };
   slaDeadline?: string;
   complianceNotes?: Record<string, any>;
   siuInvestigatorId?: string;
@@ -368,3 +670,73 @@ export interface RiskAssessmentResponse {
   };
   analysedAt: string;
 }
+
+// Travel claim intake flow definitions (Case guided intake).
+// NOTE: explicit named re-exports (not `export *`) — the frontends consume the
+// compiled CJS dist, and the CJS→ESM named-export lexer cannot see through
+// tsc's __exportStar helper, but does detect explicit re-export bindings.
+export {
+  CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_LABELS,
+  NOTIFY_WITHIN_HOURS,
+  CLAIM_WINDOW_DAYS,
+  getFlow,
+  getStep,
+  evaluateNext,
+  branchInputSteps,
+  ruleTargets,
+  resolveNextStep,
+  validateAnswer,
+  computeDeadlineFlags,
+  computeCompleteness,
+} from './case-flows';
+export type {
+  AnswerType,
+  AnswerValidation,
+  AnswerValue,
+  CaseAnswers,
+  CaseFlow,
+  CompletenessSummary,
+  DeadlineFlags,
+  DocumentTypeLike,
+  FlowStep,
+  NextCondition,
+  NextRule,
+  TravelClaimTypeLike,
+} from './case-flows';
+
+// Channel capability descriptors — what each platform can physically render,
+// so one flow definition degrades across web chat, Telegram, WhatsApp and
+// Messenger instead of forking into one flow per channel.
+export {
+  CHANNEL_CAPABILITIES,
+  parseTextDate,
+  renderChoices,
+  summariseAnswers,
+  supportsAnswerType,
+} from './channel-capabilities';
+export type {
+  ChannelCapabilities,
+  ChoiceRendering,
+  ChoiceStyle,
+  RenderableChoice,
+} from './channel-capabilities';
+
+// Publish gate — what a FlowDefinition must satisfy before claimants walk it.
+export { canPublish, systemStepIds, validateFlowDefinition } from './flow-publish-gate';
+export type { FlowProblem, FlowProblemKind } from './flow-publish-gate';
+
+// Flow overlay resolution — merges canonical structure with per-channel and
+// per-locale wording. Same explicit-re-export rule as above.
+export {
+  resolveFlow,
+  resolveStep,
+  uncoveredSteps,
+  validateOverlay,
+} from './flow-resolver';
+export type {
+  FlowOverlayRecord,
+  FlowOverrides,
+  OverlayProblem,
+  StepOverride,
+} from './flow-resolver';

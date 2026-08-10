@@ -45,7 +45,11 @@ export class HealthController {
       () =>
         this.disk.checkStorage('disk', {
           path: '/',
-          thresholdPercent: 0.1,
+          // Report DOWN above 90% used. This was 0.1 — DOWN above 10% used —
+          // which made /health return 503 on any realistically-filled disk;
+          // it went unnoticed until the staging stack's container healthcheck
+          // actually consumed the endpoint.
+          thresholdPercent: 0.9,
         }),
     ]);
   }

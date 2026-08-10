@@ -12,6 +12,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { claimTypeLabel } from '@/lib/claim-label';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
@@ -62,6 +63,15 @@ const typeLabels: Record<string, string> = {
   WINDSCREEN: 'Windscreen',
 };
 
+/**
+ * What kind of claim this is, in one cell.
+ *
+ * `Claim.claimType` is a MOTOR field and is null for everything in scope, so
+ * reading it alone rendered an em dash on every row — the known §8 defect,
+ * which only became conspicuous at volume. The real subtype for travel lives
+ * on the TravelClaim child; property lines have no subtype at all and are
+ * named by their category.
+ */
 export function ClaimsListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -382,7 +392,7 @@ export function ClaimsListPage() {
                           {claim.claimant?.fullName || claim.claimantId}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          {typeLabels[claim.claimType] || claim.claimType}
+                          {claimTypeLabel(claim)}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant={statusConfig[claim.status]?.variant || 'secondary'}>
@@ -451,7 +461,7 @@ export function ClaimsListPage() {
                           <p className="font-medium">{claim.claimant?.fullName}</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <Badge variant="secondary" className="text-[10px]">
-                              {typeLabels[claim.claimType] || claim.claimType}
+                              {claimTypeLabel(claim)}
                             </Badge>
                           </p>
                         </div>

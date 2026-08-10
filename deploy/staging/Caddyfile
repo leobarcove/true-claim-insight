@@ -1,0 +1,46 @@
+# True Claim Insight — staging edge.
+#
+# The only container with published ports. TLS is automatic (Let's Encrypt)
+# when the *_HOST values are real DNS names; for local verification use
+# http:// addresses (e.g. http://adjuster.localhost) and no certificates are
+# attempted. Internal services are reachable only on the compose network.
+
+(app_common) {
+	encode gzip
+
+	# Everything under /api goes to the gateway — the frontends are built
+	# with VITE_API_URL=/api/v1, so API traffic is same-origin.
+	handle /api/* {
+		reverse_proxy api-gateway:3000
+	}
+
+	# Files written by the local-filesystem storage fallback. Each service
+	# serves its own /storage/* route; the edge gives each a distinct public
+	# path so the two cannot collide. handle_path strips the prefix, so
+	# /case-files/storage/x arrives at case-service as /storage/x — matching
+	# CASE_SERVICE_PUBLIC_URL=<origin>/case-files.
+	handle_path /case-files/* {
+		reverse_proxy case-service:3001
+	}
+	handle_path /risk-files/* {
+		reverse_proxy risk-engine:3004
+	}
+}
+
+{$ADJUSTER_HOST} {
+	import app_common
+	handle {
+		root * /srv/adjuster
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$CLAIMANT_HOST} {
+	import app_common
+	handle {
+		root * /srv/claimant
+		try_files {path} /index.html
+		file_server
+	}
+}

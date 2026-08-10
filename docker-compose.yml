@@ -24,7 +24,7 @@ services:
     image: redis:7.4-alpine
     container_name: tci-redis
     ports:
-      - '6380:6380'
+      - '6380:6379'
     volumes:
       - redis_data:/data
     healthcheck:

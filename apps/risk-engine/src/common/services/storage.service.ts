@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 
 @Injectable()
 export class StorageService {
@@ -7,12 +9,29 @@ export class StorageService {
   private readonly supabaseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly bucketName: string;
+  private readonly localStorageEnabled: boolean;
+  private readonly localStorageRoot: string;
+  private readonly localPublicBase: string;
 
   constructor(private readonly configService: ConfigService) {
     // These should be in your .env
     this.supabaseUrl = this.configService.get<string>('SUPABASE_URL') || '';
     this.serviceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') || '';
     this.bucketName = this.configService.get<string>('SUPABASE_BUCKET_NAME') || 'claims';
+    // Filesystem fallback (matches the case-service + risk-analyzer
+    // pattern). Activates when Supabase isn't configured — Trinity
+    // reports get written under apps/risk-engine/storage/ and served
+    // via /storage/* through @fastify/static (registered in main.ts).
+    this.localStorageEnabled = !this.supabaseUrl || !this.serviceRoleKey;
+    this.localStorageRoot = join(process.cwd(), 'storage');
+    this.localPublicBase =
+      this.configService.get<string>('RISK_ENGINE_PUBLIC_URL') || 'http://localhost:3004';
+
+    if (this.localStorageEnabled) {
+      this.logger.log(
+        `Supabase not configured; Trinity reports will land in ${this.localStorageRoot}`
+      );
+    }
   }
 
   async uploadFile(
@@ -21,14 +40,17 @@ export class StorageService {
     mimeType: string,
     path: string = 'intelligence-reports'
   ): Promise<string> {
-    if (!this.supabaseUrl || !this.serviceRoleKey) {
-      this.logger.error('Supabase configuration missing');
-      throw new Error('Storage service not configured');
-    }
-
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storagePath = `${path}/${timestamp}_${sanitizedFilename}`;
+
+    if (this.localStorageEnabled) {
+      const dest = join(this.localStorageRoot, this.bucketName, storagePath);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, fileBuffer);
+      this.logger.log(`(local) Trinity report saved to ${dest}`);
+      return storagePath;
+    }
 
     const baseUrl = this.supabaseUrl.replace(/\/$/, '');
     const url = `${baseUrl}/storage/v1/object/${this.bucketName}/${storagePath}`;
@@ -64,8 +86,9 @@ export class StorageService {
    * @param expiresIn Expiration time in seconds (default 1 hour)
    */
   async getSignedUrl(storagePath: string, expiresIn: number = 3600): Promise<string> {
-    if (!this.supabaseUrl || !this.serviceRoleKey) {
-      throw new Error('Storage service not configured');
+    if (this.localStorageEnabled) {
+      const base = this.localPublicBase.replace(/\/$/, '');
+      return `${base}/storage/${this.bucketName}/${storagePath}`;
     }
 
     const baseUrl = this.supabaseUrl.replace(/\/$/, '');

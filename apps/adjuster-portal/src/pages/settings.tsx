@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, Globe, Mail, Phone, Shield, Loader2 } from 'lucide-react';
+import { User, Lock, Globe, Mail, Phone, Shield, Loader2, Building2 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import {
   useDeleteAvatar,
 } from '@/hooks/use-user';
 import { useCurrentUser } from '@/hooks/use-auth';
+import { FirmConfiguration } from '@/components/settings/firm-configuration';
 import { useForm } from 'react-hook-form';
 import {
   Select,
@@ -201,9 +202,14 @@ export function SettingsPage() {
     }
   };
 
+  // Firm configuration is only meaningful to someone who can change it, and
+  // the controls alter how every claim in the organisation is handled.
+  const canConfigureFirm = user?.role === 'FIRM_ADMIN' || user?.role === 'SUPER_ADMIN';
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'security', label: 'Security', icon: Lock },
+    ...(canConfigureFirm ? [{ id: 'firm', label: 'Firm', icon: Building2 }] : []),
     { id: 'preferences', label: 'Preferences', icon: Globe },
   ];
 
@@ -468,6 +474,12 @@ export function SettingsPage() {
                     </Button>
                   </CardContent>
                 </Card>
+              </div>
+            )}
+
+            {activeTab === 'firm' && canConfigureFirm && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <FirmConfiguration />
               </div>
             )}
 

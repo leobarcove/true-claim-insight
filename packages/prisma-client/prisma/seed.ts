@@ -1,5 +1,39 @@
-import { PrismaClient, UserRole, TenantType, ClaimType, ClaimStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  TenantType,
+  ClaimType,
+  ClaimStatus,
+  ClaimCategory,
+  TravelClaimType,
+  DocumentType,
+  PolicySource,
+  FlowStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { CSP_ADJUSTING_WORKING_DAYS, CSP_SUPPLEMENTARY_WORKING_DAYS } from '@tci/shared-types';
+import {
+  CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_LABELS,
+  validateFlowDefinition,
+  type CaseFlow,
+} from '@tci/shared-types';
+import { EncryptionService, EnvKeyProvider } from '@tci/crypto';
+import { PrismaKeyStore } from '../src/key-store';
+
+/**
+ * Encryption for seeded personal data, using the same key custody as the
+ * services: master key from ENCRYPTION_MASTER_KEY, data keys wrapped in
+ * `encryption_keys`. The seed therefore also bootstraps key v1 on a fresh
+ * database, so the first service to boot adopts the existing key rather than
+ * racing to create one.
+ */
+async function buildEncryption(prisma: PrismaClient) {
+  const configLike = { get: (key: string) => process.env[key] } as never;
+  const service = new EncryptionService(new PrismaKeyStore(prisma), new EnvKeyProvider(configLike));
+  await service.onModuleInit();
+  return service;
+}
 
 const MALAYSIA_CARS: Record<string, string[]> = {
   Perodua: ['Myvi', 'Axia', 'Bezza', 'Alza', 'Aruz', 'Ativa', 'Traz'],
@@ -101,11 +135,82 @@ const MALAYSIA_CARS: Record<string, string[]> = {
 
 const prisma = new PrismaClient();
 
+/** `FLIGHT_DELAY` → `travel-flight-delay`. Stable across versions. */
+const flowKey = (travelClaimType: string) =>
+  `travel-${travelClaimType.toLowerCase().replace(/_/g, '-')}`;
+
+/**
+ * Publish the built-in travel flows as platform-default FlowDefinition rows.
+ *
+ * These are the same five flows `CASE_FLOWS` has always held, moved from code
+ * into data so a flow can be versioned, overlaid per channel and locale, and
+ * eventually edited without a deploy. Seeding them as `tenantId: null` makes
+ * them available to every tenant; a tenant that later needs its own wording
+ * adds an overlay, and one that needs its own structure gets its own row that
+ * shadows the default.
+ *
+ * Each flow goes through the publish gate first. A seed that writes a broken
+ * flow is worse than one that fails: it produces a conversation that dead-ends
+ * in production, and nothing about a stalled Case says which flow did it.
+ */
+async function seedFlowDefinitions(createdByUserId: string) {
+  let published = 0;
+
+  for (const [travelClaimType, flow] of Object.entries(CASE_FLOWS) as Array<
+    [string, CaseFlow]
+  >) {
+    // Passing the flow as its own reference is not a tautology: it checks that
+    // every step marked `system: true` is actually reachable from the entry,
+    // which a miswired branch can break.
+    const problems = validateFlowDefinition(flow, flow);
+    if (problems.length > 0) {
+      throw new Error(
+        `Flow ${travelClaimType} failed the publish gate:\n` +
+          problems.map(problem => `  - [${problem.kind}] ${problem.detail}`).join('\n')
+      );
+    }
+
+    const key = flowKey(travelClaimType);
+    const existing = await prisma.flowDefinition.findFirst({
+      where: { tenantId: null, key, version: 1 },
+    });
+
+    const payload = {
+      name: TRAVEL_CLAIM_TYPE_LABELS[travelClaimType as keyof typeof TRAVEL_CLAIM_TYPE_LABELS],
+      category: ClaimCategory.TRAVEL,
+      travelClaimType: travelClaimType as TravelClaimType,
+      entryStepId: flow.entryStepId,
+      steps: flow.steps as unknown as object,
+      status: FlowStatus.PUBLISHED,
+      publishedByUserId: createdByUserId,
+      publishedAt: new Date(),
+    };
+
+    if (existing) {
+      // Re-running the seed refreshes the built-ins in place. Safe because
+      // version 1 is ours; an author's edits live on a new version, which this
+      // never touches.
+      await prisma.flowDefinition.update({ where: { id: existing.id }, data: payload });
+    } else {
+      await prisma.flowDefinition.create({
+        data: { ...payload, tenantId: null, key, version: 1, createdByUserId },
+      });
+      published += 1;
+    }
+  }
+
+  console.log(
+    `🧭 Intake flows: ${Object.keys(CASE_FLOWS).length} published as platform defaults` +
+      ` (${published} new).`
+  );
+}
+
 async function main() {
   console.log('🌱 Seeding database with demo data...');
 
   const password = 'DemoPass123!';
   const hashedPassword = await bcrypt.hash(password, 12);
+  const encryption = await buildEncryption(prisma);
 
   // 1. Create Tenants
   const ALLIANZ_ID = 'd601d36d-2d41-471b-9d41-325091726a57';
@@ -350,7 +455,222 @@ async function main() {
     }
   }
 
+  // 7. TPA setup — MSIG insurer tenant + sample travel policies (MANUAL source,
+  // mirroring policy data keyed in from MSIG emails until API/scraper adapters ship)
+  const MSIG_ID = '5b1f6f3e-9d2a-4f7c-8a3b-1c9e7d5a2b40';
+  const msigTenant = await prisma.tenant.upsert({
+    where: { id: MSIG_ID },
+    update: {},
+    create: {
+      id: MSIG_ID,
+      name: 'MSIG Insurance (Malaysia) Bhd',
+      type: TenantType.INSURER,
+      settings: {},
+    },
+  });
+
+  // Insured NRICs go in encrypted, exactly as the application writes them, so
+  // demo data has the same shape as production and nobody is tempted to
+  // reintroduce a plaintext column to make the seed work.
+  const samplePolicies = [
+    {
+      policyNumber: 'MSIG-TRV-2026-0001',
+      insuredName: 'Kumar Claimant',
+      insuredNric: '880101-14-5555',
+      insuredPhone: '+60123456789',
+      planTier: 'TravelRight Plus Gold',
+      tripStartDate: new Date('2026-07-20'),
+      tripEndDate: new Date('2026-08-05'),
+      destination: 'Japan',
+    },
+    {
+      policyNumber: 'MSIG-TRV-2026-0002',
+      insuredName: 'Siti Aminah binti Rahman',
+      insuredNric: '920315-10-2244',
+      insuredPhone: '+60198765432',
+      planTier: 'TravelRight Plus Silver',
+      tripStartDate: new Date('2026-08-01'),
+      tripEndDate: new Date('2026-08-10'),
+      destination: 'United Kingdom',
+    },
+    {
+      policyNumber: 'MSIG-TRV-2026-0003',
+      insuredName: 'Tan Wei Ming',
+      insuredPhone: '+60171112222',
+      planTier: 'TravelRight Plus Platinum',
+      tripStartDate: new Date('2026-07-25'),
+      tripEndDate: new Date('2026-09-01'),
+      destination: 'Australia',
+    },
+  ];
+
+  for (const { insuredNric, ...policy } of samplePolicies) {
+    const encrypted = insuredNric
+      ? {
+          insuredNricEncrypted: await encryption.encrypt(insuredNric),
+          insuredNricLast4: encryption.lastDigits(insuredNric),
+        }
+      : {};
+
+    await prisma.policy.upsert({
+      where: {
+        tenantId_policyNumber: { tenantId: msigTenant.id, policyNumber: policy.policyNumber },
+      },
+      update: encrypted,
+      create: {
+        ...policy,
+        ...encrypted,
+        tenantId: msigTenant.id,
+        source: PolicySource.MANUAL,
+        coverageSnapshot: { currency: 'MYR', asSuppliedBy: 'MSIG email' },
+      },
+    });
+  }
+
+  console.log('🏢 MSIG tenant + sample travel policies created.');
+
+  // 8. Travel evidence requirements — global defaults (tenantId null), one
+  // checklist per travel claim subtype. Upsert-by-delete because the compound
+  // unique key contains nullable tenantId, which Prisma upsert cannot target.
+  const travelEvidence: Array<{
+    travelClaimType: TravelClaimType;
+    documentType: DocumentType;
+    isMandatory: boolean;
+    description: string;
+  }> = [
+    // Flight delay
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.AIRLINE_DELAY_CONFIRMATION, isMandatory: true, description: 'Airline letter or notice confirming the delay or cancellation' },
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.BOARDING_PASS, isMandatory: true, description: 'Boarding pass for the delayed flight' },
+    { travelClaimType: TravelClaimType.FLIGHT_DELAY, documentType: DocumentType.FLIGHT_ITINERARY, isMandatory: true, description: 'E-ticket or booking confirmation' },
+    // Luggage damage
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.PROPERTY_IRREGULARITY_REPORT, isMandatory: true, description: 'Property Irregularity Report (PIR) issued by the airline' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.BAGGAGE_TAG, isMandatory: true, description: 'Baggage tag for the affected luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.DAMAGE_PHOTO, isMandatory: true, description: 'Photographs of the damaged luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_DAMAGE, documentType: DocumentType.PROOF_OF_OWNERSHIP, isMandatory: false, description: 'Receipts or proof of purchase for the luggage' },
+    // Luggage loss
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.PROPERTY_IRREGULARITY_REPORT, isMandatory: true, description: 'Property Irregularity Report (PIR) issued by the airline' },
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.BAGGAGE_TAG, isMandatory: true, description: 'Baggage tag for the lost luggage' },
+    { travelClaimType: TravelClaimType.LUGGAGE_LOSS, documentType: DocumentType.PROOF_OF_OWNERSHIP, isMandatory: true, description: 'Receipts or proof of ownership for the contents claimed' },
+    // Trip cancellation
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.TRAVEL_BOOKING_INVOICE, isMandatory: true, description: 'Booking invoices and any cancellation or refund correspondence' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.FLIGHT_ITINERARY, isMandatory: true, description: 'E-ticket or booking confirmation for the cancelled trip' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.MEDICAL_REPORT, isMandatory: false, description: 'Medical report where cancellation is due to illness or death' },
+    // Medical (form + expert routing — never auto-assessed)
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.OVERSEAS_MEDICAL_BILL, isMandatory: true, description: 'Itemised overseas medical bills and receipts' },
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.MEDICAL_REPORT, isMandatory: true, description: 'Medical report or discharge summary from the treating hospital' },
+    { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.PASSPORT, isMandatory: true, description: 'Passport pages showing identity and travel dates' },
+  ];
+
+  await prisma.evidenceRequirement.deleteMany({
+    where: { tenantId: null, category: ClaimCategory.TRAVEL },
+  });
+  await prisma.evidenceRequirement.createMany({
+    data: travelEvidence.map((req, index) => ({
+      tenantId: null,
+      category: ClaimCategory.TRAVEL,
+      travelClaimType: req.travelClaimType,
+      documentType: req.documentType,
+      isMandatory: req.isMandatory,
+      description: req.description,
+      sortOrder: index,
+    })),
+  });
+
+  console.log('🧳 Travel evidence requirements seeded.');
+
+  // Platform-default SLA policies — the BNM CSP timelines. A panel insurer that
+  // negotiates different targets gets its own row with a tenantId, which
+  // overrides these without a code change.
+  //
+  // `monitorOnly` marks the insurer's own obligations: the firm measures them so
+  // it can evidence where a delay originated, but a breach there is not the
+  // firm's failing and must never escalate against it.
+  // calendarState drives both the weekend pattern and which state holidays
+  // apply. The firm operates from Kuala Lumpur; a panel insurer in a
+  // Friday–Saturday state would get its own policy rows.
+  const slaPolicies = [
+    { stage: 'ACK_TO_INSURER' as const, workingDays: 1, warnWorkingDaysBefore: 1 },
+    { stage: 'PRELIMINARY_REPORT' as const, workingDays: 7, warnWorkingDaysBefore: 2 },
+    // CSP para 10.13: 14 working days for non-motor, from receipt of complete
+    // documents. This book is non-motor (MASTER_PLAN §1) — motor's 10 is not a
+    // second row because the platform does not serve that line.
+    {
+      stage: 'FINAL_REPORT' as const,
+      workingDays: CSP_ADJUSTING_WORKING_DAYS.NON_MOTOR,
+      warnWorkingDaysBefore: 2,
+    },
+    { stage: 'SUPPLEMENTARY_CLAIM' as const, workingDays: CSP_SUPPLEMENTARY_WORKING_DAYS, warnWorkingDaysBefore: 1 },
+    { stage: 'INSURER_DECISION' as const, workingDays: 7, warnWorkingDaysBefore: 2, monitorOnly: true },
+    { stage: 'INSURER_PAYMENT' as const, workingDays: 14, warnWorkingDaysBefore: 3, monitorOnly: true },
+  ];
+
+  for (const policy of slaPolicies) {
+    const existing = await prisma.slaPolicy.findFirst({
+      where: { tenantId: null, stage: policy.stage },
+    });
+    const withCalendar = { ...policy, calendarState: 'KUALA_LUMPUR' };
+    if (existing) {
+      await prisma.slaPolicy.update({ where: { id: existing.id }, data: withCalendar });
+    } else {
+      await prisma.slaPolicy.create({ data: withCalendar });
+    }
+  }
+
+  console.log('⏱️  SLA policies seeded (CSP defaults, Kuala Lumpur calendar).');
+
+  // Approval authority (§4.3 A3). ADJUSTER is deliberately absent: an adjuster
+  // assesses and recommends, and does not decide the outcome of their own work.
+  // An absent row means no authority, not unlimited authority.
+  for (const tenantId of [adjusterTenant.id, insurerTenant.id]) {
+    for (const limit of [
+      { role: UserRole.FIRM_ADMIN, maxApprovalAmount: 50000 },
+      { role: UserRole.SUPER_ADMIN, maxApprovalAmount: null },
+    ]) {
+      const existing = await prisma.authorityLimit.findFirst({
+        where: { tenantId, role: limit.role, adjusterId: null, category: null },
+      });
+      if (existing) {
+        await prisma.authorityLimit.update({ where: { id: existing.id }, data: limit });
+      } else {
+        await prisma.authorityLimit.create({ data: { tenantId, ...limit } });
+      }
+    }
+  }
+
+  console.log('🔐 Authority limits seeded (adjusters cannot approve).');
+
+  // Competency for the demo adjuster: seven recognised years in TRAVEL, plus a
+  // start date old enough to clear the PD 12.3 supervision window — so demo
+  // flows exercise the real seniority path rather than the unknown-data default.
+  const demoAdjuster = await prisma.adjuster.findFirst({ where: { userId: adjusterUser.id } });
+  if (demoAdjuster) {
+    await prisma.adjuster.update({
+      where: { id: demoAdjuster.id },
+      data: { adjustingSince: new Date('2019-03-01') },
+    });
+    await prisma.adjusterCompetency.upsert({
+      where: { adjusterId_category: { adjusterId: demoAdjuster.id, category: ClaimCategory.TRAVEL } },
+      update: {},
+      create: {
+        adjusterId: demoAdjuster.id,
+        category: ClaimCategory.TRAVEL,
+        yearsInSubject: 7,
+        casesHandled: 180,
+        performanceSatisfactory: true,
+        seniorRecognisedAt: new Date('2025-01-15'),
+        seniorRecognisedByUserId: firmAdmin.id,
+      },
+    });
+    console.log('🎓 Demo adjuster competency seeded (senior in TRAVEL).');
+  }
+
+  await seedFlowDefinitions(superAdmin.id);
+
   console.log('✅ Seeding completed.');
+  console.log(
+    `   Handling firm (ADJUSTING_FIRM) tenant id: ${adjusterTenant.id}` +
+      ' — set HANDLING_FIRM_TENANT_ID to this value in the environment.'
+  );
 }
 
 main()

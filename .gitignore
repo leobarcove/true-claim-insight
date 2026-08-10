@@ -61,3 +61,20 @@ __pycache__/
 *.egg-info/
 .eggs/
 *.egg
+
+# Local-dev storage fallback (when SUPABASE_URL is unset)
+apps/risk-analyzer/storage/
+apps/case-service/storage/
+
+# Playwright MCP / browser test artifacts
+.playwright-mcp/
+test-results/
+playwright-report/
+
+# Manual screenshots / scratch
+screenshots/
+claim-detail-*.png
+*.test.png
+docker-compose.override.yml
+.gstack/
+deploy/staging/.env.staging

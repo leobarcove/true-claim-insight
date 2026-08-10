@@ -1,10 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
+import shutil
 import tempfile
 import os
 import asyncio
+from pathlib import Path
 
 from app.audio_analyzer import analyze_audio
 from app.video_analyzer import analyze_video
@@ -34,14 +37,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Singleton client
-hume_analyzer = HumeAnalyzer()
+# Local filesystem fallback when SUPABASE_URL is empty.
+LOCAL_STORAGE_ENABLED = not bool(config.SUPABASE_URL)
+LOCAL_STORAGE_ROOT = Path(__file__).resolve().parent.parent / "storage"
+LOCAL_STORAGE_PUBLIC_BASE = os.getenv("RISK_ANALYZER_PUBLIC_URL", "http://localhost:3005")
+if LOCAL_STORAGE_ENABLED:
+    LOCAL_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+    app.mount("/storage", StaticFiles(directory=str(LOCAL_STORAGE_ROOT)), name="storage")
+
+# Singleton client — None when HUME_API_KEY is not configured. The service
+# must still boot without it (an environment may deliberately carry no
+# offshore provider keys); only the Hume-backed endpoint refuses, with a
+# clear 503, instead of the whole analyzer crash-looping on import.
+hume_analyzer = HumeAnalyzer() if config.HUME_API_KEY else None
+if hume_analyzer is None:
+    print("Warning: HUME_API_KEY not configured — Hume analysis endpoints disabled")
 
 @app.on_event("startup")
 async def startup_event():
     """Connect to Hume AI Stream on startup."""
+    if hume_analyzer is None:
+        return
     try:
-        global hume_analyzer
         await hume_analyzer._connect()
     except Exception as e:
         print(f"Warning: Failed to connect to Hume on startup: {e}")
@@ -106,34 +123,41 @@ async def analyze_audio_endpoint(
             os.unlink(tmp_path)
 
 async def _upload_to_supabase(file_path: str, session_id: str, claim_id: str = "unknown", bucket_name: str = None) -> str:
-    """Upload file to Supabase Storage."""
+    """Upload file to Supabase Storage, or to local filesystem when SUPABASE_URL is empty."""
     if bucket_name is None:
         bucket_name = config.SUPABASE_BUCKET_NAME
 
     if not claim_id:
         claim_id = "unknown"
-    base_url = config.SUPABASE_URL.rstrip('/')
     timestamp = int(time.time())
     ext = os.path.splitext(file_path)[1].lower()
     file_name = f"{session_id}_{timestamp}{ext}"
     storage_path = f"document/{claim_id}/{file_name}"
-    
+
+    if LOCAL_STORAGE_ENABLED:
+        dest = LOCAL_STORAGE_ROOT / bucket_name / storage_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(file_path, dest)
+        print(f"[_upload_to_supabase] (local) saved to {dest}")
+        return storage_path
+
+    base_url = config.SUPABASE_URL.rstrip('/')
     url = f"{base_url}/storage/v1/object/{bucket_name}/{storage_path}"
     headers = {
         "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
         "x-upsert": "true",
         "Content-Type": "application/pdf" if ext == ".pdf" else "application/octet-stream"
     }
-    
+
     async with httpx.AsyncClient() as client:
         with open(file_path, 'rb') as f:
             file_content = f.read()
-            
+
         resp = await client.post(url, content=file_content, headers=headers)
         if not resp.is_success:
             print(f"[_upload_to_supabase] Upload failed: {resp.text}")
         resp.raise_for_status()
-            
+
     return storage_path
 
 
@@ -180,10 +204,13 @@ async def generate_consent_pdf_endpoint(request: GenerateConsentRequest):
             os.unlink(pdf_path)
 
 async def _get_signed_url(storage_path: str, bucket_name: str = None, expires_in: int = 31536000) -> str:
-    """Generate a signed URL for a private file in Supabase Storage."""
+    """Generate a signed URL for a private file in Supabase Storage (or a local URL in fallback mode)."""
     if bucket_name is None:
         bucket_name = config.SUPABASE_BUCKET_NAME
-        
+
+    if LOCAL_STORAGE_ENABLED:
+        return f"{LOCAL_STORAGE_PUBLIC_BASE.rstrip('/')}/storage/{bucket_name}/{storage_path}"
+
     base_url = config.SUPABASE_URL.rstrip('/')
     url = f"{base_url}/storage/v1/object/sign/{bucket_name}/{storage_path}"    
     headers = {
@@ -392,6 +419,11 @@ async def analyze_expression_endpoint(
 
     try:
         # Analyze using Hume
+        if hume_analyzer is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Hume analysis unavailable: HUME_API_KEY not configured",
+            )
         metrics = await hume_analyzer.analyze_video(tmp_path, has_audio=not noAudio)
         
         # Calculate risk score specifically for Hume metrics
@@ -404,6 +436,10 @@ async def analyze_expression_endpoint(
             metrics=metrics,
             details="Expression analysis complete using HumeAI."
         )
+    except HTTPException:
+        # Deliberate statuses (e.g. 503 when Hume is unconfigured) pass
+        # through instead of being flattened into a 500.
+        raise
     except Exception as e:
         print(f"[AnalyzeExpression] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

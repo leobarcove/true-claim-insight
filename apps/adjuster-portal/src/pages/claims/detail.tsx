@@ -61,6 +61,23 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { useLayout } from '@/components/layout';
+import {
+  AssessmentMode,
+  ASSESSMENT_MODE_LABELS,
+  canDecideClaim,
+  describeLocation,
+} from '@tci/shared-types';
+import { getCategoryConfig } from '@/lib/category-config';
+import { PropertyDetailsPanel } from '@/components/claims/non-motor/property-details-panel';
+import { EvidenceChecklistCard } from '@/components/claims/non-motor/evidence-checklist-card';
+import { QuantumWorksheetPanel } from '@/components/claims/quantum-worksheet';
+import { ReportPanel } from '@/components/claims/report-panel';
+import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-card';
+import { SlaPanel } from '@/components/claims/sla-panel';
+import { IdentityControl } from '@/components/claims/identity-control';
+import { ScheduleAssessment } from '@/components/claims/schedule-assessment';
+import { FeeNotePanel } from '@/components/claims/fee-note-panel';
+import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
 const statusConfig: Record<
   string,
@@ -217,7 +234,7 @@ export function ClaimDetailPage() {
   const { toast } = useToast();
   const { isMobile, currentWidth } = useLayout();
 
-  const { data: claim, isLoading } = useClaim(claimId || '');
+  const { data: claim, isLoading, refetch: refetchClaim } = useClaim(claimId || '');
   const updateStatus = useUpdateClaimStatus(claimId || '');
   const createVideoRoom = useCreateVideoRoom();
   const [magicLink, setMagicLink] = useState<string | null>(null);
@@ -295,12 +312,12 @@ export function ClaimDetailPage() {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
+          if (claim && canDecideClaim(claim.status) && canApprove) {
             handleUpdateStatus('APPROVED');
           }
         } else if (e.key === 'Backspace') {
           e.preventDefault();
-          if (claim?.status !== 'APPROVED' && claim?.status !== 'REJECTED' && canApprove) {
+          if (claim && canDecideClaim(claim.status) && canApprove) {
             handleUpdateStatus('REJECTED');
           }
         }
@@ -512,7 +529,7 @@ export function ClaimDetailPage() {
             )}
           </span>
         }
-        description={`${claim.claimant?.fullName || claim.claimantId} • ${convertToTitleCase(claim.claimType)}`}
+        description={`${claim.claimant?.fullName || claim.claimantId} • ${claim.category === 'MOTOR' ? convertToTitleCase(claim.claimType ?? 'Motor') : getCategoryConfig(claim.category).label}`}
       >
         <div className="flex items-center gap-3">
           {canApprove && (
@@ -521,11 +538,7 @@ export function ClaimDetailPage() {
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('APPROVED')}
-                disabled={
-                  claim.status === 'APPROVED' ||
-                  claim.status === 'REJECTED' ||
-                  updateStatus.isPending
-                }
+                disabled={!canDecideClaim(claim.status) || updateStatus.isPending}
               >
                 {updateStatus.isPending && updateStatus.variables === 'APPROVED' ? (
                   <div className="flex items-center gap-2">
@@ -557,11 +570,7 @@ export function ClaimDetailPage() {
                 size="sm"
                 className="h-10 px-4 flex-col items-center justify-center sm:min-w-[120px]"
                 onClick={() => handleUpdateStatus('REJECTED')}
-                disabled={
-                  claim.status === 'APPROVED' ||
-                  claim.status === 'REJECTED' ||
-                  updateStatus.isPending
-                }
+                disabled={!canDecideClaim(claim.status) || updateStatus.isPending}
               >
                 {updateStatus.isPending && updateStatus.variables === 'REJECTED' ? (
                   <div className="flex items-center gap-2">
@@ -616,9 +625,11 @@ export function ClaimDetailPage() {
                   </div>
                   <div className="flex items-start gap-3">
                     <div>
-                      <p className="text-xs font-medium">Location</p>
+                      <p className="text-xs font-medium">
+                        {claim.category === 'TRAVEL' ? 'Destination' : 'Location'}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {claim.incidentLocation.address}
+                        {describeLocation(claim.incidentLocation) ?? 'Not recorded'}
                       </p>
                     </div>
                   </div>
@@ -707,24 +718,28 @@ export function ClaimDetailPage() {
                           : 'Pending'}
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Repair Cost (Final)</p>
-                      <p className="text-xl font-bold text-muted-foreground">
-                        {claim.estimatedRepairCost
-                          ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
-                          : 'Pending'}
-                      </p>
-                    </div>
+                    {/* "Repair cost" is a motor idea. A bag is not repaired and a
+                        cancelled trip has nothing to repair; the assessed figure
+                        lives on the quantum worksheet, which is shown in full
+                        below. Only motor keeps this field. */}
+                    {claim.category === 'MOTOR' && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Repair Cost (Final)</p>
+                        <p className="text-xl font-bold text-muted-foreground">
+                          {claim.estimatedRepairCost
+                            ? `RM ${claim.estimatedRepairCost.toLocaleString()}`
+                            : 'Pending'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+                    {/* SST is charged on the firm's fee, not on the claim — it
+                        belongs on the fee note and is shown there. Printing an
+                        empty one here invited the reading that a claimant pays
+                        service tax on their own loss. */}
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">SST (Service Tax)</span>
-                      <span className="text-sm font-medium">
-                        {claim.sstAmount ? `RM ${claim.sstAmount.toLocaleString()}` : 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Excess/Deductible</span>
+                      <span className="text-sm text-muted-foreground">Policy excess</span>
                       <span className="text-sm font-medium">
                         {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'N/A'}
                       </span>
@@ -743,6 +758,16 @@ export function ClaimDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Quantum — sits beside the financials it produces, not in a
+                separate screen: the figure and the estimates it supersedes
+                should be read together. */}
+            {claimId && <QuantumWorksheetPanel claimId={claimId} />}
+
+            {/* The work product itself: written here, signed, then handed
+                back. It sits below quantum because the figure is what the
+                report reasons about. */}
+            {claimId && <ReportPanel claimId={claimId} claimStatus={claim.status} />}
 
             {/* Documents */}
             <Card>
@@ -888,6 +913,15 @@ export function ClaimDetailPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                {/* Signature lifecycle status + actions.
+                                    Only consent statements get the
+                                    "Request" button; other types still
+                                    show a status badge if non-default. */}
+                                <SignatureControls
+                                  doc={doc}
+                                  claimId={claim.id}
+                                  canRequest={doc.type === 'SIGNED_STATEMENT'}
+                                />
                                 <InfoTooltip
                                   content="View"
                                   direction="top"
@@ -1214,52 +1248,105 @@ export function ClaimDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            <SlaPanel claimId={claimId} />
+            <FeeNotePanel claimId={claimId} />
+
             {/* Session button */}
-            {canManageSessions && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Session</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <Button
-                      className="w-full"
-                      onClick={handleStartVideoAssessment}
-                      disabled={
-                        !canManageSessions ||
-                        createVideoRoom.isPending ||
-                        isNotifying ||
-                        claim.status === 'APPROVED' ||
-                        claim.status === 'REJECTED'
-                      }
-                    >
-                      <Video className="h-4 w-4 mr-2" />
-                      {createVideoRoom.isPending || isNotifying
-                        ? 'Starting...'
-                        : 'Start Live Session'}
-                    </Button>
+            {canManageSessions &&
+              (() => {
+                /* The assessment-mode router decides how this claim is
+                   examined (MASTER_PLAN §2.4). Leading with a video CTA on a
+                   claim routed to a site visit invites the adjuster to do the
+                   wrong thing, and on a settled claim it invites them to do
+                   anything at all. */
+                const mode = claim.assessmentMode ?? null;
+                const settled =
+                  claim.status === 'APPROVED' ||
+                  claim.status === 'REJECTED' ||
+                  claim.status === 'CLOSED';
+                const videoIsTheMethod = !mode || mode === AssessmentMode.VIDEO;
 
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => navigate(`/claims/${claimId}/upload-video`)}
-                      disabled={
-                        !canManageSessions ||
-                        claim.status === 'APPROVED' ||
-                        claim.status === 'REJECTED'
-                      }
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Manual Upload
-                    </Button>
+                const explanation: Record<string, string> = {
+                  [AssessmentMode.DESK_REVIEW]:
+                    'Assessed on the documents submitted. No interview required.',
+                  [AssessmentMode.SITE_VISIT]:
+                    'Assessed by physical inspection at the risk address.',
+                  [AssessmentMode.EXPERT_REFERRAL]:
+                    'Referred to a claims expert for assessment.',
+                };
 
-                    <p className="text-xs text-muted-foreground text-center mt-5">
-                      Creates room and notifies claimant via SMS
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Assessment</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {mode && (
+                          <Badge variant="outline" className="w-fit">
+                            {ASSESSMENT_MODE_LABELS[mode]}
+                          </Badge>
+                        )}
+
+                        {videoIsTheMethod && !settled && (
+                          <>
+                            <Button
+                              className="w-full"
+                              onClick={handleStartVideoAssessment}
+                              disabled={createVideoRoom.isPending || isNotifying}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              {createVideoRoom.isPending || isNotifying
+                                ? 'Starting...'
+                                : 'Start Live Session'}
+                            </Button>
+
+                            <Button
+                              className="w-full"
+                              variant="outline"
+                              onClick={() => navigate(`/claims/${claimId}/upload-video`)}
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Manual Upload
+                            </Button>
+
+                            <p className="text-xs text-muted-foreground text-center mt-5">
+                              Creates room and notifies claimant via SMS
+                            </p>
+
+                            <ScheduleAssessment
+                              claimId={claimId}
+                              mode={mode}
+                              scheduledFor={claim.scheduledAssessmentTime}
+                              onScheduled={() => refetchClaim()}
+                            />
+                          </>
+                        )}
+
+                        {!videoIsTheMethod && !settled && (
+                          <>
+                            <p className="text-sm text-muted-foreground">
+                              {explanation[mode!] ?? 'No interview required for this assessment mode.'}
+                            </p>
+                            <ScheduleAssessment
+                              claimId={claimId}
+                              mode={mode}
+                              scheduledFor={claim.scheduledAssessmentTime}
+                              onScheduled={() => refetchClaim()}
+                            />
+                          </>
+                        )}
+
+                        {settled && (
+                          <p className="text-sm text-muted-foreground">
+                            This claim is {claim.status.toLowerCase()}. The assessment is complete.
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
             {/* Claimant Info */}
             <Card>
@@ -1299,7 +1386,7 @@ export function ClaimDetailPage() {
                           KYC {claim.claimant?.kycStatus || 'PENDING'}
                         </Badge>
                       )}
-                      {claim.isPdpaCompliant ? (
+                      {claim.consent?.claimProcessing ? (
                         <Badge
                           variant="info"
                           className="text-[10px] w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
@@ -1312,6 +1399,16 @@ export function ClaimDetailPage() {
                         </Badge>
                       )}
                     </div>
+
+                    {/* A gate nobody can satisfy is a gate that gets switched
+                        off. Automated eKYC is not integrated, so the operator
+                        records what they examined and the server keeps their
+                        name against it. */}
+                    <IdentityControl
+                      claimantId={claim.claimant?.id}
+                      kycStatus={claim.claimant?.kycStatus}
+                      onVerified={() => refetchClaim()}
+                    />
                   </div>
                 </div>
                 {claim.siuInvestigatorId && canInvestigateSIU && (
@@ -1392,44 +1489,57 @@ export function ClaimDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Vehicle Info */}
-            <Card>
-              <CardHeader className="py-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Car className="h-4 w-4" />
-                  Vehicle Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Plate No:</span>
-                  <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Chassis No:</span>
-                  <span className="font-medium text-uppercase">
-                    {claim.vehicleChassisNumber || 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Engine No:</span>
-                  <span className="font-medium text-uppercase">
-                    {claim.vehicleEngineNumber || 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Make/Model:</span>
-                  <span className="font-medium">
-                    {claim.vehicleMake} {claim.vehicleModel}
-                    {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Year:</span>
-                  <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Category-aware detail panel: Vehicle (motor) or Property (flood) */}
+            {claim.category === 'MOTOR' && (
+              <Card>
+                <CardHeader className="py-4">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Car className="h-4 w-4" />
+                    Vehicle Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Plate No:</span>
+                    <span className="font-medium">{claim.vehiclePlateNumber || 'N/A'}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Chassis No:</span>
+                    <span className="font-medium text-uppercase">
+                      {claim.vehicleChassisNumber || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Engine No:</span>
+                    <span className="font-medium text-uppercase">
+                      {claim.vehicleEngineNumber || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Make/Model:</span>
+                    <span className="font-medium">
+                      {claim.vehicleMake} {claim.vehicleModel}
+                      {!claim.vehicleMake && !claim.vehicleModel && 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Year:</span>
+                    <span className="font-medium">{claim.vehicleYear || 'N/A'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {claim.category === 'FLOOD' && <PropertyDetailsPanel claim={claim} />}
+
+            {/* Non-motor value-add cards. The evidence checklist + fraud
+                signals also benefit motor claims once their requirement
+                rows are seeded, but for now the panels stay flood-only. */}
+            {claim.category !== 'MOTOR' && (
+              <>
+                <EvidenceChecklistCard claimId={claim.id} />
+                <FraudSignalsCard claimId={claim.id} />
+              </>
+            )}
 
             {/* Policy Information */}
             <Card>
@@ -1447,7 +1557,9 @@ export function ClaimDetailPage() {
                 <div className="flex flex-col sm:flex-row justify-between">
                   <span className="text-muted-foreground">Policy Type:</span>
                   <span className="font-medium text-uppercase">
-                    {convertToTitleCase(claim.claimType)}
+                    {claim.category === 'MOTOR'
+                      ? convertToTitleCase(claim.claimType ?? 'Motor')
+                      : getCategoryConfig(claim.category).label}
                   </span>
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between">
@@ -1456,16 +1568,38 @@ export function ClaimDetailPage() {
                     {claim.sumInsured ? `RM ${claim.sumInsured.toLocaleString()}` : 'N/A'}
                   </span>
                 </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">NCD Rate:</span>
-                  <span className="font-medium">
-                    {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
-                  </span>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between">
-                  <span className="text-muted-foreground">Panel Workshop:</span>
-                  <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
-                </div>
+                {/* No-claim discount and panel workshops are motor concepts.
+                    On a fire or travel claim they read as an unfinished port of
+                    a motor system — and this platform's scope is non-motor, so
+                    the fields are shown only where they mean something. */}
+                {claim.category === 'MOTOR' && (
+                  <>
+                    <div className="flex flex-col sm:flex-row justify-between">
+                      <span className="text-muted-foreground">NCD Rate:</span>
+                      <span className="font-medium">
+                        {claim.ncdRate ? `${(claim.ncdRate * 100).toFixed(0)}%` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row justify-between">
+                      <span className="text-muted-foreground">Panel Workshop:</span>
+                      <span className="font-medium">{claim.workshopName || 'Not Assigned'}</span>
+                    </div>
+                  </>
+                )}
+
+                {/* What a non-motor reviewer needs in their place. The excess
+                    is the figure they check the quantum against, and it is on
+                    the claim itself — the policy is referenced by number only,
+                    so anything drawn from the policy record would never render
+                    here. */}
+                {claim.category !== 'MOTOR' && (
+                  <div className="flex flex-col sm:flex-row justify-between">
+                    <span className="text-muted-foreground">Excess:</span>
+                    <span className="font-medium">
+                      {claim.excessAmount ? `RM ${claim.excessAmount.toLocaleString()}` : 'Nil'}
+                    </span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -11,6 +11,11 @@ import { DashboardPage } from '@/pages/dashboard';
 import { ClaimsListPage } from '@/pages/claims';
 import { ClaimDetailPage } from '@/pages/claims/detail';
 import { NewClaimPage } from '@/pages/claims/new';
+import { CasesListPage } from '@/pages/cases';
+import { ConversationsPage } from '@/pages/conversations';
+import { IntakeQueuePage } from '@/pages/intake';
+import { CaseDetailPage } from '@/pages/cases/details';
+import { NewCasePage } from '@/pages/cases/new';
 import { UploadVideoPage } from '@/pages/claims/upload-video';
 import { VideoReviewPage } from '@/pages/claims/video-review';
 import { VideoCallPage } from '@/pages/video/call';
@@ -22,6 +27,7 @@ import { SettingsPage } from '@/pages/settings';
 import { HelpPage } from '@/pages/help';
 import { VehicleMakePage } from '@/pages/master-data/vehicle-make';
 import { VehicleModelPage } from '@/pages/master-data/vehicle-model';
+import { BillingPage } from '@/pages/billing';
 import { DocumentsListPage } from '@/pages/documents';
 import { DocumentDetailPage } from '@/pages/documents/detail';
 import { TenantsPage } from '@/pages/tenants';
@@ -95,6 +101,18 @@ export default function App() {
               }
             >
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/cases" element={<CasesListPage />} />
+              <Route path="/intake" element={<IntakeQueuePage />} />
+              <Route path="/conversations" element={<ConversationsPage />} />
+              <Route
+                path="/cases/new"
+                element={
+                  <RoleRoute allowedRoles={['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
+                    <NewCasePage />
+                  </RoleRoute>
+                }
+              />
+              <Route path="/cases/:id" element={<CaseDetailPage />} />
               <Route path="/claims" element={<ClaimsListPage />} />
               <Route
                 path="/claims/new"
@@ -105,6 +123,7 @@ export default function App() {
                 }
               />
               <Route path="/claims/:id" element={<ClaimDetailPage />} />
+              <Route path="/billing" element={<BillingPage />} />
               <Route path="/documents" element={<DocumentsListPage />} />
               <Route path="/documents/:id" element={<DocumentDetailPage />} />
               <Route

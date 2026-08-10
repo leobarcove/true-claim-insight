@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './sidebar';
+import { useCurrentUser } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 
 export interface LayoutContextType {
@@ -26,6 +27,12 @@ export function useLayout() {
 }
 
 export function AppLayout() {
+  // Re-verify the session's tenant membership against `/auth/me` for every
+  // authenticated route. Previously this ran only on the Settings page, so a
+  // session that lost its tenant list had no way to recover from any other
+  // screen. This also repairs storage already corrupted by the old setAuth.
+  useCurrentUser();
+
   const [currentWidth, setCurrentWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= currentBreakpoint);
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth <= currentBreakpoint);
@@ -54,9 +61,14 @@ export function AppLayout() {
     <LayoutContext.Provider value={{ isMobile, isCollapsed, currentWidth }}>
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar isCollapsed={isCollapsed} onCollapseChange={setIsCollapsed} isMobile={isMobile} />
+        {/* position: relative is intentional — Radix Select renders a hidden
+            absolutely-positioned native <select> for accessibility/form
+            submission. Without a positioned ancestor those elements resolve
+            against the document and inflate <html> scrollHeight, producing
+            a second scrollbar alongside <main>'s overflow-auto. */}
         <main
           className={cn(
-            'flex-1 overflow-auto transition-all duration-300',
+            'relative flex-1 overflow-auto transition-all duration-300',
             isMobile ? 'ml-20' : ''
           )}
         >

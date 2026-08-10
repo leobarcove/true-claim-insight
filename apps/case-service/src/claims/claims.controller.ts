@@ -20,10 +20,12 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { ConflictsService } from '../adjusters/conflicts.service';
 import { ClaimsService } from './claims.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
@@ -46,7 +48,8 @@ import { UserRole } from '../common/guards/roles.guard';
 @UseGuards(InternalAuthGuard, TenantGuard, RolesGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimsController {
-  constructor(private readonly claimsService: ClaimsService) {}
+  constructor(private readonly claimsService: ClaimsService,
+    private readonly conflictsService: ConflictsService) {}
 
   @Post()
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
@@ -121,6 +124,18 @@ export class ClaimsController {
     return this.claimsService.update(id, updateClaimDto, tenantContext);
   }
 
+  @Patch(':id/appointment')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Arrange the assessment and tell the claimant when' })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  async scheduleAssessment(
+    @Param('id') id: string,
+    @Body('scheduledFor') scheduledFor: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.scheduleAssessment(id, new Date(scheduledFor), tenantContext);
+  }
+
   @Patch(':id/status')
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update claim status (tenant-validated)' })
@@ -135,10 +150,10 @@ export class ClaimsController {
   })
   async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('status') status: string,
+    @Body() dto: UpdateClaimStatusDto,
     @Tenant() tenantContext: TenantContext
   ) {
-    return this.claimsService.updateStatus(id, status, tenantContext);
+    return this.claimsService.updateStatus(id, dto.status, tenantContext);
   }
 
   @Post(':id/assign')
@@ -194,6 +209,41 @@ export class ClaimsController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.getTimeline(id, tenantContext);
+  }
+
+  @Get(':id/evidence-checklist')
+  @ApiOperation({
+    summary:
+      'Get evidence checklist for a claim — required documents for its category plus upload status',
+  })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  async getEvidenceChecklist(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.getEvidenceChecklist(id, tenantContext);
+  }
+
+  @Post(':id/supplementary')
+  @ApiOperation({ summary: 'Reopen a closed claim for a supplementary claim (CSP: 5 working days)' })
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  reopenSupplementary(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.reopenSupplementary(id, reason, tenantContext);
+  }
+
+  @Post(':id/coi-attestation')
+  @ApiOperation({ summary: 'Assigned adjuster attests no undeclared conflict for this claim (PD 12.1(d))' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  attestCoi(
+    @Param('id') id: string,
+    @Body() body: { hasConflict?: boolean; note?: string },
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.conflictsService.attest(id, Boolean(body.hasConflict), body.note, tenantContext);
   }
 
   @Post(':id/notes')

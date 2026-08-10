@@ -8,11 +8,23 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
+import { AuditModule } from './common/audit/audit.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { VideoModule } from './video/video.module';
+import { CasesModule } from './cases/cases.module';
+import { ReportsModule } from './reports/reports.module';
 import { ClaimsModule } from './claims/claims.module';
+import { QuantumProxyModule } from './quantum/quantum.module';
+import { BillingProxyModule } from './billing/billing.module';
+import { SlaProxyModule } from './sla/sla.module';
+import { ConsentProxyModule } from './consent/consent.module';
+import { ConversationsProxyModule } from './conversations/conversations.module';
+import { IngestionProxyModule } from './ingestion/ingestion.module';
+import { TenantConfigModule } from './tenant-config/tenant-config.module';
+import { RetentionModule } from './retention/retention.module';
 import { ClaimantsModule } from './claimants/claimants.module';
 import { LocationModule } from './location/location.module';
 import { RiskModule } from './risk/risk.module';
@@ -51,11 +63,25 @@ import configuration from './config/configuration';
     // Database
     PrismaModule,
 
+    // Field-level encryption of personal data (PDPA)
+    CryptoModule,
+
     // Feature modules
     AuthModule,
     UsersModule,
     VideoModule,
+    AuditModule,
+    CasesModule,
+    ReportsModule,
     ClaimsModule,
+    QuantumProxyModule,
+    SlaProxyModule,
+    BillingProxyModule,
+    ConsentProxyModule,
+    ConversationsProxyModule,
+    IngestionProxyModule,
+    TenantConfigModule,
+    RetentionModule,
     ClaimantsModule,
     HealthModule,
     LocationModule,

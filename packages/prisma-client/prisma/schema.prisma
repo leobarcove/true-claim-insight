@@ -8,42 +8,41 @@ datasource db {
 }
 
 model User {
-  id               String             @id @default(uuid())
-  email            String             @unique
-  password         String
-  fullName         String
-  phoneNumber      String
-  role             UserRole
-  licenseNumber    String?
-  avatarUrl  String?
-  tenantId         String? // Deprecated: kept for backward compatibility
-  currentTenantId  String? // Active tenant context for current session
-  isVerified       Boolean            @default(false)
-  lastLoginAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  adjuster         Adjuster?
-  siuClaims        Claim[]            @relation("SIUInvestigator")
-  tenant           Tenant?            @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
-  currentTenant    Tenant?            @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
-  userTenants      UserTenant[]       // Many-to-many relationship with tenants
-  tenantAccessLogs TenantAccessLog[]
-  sessions         Session[]
-  documents        Document[]
-  documentAnalyses DocumentAnalysis[]
-  trinityChecks    TrinityCheck[]
-  deceptionScores  DeceptionScore[]
-  riskAssessments  RiskAssessment[]
-  videoUploads     VideoUpload[]
-  claimants        Claimant[]
-  otpCodes         OtpCode[]
-  vehicleMakes     VehicleMake[]
-  vehicleModels    VehicleModel[]
-  claimNotes       ClaimNote[]
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  fullName           String
+  phoneNumber        String
+  role               UserRole
+  licenseNumber      String?
+  avatarUrl          String?
+  tenantId           String? // Deprecated: kept for backward compatibility
+  currentTenantId    String? // Active tenant context for current session
+  isVerified         Boolean             @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  adjuster           Adjuster?
+  siuClaims          Claim[]             @relation("SIUInvestigator")
+  tenant             Tenant?             @relation("UserPrimaryTenant", fields: [tenantId], references: [id])
+  currentTenant      Tenant?             @relation("UserCurrentTenant", fields: [currentTenantId], references: [id])
+  userTenants        UserTenant[] // Many-to-many relationship with tenants
+  tenantAccessLogs   TenantAccessLog[]
+  sessions           Session[]
+  documents          Document[]
+  documentAnalyses   DocumentAnalysis[]
+  trinityChecks      TrinityCheck[]
+  deceptionScores    DeceptionScore[]
+  riskAssessments    RiskAssessment[]
+  videoUploads       VideoUpload[]
+  claimants          Claimant[]
+  otpCodes           OtpCode[]
+  vehicleMakes       VehicleMake[]
+  vehicleModels      VehicleModel[]
+  claimNotes         ClaimNote[]
   sessionClientInfos SessionClientInfo[]
-  auditTrails      AuditTrail[]
-  claims           Claim[]
-
+  auditTrails        AuditTrail[]
+  claims             Claim[]
 
   @@index([tenantId])
   @@index([currentTenantId])
@@ -52,18 +51,18 @@ model User {
 }
 
 model UserTenant {
-  id             String    @id @default(uuid())
+  id             String           @id @default(uuid())
   userId         String
   tenantId       String
   role           UserRole // Role specific to this tenant
-  isDefault      Boolean   @default(false) // Default tenant for this user
+  isDefault      Boolean          @default(false) // Default tenant for this user
   status         UserTenantStatus @default(ACTIVE)
-  joinedAt       DateTime  @default(now())
+  joinedAt       DateTime         @default(now())
   lastAccessedAt DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tenantId])
   @@index([userId])
@@ -73,16 +72,16 @@ model UserTenant {
 }
 
 model TenantAccessLog {
-  id            String   @id @default(uuid())
-  userId        String
-  fromTenantId  String?
-  toTenantId    String
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fromTenant    Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
-  toTenant      Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  userId       String
+  fromTenantId String?
+  toTenantId   String
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromTenant   Tenant?  @relation("TenantAccessFrom", fields: [fromTenantId], references: [id], onDelete: SetNull)
+  toTenant     Tenant   @relation("TenantAccessTo", fields: [toTenantId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])
@@ -90,80 +89,128 @@ model TenantAccessLog {
 }
 
 model Tenant {
-  id                  String            @id @default(uuid())
-  name                String
-  type                TenantType
-  subscriptionTier    SubscriptionTier  @default(BASIC)
-  settings            Json              @default("{}")
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  adjusters           Adjuster[]
-  claims              Claim[]           @relation("InsurerClaims")
-  users               User[]            @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
-  currentUsers        User[]            @relation("UserCurrentTenant") // Users currently in this tenant context
-  userTenants         UserTenant[]      // Many-to-many relationship with users
-  tenantAccessLogsFrom TenantAccessLog[] @relation("TenantAccessFrom")
-  tenantAccessLogsTo   TenantAccessLog[] @relation("TenantAccessTo")
-  sessions            Session[]
-  claimNotes          ClaimNote[]
-  deceptionScores     DeceptionScore[]
-  riskAssessments     RiskAssessment[]
-  documents           Document[]
-  documentAnalyses    DocumentAnalysis[]
-  trinityChecks       TrinityCheck[]
-  auditLogs           AuditTrail[]
-  videoUploads        VideoUpload[]
-  sessionClientInfos  SessionClientInfo[]
-  claimants           Claimant[]
-  otpCodes            OtpCode[]
-  vehicleMakes        VehicleMake[]
-  vehicleModels       VehicleModel[]
-  ownedClaims         Claim[]
+  id                   String                @id @default(uuid())
+  name                 String
+  type                 TenantType
+  subscriptionTier     SubscriptionTier      @default(BASIC)
+  settings             Json                  @default("{}")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  adjusters            Adjuster[]
+  claims               Claim[]               @relation("InsurerClaims")
+  users                User[]                @relation("UserPrimaryTenant") // Deprecated: for backward compatibility
+  currentUsers         User[]                @relation("UserCurrentTenant") // Users currently in this tenant context
+  userTenants          UserTenant[] // Many-to-many relationship with users
+  tenantAccessLogsFrom TenantAccessLog[]     @relation("TenantAccessFrom")
+  tenantAccessLogsTo   TenantAccessLog[]     @relation("TenantAccessTo")
+  sessions             Session[]
+  claimNotes           ClaimNote[]
+  deceptionScores      DeceptionScore[]
+  riskAssessments      RiskAssessment[]
+  documents            Document[]
+  documentAnalyses     DocumentAnalysis[]
+  trinityChecks        TrinityCheck[]
+  auditLogs            AuditTrail[]
+  videoUploads         VideoUpload[]
+  sessionClientInfos   SessionClientInfo[]
+  claimants            Claimant[]
+  otpCodes             OtpCode[]
+  vehicleMakes         VehicleMake[]
+  vehicleModels        VehicleModel[]
+  ownedClaims          Claim[]
+  floodClaims          FloodClaim[]
+  travelClaims         TravelClaim[]
+  evidenceRequirements EvidenceRequirement[]
+  cases                Case[]
+  policies             Policy[]
+  slaPolicies          SlaPolicy[]
+  authorityLimits      AuthorityLimit[]
+  assignmentsAsInsurer Assignment[]          @relation("AssignmentInsurer")
+  assignmentsAsHandler Assignment[]          @relation("AssignmentHandlingFirm")
+  feeScales            FeeScale[]
+  feeNotesAsInsurer    FeeNote[]             @relation("FeeNoteInsurer")
+  flowDefinitions      FlowDefinition[]
 
   @@map("tenants")
 }
 
 model Adjuster {
-  id                String         @id @default(uuid())
-  userId            String         @unique
-  tenantId          String
-  licenseNumber     String         @unique
-  bcillaCertified   Boolean        @default(false)
-  amlaMember        Boolean        @default(false)
-  status            AdjusterStatus @default(ACTIVE)
-  licenseVerifiedAt DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  tenant            Tenant         @relation(fields: [tenantId], references: [id])
-  user              User           @relation(fields: [userId], references: [id])
-  claims            Claim[]
+  id                   String                @id @default(uuid())
+  userId               String                @unique
+  tenantId             String
+  licenseNumber        String                @unique
+  bcillaCertified      Boolean               @default(false)
+  amlaMember           Boolean               @default(false)
+  status               AdjusterStatus        @default(ACTIVE)
+  licenseVerifiedAt    DateTime?
+  /// When this person began adjusting employment with the firm. PD 12.3: a new
+  /// adjusting employee is closely supervised by a senior for at least one year
+  /// before conducting adjusting work independently — supervision status is
+  /// derived from this date, so it cannot silently be forgotten.
+  adjustingSince       DateTime?
+  /// PD 12.1(a): full-time is the requirement; anything else blocks assignment
+  /// in registered mode. Null = not yet recorded, which reads as a gap.
+  employmentType       EmploymentType?
+  /// Schedule 2 minimum qualification, as held (free text until the Order's
+  /// schedule is transcribed).
+  qualification        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  user                 User                  @relation(fields: [userId], references: [id])
+  claims               Claim[]
+  authoredReports      AdjusterReport[]      @relation("ReportAuthor")
+  reviewedReports      AdjusterReport[]      @relation("ReportReviewer")
+  signedReports        AdjusterReport[]      @relation("ReportSigner")
+  authorityLimits      AuthorityLimit[]
+  competencies         AdjusterCompetency[]
+  conflictDeclarations ConflictDeclaration[]
+  conflictAttestations ConflictAttestation[]
+  cpdRecords           CpdRecord[]
+  backgroundScreenings BackgroundScreening[]
+  qualityReviews       WorkQualityReview[]
+  timeEntries          TimeEntry[]
 
   @@index([tenantId])
   @@map("adjusters")
 }
 
 model Claimant {
-  id            String    @id @default(uuid())
-  nric          String?   @unique
-  nricHash      String?   @unique
-  nricEncrypted Bytes?
-  fullName      String?
-  dateOfBirth   DateTime?
-  phoneNumber   String    @unique
-  email         String?
-  kycStatus     KycStatus @default(PENDING)
-  kycVerifiedAt DateTime?
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  tenantId      String?   // Organization ownership
-  userId        String?   // Creator/Link to User record
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
-  user          User?     @relation(fields: [userId], references: [id])
-  claims        Claim[]
+  id                   String                @id @default(uuid())
+  /// Blind index (HMAC-SHA256 of the normalised NRIC with a secret pepper).
+  /// Carries the uniqueness that plaintext `nric` used to, and is the only way
+  /// to look a claimant up by NRIC. HMAC not a bare hash: a Malaysian NRIC is
+  /// 12 structured digits, so an unpeppered rainbow table is trivial.
+  nricHash             String?               @unique
+  /// Encrypted NRIC (v<n>:<iv>:<ciphertext>:<tag>).
+  nricEncrypted        String?
+  /// Last 4 digits, clear, so screens can identify a person without decrypting.
+  nricLast4            String?
+  fullName             String?
+  dateOfBirth          DateTime?
+  phoneNumber          String                @unique
+  email                String?
+  kycStatus            KycStatus             @default(PENDING)
+  kycVerifiedAt        DateTime?
+  /// When identity was irreversibly destroyed under PD 12.8 / PDPA s.10(2).
+  /// The row survives so claims still resolve and the firm's record of what it
+  /// assessed stays coherent; the person is simply no longer identifiable from
+  /// it. Set once and never cleared — anonymisation cannot be undone, which is
+  /// what distinguishes it from pseudonymisation.
+  anonymisedAt         DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  tenantId             String? // Organization ownership
+  userId               String? // Creator/Link to User record
+  tenant               Tenant?               @relation(fields: [tenantId], references: [id])
+  user                 User?                 @relation(fields: [userId], references: [id])
+  claims               Claim[]
+  cases                Case[]
+  consents             Consent[]
+  conversationBindings ConversationBinding[]
 
   @@index([phoneNumber])
-  @@index([nric])
   @@index([tenantId])
   @@index([userId])
   @@map("claimants")
@@ -177,8 +224,8 @@ model OtpCode {
   verified    Boolean  @default(false)
   attempts    Int      @default(0)
   createdAt   DateTime @default(now())
-  tenantId    String?  // Associated tenant if known
-  userId      String?  // Associated user if known
+  tenantId    String? // Associated tenant if known
+  userId      String? // Associated user if known
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   user        User?    @relation(fields: [userId], references: [id])
 
@@ -190,15 +237,21 @@ model OtpCode {
 }
 
 model Claim {
-  id                      String      @id @default(uuid())
-  claimNumber             String      @unique
+  id                      String         @id @default(uuid())
+  claimNumber             String         @unique
   claimantId              String
-  nric                    String?
+  /// Encrypted NRIC snapshot for this claim; see Claimant.nricEncrypted.
+  nricEncrypted           String?
+  nricLast4               String?
   adjusterId              String?
   insurerTenantId         String?
   policyNumber            String
-  claimType               ClaimType
-  status                  ClaimStatus @default(SUBMITTED)
+  // Coarse-grained category drives the polymorphic sub-table relation and
+  // determines which evidence checklist + fraud providers apply.
+  category                ClaimCategory  @default(MOTOR)
+  // Motor-specific subtype. Required when category=MOTOR, otherwise nullable.
+  claimType               ClaimType?
+  status                  ClaimStatus    @default(SUBMITTED)
   incidentDate            DateTime
   incidentTime            DateTime?
   incidentLocation        Json
@@ -215,44 +268,631 @@ model Claim {
   sumInsured              Decimal?
   workshopName            String?
   estimatedLossAmount     Decimal?
-  estimatedRepairCost     Decimal?    @db.Decimal(12, 2)
+  estimatedRepairCost     Decimal?       @db.Decimal(12, 2)
   sstAmount               Decimal?
-  isPdpaCompliant         Boolean     @default(false)
+  isPdpaCompliant         Boolean        @default(false)
   slaDeadline             DateTime?
-  complianceNotes         Json?       @default("{}")
-  priority                Priority    @default(NORMAL)
+  complianceNotes         Json?          @default("{}")
+  priority                Priority       @default(NORMAL)
   scheduledAssessmentTime DateTime?
   siuInvestigatorId       String?
   approvedAmount          Decimal?
   excessAmount            Decimal?
   vehicleEngineNumber     String?
   vehicleYear             Int?
-  tenantId                String?     // Standardized tenant ownership
-  userId                  String?     // Standardized creator/owner
-  createdById             String?     // Keeping for backward compatibility
+  /// When the claim reached CLOSED — the anchor the 7-year retention period
+  /// runs from. Nothing belonging to a claim may be purged before this + the
+  /// retention period.
+  closedAt                DateTime?
+  /// Legal hold: suspends purging regardless of retention arithmetic. Litigation
+  /// or a regulator's request outranks the calendar.
+  legalHoldAt             DateTime?
+  legalHoldReason         String?
+  legalHoldByUserId       String?
+  tenantId                String? // Standardized tenant ownership
+  userId                  String? // Standardized creator/owner
+  createdById             String? // Keeping for backward compatibility
   updatedById             String?
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
   notes                   ClaimNote[]
-  adjuster                Adjuster?   @relation(fields: [adjusterId], references: [id])
-  claimant                Claimant    @relation(fields: [claimantId], references: [id])
-  tenant                  Tenant?     @relation(fields: [tenantId], references: [id])
-  user                    User?       @relation(fields: [userId], references: [id])
-  insurerTenant           Tenant?     @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
-  siuInvestigator         User?       @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
+  adjuster                Adjuster?      @relation(fields: [adjusterId], references: [id])
+  claimant                Claimant       @relation(fields: [claimantId], references: [id])
+  tenant                  Tenant?        @relation(fields: [tenantId], references: [id])
+  user                    User?          @relation(fields: [userId], references: [id])
+  insurerTenant           Tenant?        @relation("InsurerClaims", fields: [insurerTenantId], references: [id])
+  siuInvestigator         User?          @relation("SIUInvestigator", fields: [siuInvestigatorId], references: [id])
   documents               Document[]
   sessions                Session[]
   videoUploads            VideoUpload[]
   trinityChecks           TrinityCheck[]
+  // Per-category polymorphic sub-tables. Exactly one should be populated,
+  // matching the value in `category`.
+  floodClaim              FloodClaim?
+  travelClaim             TravelClaim?
+  // Pre-claim intake request this claim was converted from, if any.
+  sourceCase              Case?
+  fraudSignals            FraudSignal[]
+
+  /// The level at which this claim is currently being assessed. The decision
+  /// history is in AssessmentModeDecision; this is the cursor.
+  assessmentMode AssessmentMode?
+
+  quantumWorksheets       QuantumWorksheet[]
+  assessmentModeDecisions AssessmentModeDecision[]
+  slaClocks               SlaClock[]
+  reports                 AdjusterReport[]
+  assignment              Assignment?
+  conflictAttestations    ConflictAttestation[]
+  documentsCompleteAt     DateTime?
+  timeEntries             TimeEntry[]
+  disbursements           Disbursement[]
+  feeNotes                FeeNote[]
 
   @@index([claimantId])
-  @@index([nric])
   @@index([adjusterId])
   @@index([status])
   @@index([tenantId])
   @@index([userId])
+  @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
+}
+
+// ============================================================================
+// Non-motor: Flood (first non-motor type — Klang Valley monsoon, flash floods,
+// coastal surge). Pattern is reusable for Fire, Lightning, Burglary etc.
+//
+// Fields mirror what overseas systems anchor on:
+//  - elevationMeters / floorLevel: NFIP/FEMA elevation certificate pattern
+//  - postcode + jpsGaugeId: enables JPS InfoBanjir gauge cross-reference
+//  - parametricTriggerMet: Swiss Re parametric flood pattern
+//  - metMalaysiaEventRef: named storm/monsoon event linkage
+// ============================================================================
+model FloodClaim {
+  id       String  @id @default(uuid())
+  claimId  String  @unique
+  tenantId String?
+
+  // Incident specifics
+  incidentStart DateTime
+  incidentEnd   DateTime?
+  waterDepthCm  Int?
+  durationHours Int?
+  source        FloodSource?
+
+  // Property + geography
+  propertyType            PropertyType?
+  propertyFloorLevel      Int?
+  propertyElevationMeters Float?
+  postcode                String?
+  state                   String?
+
+  // External verification — written by FraudSignalProvider plugins
+  parametricTriggerMet Boolean?
+  metMalaysiaEventRef  String?
+  jpsGaugeId           String?
+
+  // Damage breakdown (claimant-declared, validated by inspection)
+  buildingDamageRm Decimal? @db.Decimal(12, 2)
+  contentsDamageRm Decimal? @db.Decimal(12, 2)
+  vehicleDamageRm  Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim  Claim   @relation(fields: [claimId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([incidentStart])
+  @@index([postcode])
+  @@map("flood_claims")
+}
+
+// ============================================================================
+// Non-motor: Travel (TPA model — travel claim requests captured as Cases and
+// converted into Claim + TravelClaim on operator approval). Mirrors the
+// FloodClaim polymorphic sub-table pattern.
+// ============================================================================
+model TravelClaim {
+  id              String          @id @default(uuid())
+  claimId         String          @unique
+  tenantId        String?
+  travelClaimType TravelClaimType
+  policyId        String? // carried from the source Case
+
+  // Trip context
+  tripStartDate      DateTime?
+  tripEndDate        DateTime?
+  destinationCountry String?
+
+  // Flight delay
+  airline            String?
+  flightNumber       String?
+  scheduledDeparture DateTime?
+  actualDeparture    DateTime?
+  delayHours         Float?
+
+  // Luggage damage / loss
+  baggageTagNumber String?
+
+  // Medical (form + expert routing only — never auto-assessed)
+  treatmentCountry String?
+  hospitalName     String?
+  referredToExpert Boolean @default(false)
+
+  // Trip cancellation
+  cancellationReason String?
+
+  estimatedAmountRm Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim  Claim   @relation(fields: [claimId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("travel_claims")
+}
+
+// ============================================================================
+// TPA intake — Policy data supplied by the insurer (MSIG). Today this arrives
+// manually via email; later via API integration or agency-portal scraping.
+// Both future adapters upsert rows here with the appropriate `source`.
+// ============================================================================
+/// Wrapped data-encryption keys (envelope encryption).
+///
+/// Field values are encrypted with a data key (DEK); the DEK itself is stored
+/// here wrapped by a master key (KEK) held outside the database — in the
+/// environment today, in AWS KMS later. Migrating to KMS therefore means
+/// re-wrapping this one row, NOT re-encrypting any data.
+///
+/// Multiple rows may coexist so a key can be rotated gradually: every
+/// ciphertext carries the version that produced it.
+model EncryptionKey {
+  id             String    @id @default(uuid())
+  version        Int       @unique
+  wrappedDataKey String // DEK encrypted by the master key
+  algorithm      String    @default("aes-256-gcm")
+  createdAt      DateTime  @default(now())
+  retiredAt      DateTime? // set when no longer used for new writes
+
+  @@map("encryption_keys")
+}
+
+model Policy {
+  id                   String       @id @default(uuid())
+  tenantId             String // Insurer tenant (e.g. MSIG)
+  policyNumber         String
+  insuredName          String
+  insuredNricEncrypted String?
+  insuredNricLast4     String?
+  insuredPhone         String?
+  planTier             String?
+  tripStartDate        DateTime?
+  tripEndDate          DateTime?
+  destination          String?
+  coverageSnapshot     Json? // benefits/limits exactly as supplied
+  source               PolicySource @default(MANUAL)
+  externalRef          String? // insurer API id / scrape reference (future)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  tenant               Tenant       @relation(fields: [tenantId], references: [id])
+  cases                Case[]
+
+  @@unique([tenantId, policyNumber])
+  @@index([tenantId, insuredPhone])
+  @@map("policies")
+}
+
+// ============================================================================
+// Case — pre-claim intake request (FNOL). Channel-agnostic conversational
+// artifact: web chat wizard, staff capture, logged email, or (future)
+// WhatsApp bot / system-initiated proactive cases. A human operator vets the
+// case and converts it into a Claim (+ TravelClaim) — the insurer handback.
+// ============================================================================
+model Case {
+  id                         String                @id @default(uuid())
+  caseNumber                 String                @unique // CSE-2026-000001 via case_number_seq
+  tenantId                   String
+  channel                    CaseChannel           @default(WEB_CHAT)
+  initiatedBy                CaseInitiator         @default(CLAIMANT)
+  status                     CaseStatus            @default(DRAFT)
+  category                   ClaimCategory         @default(TRAVEL)
+  travelClaimType            TravelClaimType?
+  claimantId                 String?
+  createdByUserId            String? // staff capture / email logging
+  policyId                   String?
+  policyNumberRaw            String? // as typed/extracted, pre-match
+  needsPolicyReview          Boolean               @default(false) // no auto-match found
+  currentStepId              String? // conversational cursor for resume
+  /// Which flow version this conversation is walking, pinned at creation.
+  ///
+  /// Without the pin, publishing an edit rewrites every intake already in
+  /// flight: a claimant three steps in is asked something the earlier steps
+  /// never set up, or `currentStepId` points at a step that no longer exists
+  /// and the conversation dead-ends. Nothing throws and nobody is told — the
+  /// same silent-loss shape as dropping an unparseable FNOL email.
+  ///
+  /// Null on rows created before flows became data; those walk CASE_FLOWS.
+  flowDefinitionId           String?
+  flowVersion                Int?
+  /// Where the claimant was before they went back to fix an earlier answer.
+  ///
+  /// Correcting question 3 must not cost them questions 4 through 18. The
+  /// cursor moves back to the step being edited and this holds the return
+  /// point, so once the correction is saved the conversation resumes where it
+  /// was interrupted rather than re-walking everything.
+  ///
+  /// Null whenever no edit is in progress, which is nearly always.
+  resumeStepId               String?
+  answers                    Json                  @default("{}") // Record<stepId, value>; pre-filled for SYSTEM cases
+  incidentDate               DateTime? // promoted for queue + deadline calc
+  destination                String? // promoted for queue display
+  sourceMeta                 Json? // EMAIL: {from, subject, receivedAt}; WHATSAPP later
+  bankName                   String? // not an identifier; stored in the clear
+  /// Encrypted payout account number (v<n>:<iv>:<ciphertext>:<tag>).
+  /// Never expose to a claimant; decrypt only for payout/operator review.
+  bankAccountNumberEncrypted String?
+  /// Last 4 digits kept in the clear so operator screens can display an
+  /// account without decrypting anything.
+  bankAccountLast4           String?
+  bankAccountHolderName      String?
+  notifiedLate               Boolean               @default(false) // notified >24h after incident
+  outOfWindow                Boolean               @default(false) // notified >30 days after incident
+  reviewNote                 String? // info request / expert note / reject reason
+  convertedClaimId           String?               @unique
+  submittedAt                DateTime?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  tenant                     Tenant                @relation(fields: [tenantId], references: [id])
+  claimant                   Claimant?             @relation(fields: [claimantId], references: [id])
+  policy                     Policy?               @relation(fields: [policyId], references: [id])
+  convertedClaim             Claim?                @relation(fields: [convertedClaimId], references: [id])
+  flowDefinition             FlowDefinition?       @relation(fields: [flowDefinitionId], references: [id])
+  documents                  CaseDocument[]
+  inboundMessage             InboundMessage?
+  conversationBindings       ConversationBinding[]
+
+  @@index([tenantId, status])
+  @@index([claimantId])
+  @@index([createdAt(sort: Desc)])
+  @@map("cases")
+}
+
+model CaseDocument {
+  id               String                   @id @default(uuid())
+  caseId           String
+  tenantId         String
+  documentType     DocumentType
+  fileName         String
+  storagePath      String // same StorageService bucket as claim documents
+  mimeType         String?
+  sizeBytes        Int?
+  stepId           String? // which intake step produced it
+  // Local-LLM document validation hook (name match, completeness).
+  // Slice 1 sets SKIPPED; the validation service fills these in later.
+  validationStatus DocumentValidationStatus @default(SKIPPED)
+  validationNote   String?
+  /// Set when the claimant re-sent this step's document.
+  ///
+  /// Superseded, never deleted: what a claimant actually submitted, and when,
+  /// is evidence — including the wrong photo they sent first. The checklist and
+  /// the adjuster's view read only live rows, so the mistake stays out of the
+  /// way without being destroyed. Same reasoning as a withdrawn consent keeping
+  /// its original grant.
+  supersededAt     DateTime?
+  createdAt        DateTime                 @default(now())
+  case             Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([caseId, stepId, supersededAt])
+  @@map("case_documents")
+}
+
+// ============================================================================
+// FNOL email intake (MASTER_PLAN §5 Phase 2).
+//
+// One row per email received at the dedicated FNOL mailbox. The row exists
+// before any Case does, for two reasons:
+//
+//  1. Idempotency. A mailbox re-poll, a connection dropped mid-fetch, or a
+//     provider redelivery must never produce a second Case for the same
+//     email. `messageId` (RFC 5322 Message-ID) carries a unique constraint,
+//     so the guarantee is the database's rather than the worker's — a retry
+//     racing itself loses on insert instead of duplicating a claim.
+//  2. Evidence. "Why does this claim exist, and who told us?" is a question
+//     an examiner asks. An email that failed to parse must still leave a
+//     trace; silently dropping intake is the failure mode that ends pilots.
+//
+// Deliberately NOT stored: the raw MIME body. It carries NRIC and bank
+// details in the clear, and this platform encrypts both at rest (§8). Those
+// values reach the database only through the Claimant/Case writers that
+// encrypt them. `parsed` holds non-identifying extraction only.
+// ============================================================================
+model InboundMessage {
+  id          String               @id @default(uuid())
+  /// RFC 5322 Message-ID — the idempotency key.
+  messageId   String               @unique
+  /// Resolved from the recipient mailbox. Null when the mailbox maps to no
+  /// known tenant: the message is still recorded, for the operator queue.
+  tenantId    String?
+  fromAddress String
+  toAddress   String?
+  subject     String?
+  receivedAt  DateTime
+  status      InboundMessageStatus @default(PENDING)
+  caseId      String?              @unique
+  /// Operator-facing reason for NEEDS_REVIEW or FAILED.
+  error       String?
+  attempts    Int                  @default(0)
+  /// Deterministic extraction output — policy number, dates, flight number,
+  /// destination. Never personal identifiers; see the note above.
+  parsed      Json?
+  processedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  case Case? @relation(fields: [caseId], references: [id])
+
+  @@index([status, receivedAt])
+  @@index([tenantId])
+  @@map("inbound_messages")
+}
+
+enum InboundMessageStatus {
+  PENDING
+  PROCESSED
+  /// Parsed, but a human must act: no policy matched, or a mandatory field
+  /// could not be extracted. This is the operator queue.
+  NEEDS_REVIEW
+  FAILED
+  /// Operator dismissed it — not an FNOL (spam, an out-of-office, a reply).
+  IGNORED
+}
+
+// ============================================================================
+// Assessment mode (MASTER_PLAN §2.4).
+//
+// How a claim was examined, and why. A row per decision rather than a column
+// that changes: PD 12.6 makes the assessment mode a disclosable **method**, so
+// "this claim was desk-reviewed" needs the reasons that held at the time, not
+// the ones today's thresholds would produce. A firm that raises its fast-track
+// ceiling next year must not thereby restate why a claim was fast-tracked last
+// year.
+// ============================================================================
+model AssessmentModeDecision {
+  id       String @id @default(uuid())
+  claimId  String
+  tenantId String
+
+  mode        AssessmentMode
+  /// Absent on the opening decision; set when a trigger escalated the claim.
+  trigger     EscalationTrigger?
+  /// True only where all four §2.4 fast-track conditions held.
+  fastTracked Boolean            @default(false)
+  /// Why, in an adjuster's terms — carried verbatim into the report.
+  reasons     String[]
+
+  decidedByUserId String?
+  createdAt       DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, createdAt(sort: Desc)])
+  @@index([tenantId])
+  @@map("assessment_mode_decisions")
+}
+
+enum AssessmentMode {
+  /// Documents only, no interview — the fast track.
+  DESK_REVIEW
+  VIDEO
+  SITE_VISIT
+  EXPERT_REFERRAL
+}
+
+enum EscalationTrigger {
+  FRAUD_SIGNAL
+  AMOUNT_REVISED_UP
+  EXTRACTION_INCONSISTENCY
+  ADJUSTER_JUDGEMENT
+}
+
+// ============================================================================
+// Quantum worksheet (MASTER_PLAN §5 Phase 2).
+//
+// How a loss became a figure. Both the inputs and the computed lines are
+// stored, which looks redundant and is not:
+//
+//  - The **inputs** let the figure be re-derived, which is what makes it
+//    defensible when an insured disputes it.
+//  - The **outputs and lines** record what was actually recommended at the
+//    time. A later change to the calculator — a corrected order of deductions,
+//    a new rounding rule — must not silently restate a figure already issued
+//    to an insurer under PD 12.6.
+//
+// Worksheets are superseded rather than edited, for the same reason an issued
+// report is immutable: a revised quantum is a new opinion, and the one it
+// replaced is part of the record.
+// ============================================================================
+model QuantumWorksheet {
+  id       String @id @default(uuid())
+  claimId  String
+  tenantId String
+
+  revision     Int     @default(1)
+  supersedesId String? @unique
+
+  // ---- inputs, as assessed -------------------------------------------------
+  basis            SettlementBasis
+  assessedLoss     Decimal         @db.Decimal(12, 2)
+  /// Rate, not an amount — 0.2500 is 25%. Indemnity basis only.
+  depreciationRate Decimal?        @db.Decimal(5, 4)
+  betterment       Decimal?        @db.Decimal(12, 2)
+  sumInsured       Decimal         @db.Decimal(12, 2)
+  /// Without this, underinsurance is unknown rather than absent.
+  valueAtRisk      Decimal?        @db.Decimal(12, 2)
+  averageCondition Boolean         @default(false)
+  salvage          Decimal?        @db.Decimal(12, 2)
+  excess           Decimal?        @db.Decimal(12, 2)
+
+  // ---- what the calculator produced ---------------------------------------
+  adjustedLoss       Decimal  @db.Decimal(12, 2)
+  underinsured       Boolean  @default(false)
+  averageRatio       Decimal? @db.Decimal(6, 5)
+  averageApplied     Boolean  @default(false)
+  recommended        Decimal  @db.Decimal(12, 2)
+  cappedAtSumInsured Boolean  @default(false)
+  /// Every line in order: key, label, amount, basis. The workings an insured
+  /// argues with, kept verbatim rather than recomputed on read.
+  lines              Json
+  /// Unresolved questions an adjuster must answer before relying on this.
+  warnings           String[]
+
+  /// Who prepared it. PD 12.6 disclosure names the method and its author.
+  preparedByAdjusterId String?
+  notes                String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, revision(sort: Desc)])
+  @@index([tenantId])
+  @@map("quantum_worksheets")
+}
+
+enum SettlementBasis {
+  /// New for old — no depreciation.
+  REINSTATEMENT
+  /// Value at the time of loss — depreciation applies.
+  INDEMNITY
+}
+
+// ============================================================================
+// Outbound notifications (MASTER_PLAN §5 Phase 2).
+//
+// The delivery log is the point of the table, not a convenience. Three of the
+// obligations this platform carries are discharged by telling someone
+// something — the CSP one-working-day acknowledgement to the insurer, a
+// request for information to a claimant, an SLA breach reaching a person — and
+// "we notified them" is a claim that needs evidence with a timestamp against
+// it.
+//
+// Deliberately NOT stored: the rendered body. Templates live in code and are
+// keyed here, so what was said is reconstructable from the template and the
+// entity; keeping a second copy of claimant-facing prose in a plain column
+// would put personal data somewhere the encryption work did not reach.
+// ============================================================================
+model NotificationLog {
+  id         String              @id @default(uuid())
+  tenantId   String
+  channel    NotificationChannel @default(EMAIL)
+  /// Template identifier from the code registry in notifications/templates.ts.
+  template   String
+  /// Where it was sent. Personal data, held in the clear exactly as
+  /// `Claimant.email` is: evidencing that a person was told requires knowing
+  /// which person.
+  recipient  String
+  subject    String
+  status     NotificationStatus  @default(QUEUED)
+  /// Stops one event notifying twice. The SLA sweep re-evaluates every 15
+  /// minutes and a worker restart replays jobs, so "already sent" has to be a
+  /// database fact rather than something the producer remembers.
+  dedupeKey  String?             @unique
+  attempts   Int                 @default(0)
+  error      String?
+  /// What it was about, so an operator can answer "was the claimant told?"
+  /// from the claim rather than by searching a mailbox.
+  entityType String?
+  entityId   String?
+  queuedAt   DateTime            @default(now())
+  sentAt     DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([tenantId, status])
+  @@index([entityType, entityId])
+  @@index([queuedAt(sort: Desc)])
+  @@map("notification_logs")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  /// Deliberately not sent — no address on file, or notifications switched
+  /// off in this environment. Recorded rather than skipped, because "nothing
+  /// happened" and "we chose not to" look identical afterwards otherwise.
+  SUPPRESSED
+}
+
+// ============================================================================
+// Fraud signal records — Shift Technology pattern.
+// Each detector (parametric weather check, document forgery, repeat claimant,
+// behavioural Hume score, etc.) writes one row per signal it produces.
+// The risk-engine fuses signals into an overall score; the adjuster UI lists
+// individual signals with severity + evidence.
+// ============================================================================
+model FraudSignal {
+  id         String         @id @default(uuid())
+  claimId    String
+  // Free-form provider id (e.g. "MetMalaysiaRainfall", "RepeatClaimantGraph",
+  // "HumeBehavioural"). Kept as string rather than enum so plugins can register
+  // without schema migrations.
+  provider   String
+  category   FraudCategory
+  signalType String
+  severity   SignalSeverity
+  confidence Float
+  message    String?
+  rawData    Json           @default("{}")
+  createdAt  DateTime       @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@index([provider])
+  @@index([category])
+  @@index([severity])
+  @@map("fraud_signals")
+}
+
+// ============================================================================
+// Evidence checklist — data-driven per ClaimCategory + tenant.
+// Lets each insurer define their own required documents for each claim type
+// without code changes. Null tenantId = global default.
+// ============================================================================
+model EvidenceRequirement {
+  id              String           @id @default(uuid())
+  tenantId        String?
+  category        ClaimCategory
+  // Travel subtype refinement — null for non-travel categories, letting each
+  // travel claim type (flight delay, luggage loss, ...) have its own checklist.
+  travelClaimType TravelClaimType?
+  documentType    DocumentType
+  isMandatory     Boolean          @default(true)
+  description     String?
+  sortOrder       Int              @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, category, travelClaimType, documentType])
+  @@index([category])
+  @@map("evidence_requirements")
 }
 
 model ClaimNote {
@@ -261,9 +901,9 @@ model ClaimNote {
   content    String
   isPrivate  Boolean   @default(false)
   createdAt  DateTime  @default(now())
-  tenantId   String?   // Organization ownership
-  userId     String?   // Creator (linked to User)
-  authorId   String    // Generic author ID (can be user or claimant)
+  tenantId   String? // Organization ownership
+  userId     String? // Creator (linked to User)
+  authorId   String // Generic author ID (can be user or claimant)
   authorType ActorType
   claim      Claim     @relation(fields: [claimId], references: [id])
   tenant     Tenant?   @relation(fields: [tenantId], references: [id])
@@ -276,27 +916,27 @@ model ClaimNote {
 }
 
 model Session {
-  id              String           @id @default(uuid())
+  id              String              @id @default(uuid())
   claimId         String
   tenantId        String? // Tenant context for this session
   roomId          BigInt
-  status          SessionStatus    @default(SCHEDULED)
+  status          SessionStatus       @default(SCHEDULED)
   scheduledTime   DateTime?
   startedAt       DateTime?
   endedAt         DateTime?
   durationSeconds Int?
   recordingUrl    String?
-  analysisStatus  AnalysisStatus   @default(PENDING)
-  screenshots     Json             @default("[]")
-  createdAt       DateTime         @default(now())
+  analysisStatus  AnalysisStatus      @default(PENDING)
+  screenshots     Json                @default("[]")
+  createdAt       DateTime            @default(now())
   roomUrl         String?
   riskAssessments RiskAssessment[]
   deceptionScores DeceptionScore[]
   clientInfos     SessionClientInfo[]
-  claim           Claim            @relation(fields: [claimId], references: [id])
-  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
-  userId          String?          // User who scheduled/initiated
-  user            User?            @relation(fields: [userId], references: [id])
+  claim           Claim               @relation(fields: [claimId], references: [id])
+  tenant          Tenant?             @relation(fields: [tenantId], references: [id])
+  userId          String? // User who scheduled/initiated
+  user            User?               @relation(fields: [userId], references: [id])
 
   @@index([claimId])
   @@index([tenantId])
@@ -311,8 +951,8 @@ model DeceptionScore {
   visualBehavior        Decimal  @db.Decimal(5, 4)
   expressionMeasurement Decimal  @db.Decimal(5, 4)
   createdAt             DateTime @default(now())
-  tenantId              String?  // Denormalized for reporting
-  userId                String?  // Who triggered analysis
+  tenantId              String? // Denormalized for reporting
+  userId                String? // Who triggered analysis
   session               Session  @relation(fields: [sessionId], references: [id])
   tenant                Tenant?  @relation(fields: [tenantId], references: [id])
   user                  User?    @relation(fields: [userId], references: [id])
@@ -333,8 +973,8 @@ model RiskAssessment {
   rawResponse    Json?
   contextData    Json?
   createdAt      DateTime       @default(now())
-  tenantId       String?        // Denormalized for reporting
-  userId         String?        // Who triggered analysis
+  tenantId       String? // Denormalized for reporting
+  userId         String? // Who triggered analysis
   session        Session        @relation(fields: [sessionId], references: [id])
   tenant         Tenant?        @relation(fields: [tenantId], references: [id])
   user           User?          @relation(fields: [userId], references: [id])
@@ -345,45 +985,70 @@ model RiskAssessment {
 }
 
 model Document {
-  id           String       @id @default(uuid())
-  claimId      String
-  type         DocumentType
-  filename     String
-  storageUrl   String
-  fileSize     Int?
-  mimeType     String?
-  status       DocumentStatus @default(QUEUED)
-  metadata     Json         @default("{}")
-  signedAt     DateTime?
-  documentHash String?
-  createdAt    DateTime     @default(now())
-  tenantId     String?      // Organization ownership
-  userId       String?      // Uploader ID
-  claim        Claim             @relation(fields: [claimId], references: [id])
-  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
-  user         User?             @relation(fields: [userId], references: [id])
-  analysis     DocumentAnalysis?
+  id                   String            @id @default(uuid())
+  claimId              String
+  type                 DocumentType
+  filename             String
+  storageUrl           String
+  fileSize             Int?
+  mimeType             String?
+  status               DocumentStatus    @default(QUEUED)
+  metadata             Json              @default("{}")
+  // ===== Digital signature lifecycle =====
+  // Set on every Document so we can show a "not requested" badge on the UI
+  // for non-signable docs (photos, receipts) as well as track the lifecycle
+  // for consent forms. The provider abstraction (Stub today, SigningCloud
+  // later) writes these columns through case-service's SignaturesService.
+  signatureStatus      SignatureStatus   @default(NOT_REQUESTED)
+  signatureRequestId   String? // External provider reference (SigningCloud envelope id)
+  signatureUrl         String? // URL the signer (claimant) opens to sign
+  signatureRequestedAt DateTime? // When the signing request was created
+  signedAt             DateTime? // When the claimant completed signing
+  signedStorageUrl     String? // URL of the countersigned PDF (signed PDF stored separately)
+  documentHash         String?
+  /// Soft delete (PD 12.8). A "deleted" document is hidden from ordinary use but
+  /// retained — row and stored file — until the retention sweep purges it after
+  /// the claim's retention period, and never while a legal hold stands.
+  deletedAt            DateTime?
+  deletedByUserId      String?
+  deleteReason         String?
+  createdAt            DateTime          @default(now())
+  tenantId             String? // Organization ownership
+  userId               String? // Uploader ID
+  claim                Claim             @relation(fields: [claimId], references: [id])
+  tenant               Tenant?           @relation(fields: [tenantId], references: [id])
+  user                 User?             @relation(fields: [userId], references: [id])
+  analysis             DocumentAnalysis?
 
   @@index([claimId])
+  @@index([signatureStatus])
   @@map("documents")
 }
 
+enum SignatureStatus {
+  NOT_REQUESTED // Default — signing has not been initiated
+  PENDING // Signing request created, signer has not yet completed
+  SIGNED // Signer completed; signedStorageUrl populated
+  EXPIRED // Request expired before signer completed
+  CANCELLED // Request explicitly cancelled
+}
+
 model DocumentAnalysis {
-  id            String   @id @default(uuid())
-  documentId    String   @unique
-  rawText       String?  // OCR text
-  extractedData Json?    // Normalized data from LLM
-  visionData    Json?    // Vision analysis result from VLM
-  modelUsed     String?
-  confidence    Float?
-  processingTime Int?    // in ms
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  tenantId      String?  // Organization ownership
-  userId        String?  // Who triggered analysis
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
-  user          User?    @relation(fields: [userId], references: [id])
+  id             String   @id @default(uuid())
+  documentId     String   @unique
+  rawText        String? // OCR text
+  extractedData  Json? // Normalized data from LLM
+  visionData     Json? // Vision analysis result from VLM
+  modelUsed      String?
+  confidence     Float?
+  processingTime Int? // in ms
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenantId       String? // Organization ownership
+  userId         String? // Who triggered analysis
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  user           User?    @relation(fields: [userId], references: [id])
 
   @@map("document_analyses")
 }
@@ -392,18 +1057,18 @@ model TrinityCheck {
   id                String   @id @default(uuid())
   claimId           String
   claim             Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  score             Float?   // 0.0 to 100.0
-  status            String   // PASS, FAIL, WARNING, REVIEW_NEEDED
+  score             Float? // 0.0 to 100.0
+  status            String // PASS, FAIL, WARNING, REVIEW_NEEDED
   summary           String?
-  checkResults      Json     // Detailed pass/fail for each rule
-  riskFactors       Json     // Identified risks
+  checkResults      Json // Detailed pass/fail for each rule
+  riskFactors       Json // Identified risks
   reasoning         String?  @db.Text
   reasoningInsights Json?
   reportUrl         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  tenantId          String?  // Organization ownership
-  userId            String?  // Triggered by
+  tenantId          String? // Organization ownership
+  userId            String? // Triggered by
   tenant            Tenant?  @relation(fields: [tenantId], references: [id])
   user              User?    @relation(fields: [userId], references: [id])
 
@@ -424,8 +1089,8 @@ model AuditTrail {
   newValues  Json?
   metadata   Json?
   createdAt  DateTime   @default(now())
-  tenantId   String?    // Tenant context for this audit event
-  userId     String?    // User context
+  tenantId   String? // Tenant context for this audit event
+  userId     String? // User context
   tenant     Tenant?    @relation(fields: [tenantId], references: [id])
   user       User?      @relation(fields: [userId], references: [id])
 
@@ -478,13 +1143,126 @@ enum UserTenantStatus {
   PENDING_APPROVAL
 }
 
+// Coarse-grained claim category drives polymorphic sub-tables, evidence
+// checklists, and which FraudSignalProvider plugins apply.
+enum ClaimCategory {
+  MOTOR
+  FLOOD
+  FIRE
+  LIGHTNING
+  BURGLARY
+  PERSONAL_ACCIDENT
+  HOH // Houseowner / Householder umbrella (multi-peril)
+  TRAVEL
+  OTHER
+}
 
+// Travel-specific subtype — only meaningful when category=TRAVEL.
+// Exactly the five categories agreed for the MSIG TPA scope.
+enum TravelClaimType {
+  FLIGHT_DELAY
+  LUGGAGE_DAMAGE
+  LUGGAGE_LOSS
+  TRIP_CANCELLATION
+  MEDICAL
+}
+
+enum CaseStatus {
+  DRAFT // created, intake in progress
+  IN_PROGRESS // answers being captured
+  SUBMITTED // claimant/staff finished review + submit
+  UNDER_REVIEW // operator opened it (vetting)
+  INFO_REQUESTED // operator asked for more info — claimant can amend
+  REFERRED_TO_EXPERT // MEDICAL: routed to human expert, awaiting outcome
+  CONVERTED // Claim created (handback to insurer)
+  REJECTED
+  ABANDONED
+}
+
+enum CaseChannel {
+  WEB_CHAT
+  STAFF
+  EMAIL
+  WHATSAPP
+  TELEGRAM
+  MESSENGER
+}
+
+/// Publication state of a FlowDefinition. DRAFT is editable and unusable;
+/// PUBLISHED is usable and immutable; ARCHIVED is neither, but is retained
+/// because Cases pin the version they walked.
+enum FlowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CaseInitiator {
+  CLAIMANT
+  STAFF
+  SYSTEM // future proactive detection (e.g. flight-delay feed)
+}
+
+enum PolicySource {
+  MANUAL // keyed in from insurer emails
+  API // insurer API integration (future)
+  FILE_FEED // structured file drop from the insurer (SFTP or agreed inbox schema)
+}
+
+enum DocumentValidationStatus {
+  PENDING
+  PASSED
+  FLAGGED
+  SKIPPED
+}
+
+// Motor-specific subtype — only meaningful when category=MOTOR.
 enum ClaimType {
   OWN_DAMAGE
   THIRD_PARTY_PROPERTY
   THIRD_PARTY_INJURY
   THEFT
   WINDSCREEN
+}
+
+enum FloodSource {
+  RIVER_OVERFLOW
+  FLASH_FLOOD
+  COASTAL_SURGE
+  DRAINAGE_FAILURE
+  RAINWATER_INGRESS
+  DAM_RELEASE
+  UNKNOWN
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+  MIXED_USE
+  AGRICULTURAL
+  OTHER
+}
+
+// Shift Technology-inspired signal taxonomy. Each detector tags its output
+// with one category so the adjuster UI can group them sensibly.
+enum FraudCategory {
+  PARAMETRIC // External trigger verification (rainfall, lightning strikes)
+  IDENTITY // eKYC, deepfake, liveness checks
+  BEHAVIOURAL // Hume voice/face, Parselmouth voice stress, attention
+  DOCUMENT // OCR + forgery + duplicate-receipt detection
+  NETWORK // Graph: repeat claimants, linked accounts, shared addresses
+  ENVIRONMENTAL // Weather, satellite, geo, timezone evidence
+  INVENTORY // Contents inventory validation, market-value checks
+  POLICY // Policy timing anomalies (new policy + immediate claim)
+}
+
+enum SignalSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum ClaimStatus {
@@ -551,6 +1329,25 @@ enum DocumentType {
   NRIC
   OTHER_DOCUMENT
   CLAIMANT_SCREENSHOT
+  // Non-motor evidence types
+  BOMBA_REPORT // Fire & Rescue Department report (fire claims)
+  FLOOD_AUTHORITY_REPORT // NADMA / JPS / local council flood notice
+  WEATHER_REPORT // MetMalaysia weather/rainfall/lightning record
+  UTILITY_SURGE_REPORT // TNB / utility company surge incident (lightning)
+  INVENTORY_LIST // Contents inventory for fire/flood/burglary
+  PROOF_OF_OWNERSHIP // Receipts, serial numbers, photos predating loss
+  MEDICAL_REPORT // PA / injury claims
+  PROPERTY_TITLE // Geran / property ownership
+  UTILITY_BILL // Address proof
+  // Travel evidence types
+  BOARDING_PASS
+  FLIGHT_ITINERARY // e-ticket / booking confirmation
+  AIRLINE_DELAY_CONFIRMATION // airline delay/cancellation notice
+  PROPERTY_IRREGULARITY_REPORT // PIR (luggage damage/loss)
+  BAGGAGE_TAG
+  PASSPORT
+  OVERSEAS_MEDICAL_BILL
+  TRAVEL_BOOKING_INVOICE // bookings, cancellation/refund proof
 }
 
 enum ActorType {
@@ -579,14 +1376,17 @@ model VideoUpload {
   filename       String
   fileSize       Int
   mimeType       String
-  duration       Float?            // in seconds
+  duration       Float? // in seconds
   processedUntil Float             @default(0) // seconds processed so far
   status         VideoUploadStatus @default(PENDING)
-  uploadedBy     String?           // user ID (deprecated, use userId)
-  userId         String?           // Who uploaded
+  /// Soft delete (PD 12.8): recordings are claim evidence, so "delete" hides
+  /// rather than destroys until the retention sweep is entitled to purge.
+  deletedAt      DateTime?
+  uploadedBy     String? // user ID (deprecated, use userId)
+  userId         String? // Who uploaded
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-  tenantId       String?           // Organization ownership
+  tenantId       String? // Organization ownership
   claim          Claim             @relation(fields: [claimId], references: [id])
   tenant         Tenant?           @relation(fields: [tenantId], references: [id])
   user           User?             @relation(fields: [userId], references: [id])
@@ -603,15 +1403,14 @@ enum VideoUploadStatus {
   FAILED
 }
 
-
 model VehicleMake {
   id        String         @id @default(uuid())
   name      String
   models    VehicleModel[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
-  tenantId  String?        // Organization ownership
-  userId    String?        // Creator
+  tenantId  String? // Organization ownership
+  userId    String? // Creator
   tenant    Tenant?        @relation(fields: [tenantId], references: [id])
   user      User?          @relation(fields: [userId], references: [id])
 
@@ -628,8 +1427,8 @@ model VehicleModel {
   make      VehicleMake @relation(fields: [makeId], references: [id], onDelete: Cascade)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
-  tenantId  String?     // Organization ownership
-  userId    String?     // Creator
+  tenantId  String? // Organization ownership
+  userId    String? // Creator
   tenant    Tenant?     @relation(fields: [tenantId], references: [id])
   user      User?       @relation(fields: [userId], references: [id])
 
@@ -641,9 +1440,9 @@ model VehicleModel {
 }
 
 model SessionClientInfo {
-  id               String   @id @default(uuid())
+  id               String  @id @default(uuid())
   sessionId        String
-  session          Session  @relation(fields: [sessionId], references: [id])
+  session          Session @relation(fields: [sessionId], references: [id])
   latitude         Float?
   longitude        Float?
   ipv4             String?
@@ -654,25 +1453,1339 @@ model SessionClientInfo {
   platform         String?
   screenResolution String?
   timezone         String?
-  
+
   // ISP Info
-  city             String?
-  region           String?
-  country          String?
-  postalCode       String?
-  isp              String?
-  organisation     String?
-  asn              String?
-  
-  metadata         Json?    @default("{}")
-  createdAt        DateTime @default(now())
-  tenantId         String?  // Organization info
-  userId           String?  // Associated user session
-  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
-  user             User?    @relation(fields: [userId], references: [id])
+  city         String?
+  region       String?
+  country      String?
+  postalCode   String?
+  isp          String?
+  organisation String?
+  asn          String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  tenantId  String? // Organization info
+  userId    String? // Associated user session
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([sessionId])
   @@index([tenantId])
   @@index([userId])
   @@map("session_client_info")
+}
+
+// ============================================================================
+// SLA CLOCKS — turnaround obligations (BNM CSP PD 029-69; Adjuster PD 12.5)
+// ============================================================================
+
+/// A stage of the claim journey that carries a turnaround obligation.
+/// Firm-side stages are ours to meet; insurer-side stages are measured only, so
+/// the firm can evidence where a delay actually originated.
+enum SlaStage {
+  ACK_TO_INSURER /// firm acknowledges an appointment — 1 working day
+  PRELIMINARY_REPORT /// market practice, per-insurer target
+  FINAL_REPORT /// CSP 10.13: 14 working days non-motor, from complete documents
+  SUPPLEMENTARY_CLAIM /// 5 working days
+  INSURER_DECISION /// insurer side: 7 working days — monitored, not owned
+  INSURER_PAYMENT /// insurer side: 14 working days non-motor — monitored
+}
+
+enum SlaClockState {
+  RUNNING
+  PAUSED /// stopped by a dependency outside the firm's control
+  MET /// completed on or before the deadline
+  BREACHED /// deadline passed while still running
+}
+
+/// Configured turnaround target for one stage.
+///
+/// `tenantId` null is the platform default; a row with a tenantId overrides it
+/// for that insurer, which is what makes white-label multi-panel operation
+/// possible without code changes.
+model SlaPolicy {
+  id                    String   @id @default(uuid())
+  tenantId              String?
+  stage                 SlaStage
+  workingDays           Int
+  /// Warn this many working days before the deadline. Skipped when the target
+  /// is not longer than the warning window — a 1-day SLA cannot warn early.
+  warnWorkingDaysBefore Int      @default(1)
+  /// Malaysian state whose weekend pattern and holidays apply. Null uses the
+  /// national calendar (Saturday–Sunday).
+  calendarState         String?
+  /// Insurer-side stages: measure and report, never escalate against the firm.
+  monitorOnly           Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant Tenant?    @relation(fields: [tenantId], references: [id])
+  clocks SlaClock[]
+
+  @@unique([tenantId, stage])
+  @@index([stage])
+  @@map("sla_policies")
+}
+
+/// A running deadline against one claim and stage.
+///
+/// History is kept: a stage may legitimately recur (a second supplementary
+/// claim), so completed clocks are never overwritten. A partial unique index
+/// added in the migration guarantees at most one RUNNING or PAUSED clock per
+/// claim and stage, so the state cannot become ambiguous.
+model SlaClock {
+  id String @id @default(uuid())
+
+  /// A clock hangs on a claim *or* on an assignment. The acknowledgement
+  /// obligation falls due before any claim exists — that is why it could not be
+  /// measured until `Assignment` existed — so exactly one of these is set.
+  claimId      String?
+  assignmentId String?
+
+  policyId String
+  stage    SlaStage
+  state    SlaClockState @default(RUNNING)
+
+  startedAt DateTime @default(now())
+  /// Deadline in working days from startedAt, per the policy's calendar.
+  dueAt     DateTime
+
+  pausedAt                    DateTime?
+  /// Working days that remained when the clock was paused. The deadline is
+  /// recomputed from the resume date, so a pause never silently consumes time.
+  remainingWorkingDaysAtPause Int?
+  pauseReason                 String?
+
+  stoppedAt       DateTime?
+  breachedAt      DateTime?
+  /// Set when the due-soon warning has fired, so it fires once.
+  warnedAt        DateTime?
+  /// Raised on each escalation step after a breach.
+  escalationLevel Int       @default(0)
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim      Claim?      @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  policy     SlaPolicy   @relation(fields: [policyId], references: [id])
+
+  @@index([claimId])
+  @@index([assignmentId])
+  @@index([state, dueAt])
+  @@index([stage])
+  @@map("sla_clocks")
+}
+
+// ============================================================================
+// ADJUSTER REPORTS — the firm's core work product (BNM Adjuster PD 12.6–12.7)
+// ============================================================================
+
+enum AdjusterReportType {
+  PRELIMINARY
+  INTERIM
+  FINAL
+  SUPPLEMENTARY
+}
+
+enum AdjusterReportStatus {
+  DRAFT /// being written by the author
+  IN_REVIEW /// submitted, awaiting sign-off
+  SIGNED /// signed by a qualified adjusting employee
+  ISSUED /// released to the insurer — immutable from here
+  WITHDRAWN /// superseded or retracted, retained for the record
+}
+
+/// An adjuster's report on a claim.
+///
+/// PD 12.7 restricts authorship to adjusting employees and requires a junior's
+/// report to be signed by a senior, so `authorAdjusterId` and `signedByAdjusterId`
+/// are separate and both point at Adjuster rather than User — a report cannot be
+/// authored by someone who is not an adjusting employee.
+///
+/// PD 12.6 requires the report to disclose facts, assumptions, methods, sources
+/// and databases relied on. Those sections are mandatory in the template registry
+/// and cannot be signed while empty.
+///
+/// Reports are never edited after issue. A correction supersedes the previous
+/// version via `supersedesId`, so the record shows what was told to the insurer
+/// and when — which is the question a s.146 examination asks.
+model AdjusterReport {
+  id      String               @id @default(uuid())
+  claimId String
+  type    AdjusterReportType
+  status  AdjusterReportStatus @default(DRAFT)
+
+  /// Increments per claim and type; a superseding report carries the next number.
+  version      Int     @default(1)
+  supersedesId String? @unique
+
+  /// Section key → { heading, body, aiAssisted }. The template registry defines
+  /// which keys are mandatory; see report-templates.ts.
+  sections Json @default("{}")
+
+  authorAdjusterId   String
+  reviewerAdjusterId String?
+  signedByAdjusterId String?
+
+  /// The exact quantum worksheet revision this report cites.
+  ///
+  /// Stored rather than resolved at render time so the two cannot silently
+  /// diverge: an issued report must keep showing the figure it was signed
+  /// against, even after the worksheet is revised. A draft citing a superseded
+  /// revision is reported as outdated so the author can refresh it deliberately.
+  quantumWorksheetId String?
+
+  /// Recorded when the countersign requirement could not be verified against
+  /// seniority data, so the basis of a sign-off is never silently assumed.
+  countersignBasis String?
+
+  submittedAt DateTime?
+  signedAt    DateTime?
+  issuedAt    DateTime?
+
+  withdrawnAt     DateTime?
+  withdrawnReason String?
+
+  /// Rendered PDF, once issued.
+  renderedDocumentId String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim          Claim               @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  author         Adjuster            @relation("ReportAuthor", fields: [authorAdjusterId], references: [id])
+  reviewer       Adjuster?           @relation("ReportReviewer", fields: [reviewerAdjusterId], references: [id])
+  signedBy       Adjuster?           @relation("ReportSigner", fields: [signedByAdjusterId], references: [id])
+  supersedes     AdjusterReport?     @relation("ReportSupersession", fields: [supersedesId], references: [id])
+  supersededBy   AdjusterReport?     @relation("ReportSupersession")
+  qualityReviews WorkQualityReview[]
+
+  @@index([claimId])
+  @@index([status])
+  @@index([authorAdjusterId])
+  @@map("adjuster_reports")
+}
+
+// ============================================================================
+// AUTHORITY LIMITS — segregation of duties (§4.3 A3; PD 11.2(d))
+// ============================================================================
+
+/// Who may approve a claim, and up to what value.
+///
+/// The defect this closes: an adjuster could assess a claim and approve it in
+/// the same breath, at any amount, with nothing recording that the same person
+/// did both. Segregation of duties is the control every financial-services
+/// examiner looks for first, and its absence is not mitigated by good intent.
+///
+/// A limit may be attached to a role (everyone holding it) or to a named
+/// adjuster (which takes precedence). `maxApprovalAmount` null means unlimited
+/// — deliberate and explicit rather than implied by an absent row, because
+/// "no limit configured" and "no limit intended" must not look the same.
+model AuthorityLimit {
+  id       String @id @default(uuid())
+  tenantId String
+
+  /// Applies to everyone holding this role. Mutually exclusive with adjusterId.
+  role       UserRole?
+  /// Applies to one named adjuster, overriding any role limit.
+  adjusterId String?
+
+  /// Null applies to every claim category.
+  category ClaimCategory?
+
+  /// Null means no ceiling. Absence of a row means no authority at all.
+  maxApprovalAmount Decimal? @db.Decimal(14, 2)
+
+  /// May the holder approve a claim they assessed themselves? Default false —
+  /// the four-eyes principle is the point of the model.
+  canApproveOwnAssessment Boolean @default(false)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  adjuster Adjuster? @relation(fields: [adjusterId], references: [id])
+
+  @@index([tenantId, role])
+  @@index([adjusterId])
+  @@map("authority_limits")
+}
+
+// ============================================================================
+// CONSENT — PDPA 2010 lawful basis, notice and withdrawal
+// ============================================================================
+
+enum ConsentPurpose {
+  CLAIM_PROCESSING /// handling the claim itself
+  BIOMETRIC_ANALYSIS /// voice and facial analysis — sensitive personal data
+  CROSS_BORDER_TRANSFER /// s.129(3)(a) basis for offshore processors
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum ConsentChannel {
+  WEB_FORM
+  VIDEO_SESSION
+  STAFF_CAPTURED
+  IMPORTED
+  /// Agreed in a messaging thread (Telegram today; WhatsApp/Messenger later).
+  /// Its own value rather than WEB_FORM: the record has to say where consent
+  /// was actually given, and a chat thread is not a web form. It also matters
+  /// evidentially — the wording shown, and the reply agreeing to it, are both
+  /// in the conversation transcript.
+  MESSAGING
+}
+
+/// The wording a data subject was shown, versioned and approved.
+///
+/// PDPA s.7 requires written notice in **both English and Bahasa Malaysia**, so
+/// a notice version is incomplete until both locales exist — enforced in the
+/// service, not left to whoever writes the seed.
+///
+/// A notice is immutable once approved. Consent is only meaningful if the exact
+/// wording the subject agreed to can be reproduced years later; editing it in
+/// place would make every prior consent unprovable.
+model ConsentNotice {
+  id      String         @id @default(uuid())
+  purpose ConsentPurpose
+  version Int
+  /// `en` or `ms`.
+  locale  String
+
+  title String
+  body  String
+
+  /// Null means draft. An unapproved notice can never be shown to a data
+  /// subject or recorded against — the gate is in the service.
+  approvedByUserId String?
+  approvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consents Consent[]
+
+  @@unique([purpose, version, locale])
+  @@index([purpose, approvedAt])
+  @@map("consent_notices")
+}
+
+/// One data subject's consent to one purpose.
+///
+/// Withdrawal does not delete the record — PDPA gives a right to withdraw, and
+/// evidencing *when* processing became unlawful requires the original grant to
+/// survive alongside the withdrawal.
+model Consent {
+  id         String         @id @default(uuid())
+  claimantId String
+  purpose    ConsentPurpose
+  status     ConsentStatus  @default(GRANTED)
+
+  /// Exactly which wording, in which language, the subject agreed to.
+  noticeId String
+
+  grantedAt        DateTime  @default(now())
+  withdrawnAt      DateTime?
+  withdrawalReason String?
+
+  capturedVia      ConsentChannel @default(WEB_FORM)
+  ipAddress        String?
+  /// Staff member who captured it, when not self-served.
+  capturedByUserId String?
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claimant Claimant      @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+  notice   ConsentNotice @relation(fields: [noticeId], references: [id])
+
+  @@index([claimantId, purpose])
+  @@index([status])
+  @@map("consents")
+}
+
+// ============================================================================
+// ASSIGNMENT — the insurer's appointment (CSP ack ≤1 working day; PD 11.2(a))
+// ============================================================================
+
+/// What the firm was appointed to do. Drives which gate set applies.
+enum AssignmentMode {
+  TPA_ADMIN /// claims administration on the insurer's behalf
+  ADJUSTING /// independent adjusting, issuing an adjuster's report
+}
+
+/// How the appointment reached the firm. Merimen is the market's rail; the
+/// others exist because access to it is insurer-sponsored and not guaranteed
+/// (docs/MASTER_PLAN.md §6.4), so no schema assumes it.
+enum AssignmentChannel {
+  EMAIL
+  PORTAL
+  MERIMEN
+  API
+  MANUAL
+}
+
+enum AssignmentStatus {
+  RECEIVED /// logged, acknowledgement outstanding
+  ACKNOWLEDGED /// ack sent to the insurer — stops the CSP clock
+  ACCEPTED /// work under way; a claim has been opened
+  DECLINED /// refused, with a reason
+  COMPLETED /// closed out
+}
+
+/// An insurer's instruction to handle a matter.
+///
+/// The claim journey previously began at `Claim`, which meant it began when the
+/// firm decided to start work rather than when the insurer asked — leaving no
+/// record of the appointment and nothing for the CSP one-working-day
+/// acknowledgement to be measured from. PD 11.2(a) expects the adjusting process
+/// to be embodied end to end; this is the missing front end.
+///
+/// A claim is opened *from* an assignment rather than the other way round. The
+/// relation is optional because an assignment can be declined before any claim
+/// exists, and that refusal is itself part of the record.
+model Assignment {
+  id String @id @default(uuid())
+
+  /// Who appointed the firm.
+  insurerTenantId  String
+  /// The adjusting firm instructed.
+  handlingTenantId String
+
+  mode    AssignmentMode    @default(TPA_ADMIN)
+  channel AssignmentChannel @default(EMAIL)
+  status  AssignmentStatus  @default(RECEIVED)
+
+  /// The insurer's own reference — a Merimen number, an email subject ref, a
+  /// claim number in their system. Unique per insurer so the same appointment
+  /// ingested twice does not become two, which matters most for automated
+  /// channels where a retry is normal.
+  externalRef String
+
+  /// What the firm was asked to assess, in the insurer's words.
+  scope        String?
+  instructions String?
+
+  appointedByName  String?
+  appointedByEmail String?
+
+  /// When the instruction arrived — the moment the CSP clock starts from, which
+  /// is not the same as when the row was written.
+  receivedAt     DateTime  @default(now())
+  /// When the acknowledgement went back to the insurer.
+  acknowledgedAt DateTime?
+  declinedAt     DateTime?
+  declineReason  String?
+  completedAt    DateTime?
+
+  /// The claim opened for this appointment, once one exists.
+  claimId String? @unique
+
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insurer      Tenant     @relation("AssignmentInsurer", fields: [insurerTenantId], references: [id])
+  handlingFirm Tenant     @relation("AssignmentHandlingFirm", fields: [handlingTenantId], references: [id])
+  claim        Claim?     @relation(fields: [claimId], references: [id])
+  slaClocks    SlaClock[]
+
+  @@unique([insurerTenantId, externalRef])
+  @@index([handlingTenantId, status])
+  @@index([status, receivedAt])
+  @@map("assignments")
+}
+
+// ============================================================================
+// RETENTION — PD 12.8: records kept ≥7 years; purge is scheduled, never manual
+// ============================================================================
+
+/// How long each kind of record is kept after its claim closes.
+///
+/// A table rather than a constant so a panel insurer's contract can demand
+/// longer — but never shorter: the PD 12.8 seven-year floor is enforced in code
+/// and asserted by test, so no row can quietly undercut it.
+model RetentionPolicy {
+  id          String  @id @default(uuid())
+  /// e.g. DOCUMENT, VIDEO_UPLOAD. One row per kind.
+  entityType  String  @unique
+  /// Years after claim closure before a purge becomes permissible.
+  retainYears Int     @default(7)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("retention_policies")
+}
+
+// ============================================================================
+// CROSS-BORDER TRANSFER REGISTER — PDPA s.129; CBPDT Guidelines (April 2025)
+// ============================================================================
+
+/// One transfer of personal data to a recipient outside Malaysia.
+///
+/// The CBPDT Guidelines require the data controller to keep records of each
+/// cross-border transfer: recipient, country, type of data, purpose, and
+/// evidence of the s.129 basis relied on. Until now every Gemini, Hume and
+/// Daily.co call moved claimant data offshore with no record at all.
+///
+/// `lawfulBasis` is nullable on purpose: where no basis has been established
+/// yet, the honest record says so — a register that invents a basis is worse
+/// than the gap it papers over.
+model TransferRecord {
+  id String @id @default(uuid())
+
+  /// Recipient service, from the provider registry (e.g. HUME_AI, GOOGLE_GEMINI).
+  provider String
+  /// Country the recipient processes in.
+  country  String
+
+  /// What was sent, in words a regulator can read.
+  dataDescription String
+  /// Why it was sent.
+  purpose         String
+  /// s.129 basis relied on, e.g. "CONSENT s.129(3)(a)". Null = none established.
+  lawfulBasis     String?
+
+  /// Which service initiated the transfer.
+  sourceService String
+
+  claimId    String?
+  claimantId String?
+
+  transferredAt DateTime @default(now())
+  metadata      Json?    @default("{}")
+
+  @@index([provider, transferredAt])
+  @@index([claimId])
+  @@map("transfer_records")
+}
+
+// ============================================================================
+// ADJUSTER COMPETENCY — PD 12.2(b), 12.3, 12.4: who may do which adjusting work
+// ============================================================================
+
+/// An adjusting employee's standing in one subject matter.
+///
+/// PD 12.4 makes seniority a *recognition*, not an arithmetic: five years in the
+/// subject (12.4(a)) is the floor, and the firm must also weigh case volume and
+/// performance (12.4(b)) before recognising someone as senior. So the model
+/// records the inputs and the recognition act separately — `yearsInSubject`
+/// alone never makes anyone senior.
+model AdjusterCompetency {
+  id         String        @id @default(uuid())
+  adjusterId String
+  category   ClaimCategory
+
+  /// Years of adjusting experience in this subject matter (12.4(a)).
+  yearsInSubject          Int
+  /// Relevant cases handled (12.4(b)(i)) — an input to recognition, kept current.
+  casesHandled            Int     @default(0)
+  /// 12.4(b)(ii): satisfactory performance across relevant cases.
+  performanceSatisfactory Boolean @default(false)
+
+  /// The recognition act (12.4): a named person, on a date, decided this
+  /// adjuster is senior in this subject. Absent = not senior, whatever the years.
+  seniorRecognisedAt       DateTime?
+  seniorRecognisedByUserId String?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([adjusterId, category])
+  @@index([category])
+  @@map("adjuster_competencies")
+}
+
+// ============================================================================
+// CONFLICT OF INTEREST — PD 10.3, 11.2(c), 12.1(d)
+// ============================================================================
+
+enum ConflictPartyType {
+  INSURER
+  TAKAFUL_OPERATOR
+  WORKSHOP
+  CLAIMANT
+  OTHER
+}
+
+enum ConflictInterestType {
+  EMPLOYMENT
+  EQUITY
+  FAMILY
+  FINANCIAL
+  OTHER
+}
+
+/// A standing declaration of a relation or interest (PD 10.3).
+///
+/// The PD reaches spouses, children, parents, siblings and other immediate
+/// family — so `relationship` records *whose* interest it is, and a declaration
+/// is never deleted: it is resolved, with a reason, because "we knew and dealt
+/// with it" is the record that protects the firm, while a deleted row protects
+/// nobody.
+model ConflictDeclaration {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  partyType     ConflictPartyType
+  interestType  ConflictInterestType
+  /// The party's name as declared (e.g. an insurer or workshop name).
+  partyName     String
+  /// When the party is a tenant on the platform, the id enables automatic
+  /// screening against a claim's insurer — a name match alone is weaker.
+  partyTenantId String?
+
+  /// Whose interest: SELF, SPOUSE, CHILD, PARENT, SIBLING, OTHER_FAMILY.
+  relationship String
+  details      String?
+
+  declaredAt       DateTime  @default(now())
+  declaredByUserId String
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  resolvedNote     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, resolvedAt])
+  @@index([partyTenantId])
+  @@map("conflict_declarations")
+}
+
+/// The per-claim attestation (PD 12.1(d)): the assigned adjuster confirms, for
+/// this specific claim, that no undeclared conflict exists — or declares one.
+model ConflictAttestation {
+  id         String @id @default(uuid())
+  claimId    String
+  adjusterId String
+
+  hasConflict Boolean  @default(false)
+  note        String?
+  attestedAt  DateTime @default(now())
+
+  claim    Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, adjusterId])
+  @@map("conflict_attestations")
+}
+
+// ============================================================================
+// CPD LEDGER — PD 12.9–12.11: 15 hours per adjusting employee per year
+// ============================================================================
+
+/// One CPD activity attended by an adjusting employee.
+///
+/// PD 12.11 directs the firm to the Association of Malaysian Loss Adjusters (or
+/// institutions BNM specifies) on which programmes *qualify* — so recognition
+/// is recorded per entry, and only recognised hours count toward the 12.10
+/// floor. Unrecognised attendance is still recorded: it is true, it is just not
+/// the currency the floor is denominated in.
+model CpdRecord {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  /// Calendar year the hours count toward.
+  year  Int
+  hours Decimal @db.Decimal(5, 1)
+
+  programmeName      String
+  provider           String
+  /// Qualifies per PD 12.11 (AMLA-the-association or a BNM-specified institution).
+  providerRecognised Boolean @default(false)
+
+  completedAt DateTime
+  /// Certificate or attendance evidence, when held.
+  evidenceUrl String?
+  notes       String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, year])
+  @@map("cpd_records")
+}
+
+// ============================================================================
+// BACKGROUND SCREENING — PD 11.2(e): due diligence prior to employment
+// ============================================================================
+
+/// The check kinds 11.2(e) names as the minimum.
+enum ScreeningCheckType {
+  BANKRUPTCY_INSOLVENCY
+  EMPLOYMENT_HISTORY
+  ACADEMIC_HISTORY
+  CRIMINAL_SCREENING
+  OTHER
+}
+
+enum ScreeningOutcome {
+  CLEAR
+  FINDINGS
+}
+
+/// One background check on an adjusting employee.
+///
+/// 11.2(e) says *prior to employment* — so a check dated after `adjustingSince`
+/// is recorded (late screening beats none) but flagged as late rather than
+/// silently counted as compliant. FINDINGS is a legitimate outcome: the record
+/// of "we found it, considered it and hired anyway" is exactly what protects
+/// the firm; only an undescribed finding is refused.
+model BackgroundScreening {
+  id         String @id @default(uuid())
+  adjusterId String
+
+  checkType    ScreeningCheckType
+  outcome      ScreeningOutcome
+  /// Required when the outcome is FINDINGS.
+  findingsNote String?
+
+  /// When the check was performed — may predate the adjuster record.
+  screenedAt  DateTime
+  /// Who performed it (an agency, a registry search, a named person).
+  conductedBy String
+  evidenceUrl String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@index([adjusterId, checkType])
+  @@map("background_screenings")
+}
+
+// ============================================================================
+// COMPLIANCE EVENTS — PD 11.2(d): timely escalation of issues to the Board
+// ============================================================================
+
+enum ComplianceEventType {
+  SLA_BREACH_ESCALATED
+  COI_CONFLICT_ATTESTED
+  POLICY_BREACH
+  AUDIT_GAP
+  OTHER
+}
+
+enum ComplianceEventSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ComplianceEventStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+/// An issue on its way to the Board (PD 11.2(d)).
+///
+/// Events are raised by the system where the controls already are — a firm-side
+/// SLA breach reaching escalation level 3, an adjuster attesting a conflict —
+/// and by hand for everything else. `dedupeKey` makes system raising idempotent:
+/// the SLA sweep runs every fifteen minutes, and a breach that raised a fresh
+/// event per sweep would bury the register it exists to feed.
+model ComplianceEvent {
+  id String @id @default(uuid())
+
+  type     ComplianceEventType
+  severity ComplianceEventSeverity
+  status   ComplianceEventStatus   @default(OPEN)
+
+  title   String
+  details String?
+
+  claimId    String?
+  adjusterId String?
+
+  /// Null for system-raised events; the raising control is named in `source`.
+  raisedByUserId String?
+  source         String
+
+  /// Unique per underlying fact, so the same breach raises one event however
+  /// many sweeps observe it.
+  dedupeKey String? @unique
+
+  acknowledgedAt       DateTime?
+  acknowledgedByUserId String?
+  resolvedAt           DateTime?
+  resolvedByUserId     String?
+  resolutionNote       String?
+
+  /// When this event was included in a Board report — the 11.2(d) act itself.
+  boardReportedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, severity])
+  @@index([boardReportedAt])
+  @@map("compliance_events")
+}
+
+// ============================================================================
+// FIT AND PROPER — PD 10.1/10.2: shareholders and key responsible persons
+// ============================================================================
+
+enum KeyPersonType {
+  SHAREHOLDER
+  KRP
+  SHAREHOLDER_AND_KRP
+}
+
+/// A shareholder or key responsible person of the firm.
+///
+/// Kept as a register with appointment and cessation dates because PD 13.1
+/// makes changes to directors, CEO and shareholders notifiable to BNM within
+/// seven working days — when `BnmNotification` is built, these dates are what
+/// it hangs on.
+model KeyPerson {
+  id String @id @default(uuid())
+
+  fullName String
+  type     KeyPersonType
+  /// e.g. Director, CEO, Head of Claims — free text; `type` drives the criteria.
+  position String?
+
+  appointedAt DateTime
+  ceasedAt    DateTime?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attestations FitProperAttestation[]
+
+  @@index([type, ceasedAt])
+  @@map("key_persons")
+}
+
+/// One fit-and-proper attestation for one person.
+///
+/// `responses` maps each applicable criterion code to its outcome and note.
+/// `allMet` is denormalised for the register listing; the truth stays in the
+/// responses. A NOT_MET outcome does not block recording — the honest record of
+/// an unfit finding is the whole point — it raises a compliance event instead.
+model FitProperAttestation {
+  id          String @id @default(uuid())
+  keyPersonId String
+
+  /// { [criterionCode]: { outcome: 'MET' | 'NOT_MET', note?: string } }
+  responses Json
+  allMet    Boolean
+
+  attestedAt       DateTime @default(now())
+  attestedByUserId String
+  notes            String?
+
+  keyPerson KeyPerson @relation(fields: [keyPersonId], references: [id], onDelete: Cascade)
+
+  @@index([keyPersonId, attestedAt])
+  @@map("fit_proper_attestations")
+}
+
+// ============================================================================
+// WORK-QUALITY REVIEWS — PD 11.2(b): adequate reviews of practices and quality
+// ============================================================================
+
+enum QualityRating {
+  SATISFACTORY
+  NEEDS_IMPROVEMENT
+  UNSATISFACTORY
+}
+
+/// A review of one adjuster's work on one issued report.
+///
+/// This is the evidence behind `AdjusterCompetency.performanceSatisfactory`
+/// (PD 12.4(b)(ii)): recognition attests performance, and these rows are what
+/// the attestation stands on.
+model WorkQualityReview {
+  id         String @id @default(uuid())
+  reportId   String
+  adjusterId String
+
+  rating   QualityRating
+  /// Required for any rating below SATISFACTORY — the finding is the value.
+  findings String?
+  notes    String?
+
+  reviewerUserId String
+  reviewedAt     DateTime @default(now())
+
+  report   AdjusterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  adjuster Adjuster       @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, reviewerUserId])
+  @@index([adjusterId, reviewedAt])
+  @@map("work_quality_reviews")
+}
+
+// ============================================================================
+// BNM NOTIFICATIONS — PD 13.1: notify within 7 working days of the change
+// ============================================================================
+
+enum BnmChangeType {
+  PAID_UP_CAPITAL
+  HEAD_OFFICE_RELOCATION
+  BRANCH_CHANGE
+  DIRECTOR_CEO_SHAREHOLDER_CHANGE
+}
+
+/// One notifiable change and whether BNM has been told.
+///
+/// The obligation binds a *registered* adjuster, so as a TPA the register runs
+/// inert — due dates computed, nothing escalated — and the licence flip makes
+/// an overdue notification a Board matter. Rows for director/CEO/shareholder
+/// changes are drafted automatically from the KeyPerson register; capital and
+/// office changes are raised by hand.
+model BnmNotification {
+  id String @id @default(uuid())
+
+  changeType  BnmChangeType
+  description String
+
+  /// When the change occurred — the 7-working-day clock runs from here.
+  occurredAt DateTime
+  /// occurredAt + 7 working days (KL calendar).
+  dueAt      DateTime
+
+  /// When BNM was actually notified, with the submission reference.
+  notifiedAt       DateTime?
+  notifiedByUserId String?
+  reference        String?
+
+  /// The KeyPerson change that drafted this row, when automatic.
+  keyPersonId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([notifiedAt, dueAt])
+  @@map("bnm_notifications")
+}
+
+// ============================================================================
+// BILLING — CSP 11.16–11.18: adjuster fees, and evidence the ITO settles them
+// ============================================================================
+
+enum FeeBasis {
+  SCALE /// banded on the assessed amount
+  TIME /// hourly
+  FIXED /// flat per engagement
+}
+
+enum FeeNoteStatus {
+  DRAFT
+  ISSUED
+  PAID
+  DISPUTED
+}
+
+/// A panel insurer's fee terms. Rates are tenant configuration, never code —
+/// MSIG's actual terms arrive as a row, not a release (§6.8).
+model FeeScale {
+  id       String   @id @default(uuid())
+  tenantId String
+  basis    FeeBasis
+
+  /// SCALE: [{ upTo: number|null, pct?: number, fee?: number }] — null upTo = top band.
+  bands      Json?
+  hourlyRate Decimal? @db.Decimal(10, 2)
+  fixedFee   Decimal? @db.Decimal(10, 2)
+
+  /// Malaysian service tax on adjusting services. A rate, not a constant — it
+  /// has changed before and will again.
+  sstRate Decimal @default(0.08) @db.Decimal(4, 3)
+
+  paymentTermsDays Int     @default(30)
+  isActive         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isActive])
+  @@map("fee_scales")
+}
+
+/// Time spent on a claim — the TIME basis input, and the effort record besides.
+model TimeEntry {
+  id         String @id @default(uuid())
+  claimId    String
+  adjusterId String
+
+  workedOn    DateTime
+  hours       Decimal  @db.Decimal(5, 2)
+  description String
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+
+  claim    Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  adjuster Adjuster @relation(fields: [adjusterId], references: [id])
+
+  @@index([claimId])
+  @@map("time_entries")
+}
+
+/// An out-of-pocket cost recharged to the insurer.
+model Disbursement {
+  id      String @id @default(uuid())
+  claimId String
+
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  incurredAt  DateTime
+  evidenceUrl String?
+
+  recordedByUserId String
+  createdAt        DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+  @@map("disbursements")
+}
+
+/// The fee note to the insurer, and whether it was settled.
+///
+/// CSP 11.16–11.18 obliges the ITO to settle adjusters' fees; the firm's side
+/// of that is an issued note with a due date and an ageing trail. An issued
+/// note is immutable — a correction is a new note, the same principle as
+/// reports.
+model FeeNote {
+  id              String        @id @default(uuid())
+  noteNumber      String        @unique
+  claimId         String
+  insurerTenantId String
+  status          FeeNoteStatus @default(DRAFT)
+
+  professionalFee    Decimal @db.Decimal(12, 2)
+  disbursementsTotal Decimal @db.Decimal(12, 2)
+  sstAmount          Decimal @db.Decimal(12, 2)
+  total              Decimal @db.Decimal(12, 2)
+
+  /// How the professional fee was computed — basis, inputs, band. The number
+  /// without its derivation is unanswerable in a dispute.
+  computation Json
+
+  issuedAt         DateTime?
+  dueAt            DateTime?
+  paidAt           DateTime?
+  paymentReference String?
+  disputedAt       DateTime?
+  disputeReason    String?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  claim   Claim  @relation(fields: [claimId], references: [id])
+  insurer Tenant @relation("FeeNoteInsurer", fields: [insurerTenantId], references: [id])
+
+  @@index([insurerTenantId, status])
+  @@index([status, dueAt])
+  @@map("fee_notes")
+}
+
+/// PD 12.1(a): adjusting employees are employed full-time (Employment Act
+/// contract of service, per the PD's footnote).
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
+// ============================================================================
+// Intake flow authoring — one structure, many channels and locales
+// ============================================================================
+
+/// A versioned intake flow: the *structure* of the guided Case conversation.
+///
+/// Structure only — step ids, order, branching, answer types, validation, and
+/// which steps the rest of the system depends on by name. Channel- and
+/// locale-specific wording lives in FlowOverlay, whose shape cannot express
+/// structure. So a WhatsApp conversation and a web conversation can never ask
+/// different questions in a different order; only phrase them differently.
+///
+/// A channel that genuinely needs a shorter conversation (typing twenty answers
+/// into WhatsApp is miserable) gets its own FlowDefinition and is pointed at
+/// it. That is flow *selection* per channel, which is supported. It is not a
+/// clone, which drifts and remembers nothing about where it came from.
+///
+/// Immutable once PUBLISHED, for the reason ConsentNotice is: an operator
+/// asking why a claimant answered as they did needs the exact flow they walked.
+/// Editing in place would make every earlier Case unreproducible.
+model FlowDefinition {
+  id       String     @id @default(uuid())
+  /// Null is a platform default available to every tenant; a tenant row
+  /// shadows the default for that tenant alone.
+  tenantId String?
+  /// Stable identity across versions, e.g. "travel-flight-delay". The resolver
+  /// selects the highest PUBLISHED version for a key.
+  key      String
+  version  Int
+  status   FlowStatus @default(DRAFT)
+
+  category        ClaimCategory    @default(TRAVEL)
+  travelClaimType TravelClaimType?
+
+  /// Human label for the editor list.
+  name        String
+  /// Step the conversation opens on. Must exist in `steps` — checked by the
+  /// publish gate, which cannot be expressed as a database constraint.
+  entryStepId String
+  /// FlowStep[] — structure plus default (en) copy. Validated against the
+  /// shared-types schema on publish, not on every write: a DRAFT is allowed to
+  /// be incomplete while someone is still building it.
+  steps       Json
+
+  publishedByUserId String?
+  publishedAt       DateTime?
+  archivedAt        DateTime?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id])
+  overlays FlowOverlay[]
+  cases    Case[]
+
+  /// Postgres treats NULLs as distinct, so this does not constrain the
+  /// platform-default rows (tenantId IS NULL). The migration adds a partial
+  /// unique index for those — same approach as SlaClock's running-clock guard.
+  @@unique([tenantId, key, version])
+  @@index([key, status])
+  @@index([tenantId, status])
+  @@map("flow_definitions")
+}
+
+/// Channel- and locale-specific wording for one FlowDefinition.
+///
+/// Sparse by design: only the steps that actually differ. An absent step, or an
+/// absent overlay, inherits from the definition — so correcting a typo in the
+/// base corrects it everywhere that did not deliberately override it. That is
+/// the property a per-channel clone cannot have.
+///
+/// Deliberately unable to express structure. There is no `next`, no
+/// `answerType`, no ordering here, so a channel cannot diverge into asking
+/// different questions. The guarantee is in the shape of the data, not in a
+/// rule that the bulk-import tool someone writes in eighteen months can bypass.
+///
+/// Not versioned, and that is not an oversight. Because an overlay can only
+/// change wording, it cannot move `currentStepId` or invalidate a stored
+/// answer — so copy is safe to correct live, with conversations in flight.
+/// Only the structure needs pinning, which is why the pin lives on
+/// FlowDefinition and Case rather than here.
+model FlowOverlay {
+  id               String       @id @default(uuid())
+  flowDefinitionId String
+  /// Null applies to every channel; a channel-specific row wins over it.
+  channel          CaseChannel?
+  /// `en` or `ms`. Null applies to every locale; a locale-specific row wins
+  /// over it — and wins over a channel row too. Showing Malay copy in the
+  /// wrong tone is cosmetic; showing English to a Malay speaker is a
+  /// comprehension failure, and PDPA s.7 treats language as substantive.
+  locale           String?
+
+  /// Record<stepId, { prompt?, label?, choices?: Array<{value, label}> }>.
+  /// A choice override may only relabel a value the base step already
+  /// defines — adding or removing a value would change what can be stored,
+  /// which is structure. Enforced by the resolver and the publish gate.
+  overrides Json
+
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  definition FlowDefinition @relation(fields: [flowDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([flowDefinitionId, channel, locale])
+  @@index([flowDefinitionId])
+  @@map("flow_overlays")
+}
+
+// ============================================================================
+// Conversational channels — Telegram first, the contract is channel-agnostic
+// ============================================================================
+
+/// Binds a messaging-platform user to a Claimant and the Case they are filling.
+///
+/// The web chat does not need this: a claimant is authenticated and already
+/// holds a caseId. A Telegram message arrives with nothing but an opaque chat
+/// id, so this table is what turns an anonymous sender into someone whose claim
+/// we may discuss — and it is the only thing standing between a stranger and
+/// another person's claim details. Nothing is served until `verifiedAt` is set.
+///
+/// `activeCaseId` is what makes a conversation resumable: the claimant closes
+/// Telegram mid-intake, comes back a day later, and the next message continues
+/// where the Case left off rather than starting again.
+model ConversationBinding {
+  id             String      @id @default(uuid())
+  channel        CaseChannel
+  /// Telegram chat id, WhatsApp wa_id, Messenger PSID. Opaque, per channel.
+  platformUserId String
+  /// Null until OTP verification succeeds.
+  claimantId     String?
+  /// The Case this conversation is currently filling, if any.
+  activeCaseId   String?
+  /// Resolved once the claimant is known; drives which flow they are offered.
+  tenantId       String?
+
+  /// Phone the claimant is verifying, pending OTP. On Telegram this arrives
+  /// via request_contact, so it is Telegram-verified before we even send the
+  /// code — the code proves possession now rather than at signup.
+  pendingPhone String?
+  verifiedAt   DateTime?
+  /// Counts failed OTP attempts so a binding can be rate-limited rather than
+  /// letting a stranger grind codes against a known phone number.
+  otpAttempts  Int       @default(0)
+
+  /// Whether the bot is answering, or a human has taken the conversation.
+  ///
+  /// In HANDOVER the gateway records inbound messages and sends nothing
+  /// automated. Without this the bot would answer over the agent mid-sentence,
+  /// which reads to the claimant as one confused party rather than two.
+  mode           ConversationMode @default(BOT)
+  /// Operator currently handling it. Null in BOT mode, or unassigned handover.
+  assignedUserId String?
+  handoverAt     DateTime?
+  /// Why a human stepped in — the field that makes bot performance reviewable.
+  handoverReason String?
+  resolvedAt     DateTime?
+
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  claimant   Claimant?             @relation(fields: [claimantId], references: [id])
+  activeCase Case?                 @relation(fields: [activeCaseId], references: [id])
+  messages   ConversationMessage[]
+
+  @@unique([channel, platformUserId])
+  @@index([claimantId])
+  @@index([activeCaseId])
+  @@index([mode, handoverAt])
+  @@map("conversation_bindings")
+}
+
+/// One inbound message from a messaging channel, recorded before it is handled.
+///
+/// Written insert-first on `platformMessageId`, so a unique violation *is* the
+/// "already seen" branch and the database is the arbiter rather than the
+/// worker. Exactly the same reasoning as InboundMessage for FNOL email: a
+/// platform that retries delivery (all of them do) must not produce two answers
+/// to one question, and two workers racing the same update must produce one.
+///
+/// The row is written before the turn is interpreted, so a message nobody could
+/// parse still leaves a trace. A claimant who typed something believes they
+/// answered; silently dropping it is invisible.
+/// One message in a conversation, in either direction.
+///
+/// Both directions in one table because a transcript is a single ordered list.
+/// Two tables would mean a merge-sort on every read, and an operator scrolling a
+/// conversation is the whole point of storing this — the read shape should be
+/// the cheap one.
+///
+/// Inbound rows are written insert-first on `platformMessageId`, so a unique
+/// violation *is* the "already seen" branch and the database arbitrates rather
+/// than the worker. Outbound rows have no such key until the platform returns
+/// one, which is why the column is nullable and the uniqueness is a partial
+/// index added in the migration.
+model ConversationMessage {
+  id        String           @id @default(uuid())
+  channel   CaseChannel
+  direction MessageDirection
+
+  /// Inbound: the platform's update id — the idempotency key. Outbound: the id
+  /// the platform returned, kept so a delivery can be traced. Null when none
+  /// was given.
+  platformMessageId String?
+  bindingId         String?
+
+  /// Raw text, if the message carried any.
+  text     String?
+  /// Platform reference for an attachment, resolved lazily — media is fetched
+  /// only when a document step is actually expecting one.
+  mediaRef String?
+  /// Step this message answered or asked, once known. Null when the turn was
+  /// consumed by identity binding (phone share, OTP) rather than by the flow.
+  stepId   String?
+
+  /// Set on an outbound message a human sent. Null means the bot said it.
+  ///
+  /// This distinction is the point of the transcript: reviewing how the bot
+  /// performs is impossible if its words and an agent's are indistinguishable,
+  /// and an agent speaking to a claimant on the firm's behalf is a
+  /// claims-handling act that must be attributable.
+  sentByUserId String?
+
+  status ConversationMessageStatus @default(PENDING)
+  /// Why this message could not be handled — shown in the operator queue.
+  error  String?
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  binding ConversationBinding? @relation(fields: [bindingId], references: [id])
+
+  /// Uniqueness on (channel, platformMessageId) is a partial index in the
+  /// migration, because Postgres treats NULLs as distinct and outbound rows
+  /// legitimately have none.
+  @@index([bindingId, createdAt])
+  @@index([status, createdAt])
+  @@map("conversation_messages")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum ConversationMessageStatus {
+  PENDING
+  PROCESSED
+  /// Consumed by identity binding rather than by the flow — phone share, OTP.
+  ONBOARDING
+  /// Could not be interpreted as an answer to the current step. The claimant
+  /// is told; the row stays so an operator can see what they actually sent.
+  UNPARSEABLE
+  /// Arrived while a human had the conversation. Recorded, deliberately not
+  /// answered — see ConversationMode.HANDOVER.
+  AWAITING_AGENT
+  FAILED
+}
+
+/// Who is answering a conversation.
+enum ConversationMode {
+  BOT
+  /// A human has it. The bot stands down entirely until resolved, then the
+  /// flow resumes at the step the Case is pinned to.
+  HANDOVER
 }

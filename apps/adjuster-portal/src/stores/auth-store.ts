@@ -38,6 +38,14 @@ export interface UserTenant {
 interface AuthState {
   user: User | null;
   userTenants: UserTenant[];
+  /**
+   * Whether `userTenants` has been confirmed against the server this session.
+   * Distinguishes "this user genuinely has no tenants" from "we have not
+   * learned them yet", which an empty array alone cannot express. Deliberately
+   * not persisted — tenant membership is re-verified from `/auth/me` on every
+   * load, so a stale or corrupted cache cannot masquerade as fact.
+   */
+  tenantsKnown: boolean;
   accessToken: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string, userTenants?: UserTenant[]) => void;
@@ -52,23 +60,29 @@ export const useAuthStore = create<AuthState>()(
     set => ({
       user: null,
       userTenants: [],
+      tenantsKnown: false,
       accessToken: null,
       isAuthenticated: false,
 
-      setAuth: (user, accessToken, userTenants = []) =>
-        set({
+      setAuth: (user, accessToken, userTenants) =>
+        set(state => ({
           user,
-          userTenants,
           accessToken,
           isAuthenticated: true,
-        }),
+          // Omitting `userTenants` means "leave unchanged", not "none". Callers
+          // that only renew a token (api-client refresh) or patch the profile
+          // (use-user) must not silently clear tenant membership — a defaulted
+          // `[]` here previously wiped it and persisted the loss to storage.
+          userTenants: userTenants ?? state.userTenants,
+          tenantsKnown: userTenants !== undefined ? true : state.tenantsKnown,
+        })),
 
       updateUser: updates =>
         set(state => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
-      setUserTenants: userTenants => set({ userTenants }),
+      setUserTenants: userTenants => set({ userTenants, tenantsKnown: true }),
 
       switchTenant: tenantId =>
         set(state => ({
@@ -79,6 +93,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           userTenants: [],
+          tenantsKnown: false,
           accessToken: null,
           isAuthenticated: false,
         }),

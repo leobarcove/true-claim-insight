@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market &amp; Financial Assessment — True Claim Insight (Rev 7)</title>
+<style>
+:root{
+  --ink:#0A2540; --accent:#0E9F9F; --accent-d:#0E7C86;
+  --body:#26333F; --muted:#5D7183; --line:#E2EAF0; --soft:#F7FAFC;
+}
+*{box-sizing:border-box}
+html{background:#EDF1F5}
+body{
+  margin:0; color:var(--body);
+  font-family:"Avenir Next","Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:9.5pt; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- screen shell ---------- */
+.sheet{
+  background:#fff; width:210mm; min-height:297mm; margin:8mm auto;
+  padding:18mm 18mm 20mm; box-shadow:0 2px 18px rgba(10,37,64,.13);
+}
+.banner{
+  max-width:210mm; margin:10mm auto 0; padding:12px 16px; border-radius:8px;
+  background:#0A2540; color:#CFE3EC; font-size:9.5pt; line-height:1.55;
+}
+.banner b{color:#7FD4D4}
+.banner code{background:rgba(255,255,255,.12); color:#fff; padding:1px 5px; border-radius:3px}
+
+/* ---------- cover ---------- */
+.cover{
+  position:relative; overflow:hidden; background:var(--ink); color:#fff;
+  width:210mm; height:297mm; margin:8mm auto; padding:26mm 22mm;
+  box-shadow:0 2px 18px rgba(10,37,64,.13);
+}
+.cover .glow{
+  position:absolute; top:-55mm; right:-75mm; width:185mm; height:185mm; border-radius:50%;
+  background:radial-gradient(circle at 38% 38%,rgba(14,159,159,.50) 0%,rgba(14,159,159,.10) 46%,rgba(10,37,64,0) 70%);
+}
+.cover .wordmark{position:relative;font-size:8.5pt;letter-spacing:.34em;text-transform:uppercase;color:#7FD4D4;font-weight:600}
+.cover .wordmark b{color:#fff}
+.cover h1{position:relative;margin:44mm 0 0;font-size:34pt;line-height:1.1;font-weight:600;letter-spacing:-.015em;max-width:145mm}
+.cover .sub{position:relative;margin-top:7mm;font-size:13.5pt;line-height:1.35;color:#A8C4D8;max-width:138mm}
+.cover .bars{position:relative;margin:9mm 0 0 -22mm}
+.cover .bars i{display:block;height:3mm;background:var(--accent);margin-bottom:2.2mm;border-radius:0 2mm 2mm 0}
+.cover .bars i:nth-child(1){width:52mm}
+.cover .bars i:nth-child(2){width:36mm;opacity:.62}
+.cover .bars i:nth-child(3){width:24mm;opacity:.34}
+.cover .lede{position:relative;margin-top:22mm;font-size:10pt;line-height:1.62;color:#C8DAE7;max-width:130mm}
+.cover .lede b{color:#fff;font-weight:600}
+.cover .foot{position:absolute;left:22mm;right:22mm;bottom:20mm}
+.cover .meta{border-top:.4mm solid rgba(255,255,255,.20);padding-top:7mm}
+.cover .meta table{width:100%;border-collapse:collapse}
+.cover .meta td{vertical-align:top;padding:0 10mm 0 0;width:33.3%}
+.cover .k{display:block;margin-bottom:2mm;font-size:6.8pt;letter-spacing:.18em;text-transform:uppercase;color:#6E93AE;font-weight:600}
+.cover .v{font-size:9.5pt;color:#EAF3F8;line-height:1.5}
+.cover .pill{display:inline-block;margin-top:12mm;padding:2.6mm 7mm;border:.35mm solid var(--accent);
+  border-radius:8mm;font-size:7.2pt;letter-spacing:.2em;text-transform:uppercase;color:#7FD4D4;font-weight:600;white-space:nowrap}
+
+/* ---------- typography ---------- */
+h2{font-size:14.5pt;font-weight:600;letter-spacing:-.01em;color:var(--ink);
+   margin:20pt 0 10pt;padding-bottom:7pt;border-bottom:1.6pt solid var(--accent);
+   break-after:avoid;page-break-after:avoid}
+h2:first-child{margin-top:0}
+h3{font-size:10.5pt;font-weight:600;color:var(--accent-d);margin:14pt 0 6pt;break-after:avoid;page-break-after:avoid}
+h4{font-size:10pt;font-weight:600;color:var(--ink);margin:12pt 0 5pt}
+p{margin:0 0 7pt;orphans:3;widows:3}
+strong{color:var(--ink);font-weight:600}
+em{color:#47596B}
+ul,ol{margin:0 0 10pt;padding-left:17pt}
+li{margin-bottom:4pt}
+hr{border:none;border-top:.5pt solid var(--line);margin:20pt 0}
+a{color:var(--accent-d);text-decoration:none;word-break:break-word}
+code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:8.6pt;background:#EEF4F7;color:#0A4D57;padding:1px 4px;border-radius:3px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;margin:8pt 0 12pt;font-size:8.2pt;line-height:1.42}
+thead th{background:var(--ink);color:#fff;font-weight:600;font-size:8.2pt;text-align:left;padding:6pt 7pt}
+tbody td{padding:5.5pt 7pt;border-bottom:.4pt solid var(--line);vertical-align:top}
+tbody tr:nth-child(odd){background:var(--soft)}
+tbody tr:last-child td{border-bottom:.8pt solid #C9D8E3}
+tr{break-inside:avoid;page-break-inside:avoid}
+
+/* ---------- callouts ---------- */
+blockquote{margin:12pt 0 15pt;padding:11pt 14pt;background:#F2F8F9;border-left:2.6pt solid var(--accent);
+  border-radius:0 3px 3px 0;font-size:9.2pt;color:#34485A;break-inside:avoid;page-break-inside:avoid}
+blockquote p:last-child{margin-bottom:0}
+
+/* ---------- print ---------- */
+@page{size:A4;margin:15mm 15mm 17mm}
+@page :first{margin:0}
+@media print{
+  html{background:#fff}
+  .banner{display:none}
+  .cover{width:auto;height:100vh;margin:0;box-shadow:none;
+         break-after:page;page-break-after:always;
+         -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
+  thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tbody tr:nth-child(odd),blockquote{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h2{break-after:avoid}
+}
+</style>
+</head><body>
+
+<div class="banner">
+  <b>To save as PDF:</b> press <code>&#8984;P</code> &rarr; Destination <b>Save as PDF</b> &rarr;
+  Paper <b>A4</b> &rarr; open <b>More settings</b> and tick <b>Background graphics</b>
+  (without it the navy cover and table headers print white).
+  Tick <b>Headers and footers</b> if you want page numbers. This banner does not print.
+</div>
+
+
+<section class="cover">
+  <div class="glow"></div>
+  <div class="wordmark">True&nbsp;Claim&nbsp;<b>Insight</b></div>
+  <h1>Market &amp; Financial Assessment</h1>
+  <div class="sub">Malaysian non-motor and Group&nbsp;/&nbsp;Travel PA claims adjusting</div>
+  <div class="bars"><i></i><i></i><i></i></div>
+  <div class="lede">
+    Market sizing, fee structures, full cost base and risk assessment for a
+    claims-administration and <b>BNM-registered loss adjusting</b> business across
+    fire and property, engineering, liability, marine and <b>travel insurance</b> claims.
+  </div>
+  <div class="foot">
+    <div class="meta"><table><tr>
+      <td><span class="k">Version</span><span class="v">Rev 7 &middot; 30 July 2026<br>Draft for partner discussion</span></td>
+      <td><span class="k">Prepared by</span><span class="v">Leo<br>Technical lead, True Claim Insight</span></td>
+      <td><span class="k">Data currency</span><span class="v">PIAM FY2025 full-year results<br>DOSM flood report 2025</span></td>
+    </tr></table></div>
+    <div class="pill">Confidential &mdash; not for circulation</div>
+  </div>
+</section>
+
+<main class="sheet">
+
+<h2 id="executive-summary">Executive summary</h2>
+<p><strong>The opportunity.</strong> Malaysian general insurers spend on
+claims assessment across the non-motor lines (fire/property including
+flood, engineering, liability, marine/aviation/ transit, miscellaneous)
+and the Group and Travel PA classes. Those lines represent
+<strong>~RM11.4–11.6B of annual premium, roughly 47% of the general
+insurance market</strong>. The realistically addressable
+services-and-software spend within them is <strong>RM60–150M per
+year</strong> (estimate).</p>
+<p><strong>Why these lines, not motor.</strong> Motor is deliberately
+excluded. It runs at an underwriting loss (103% combined ratio in 2025,
+RM289.3M loss) with insurers squeezing vendor fees, and it is served by
+an entrenched incumbent workflow. The non-motor lines are the opposite:
+<strong>fire insurance earned a RM700.8M underwriting profit at a 69.5%
+combined ratio in 2025</strong>, so insurers there buy service quality
+and capacity rather than the lowest price. The PA class is the
+<strong>fastest-growing line in Malaysian general insurance (+12% in
+2025)</strong> with a very low loss ratio — and PIAM attributes that
+growth <strong>"mainly to travel insurance demand,"</strong> which is
+independent confirmation of the segment this business is targeting.</p>
+<p><strong>The wedge.</strong> Flooding is Malaysia's most severe
+recurring peril — roughly one major event every three years, with the
+December 2021 flood alone generating <strong>RM2–3B of claims
+exposure</strong>. Balance matters here: 2024 and 2025 were both mild by
+comparison (national flood losses of RM933M and RM637M), so catastrophe
+upside is real but must not be modelled as annual. Claim volumes spike
+2–5× exactly when adjusters physically cannot reach sites, while BNM's
+Claims Settlement Practices policy still imposes turnaround standards.
+Remote, claimant-guided assessment with fraud screening addresses a
+structural weakness in the incumbents' site-visit model.</p>
+<p><strong>Two engines, one platform.</strong> Property and catastrophe
+work is high-value, technical and lumpy. Travel and Group PA work is
+high-volume, low-value (typically RM200–3,000 per claim) and adjudicated
+on documents. Together they give the business recurring transaction
+volume underneath a high-margin, event-driven top layer.</p>
+<p><strong>The honest financial picture.</strong></p>
+<table>
+<tbody>
+<tr>
+<td>Year 1</td>
+<td><strong>Net loss of RM465,000</strong>; total funding need
+<strong>RM900,000–1,400,000</strong> including working capital</td>
+</tr>
+<tr>
+<td>Breakeven</td>
+<td>Monthly during <strong>Year 2</strong>; cumulative cash payback
+during <strong>Year 3</strong></td>
+</tr>
+<tr>
+<td>Year 5 revenue</td>
+<td>RM5.0M downside · <strong>RM9.5M base</strong> · RM14.0M upside</td>
+</tr>
+<tr>
+<td><strong>Year 5 net profit after tax</strong></td>
+<td>RM0.6M downside · <strong>RM2.2M base</strong> · RM3.8M upside</td>
+</tr>
+<tr>
+<td>Five-year cumulative net profit</td>
+<td>(RM0.2M) downside · <strong>RM4.2M base</strong> · RM8.1M
+upside</td>
+</tr>
+<tr>
+<td>Steady-state margin</td>
+<td><strong>28–31% EBITDA</strong> by Year 5 in the base case; 16%
+downside — a services business with a software layer</td>
+</tr>
+<tr>
+<td>Catastrophe-year uplift</td>
+<td>+RM1–3M (base), timing unpredictable</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What makes or breaks it.</strong> Three things, in order.
+First, <strong>talent</strong>: BNM requires adjusting work to be signed
+off by a senior adjusting employee with five years of subject-matter
+experience, and only 55 firms hold registration — AI raises throughput
+per adjuster but cannot remove this headcount floor. Second,
+<strong>panel access</strong>, which is relationship-driven and takes
+6–12 months. Third, <strong>catastrophe timing</strong>, which nobody
+controls.</p>
+<p><strong>What is already built.</strong> A working multi-tenant claims
+platform with non-motor claim models, a fraud-signal framework and an
+existing unlicensed TPA operation — see §3. This is not a concept
+seeking a build; it is an operating system seeking regulatory
+qualification, panel access and senior adjusting capability.</p>
+<p><strong>The candid caveat.</strong> As a standalone Malaysian
+business this is a <strong>profitable niche, not a venture-scale volume
+market</strong>. The realistic outcome is a RM9.5M revenue business
+earning ~RM2.2M net profit at ~31% EBITDA. All revenue figures rest on
+three estimates that public sources cannot confirm, listed in §10.
+Anyone joining should treat this as a <strong>costed hypothesis with a
+named validation plan</strong>, not a validated forecast.</p>
+<hr />
+<h2 id="key-structural-findings">Key structural findings</h2>
+<ol type="1">
+<li><strong>Assessment work in these lines is loss adjusting</strong>,
+performed by BNM-registered adjusters paid per-case professional fees
+(ad-valorem scale or time-and-expense) — not the per-transaction
+admin-fee model of medical TPAs.</li>
+<li><strong>BNM's August 2025 policy document</strong> requires
+adjusting work to be performed by <strong>full-time employees of
+registered adjusting firms</strong>, with senior sign-off rules. A tech
+platform cannot simply "be" the assessor — it must register as an
+adjuster or sell to/through registered adjusters and insurers.</li>
+<li><strong>Non-motor is the opposite of motor economically.</strong>
+Motor runs at an underwriting loss (combined ratio 103% in 2025);
+<strong>fire runs at a large underwriting profit</strong> (combined
+ratio 69.5%, RM700.8M profit in 2025). Insurers in these lines buy
+service quality and catastrophe surge capacity, not desperate
+cost-cutting.</li>
+<li><strong>The property market is event-driven.</strong> Flooding is
+Malaysia's most severe recurring peril — major events roughly every 3
+years, 14 major floods between 1998 and 2021. The December 2021 flood
+alone generated an estimated <strong>RM2–3B in claims exposure</strong>
+(PIAM), against a normal-year non-motor claims baseline of ~RM1.5–2B.
+Adjusting demand spikes 2–5× in catastrophe periods, when physical site
+access is hardest — which is precisely the remote assessment use case.
+<strong>Counterweight:</strong> 2024 and 2025 were both quiet flood
+years (RM933M and RM637M of national losses), so surge revenue is
+genuine but episodic.</li>
+<li><strong>The PA/travel segment is a different operating model
+entirely.</strong> Travel and group PA claims are high-volume, low-value
+(typical travel claim RM200–3,000) and adjudicated on documents — no
+adjuster site visits. Loss adjusters are largely absent from this chain;
+the competition is insurer in-house teams, assistance companies (Europ
+Assistance, Allianz assistance network) and claims-automation vendors.
+Speed is already the battleground: Tune Protect pays flight-delay claims
+<strong>instantly via DuitNow</strong> (parametric); Allianz guarantees
+app claims ≤RM5,000 in <strong>3 working days or pays double</strong>.
+This segment gives the business recurring transaction volume that
+property/catastrophe work cannot — and it is the one part of the market
+with published tailwind: PIAM reports PA growing 12% in 2025
+<strong>"driven mainly by travel insurance demand,"</strong> and expects
+further recovery as travel activity improves.</li>
+</ol>
+<hr />
+<h2 id="1-demand-side-market-size-and-claims-volumes">1. Demand side:
+market size and claims volumes</h2>
+<p>All FY2025 figures below are from PIAM's full-year industry briefing
+(May 2026) — the most recent published data. Net-claims-incurred detail
+by class is only published to FY2024, so those rows are marked
+accordingly.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+<th>Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total general insurance market</strong></td>
+<td>FY2025: <strong>RM24.2B GWP</strong> (+4.8% on RM23.1B in 2024);
+underwriting profit <strong>RM1.2B</strong>; combined ratio 93%</td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>Market structure</td>
+<td>19 direct general insurers + 4 reinsurers</td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>Fire gross premium</td>
+<td>FY2025: <strong>RM5.0B (20.9% of GI)</strong>, +6.9% —
+second-largest class</td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>Miscellaneous classes premium</td>
+<td>FY2025: <strong>≈RM3.6B (14.9%)</strong> — bonds, engineering/CAR,
+liability, workmen's compensation, others</td>
+<td>derived from PIAM class shares</td>
+</tr>
+<tr>
+<td>MAT gross premium</td>
+<td>FY2025: <strong>≈RM1.8B (7.4%)</strong> — share declined on weaker
+global trade and geopolitical pressure</td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>PA class premium</td>
+<td>FY2025: <strong>RM1.6B (6.5%), +12% — the fastest-growing
+class</strong>, which PIAM attributes <strong>"mainly to travel
+insurance demand"</strong></td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>In-scope PA share (excl. Individual PA)</td>
+<td><strong>60–75% of the PA class (~RM0.95–1.2B)</strong> is Group PA +
+Travel PA + riders/affinity — the Individual-PA split is not
+published</td>
+<td>estimate — validate</td>
+</tr>
+<tr>
+<td><strong>In-scope premium base</strong></td>
+<td><strong>~RM11.4–11.6B/year (~47% of the general insurance
+market)</strong></td>
+<td>derived</td>
+</tr>
+<tr>
+<td>Fire underwriting result</td>
+<td>FY2025: <strong>RM700.8M profit</strong>, combined ratio
+<strong>69.5%</strong></td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>Motor (excluded, for contrast)</td>
+<td>FY2025: RM10.9B premium, <strong>RM289.3M underwriting
+loss</strong>, combined ratio 103%</td>
+<td>verified — PIAM</td>
+</tr>
+<tr>
+<td>Fire net claims incurred</td>
+<td>FY2024: ~RM0.5B (5.5% of total NCI)</td>
+<td>verified — PIAM Yearbook 2024</td>
+</tr>
+<tr>
+<td>MAT net claims incurred</td>
+<td>FY2024: ~RM0.7B (7.7%)</td>
+<td>verified — PIAM Yearbook 2024</td>
+</tr>
+<tr>
+<td>Miscellaneous net claims incurred</td>
+<td>FY2024: ~RM0.4B (4.6%)</td>
+<td>verified — PIAM Yearbook 2024</td>
+</tr>
+<tr>
+<td>PA class net claims incurred</td>
+<td>FY2024: ~RM0.2B (1.8% of total NCI) — very low loss ratio</td>
+<td>verified — PIAM Yearbook 2024</td>
+</tr>
+<tr>
+<td><strong>In-scope NCI baseline</strong></td>
+<td><strong>~RM1.6B/year in a normal (non-catastrophe)
+year</strong></td>
+<td>derived</td>
+</tr>
+<tr>
+<td>Dec 2021 flood (the reference catastrophe)</td>
+<td>Claims exposure <strong>RM2–3B</strong> (PIAM); insured loss
+~RM1.5–2B (Malaysian Re); economic loss RM5.3–6.5B</td>
+<td>verified</td>
+</tr>
+<tr>
+<td>Recent flood years, for balance</td>
+<td>Total national flood losses: <strong>RM933.4M (2024)</strong>,
+<strong>RM636.9M (2025)</strong> — both mild by comparison</td>
+<td>verified — DOSM, Apr 2026</td>
+</tr>
+<tr>
+<td>Flood protection gap</td>
+<td>Historically only ~10% of flood economic losses are insured; under
+25% of homeowners carry flood cover</td>
+<td>verified — Malaysian Re, Zurich</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Claim-count estimates (low confidence — no published
+counts):</strong></p>
+<ul>
+<li><strong>Property/commercial lines:</strong> householder/houseowner
+policies are high-count but very low frequency and severity (average
+premiums RM136/RM369); commercial fire and IAR claims are low-count but
+high value (IAR average premium RM343k); MAT, liability and engineering
+claims are episodic. Plausible normal-year range: <strong>~30,000–80,000
+assessable claims/ year</strong>, of which the adjuster-appointed subset
+is perhaps <strong>15,000–40,000 instructions/ year</strong>. In
+catastrophe years the property claim count multiplies (the 2021 flood
+produced tens of thousands of property and contents claims within
+weeks).</li>
+<li><strong>Travel/Group PA:</strong> counts are also unpublished, but
+the volume logic is opposite — many small claims. Flight-delay benefits
+alone (paid per qualifying delay, increasingly parametric/automatic)
+plus baggage, cancellation and group PA batches plausibly put
+industry-wide in-scope PA claims in the <strong>low-to-mid six figures
+per year</strong>, at RM200–3,000 average value. <strong>This count is
+the single most important number to validate</strong> — it determines
+whether per-claim pricing can build real revenue in this segment.</li>
+</ul>
+<hr />
+<h2 id="2-what-insurers-pay-for-claims-assessment">2. What insurers pay
+for claims assessment</h2>
+<h3 id="fee-structure-how-not-how-much--the-how-is-well-documented">Fee
+structure (how, not how much — the "how" is well documented)</h3>
+<p>Non-motor adjusting is charged on two bases, internationally and in
+Malaysia:</p>
+<ul>
+<li><strong>Ad-valorem scale fee:</strong> a regressive percentage of
+the adjusted loss (higher % on the first tranche, stepping down as the
+loss grows).</li>
+<li><strong>Time and expense:</strong> hourly/day rates for large or
+complex losses (business interruption, engineering, liability), plus
+disbursements.</li>
+</ul>
+<p>Published Malaysian tariffs do not exist; panel agreements are
+confidential. <strong>Industry-practice estimates (require primary
+validation):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Claim type</th>
+<th>Estimated fee per case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small domestic property (householder/houseowner)</td>
+<td>RM500–1,500 minimum-fee territory</td>
+</tr>
+<tr>
+<td>Mid-size commercial fire/property</td>
+<td>RM3,000–15,000 (scale fee on adjusted loss)</td>
+</tr>
+<tr>
+<td>Large/complex losses (major fire, BI, engineering)</td>
+<td>RM50,000+ on time-and-expense</td>
+</tr>
+<tr>
+<td>Liability/WC investigations</td>
+<td>RM1,500–5,000</td>
+</tr>
+</tbody>
+</table>
+<h3 id="implied-fee-pool">Implied fee pool</h3>
+<p>Adjusting fees on property/commercial claims typically run at
+<strong>~1–3% of claims paid</strong> on adjusted claims. Against a
+normal-year in-scope claims baseline of RM1.5–2B:</p>
+<ul>
+<li><strong>Normal-year non-motor adjusting fee pool: roughly
+RM30–80M/year</strong> (estimate).</li>
+<li><strong>Catastrophe years: 2–3× that</strong>, concentrated in
+months.</li>
+</ul>
+<p>This is <strong>materially smaller than the motor fee pool</strong>
+(previously estimated at RM200–400M/year) — fewer, larger, more
+technical cases.</p>
+<h3 id="the-patravel-segment-no-adjusters-different-fee-logic">The
+PA/travel segment: no adjusters, different fee logic</h3>
+<p>For Group PA, Travel PA and rider claims, <strong>loss adjusters are
+largely absent</strong> — insurers adjudicate in-house on documents,
+with assistance companies handling the overseas-emergency slice (Europ
+Assistance for Tune Protect, with MiCare on admission support; Allianz's
+own assistance network). What insurers "pay" for claims handling here is
+internal operations cost plus assistance-company retainers, not per-case
+adjusting fees. Consequences:</p>
+<ul>
+<li><strong>There is no incumbent fee to capture</strong> — the revenue
+model is per-claim adjudication automation, fraud screening, or SaaS to
+the insurer's claims team, priced against the insurer's internal cost
+per claim (estimate: RM20–80 of internal handling cost on a small travel
+claim) and against leakage reduction.</li>
+<li><strong>Speed benchmarks are already extreme:</strong> instant
+parametric flight-delay payouts via DuitNow (Tune Protect),
+3-working-day guarantees with a pay-double penalty (Allianz, claims
+≤RM5,000 via app). Any offering must match or enable this, not slow it
+down.</li>
+<li><strong>Fraud is document fraud:</strong> inflated/fabricated
+baggage claims, doctored receipts, claims for trips not taken,
+undisclosed pre-existing conditions — a strong fit for document-AI and
+voice-risk screening rather than video site assessment.</li>
+<li><strong>Buyers are concentrated:</strong> Tune Protect (AirAsia
+channel), Allianz, Zurich, Etiqa, AIG and airline/banca partnerships
+control most Malaysian travel-claim volume — a handful of logos to sell
+to.</li>
+</ul>
+<h3 id="market-structure--who-earns-these-fees-today">Market structure —
+who earns these fees today</h3>
+<p>Of the <strong>55 firms on BNM's List of Registered
+Adjusters</strong> (verified 21 July 2026), non-motor work is
+concentrated in the international networks and a few strong locals:</p>
+<ul>
+<li><strong>Sedgwick</strong> — self-described largest loss adjusting
+firm in Asia; dedicated Malaysia operation.</li>
+<li><strong>Crawford &amp; Company</strong> — long-established Malaysian
+presence.</li>
+<li><strong>Charles Taylor Adjusting</strong> — large/complex commercial
+specialist (property, marine, aviation, construction &amp; engineering);
+Malaysian MD and local team.</li>
+<li><strong>McLarens Malaysia</strong> — tripled its Malaysian team in
+2023, offices in KL, Johor and Penang; named Insurance Asia News Loss
+Adjuster of the Year 2025; new MD appointed July 2026 — evidence that
+internationals see growth here.</li>
+<li><strong>Malayan Adjustment Company (MAC)</strong> and other
+established locals handle the broad mid-market.</li>
+</ul>
+<p>This segment competes on <strong>technical credentials (chartered
+adjusters, engineers, forensic accountants) and insurer
+relationships</strong>, far more than on price. That is a higher barrier
+to entry than motor adjusting — and the BNM rule that a senior adjusting
+employee needs <strong>5 years of experience in the subject
+matter</strong> to sign off reports makes talent the binding constraint
+for any new entrant.</p>
+<hr />
+<h2 id="3-what-exists-today-capability-and-traction">3. What exists
+today (capability and traction)</h2>
+<p>Stated conservatively, with known gaps included — a partner should be
+able to verify every line. Further technical detail available on
+request.</p>
+<p><strong>Operating business.</strong> An <strong>unlicensed TPA
+operation</strong> (claims administration performed on behalf of
+insurers) is running today. A <strong>first insurer client has verbally
+agreed</strong> to a white-label engagement, with a multi-panel ambition
+thereafter. <em>Verbal, non-binding, and not yet contracted — treat as a
+qualified prospect, not secured revenue. Client name withheld in this
+copy pending their consent to be named.</em></p>
+<p><strong>Platform.</strong> A working multi-tenant claims system, not
+a prototype: 144 commits across seven services (NestJS/Fastify APIs,
+React adjuster portal, claimant PWA) on PostgreSQL via Prisma, with 27
+data models.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Non-motor claim models — <code>FloodClaim</code>,
+<code>TravelClaim</code>, <code>Policy</code>, <code>Case</code>,
+<code>CaseDocument</code></td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Multi-tenant isolation (per-insurer white-label;
+<code>TenantGuard</code>, strict/flexible scopes)</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Fraud-signal framework — typed provider interface
+(<code>FraudSignal</code>), behavioural scoring
+(<code>DeceptionScore</code>), document analysis
+(<code>DocumentAnalysis</code>), <code>TrinityCheck</code></td>
+<td>Built, providers extensible</td>
+</tr>
+<tr>
+<td>Parametric flood trigger field, JPS gauge and MetMalaysia event
+references</td>
+<td>Schema ready; external feeds pending</td>
+</tr>
+<tr>
+<td>Per-insurer evidence checklists (<code>EvidenceRequirement</code>) —
+no code change per insurer</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Remote video assessment (Daily.co integration)</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Digital signing</td>
+<td>Lifecycle and provider interface built; <strong>stub provider only —
+no signing vendor integrated yet</strong></td>
+</tr>
+<tr>
+<td>eKYC / identity verification</td>
+<td>Status tracking in the claim record; <strong>no verification vendor
+integrated yet</strong></td>
+</tr>
+<tr>
+<td>Audit trail (<code>AuditTrail</code>) supporting BNM's 7-year
+retention obligation</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Assessment-mode router (desk review / remote video / site visit /
+expert referral)</td>
+<td>Designed, build pending</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Known gaps, disclosed.</strong> No scheduler exists in the
+monorepo, so SLA/turnaround clocks are not yet enforced; billing is
+unbuilt (fee scales, time entries, disbursements, fee notes); there is
+no BNM change-notification register; and the licensed-mode hard gates
+(qualified-assignee-only, junior supervision with senior countersign,
+conflict-of-interest screening, CPD floor) are specified but not
+implemented. Third-party signing and eKYC vendors are not yet
+integrated. A clause-by-clause compliance audit of these gaps has been
+completed internally.</p>
+<p><strong>Data residency — an open commitment, not yet a property of
+the system.</strong> Malaysian data residency (AWS ap-southeast-5) is
+the stated design target and is set as a configuration default, but the
+platform is <strong>not yet containerised and has no deployment
+manifests</strong>, so residency is not currently enforced by
+infrastructure. This will be an early question in any insurer's
+information-security review and is treated as a build prerequisite, not
+a claim.</p>
+<p><strong>Legacy motor surface.</strong> Motor code
+(<code>ClaimCategory.MOTOR</code>, motor rule engine, vehicle master
+data) remains in the repository and functional but is <strong>not a
+target and will not be extended</strong>, consistent with the pivot.</p>
+<p><strong>What this means for a partner.</strong> The build risk is
+materially reduced; the open risks are regulatory qualification, insurer
+panel access and senior adjusting capability — which is where a partner
+adds what capital alone cannot.</p>
+<hr />
+<h2 id="4-structural-constraints-and-tailwinds">4. Structural
+constraints and tailwinds</h2>
+<ol type="1">
+<li><strong>BNM Adjusters Policy Document (29 Aug 2025):</strong>
+registration required; full-time adjusting employees; 5-year seniority
+for sign-off; 15 CPD hours/year; 7-year record retention. Path options:
+(a) register an adjusting subsidiary and hire senior non-motor
+adjusters, or (b) sell the platform to insurers and existing adjusting
+firms. <strong>PA/travel nuance:</strong> desktop adjudication of
+travel/group PA claims as an outsourced service for an insurer likely
+falls under BNM's <em>outsourcing</em> rules (insurer stays accountable)
+rather than requiring <em>adjusting</em> registration — but the FSA
+s.2(1) definition of adjusting business ("investigating the cause and
+circumstances of a loss and ascertaining the quantum") is broad enough
+that this needs a formal legal read before building the travel
+product.</li>
+<li><strong>Merimen is less of a blocker here.</strong> The Merimen
+eClaims rail is motor-centric; non-motor claims workflows are more
+bespoke (email, reports, site visits) — a genuine digitisation gap, but
+also a sign that volumes were historically too low to justify platform
+investment.</li>
+<li><strong>Catastrophe surge is the standout use case for remote
+assessment.</strong> During floods, adjusters physically cannot reach
+sites for days while claim volumes multiply. BNM's Claims Settlement
+Practices policy (July 2024) imposes turnaround-time standards that are
+hardest to meet exactly then. Claimant-guided video triage, geotagged
+evidence capture and fraud screening directly address this.</li>
+<li><strong>Climate trajectory supports the thesis:</strong> major
+floods ~every 3 years, ~90% of flood economic losses uninsured (a gap
+regulators and the industry want to close — more policies → more claims
+to assess), and reinsurers pressing for better claims data.</li>
+<li><strong>Counter-pressure:</strong> fire underwriting is highly
+profitable at a 69.5% combined ratio, so insurers feel less cost pain in
+these lines; the sales argument must lean on surge capacity, turnaround
+compliance and fraud detection rather than cost-cutting.</li>
+</ol>
+<hr />
+<h2 id="5-revenue-forecast-scenarios-neutral">5. Revenue forecast
+scenarios (neutral)</h2>
+<h3 id="path-a--operate-as-a-registered-non-motor-adjusting-firm">Path A
+— operate as a registered non-motor adjusting firm</h3>
+<p>Assumes successful registration and, critically, hiring senior
+non-motor adjusters (the scarce resource). Fee assumptions from the
+estimate table above.</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Instructions/yr</th>
+<th>Blended avg fee</th>
+<th>Revenue</th>
+<th>Technical headcount (AI-native vs incumbent model)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conservative (niche panel, domestic property)</td>
+<td>2,000</td>
+<td>RM1,200</td>
+<td>RM2.4M</td>
+<td>3–4 vs 6–8</td>
+</tr>
+<tr>
+<td>Base (multi-line panel, yr 3–4)</td>
+<td>5,000</td>
+<td>RM1,800</td>
+<td>RM9.0M</td>
+<td><strong>8–14 vs 15–25</strong></td>
+</tr>
+<tr>
+<td>Optimistic (incl. one catastrophe-year surge)</td>
+<td>8,000–12,000</td>
+<td>RM2,000</td>
+<td>RM16–24M</td>
+<td>15–22 vs 30–45 (plus surge contractors)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The AI-native claim, quantified.</strong> Incumbent non-motor
+adjusters handle roughly 40–60 cases/month. With automated document
+extraction, drafted reports and remote assessment replacing most site
+visits, a blended 80–100 cases/month is a defensible target — lower than
+the 100–150 achievable on simple claims, because large commercial and
+business-interruption losses remain inherently slow and cannot be
+compressed much. That implies <strong>roughly half the technical
+headcount for the same revenue</strong>, or about
+<strong>RM650,000–1,100,000 of revenue per technical employee</strong>
+versus an incumbent RM350,000–600,000.</p>
+<p>Two caveats an investor will test: the statutory minimum headcount
+for lawful sign-off still applies regardless of throughput (§6.1), and
+utilisation is uneven between catastrophe events. Realistic steady-state
+EBITDA: <strong>15–25%</strong> (estimate).</p>
+<h3
+id="path-b--saas-platform-for-insurers-and-adjusting-firms-non-motor-claims">Path
+B — SaaS platform for insurers and adjusting firms (non-motor
+claims)</h3>
+<p>The transaction pool (~15k–40k adjuster instructions/year) is
+<strong>too small for motor-style per-transaction pricing</strong> to
+build a large business. Pricing must be value-based per case or
+subscription:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Claims on platform</th>
+<th>Pricing</th>
+<th>ARR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conservative</td>
+<td>5,000 cases</td>
+<td>RM80/case</td>
+<td>RM0.4M</td>
+</tr>
+<tr>
+<td>Base</td>
+<td>15,000 cases + 3 insurer subscriptions</td>
+<td>RM100/case + RM250k/insurer</td>
+<td>RM2.3M</td>
+</tr>
+<tr>
+<td>Optimistic</td>
+<td>30,000 cases + surge-capacity licences + fraud tier</td>
+<td>RM120/case blended + subscriptions</td>
+<td>RM6–8M</td>
+</tr>
+</tbody>
+</table>
+<p>A <strong>catastrophe surge-capacity licence</strong> — insurers
+paying a standing annual fee for guaranteed remote-assessment capacity
+when floods hit, analogous to a disaster-recovery contract — would
+convert lumpy event demand into recurring ARR. It is the most promising
+non-linear revenue structure this research identified, but note that
+<strong>no evidence was found of any Malaysian insurer currently buying
+such a product</strong>; appetite is unvalidated (§10) and the standby
+contractor pool needed to honour it is a real cost (§6.3).</p>
+<p><strong>Unit-economics caution (unchanged):</strong> per-claim COGS
+(video minutes, eKYC at ~RM3–8, AI fraud analysis potentially several
+USD/claim) is proportionally less painful here than in motor because
+per-case pricing is 3–10× higher — one genuine advantage of the
+non-motor scope.</p>
+<h3
+id="path-c--travel--group-pa-claims-adjudication-platform-the-volume-engine">Path
+C — travel / Group PA claims adjudication platform (the volume
+engine)</h3>
+<p>Sold to insurers as automation + fraud screening on high-volume
+PA-class claims. Pricing must sit below the insurer's internal handling
+cost (~RM20–80/claim, estimate) and COGS must be kept minimal per claim
+(document AI, no video, selective eKYC/voice-risk only on flagged
+claims):</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Claims/yr on platform</th>
+<th>Pricing</th>
+<th>ARR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conservative (1 travel insurer)</td>
+<td>30,000</td>
+<td>RM8/claim</td>
+<td>RM0.24M</td>
+</tr>
+<tr>
+<td>Base (2–3 insurers incl. one airline channel)</td>
+<td>150,000</td>
+<td>RM10/claim + RM200k/insurer fraud tier</td>
+<td>RM2.0M</td>
+</tr>
+<tr>
+<td>Optimistic (majority of travel-claim volume + group PA batches)</td>
+<td>400,000</td>
+<td>RM12/claim blended + fraud tiers</td>
+<td>RM6–8M</td>
+</tr>
+</tbody>
+</table>
+<p>Path C's role in the portfolio is <strong>recurring, non-lumpy
+transaction revenue</strong> that smooths the catastrophe-driven Path
+A/B property income — and the fraud-screening data network effect grows
+with every claim processed. Its risk is the inverse: thin per-claim
+pricing means volume commitments from a small set of concentrated buyers
+are essential before building.</p>
+<hr />
+<h2 id="6-cost-structure-year-1-pl-and-breakeven">6. Cost structure,
+year-1 P&amp;L and breakeven</h2>
+<blockquote>
+<p><strong>Modelling assumptions:</strong> AI-native operating model
+(workflow digitised end-to-end, minimal clerical headcount); <strong>no
+shareholder or director salaries drawn</strong>; Malaysian Sdn Bhd;
+founders provide engineering. All figures are planning estimates, not
+quotations.</p>
+</blockquote>
+<h3 id="61-the-cost-that-ai-cannot-remove">6.1 The cost that AI cannot
+remove</h3>
+<p>BNM's Adjusters Policy Document makes certain headcount
+<strong>non-substitutable</strong> for Path A: adjusting work "shall be
+completely carried out by its adjusting employees only" (para 12.2),
+those employees must be <strong>full-time under the Employment
+Act</strong> (para 12.1), new adjusting employees require <strong>one
+year of supervision</strong> by a senior adjusting employee (para 12.3),
+and any report by someone with under five years' experience must be
+<strong>signed off by a senior adjusting employee with five years in
+that subject matter</strong> (paras 12.4, 12.7).</p>
+<p>Consequence: AI raises <strong>cases per adjuster</strong> —
+plausibly from the incumbent 40–60/month toward 100–150/month via
+automated document extraction, drafted reports and remote video
+assessment — but it <strong>cannot reduce the required number of
+qualified adjusters below the minimum needed for lawful sign-off and
+continuity</strong>. Senior non-motor adjusters in Malaysia are
+chartered-level professionals; budget
+<strong>RM12,000–20,000/month</strong>, materially above the
+RM1,700–5,000/month that field <em>motor</em> adjusters command.</p>
+<p><strong>Single-senior risk:</strong> with only one senior adjusting
+employee, losing that person halts report sign-off entirely. Two seniors
+is the practical minimum for a going concern — an investor-relevant cost
+floor, not padding.</p>
+<h3 id="62-malaysian-statutory-employer-costs-frequently-omitted">6.2
+Malaysian statutory employer costs (frequently omitted)</h3>
+<p>Payroll costs <strong>more than gross salary</strong>. Verified rates
+as at 2026:</p>
+<table>
+<thead>
+<tr>
+<th>Statutory item</th>
+<th>Employer rate</th>
+<th>Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EPF (employee under 60)</td>
+<td><strong>13%</strong> (wage ≤ RM5,000) / <strong>12%</strong> (&gt;
+RM5,000)</td>
+<td>KWSP Third Schedule wage bands</td>
+</tr>
+<tr>
+<td>SOCSO (Category 1)</td>
+<td><strong>1.75%</strong></td>
+<td>Wages capped at RM6,000/month</td>
+</tr>
+<tr>
+<td>EIS</td>
+<td><strong>0.2%</strong></td>
+<td>Wages capped at RM6,000/month</td>
+</tr>
+<tr>
+<td>HRD Corp levy</td>
+<td><strong>1.0%</strong> (10+ Malaysian employees) / 0.5% (5–9)</td>
+<td>Services sector employers; reclaimable against approved
+training</td>
+</tr>
+<tr>
+<td><strong>Effective loading on payroll</strong></td>
+<td><strong>≈ +14–16%</strong></td>
+<td>applies to every salary line below</td>
+</tr>
+</tbody>
+</table>
+<h3 id="63-full-cost-inventory">6.3 Full cost inventory</h3>
+<p><strong>One-off / setup</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Estimate</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Incorporation, company secretary setup</td>
+<td>RM3,000–8,000</td>
+<td></td>
+</tr>
+<tr>
+<td>BNM registration preparation (legal/consultant)</td>
+<td>RM30,000–80,000</td>
+<td>Fit-and-proper documentation, policies, procedures manuals</td>
+</tr>
+<tr>
+<td><strong>Minimum paid-up capital for adjusting business</strong></td>
+<td><strong>Not verified — confirm from Schedule 2 of the Financial
+Services (Registered Businesses) Order</strong></td>
+<td>Locked-up capital, not an expense, but increases the funding
+requirement</td>
+</tr>
+<tr>
+<td>Legal opinion: does desktop travel adjudication require adjusting
+registration?</td>
+<td>RM20,000–40,000</td>
+<td>FSA s.2(1) scope vs BNM outsourcing rules</td>
+</tr>
+<tr>
+<td>Senior adjuster recruitment (headhunter ~15–20% of annual
+package)</td>
+<td>RM30,000–70,000</td>
+<td>Scarce talent, 55 firms competing</td>
+</tr>
+<tr>
+<td>Information-security certification (ISO 27001 or equivalent)</td>
+<td>RM40,000–120,000</td>
+<td>Insurer vendor onboarding increasingly requires it; peers such as
+HealthMetrics hold ISO 27001</td>
+</tr>
+<tr>
+<td>Insurer vendor security assessments / penetration testing</td>
+<td>RM20,000–50,000</td>
+<td>Per-insurer onboarding requirement</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recurring people (the dominant cost)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Monthly</th>
+<th>Regulated?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Senior adjusting employee × 2</td>
+<td>RM24,000–40,000</td>
+<td><strong>Yes — mandatory</strong></td>
+</tr>
+<tr>
+<td>Junior adjusting employee × 1–2</td>
+<td>RM4,000–10,000</td>
+<td>Yes (supervised year 1)</td>
+</tr>
+<tr>
+<td>Engineering (0 if founders unpaid; else 1 mid-level)</td>
+<td>RM0–12,000</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Claims ops / admin support</td>
+<td>RM0–4,000</td>
+<td>No — largely automatable</td>
+</tr>
+<tr>
+<td><strong>Statutory loading (§6.2)</strong></td>
+<td><strong>+14–16% of the above</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recurring compliance</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Annual estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BNM annual registration fee</td>
+<td>Not verified — Third Schedule, Financial Services (Fees) Regulations
+2014</td>
+</tr>
+<tr>
+<td>External auditor (required at registration)</td>
+<td>RM15,000–30,000</td>
+</tr>
+<tr>
+<td>Company secretary, filings</td>
+<td>RM5,000–10,000</td>
+</tr>
+<tr>
+<td>Professional indemnity insurance</td>
+<td>RM20,000–50,000</td>
+</tr>
+<tr>
+<td>Cyber liability insurance</td>
+<td>RM10,000–25,000</td>
+</tr>
+<tr>
+<td>CPD: 15 hours/year per adjusting employee (mandated)</td>
+<td>RM2,000–5,000/employee + lost billable time</td>
+</tr>
+<tr>
+<td>7-year record retention (storage, archival, retrieval)</td>
+<td>RM5,000–15,000, compounding yearly</td>
+</tr>
+<tr>
+<td>PDPA compliance, DPO function</td>
+<td>RM10,000–25,000</td>
+</tr>
+<tr>
+<td>PIAM/AMLA-adjacent memberships, industry events</td>
+<td>RM5,000–15,000</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Technology and per-claim COGS</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AWS <strong>ap-southeast-5 (Malaysia)</strong></td>
+<td>Data-sovereignty requirement per project rules; Malaysia-region
+pricing typically exceeds Singapore — model a premium</td>
+</tr>
+<tr>
+<td>LLM inference</td>
+<td>Scales with claim volume; the core AI-native variable cost</td>
+</tr>
+<tr>
+<td>Daily.co video minutes</td>
+<td>Per remote assessment session</td>
+</tr>
+<tr>
+<td>eKYC (Innov8tif/CTOS)</td>
+<td>~RM3–8 per check</td>
+</tr>
+<tr>
+<td>Clearspeed voice risk analysis</td>
+<td>Priced per claim in USD — use selectively on flagged claims
+only</td>
+</tr>
+<tr>
+<td>Hive AI deepfake detection</td>
+<td>Per media asset</td>
+</tr>
+<tr>
+<td>SigningCloud digital signatures</td>
+<td>Per document</td>
+</tr>
+<tr>
+<td>Merimen or insurer system integration</td>
+<td>If required by a panel</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Other operating</strong></p>
+<p>Office/registered premises (BNM requires a principal place of
+business, with branch notification) RM3,000–5,000/month; residual
+physical site visits and travel RM30,000–60,000/year;
+<strong>catastrophe surge contractor pool on standby</strong> (the cost
+side of the surge-capacity product — retainers or panel agreements with
+freelance adjusters); BD and marketing RM30,000–80,000/year; bad debt
+provision.</p>
+<p><strong>Working capital:</strong> insurers typically settle on
+<strong>30–90 day terms</strong>. At RM500,000 of revenue that is
+roughly <strong>RM60,000–120,000 of receivables to finance</strong> — a
+funding requirement, not a P&amp;L line.</p>
+<h3 id="64-year-1-pl-realistic-founders-unsalaried">6.4 Year-1 P&amp;L
+(realistic, founders unsalaried)</h3>
+<p>Year 1 is structurally loss-making on the registered route because
+regulated payroll and fixed compliance costs land
+<strong>before</strong> panel appointments produce invoices. BNM
+registration requires submission at least 30 working days before
+commencement plus fit-and-proper clearance; insurer panel procurement
+then typically takes 6–12 months.</p>
+<table>
+<thead>
+<tr>
+<th>Line</th>
+<th>Path A+C (registered adjuster)</th>
+<th>Path C only (travel/PA platform, unregistered)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Revenue</td>
+<td>RM300,000–600,000</td>
+<td>RM100,000–400,000</td>
+</tr>
+<tr>
+<td>Adjusting employees incl. statutory loading</td>
+<td>(RM380,000–450,000)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Engineering (RM0 if founders unpaid)</td>
+<td>(RM0–160,000)</td>
+<td>(RM0–160,000)</td>
+</tr>
+<tr>
+<td>Technology, infrastructure, per-claim COGS</td>
+<td>(RM50,000–110,000)</td>
+<td>(RM40,000–80,000)</td>
+</tr>
+<tr>
+<td>Office and premises</td>
+<td>(RM40,000–60,000)</td>
+<td>(RM12,000–30,000)</td>
+</tr>
+<tr>
+<td>Compliance: audit, co-sec, PI, cyber, PDPA, CPD, BNM fees</td>
+<td>(RM100,000–180,000)</td>
+<td>(RM40,000–70,000)</td>
+</tr>
+<tr>
+<td>One-off setup: registration, legal opinion, recruitment,
+InfoSec</td>
+<td>(RM120,000–300,000)</td>
+<td>(RM60,000–150,000)</td>
+</tr>
+<tr>
+<td>BD, travel, contingency</td>
+<td>(RM60,000–120,000)</td>
+<td>(RM40,000–80,000)</td>
+</tr>
+<tr>
+<td><strong>Net profit / (loss)</strong></td>
+<td><strong>(RM450,000–1,020,000)</strong></td>
+<td><strong>(RM250,000) to +RM100,000</strong></td>
+</tr>
+<tr>
+<td><strong>Total year-1 funding need</strong> (incl. receivables +
+paid-up capital)</td>
+<td><strong>RM900,000–1,400,000</strong></td>
+<td><strong>RM300,000–500,000</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tax:</strong> with a year-1 loss there is no tax charge, and
+losses carry forward. Malaysian SME rates (15% on the first RM150,000 of
+chargeable income, 17% on the next RM450,000, 24% thereafter, subject to
+the paid-up capital and gross-income conditions) make tax immaterial
+until year 2–3. <strong>Service tax (SST) on adjusting or
+claims-administration fees is unverified</strong> — Malaysia's service
+tax scope expanded on 1 July 2025 and professional services categories
+were widened. If in scope at 8%, this affects pricing and cash flow
+materially and must be confirmed with a tax adviser before quoting
+insurers.</p>
+<h3 id="65-revenue-path--and-an-important-reconciliation">6.5 Revenue
+path — and an important reconciliation</h3>
+<p>The Path A scenario in §5 assumed a <strong>RM1,800 blended
+fee</strong> per instruction. That assumption does not survive a
+benchmark check and has been revised down for the financial model:</p>
+<ul>
+<li>55 registered firms share a RM30–80M fee pool. A 30-staff firm
+earning RM4–8M implies <strong>RM205,000–410,000 of revenue per
+technical head</strong>.</li>
+<li>At incumbent throughput (~600 cases/year), that implies a
+<strong>blended fee of roughly RM330–670</strong> — not RM1,800.</li>
+<li>At RM1,800 and AI-assisted throughput, revenue per technical head
+would be ~RM1.8M, i.e. <strong>4.5–9× the incumbent benchmark</strong>.
+Fee level alone cannot explain that gap.</li>
+<li>Separately, 5,000 instructions a year would be <strong>12–33% of the
+entire national pool</strong> — a very large share for a new
+entrant.</li>
+</ul>
+<p>The model below therefore uses a <strong>blended property fee of
+~RM900</strong> (above incumbent average, crediting a better commercial
+mix, but not 2× it), and leans on Travel/Group PA and platform licensing
+for the balance of revenue. <strong>This is the single most sensitive
+assumption in the document</strong> (§10).</p>
+<table>
+<thead>
+<tr>
+<th>Revenue (RM'm)</th>
+<th>Year 1</th>
+<th>Year 2</th>
+<th>Year 3</th>
+<th>Year 4</th>
+<th>Year 5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Downside — fee compression, no travel channel</td>
+<td>0.35</td>
+<td>1.2</td>
+<td>2.4</td>
+<td>3.6</td>
+<td>5.0</td>
+</tr>
+<tr>
+<td><strong>Base — fee-benchmarked</strong></td>
+<td><strong>0.5</strong></td>
+<td><strong>2.2</strong></td>
+<td><strong>4.5</strong></td>
+<td><strong>6.8</strong></td>
+<td><strong>9.5</strong></td>
+</tr>
+<tr>
+<td>Upside — fees hold, airline/banca channel won</td>
+<td>0.6</td>
+<td>3.2</td>
+<td>6.8</td>
+<td>10.0</td>
+<td>14.0</td>
+</tr>
+</tbody>
+</table>
+<p>Year 5 base revenue splits roughly: property adjusting RM3.5–4M
+(about 4,000 instructions), Travel/Group PA RM4M, platform licensing
+RM2M. Catastrophe years add RM1–3M on top, timing unpredictable.</p>
+<h3 id="66-five-year-profit-forecast">6.6 Five-year profit forecast</h3>
+<p>Cost assumptions: payroll includes the <strong>+14–16% statutory
+loading</strong> (§6.2); technology and per-claim COGS at 7% of revenue;
+field, travel and catastrophe-surge contractors at 6%; business
+development at 4%; general, professional and bad debt at 3%; compliance,
+insurance and office as fixed steps. <strong>No shareholder or director
+salaries in Years 1–2</strong>; management salaries enter from Year 3.
+Tax applies Malaysian SME rates (15% on the first RM150,000 of
+chargeable income, 17% on the next RM450,000, 24% above) with losses
+carried forward.</p>
+<p><strong>Base case (RM'000)</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Year 1</th>
+<th>Year 2</th>
+<th>Year 3</th>
+<th>Year 4</th>
+<th>Year 5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Revenue</td>
+<td>500</td>
+<td>2,200</td>
+<td>4,500</td>
+<td>6,800</td>
+<td>9,500</td>
+</tr>
+<tr>
+<td>Payroll incl. statutory</td>
+<td>(430)</td>
+<td>(1,150)</td>
+<td>(2,100)</td>
+<td>(3,000)</td>
+<td>(4,000)</td>
+</tr>
+<tr>
+<td>Technology &amp; per-claim COGS</td>
+<td>(35)</td>
+<td>(154)</td>
+<td>(315)</td>
+<td>(476)</td>
+<td>(665)</td>
+</tr>
+<tr>
+<td>Field, travel, surge contractors</td>
+<td>(30)</td>
+<td>(132)</td>
+<td>(270)</td>
+<td>(408)</td>
+<td>(570)</td>
+</tr>
+<tr>
+<td>Compliance, PI, cyber, audit, CPD</td>
+<td>(160)</td>
+<td>(200)</td>
+<td>(260)</td>
+<td>(300)</td>
+<td>(340)</td>
+</tr>
+<tr>
+<td>Office &amp; premises</td>
+<td>(55)</td>
+<td>(100)</td>
+<td>(170)</td>
+<td>(230)</td>
+<td>(290)</td>
+</tr>
+<tr>
+<td>Business development</td>
+<td>(20)</td>
+<td>(88)</td>
+<td>(180)</td>
+<td>(272)</td>
+<td>(380)</td>
+</tr>
+<tr>
+<td>G&amp;A, professional, bad debt</td>
+<td>(15)</td>
+<td>(66)</td>
+<td>(135)</td>
+<td>(204)</td>
+<td>(285)</td>
+</tr>
+<tr>
+<td>One-off setup &amp; registration</td>
+<td>(190)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>EBITDA</strong></td>
+<td><strong>(435)</strong></td>
+<td><strong>310</strong></td>
+<td><strong>1,070</strong></td>
+<td><strong>1,910</strong></td>
+<td><strong>2,970</strong></td>
+</tr>
+<tr>
+<td>EBITDA margin</td>
+<td>—</td>
+<td>14%</td>
+<td>24%</td>
+<td>28%</td>
+<td>31%</td>
+</tr>
+<tr>
+<td>Depreciation &amp; amortisation</td>
+<td>(30)</td>
+<td>(60)</td>
+<td>(100)</td>
+<td>(130)</td>
+<td>(160)</td>
+</tr>
+<tr>
+<td>Tax (losses carried forward)</td>
+<td>—</td>
+<td>—</td>
+<td>(136)</td>
+<td>(382)</td>
+<td>(629)</td>
+</tr>
+<tr>
+<td><strong>Net profit after tax</strong></td>
+<td><strong>(465)</strong></td>
+<td><strong>250</strong></td>
+<td><strong>834</strong></td>
+<td><strong>1,398</strong></td>
+<td><strong>2,181</strong></td>
+</tr>
+<tr>
+<td>Cumulative net profit</td>
+<td>(465)</td>
+<td>(215)</td>
+<td>619</td>
+<td>2,017</td>
+<td>4,197</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Net profit after tax across all three cases
+(RM'000)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Year 1</th>
+<th>Year 2</th>
+<th>Year 3</th>
+<th>Year 4</th>
+<th>Year 5</th>
+<th>Cumulative</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Downside</td>
+<td>(585)</td>
+<td>(330)</td>
+<td>(60)</td>
+<td>200</td>
+<td>620</td>
+<td><strong>(155)</strong></td>
+</tr>
+<tr>
+<td><strong>Base</strong></td>
+<td><strong>(465)</strong></td>
+<td><strong>250</strong></td>
+<td><strong>834</strong></td>
+<td><strong>1,398</strong></td>
+<td><strong>2,181</strong></td>
+<td><strong>4,197</strong></td>
+</tr>
+<tr>
+<td>Upside</td>
+<td>(385)</td>
+<td>625</td>
+<td>1,611</td>
+<td>2,454</td>
+<td>3,784</td>
+<td><strong>8,089</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read this.</strong> Three things matter more than the
+precise figures:</p>
+<ol type="1">
+<li><strong>Monthly breakeven arrives in Year 2; cash payback in Year
+3.</strong> Three different milestones are easy to confuse. <em>Monthly
+breakeven</em> is the first month revenue covers costs. <em>Annual
+breakeven</em> is the first profitable full year — Year 2, at RM250,000.
+<strong>Cash payback is the point where cumulative profits have repaid
+every earlier loss</strong> — the year the cumulative row crosses zero,
+which is Year 3. Year 2 is profitable yet the business is still
+RM215,000 down overall. When a partner asks "when do I get my money
+back," they mean payback, not monthly breakeven. Fund the business to
+survive roughly 24 months, not 12.</li>
+<li><strong>Margins expand with scale because the cost base is largely
+fixed.</strong> Compliance, office and senior-adjuster capacity are step
+costs; revenue grows faster than they do. That is the AI-native thesis
+expressed in the P&amp;L — and it holds only if the productivity claim
+is real (§10).</li>
+<li><strong>The downside case never pays back inside five
+years.</strong> If fees compress and no travel channel is won,
+cumulative net profit is still negative at Year 5 (RM155,000 in the red)
+despite a profitable Year 5. That is the scenario to plan against, not
+the base case.</li>
+</ol>
+<p><strong>Breakeven lands in months 15–22 on the base case.</strong>
+The dominant variable is not engineering velocity but
+<strong>time-to-first-panel-appointment</strong>, because regulated
+payroll burns whether or not instructions flow. Secondary variables:
+whether an airline or bancassurance travel channel is won (roughly the
+gap between the conservative and optimistic Path C columns), and
+catastrophe timing, which is uncontrollable.</p>
+<p><strong>Margin honesty:</strong> at maturity this is a
+<strong>services business with a software layer</strong>, not a software
+business with services attached. The base case reaches <strong>28–31%
+EBITDA by Year 5</strong> (§6.6) because compliance, office and
+senior-adjuster capacity are step costs that revenue outgrows. If fees
+compress, that falls to ~16%. Pushing toward the platform-led mix (Paths
+B and C) improves margin and scalability but lowers absolute
+revenue.</p>
+<h3 id="67-cash-flow-and-the-real-funding-requirement">6.7 Cash flow and
+the real funding requirement</h3>
+<p>Profit is not cash. Insurers settle on 30–90 day terms, so revenue is
+invoiced well before it is collected. The table below assumes 35% of a
+quarter's invoicing is collected within that quarter and 65% in the
+following one — and it moves the payback date.</p>
+<p><strong>Base case, quarterly cash (RM'000)</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Invoiced</th>
+<th>Collected</th>
+<th>Cash costs</th>
+<th>Net cash</th>
+<th>Cumulative cash</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Y1 Q1</td>
+<td>—</td>
+<td>—</td>
+<td>(330)</td>
+<td>(330)</td>
+<td>(330)</td>
+</tr>
+<tr>
+<td>Y1 Q2</td>
+<td>50</td>
+<td>18</td>
+<td>(170)</td>
+<td>(152)</td>
+<td>(482)</td>
+</tr>
+<tr>
+<td>Y1 Q3</td>
+<td>150</td>
+<td>85</td>
+<td>(210)</td>
+<td>(125)</td>
+<td>(608)</td>
+</tr>
+<tr>
+<td>Y1 Q4</td>
+<td>300</td>
+<td>202</td>
+<td>(225)</td>
+<td>(22)</td>
+<td>(630)</td>
+</tr>
+<tr>
+<td>Y2 Q1</td>
+<td>350</td>
+<td>318</td>
+<td>(400)</td>
+<td>(82)</td>
+<td>(712)</td>
+</tr>
+<tr>
+<td><strong>Y2 Q2</strong></td>
+<td>500</td>
+<td>402</td>
+<td>(450)</td>
+<td>(48)</td>
+<td><strong>(760)</strong> ← trough</td>
+</tr>
+<tr>
+<td>Y2 Q3</td>
+<td>600</td>
+<td>535</td>
+<td>(500)</td>
+<td>35</td>
+<td>(725)</td>
+</tr>
+<tr>
+<td>Y2 Q4</td>
+<td>750</td>
+<td>652</td>
+<td>(540)</td>
+<td>112</td>
+<td>(612)</td>
+</tr>
+<tr>
+<td>Y3 Q1</td>
+<td>900</td>
+<td>802</td>
+<td>(800)</td>
+<td>2</td>
+<td>(610)</td>
+</tr>
+<tr>
+<td>Y3 Q2</td>
+<td>1,050</td>
+<td>952</td>
+<td>(850)</td>
+<td>102</td>
+<td>(508)</td>
+</tr>
+<tr>
+<td>Y3 Q3</td>
+<td>1,200</td>
+<td>1,102</td>
+<td>(880)</td>
+<td>222</td>
+<td>(285)</td>
+</tr>
+<tr>
+<td>Y3 Q4</td>
+<td>1,350</td>
+<td>1,252</td>
+<td>(1,036)</td>
+<td>216</td>
+<td>(68)</td>
+</tr>
+</tbody>
+</table>
+<p>Three consequences:</p>
+<ul>
+<li><strong>The cash trough is RM760,000, reached around month
+18</strong> (Y2 Q2) — deeper and later than the Year 1 accounting loss
+of RM465,000 suggests. The trough, not the first-year loss, is what has
+to be funded.</li>
+<li><strong>Cash payback lags accounting payback by about two
+quarters.</strong> Cumulative net profit turns positive during Year 3,
+but cumulative <em>cash</em> is still RM68,000 negative at the end of
+Year 3 and only crosses zero in early Year 4, because roughly RM880,000
+is sitting in receivables by then.</li>
+<li><strong>Working capital grows with success.</strong> Every step up
+in revenue ties up more cash in unpaid invoices. Fast growth consumes
+cash even while the P&amp;L looks healthy.</li>
+</ul>
+<p><strong>Funding requirement</strong></p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Amount</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operating cash trough</td>
+<td>RM760,000</td>
+</tr>
+<tr>
+<td>Contingency at 25% of the trough</td>
+<td>RM190,000</td>
+</tr>
+<tr>
+<td><strong>Working funding required</strong></td>
+<td><strong>≈RM950,000</strong></td>
+</tr>
+<tr>
+<td>BNM minimum paid-up capital</td>
+<td>Locked capital — <strong>amount unverified</strong> (§10)</td>
+</tr>
+<tr>
+<td><strong>Total to raise</strong></td>
+<td><strong>RM900,000–1,400,000</strong> depending on the capital
+requirement and buffer</td>
+</tr>
+</tbody>
+</table>
+<p>Do not distribute profits before cash payback in Year 4; Years 2 and
+3 profits are needed to refill the hole dug in Year 1.</p>
+<hr />
+<h2 id="7-verdict-on-profitability">7. Verdict on profitability</h2>
+<ul>
+<li><strong>The addressable fee pool shrinks by roughly an order of
+magnitude versus motor</strong> (~RM30–80M/year normal-year adjusting
+fees vs ~RM200–400M for motor). Whatever is built must win on value per
+case, not volume.</li>
+<li><strong>Per-case economics are better and fee pressure is
+lower</strong> — insurers are profitable in these lines and pay for
+technical quality. But the competition (Sedgwick, Crawford, Charles
+Taylor, McLarens) is credentialed and entrenched, and BNM's 5-year
+seniority rule makes talent, not technology, the gating factor for Path
+A.</li>
+<li><strong>Revenue will be lumpy.</strong> A flood year can double
+revenue; two quiet years can follow. Plan cash accordingly; sell surge
+capacity as a subscription to smooth it.</li>
+<li><strong>The strongest genuine wedge:</strong> catastrophe surge
+remote assessment + BNM turnaround compliance + fraud screening on
+property claims. This is a real, regulator-aligned gap that incumbents'
+site-visit model handles poorly.</li>
+<li><strong>The PA/travel inclusion changes the shape of the
+business.</strong> Property/catastrophe work is high-value and lumpy;
+travel/group PA is low-value and recurring. Together they form a
+<strong>two-engine model</strong>: Path C transaction volume covers the
+base while Path A/B catastrophe and complex-loss work provides the
+high-margin spikes. The PA class is also the fastest-growing GI line
+(+12.2% in 2025) with a very low loss ratio — insurers there invest in
+claims experience as a sales weapon, which is an easier conversation
+than cost-cutting.</li>
+<li><strong>Market sizing, stated the way an investor will ask
+it.</strong> Total in-scope premium is ~RM11.4–11.6B (verified/derived),
+but premium is not the addressable market. The <strong>addressable
+services and software spend</strong> is the ~RM30–80M normal-year
+non-motor adjusting fee pool plus insurers' internal PA/travel
+claims-handling cost (unquantified, estimate) — call it
+<strong>RM60–150M of realistically addressable annual spend</strong>. A
+credible obtainable share at maturity is <strong>RM9.5M (base case),
+RM14M (upside), RM5M (downside)</strong> per §6.5–6.6 — roughly a 6–20%
+share of the addressable pool.</li>
+<li><strong>Honest bottom line:</strong> as a standalone Malaysian
+business this is a <strong>solid, cash-generative niche — RM9.5M revenue
+and RM2.2M net profit by Year 5 on the base case, at ~31% EBITDA — but
+not a venture-scale volume market.</strong> Investors seeking a large
+outcome should treat Malaysia as a <strong>beachhead</strong>, with the
+equity story resting on one of: (a) regional expansion, since the same
+internationals and travel insurers operate Asia-wide networks (Tune
+Protect alone spans a dozen markets); (b) becoming the surge/fraud
+platform layer sold <strong>to</strong> the industry rather than
+competing with it; or or (c) adjacent non-motor lines and specialist
+classes. Without one of those, the realistic outcome is a profitable
+business earning roughly <strong>RM2.2M net profit a year by Year 5,
+RM4.2M cumulative over five years</strong> — which may be exactly the
+right goal, but should be pitched as such rather than as a platform
+hypergrowth story.</li>
+</ul>
+<hr />
+<h2 id="8-risk-register">8. Risk register</h2>
+<p>Stated plainly because an investor will find these anyway. Severity
+reflects impact on the base case if the risk materialises.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Risk</th>
+<th>Severity</th>
+<th>Mitigation / current view</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Fee assumptions unverified.</strong> Per-case non-motor fees
+are confidential; the RM500–15,000 table is industry-practice estimate.
+If actual fees sit at the bottom of each band, year-3 revenue falls
+toward the conservative column.</td>
+<td>High</td>
+<td>Validate in primary interviews before committing capital. This is
+the single largest modelling risk.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Talent is the binding constraint.</strong> BNM's 5-year
+subject-matter seniority rule for sign-off means the business cannot
+operate without scarce senior adjusters, and 55 registered firms compete
+for the same pool. Losing a senior halts sign-off.</td>
+<td>High</td>
+<td>Two-senior minimum; equity participation; consider acquiring a small
+registered firm instead of building.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Panel access is relationship-driven and slow.</strong>
+Insurers appoint adjusters they know; procurement cycles run 6–12 months
+with security assessments.</td>
+<td>High</td>
+<td>Warm introductions; start with one line and one insurer; consider
+white-label work under an existing registered adjuster to generate
+revenue during registration.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Small TAM.</strong> ~RM30–80M normal-year non-motor
+adjusting fee pool nationally. Even strong execution yields a RM5–14M
+revenue business in Malaysia alone.</td>
+<td>High</td>
+<td>Honest framing: this is a beachhead, not the endgame. Regional
+expansion or platform licensing is required for venture-scale
+outcomes.</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Revenue lumpiness.</strong> Catastrophe-driven property work
+can double a year's revenue, then not recur.</td>
+<td>Medium–High</td>
+<td>Path C recurring volume plus surge-capacity subscriptions to smooth;
+hold cash buffer through quiet years.</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Buyer concentration, especially Path C.</strong> A handful
+of insurers control most travel-claim volume; losing one contract could
+remove a majority of ARR.</td>
+<td>Medium–High</td>
+<td>Contract minimum volumes; diversify across 3+ payers before scaling
+headcount.</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Incumbents are already investing in the same
+technology.</strong> Sedgwick publishes on AI in loss adjusting and is
+the largest adjuster in Asia; McLarens tripled its Malaysian team and
+won regional awards. They have capital, panels and credentials, and can
+buy or build comparable tooling.</td>
+<td>Medium–High</td>
+<td>Compete where their site-visit operating model is structurally weak
+(surge, turnaround compliance) rather than on general capability; or
+sell to them.</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Regulatory scope uncertainty on travel
+adjudication.</strong> If BNM deems desktop travel-claim adjudication to
+be adjusting business, Path C inherits the full registered-adjuster cost
+base and its economics change materially.</td>
+<td>Medium–High</td>
+<td>Obtain a formal legal opinion <strong>before</strong> building the
+travel product.</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Insurers in-house the capability.</strong> Zurich, Allianz
+and Tune Protect already ship their own claims automation and app-based
+payouts.</td>
+<td>Medium</td>
+<td>Position as capacity and fraud-network value that is uneconomic to
+build per-insurer; avoid competing on basic workflow.</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>AI does not reduce regulated headcount</strong> (§6.1) — the
+"AI-native, low-manpower" thesis holds for throughput and for Path C,
+but not for Path A's statutory minimum.</td>
+<td>Medium</td>
+<td>Model Path A margins on realistic headcount; concentrate AI leverage
+where it is legally unconstrained.</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Data, PDPA and cyber exposure.</strong> Claims data includes
+personal, medical and financial information; data must stay in Malaysia;
+a breach would end insurer relationships.</td>
+<td>Medium</td>
+<td>ap-southeast-5 residency, ISO 27001, cyber cover, DPO function —
+costed in §6.3.</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Working capital squeeze.</strong> 30–90 day insurer terms
+against monthly regulated payroll.</td>
+<td>Medium</td>
+<td>Fund receivables explicitly; do not treat revenue recognition as
+cash.</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>Model-risk and explainability.</strong> BNM requires
+adjusting reports to disclose facts, assumptions, methods and data
+sources (para 12.6); black-box AI outputs may be challenged in disputes
+or by the regulator.</td>
+<td>Low–Medium</td>
+<td>Human-in-the-loop sign-off, full audit trails, documented
+methodology — aligns with the 7-year retention rule.</td>
+</tr>
+<tr>
+<td>14</td>
+<td><strong>Unverified capital and tax items.</strong> BNM minimum
+paid-up capital and SST applicability are both unconfirmed (§6.3, §6.4)
+and could each shift the funding requirement or pricing.</td>
+<td>Low–Medium</td>
+<td>Confirm both before finalising any investor financial model.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9-what-we-are-looking-for">9. What we are looking for</h2>
+<p>The analysis points to three constraints that money alone doesn't
+fix. They're what we're looking for in a partner:</p>
+<ol type="1">
+<li><strong>Senior adjusting capability.</strong> BNM requires adjusting
+reports to be signed off by a senior adjusting employee with five years
+of subject-matter experience (§6.1). A partner who is a qualified
+non-motor adjuster — or who can bring one — is worth more to this
+business than an equivalent amount of cash.</li>
+<li><strong>Insurer panel access.</strong> Appointments are
+relationship-driven and take 6–12 months (§8). Existing credibility with
+insurer claims leadership compresses the single longest item on the
+critical path.</li>
+<li><strong>Funding.</strong> Year 1 requires
+<strong>RM900,000–1,400,000</strong> including working capital
+(§6.4).</li>
+</ol>
+<p>Two open questions we'd want to work through together: whether we
+pursue BNM registration directly or partner with an existing registered
+firm, and how the working arrangement is structured. Both are
+conversations, not fixed positions.</p>
+<p><em>[Leo — add the specific role and terms here if you want them in
+writing before the meeting. Leaving it open is also a valid choice for a
+first conversation.]</em></p>
+<hr />
+<h2
+id="10-what-could-not-be-verified-publicly--validate-before-committing">10.
+What could not be verified publicly — validate before committing</h2>
+<table>
+<thead>
+<tr>
+<th>Open question</th>
+<th>How to validate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actual non-motor fee scales / time-and-expense rates on insurer
+panels</td>
+<td>Interviews with claims heads at PIAM member insurers; ex-staff of
+the international adjusting firms</td>
+</tr>
+<tr>
+<td>Annual count of non-motor adjuster instructions</td>
+<td>ISM member data via an insurer partner; AMLA member firms</td>
+</tr>
+<tr>
+<td><strong>BNM minimum paid-up capital for adjusting business</strong>
+(affects funding requirement)</td>
+<td>Schedule 2, Financial Services (Registered Businesses) Order;
+confirm directly with BNM</td>
+</tr>
+<tr>
+<td><strong>BNM annual registration fee</strong> for a registered
+adjuster</td>
+<td>Third Schedule, Financial Services (Fees) Regulations 2014</td>
+</tr>
+<tr>
+<td><strong>Whether service tax (8%) applies to adjusting /
+claims-administration fees</strong> (affects pricing and cash flow)</td>
+<td>Tax adviser; SST scope expansion effective 1 July 2025</td>
+</tr>
+<tr>
+<td>Realistic cases-per-adjuster-per-month with AI assistance (the
+productivity claim in §5)</td>
+<td>Time-and-motion benchmarking during pilot; compare against incumbent
+40–60 baseline</td>
+</tr>
+<tr>
+<td><strong>Blended fee per adjusting instruction</strong> — the most
+sensitive input in the model; RM1,800 fails an incumbent
+revenue-per-head benchmark, RM900 is assumed (§6.5)</td>
+<td>Panel fee schedules from insurer claims heads; ex-staff of
+registered adjusting firms</td>
+</tr>
+<tr>
+<td><strong>Annual travel/group PA claim counts and internal
+cost-per-claim</strong> (the load-bearing number for Path C)</td>
+<td>Discovery with Tune Protect, Allianz, Zurich, Etiqa claims
+operations</td>
+</tr>
+<tr>
+<td>Individual-PA vs Group/Travel-PA split of the RM1.6B PA class</td>
+<td>ISM statistics via an insurer partner</td>
+</tr>
+<tr>
+<td>Whether desktop travel-claim adjudication requires adjusting
+registration or falls under outsourcing rules</td>
+<td>Formal legal opinion (FSA s.2(1) definition vs BNM outsourcing
+policy)</td>
+</tr>
+<tr>
+<td>Insurer appetite for a surge-capacity subscription product</td>
+<td>Direct discovery conversations with 3–5 insurers' claims/CAT
+teams</td>
+</tr>
+<tr>
+<td>Whether internationals would license a third-party remote-assessment
+platform</td>
+<td>BD conversations with Sedgwick/McLarens/Crawford Malaysia</td>
+</tr>
+</tbody>
+</table>
+<p>Recommended: 5–10 primary conversations before financial commitment.
+The three load-bearing estimates are the property fee-per-case table,
+the adjuster-instruction count, and the travel/PA claim-count range.</p>
+<p><strong>Investor-readiness assessment.</strong> This document is a
+defensible market and cost analysis built on public data, and it is
+honest about a small TAM and a services-margin profile. What it does
+<strong>not</strong> yet contain, and what a professional investor will
+ask for: (i) any primary validation of the fee and volume estimates,
+(ii) a signed or verbal letter of intent from at least one insurer,
+(iii) confirmation of the two unverified regulatory/capital items above,
+and (iv) evidence for the cases-per-adjuster productivity claim.
+Presenting the forecast as a <strong>validated</strong> model before
+those four exist would misrepresent its confidence level; present it as
+a costed hypothesis with a named validation plan.</p>
+<hr />
+<h2 id="about-this-document--scope-method-and-limitations">About this
+document — scope, method and limitations</h2>
+<blockquote>
+<p><strong>Purpose:</strong> Neutral, research-based assessment of what
+loss adjusters and claims service providers charge Malaysian insurers in
+the <strong>in-scope general insurance lines</strong>, the size of the
+fee pool, and the realistic profitability of entering this business with
+the True Claim Insight platform.</p>
+<p><strong>Scope:</strong> Fire/Property, Construction &amp;
+Engineering, Liability, Marine/Aviation/Transit (MAT), Bonds, Workmen's
+Compensation and Miscellaneous classes, <strong>plus the Personal
+Accident (PA) class excluding Individual PA</strong> — i.e. Group PA,
+Travel PA (travel insurance), PA riders/add-ons and affinity/niche PA
+are <strong>in scope</strong>. <strong>Explicitly excluded:</strong>
+Motor, Medical &amp; Health, and Individual PA (standalone personal
+accidental death/disablement adjudication). <em>Classification
+note:</em> travel insurance in Malaysia is a <strong>product written
+under the PA class</strong> (PA core benefits + travel-inconvenience
+add-ons), not a statistical class of its own — which is why the PA class
+must be partially included to capture travel claims.</p>
+<p><strong>Data currency:</strong> prepared 30 July 2026 using the most
+recent published figures — PIAM's <strong>FY2025 full-year
+results</strong> (released May 2026) for market size, class shares and
+underwriting outcomes, and DOSM's <strong>2025 flood-loss
+report</strong> (April 2026). Net-claims-incurred detail by class is
+only published to FY2024 and is labelled as such. <strong>Method and
+limitation:</strong> <strong>desk research only</strong> — PIAM
+full-year and half-year briefings, PIAM Yearbook, ISM data, BNM policy
+documents, DOSM flood statistics, Malaysian Re <em>Malaysian Insurance
+Highlights</em>, and company/industry sources. <strong>No primary
+interviews have been conducted.</strong> Per-case adjusting fees are
+negotiated privately and published nowhere, which is itself a
+finding.</p>
+<p><strong>How to read the numbers.</strong> Every figure is labelled
+one of three ways: <strong>verified</strong> (traceable to a cited
+public source), <strong>derived</strong> (arithmetic on verified
+figures, method shown), or <strong>estimate</strong> (industry-practice
+judgement requiring validation). The three load-bearing estimates are
+flagged in §10. This document is intended to support an investment
+discussion honestly — including where it is weak — not to advocate a
+position.</p>
+</blockquote>
+<hr />
+<h2 id="sources">Sources</h2>
+<ul>
+<li>PIAM Yearbook 2024 — <a
+href="https://piam.org.my/pdf/piam-yearbook-2024.pdf">https://piam.org.my/pdf/piam-yearbook-2024.pdf</a></li>
+<li>PIAM FY2025 full-year results: GWP RM24.2B, +4.8%, underwriting
+profit RM1.2B; PA +12% "driven mainly by travel insurance demand" (The
+Star, 6 May 2026) — <a
+href="https://www.thestar.com.my/business/business-news/2026/05/06/general-insurance-industry-grows-48-in-2025-posts-rm12bil-underwriting-profit---piam">https://www.thestar.com.my/business/business-news/2026/05/06/general-insurance-industry-grows-48-in-2025-posts-rm12bil-underwriting-profit---piam</a></li>
+<li>PIAM 1H2025 results: GWP RM12.3B, underwriting profit RM629M,
+combined ratio 92.1% (The Star, 8 Oct 2025) — <a
+href="https://www.thestar.com.my/business/business-news/2025/10/08/motor-fire-segments-fuel-growth-in-malaysia039s-general-insurance-industry---piam">https://www.thestar.com.my/business/business-news/2025/10/08/motor-fire-segments-fuel-growth-in-malaysia039s-general-insurance-industry---piam</a></li>
+<li>DOSM Special Report on the Impact of Floods in Malaysia 2025
+(national flood losses RM636.9M in 2025; RM933.4M in 2024) — <a
+href="https://www.dosm.gov.my/portal-main/release-content/special-report-on-impact-of-floods-in-malaysia2025">https://www.dosm.gov.my/portal-main/release-content/special-report-on-impact-of-floods-in-malaysia2025</a></li>
+<li>PIAM Insurance Data (ISM Q4 2024) — <a
+href="https://piam.org.my/in-focus/resources/insurance-data">https://piam.org.my/in-focus/resources/insurance-data</a></li>
+<li>PIAM press release: GI industry posts RM1.2B underwriting profit;
+fire RM700.8M profit, CR 69.5% (2025 results) — <a
+href="https://piam.org.my/news-media/stay-ahead/press-releases/article/Malaysia-s-General-Insurance-Industry-Posts-RM1-2-Billion-Underwriting-Profit-Reinforcing-Financial-Resilience-for-Malaysians">https://piam.org.my/news-media/stay-ahead/press-releases/article/Malaysia-s-General-Insurance-Industry-Posts-RM1-2-Billion-Underwriting-Profit-Reinforcing-Financial-Resilience-for-Malaysians</a></li>
+<li>Malaysian Re, <em>Malaysian Insurance Highlights 2021</em> (Dec 2021
+flood: RM2–3B claims exposure, flood history, protection gap) — <a
+href="https://www.malaysian-re.com.my/api/uploads/MIH_22_final_a6da7cf755.pdf">https://www.malaysian-re.com.my/api/uploads/MIH_22_final_a6da7cf755.pdf</a></li>
+<li>Malaysian Re, <em>Malaysian Insurance Highlights 2024</em> — <a
+href="https://www.malaysian-re.com.my/api/uploads/Malaysian_Insurance_Highlights_2024_df82519933.pdf">https://www.malaysian-re.com.my/api/uploads/Malaysian_Insurance_Highlights_2024_df82519933.pdf</a></li>
+<li>PIAM flood claims estimate RM3B (The Edge / Malay Mail, Dec 2021) —
+<a
+href="https://theedgemalaysia.com/article/general-insurance-industry-facing-rm3-billion-floodrelated-claims-says-piam">https://theedgemalaysia.com/article/general-insurance-industry-facing-rm3-billion-floodrelated-claims-says-piam</a></li>
+<li>BNM Policy Document: Registration Procedures and Requirements on
+Professionalism of Adjusters (29 Aug 2025) — <a
+href="https://www.bnm.gov.my/documents/20124/855632/PD_Registration_Procedures_and_Requirements_on_Professionalism_of_Adjusters.pdf">https://www.bnm.gov.my/documents/20124/855632/PD_Registration_Procedures_and_Requirements_on_Professionalism_of_Adjusters.pdf</a></li>
+<li>BNM List of Registered Adjusters (55 firms as at 21 July 2026) — <a
+href="https://www.bnm.gov.my/-/registered-adjusters">https://www.bnm.gov.my/-/registered-adjusters</a></li>
+<li>KPMG factsheet: BNM Claims Settlement Practices (July 2024) — <a
+href="https://assets.kpmg.com/content/dam/kpmg/my/pdf/factsheet-claims-settlement-practices.pdf">https://assets.kpmg.com/content/dam/kpmg/my/pdf/factsheet-claims-settlement-practices.pdf</a></li>
+<li>Sedgwick Malaysia solutions brochure ("largest loss adjusting and
+risk management company in Asia") — <a
+href="https://marketing.sedgwick.com/acton/attachment/4952/f-a193fcef-3c62-49dd-b565-c7a2f3f306de/1/-/-/-/-/Sedgwick_Malaysia_Solutions-Brochure-English.pdf">https://marketing.sedgwick.com/acton/attachment/4952/f-a193fcef-3c62-49dd-b565-c7a2f3f306de/1/-/-/-/-/Sedgwick_Malaysia_Solutions-Brochure-English.pdf</a></li>
+<li>McLarens Malaysia expansion &amp; MD appointment — <a
+href="https://www.mclarens.com/mclarens-appoints-lam-choy-heng-as-managing-director-mclarens-malaysia/">https://www.mclarens.com/mclarens-appoints-lam-choy-heng-as-managing-director-mclarens-malaysia/</a></li>
+<li>Charles Taylor Adjusting Asia (large/complex commercial focus,
+Malaysia office) — <a
+href="https://www.charlestaylor.com/en/asia">https://www.charlestaylor.com/en/asia</a></li>
+<li>Loss adjuster fee bases (time/hourly rate vs ad-valorem scale fee) —
+Australian Treasury consultation submission, Insurance Claims Handling —
+<a
+href="https://treasury.gov.au/sites/default/files/2019-10/t406602_iicp.pdf">https://treasury.gov.au/sites/default/files/2019-10/t406602_iicp.pdf</a></li>
+<li>AMLA (Association of Malaysian Loss Adjusters) — <a
+href="https://amla1981.org/">https://amla1981.org/</a></li>
+<li>Malayan Adjustment Company — <a
+href="https://www.macsb.com.my/">https://www.macsb.com.my/</a></li>
+<li>Tune Protect Travel Easy (instant DuitNow flight-delay claims, 3:3:3
+promise, Europ Assistance/MiCare partnerships) — <a
+href="https://www.tuneprotect.com/my/products/travel-easy-insurance">https://www.tuneprotect.com/my/products/travel-easy-insurance</a></li>
+<li>Allianz Travel Insurance Malaysia (3-working-day claims guarantee
+"or we pay double", benefit schedule) — <a
+href="https://www.allianz.com.my/personal/home-motor-and-travel/travel-and-flight-insurance/allianz-travel-insurance.html">https://www.allianz.com.my/personal/home-motor-and-travel/travel-and-flight-insurance/allianz-travel-insurance.html</a></li>
+<li>Skrine / Lexology commentary on the BNM Adjusters Policy Document —
+<a
+href="https://www.lexology.com/library/detail.aspx?g=1a555fe6-96a4-499b-bc28-610cee66e1e0">https://www.lexology.com/library/detail.aspx?g=1a555fe6-96a4-499b-bc28-610cee66e1e0</a></li>
+<li>EPF employer contribution rates (13% / 12%) — KWSP — <a
+href="https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution">https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution</a></li>
+<li>SOCSO 1.75% and EIS 0.2% employer rates, RM6,000 wage ceiling — <a
+href="https://www.ajobthing.com/resources/blog/epf-socso-eis-contribution-2026-latest-rates-rules-employer-guide-malaysia">https://www.ajobthing.com/resources/blog/epf-socso-eis-contribution-2026-latest-rates-rules-employer-guide-malaysia</a></li>
+<li>HRD Corp levy (employer training levy, services sector) — <a
+href="https://hrdcorp.gov.my/employers">https://hrdcorp.gov.my/employers</a></li>
+<li>SST scope expansion effective 1 July 2025 (service tax applicability
+to be confirmed) — <a
+href="https://landco.my/information-sharing/sst-scope-threshold-rate">https://landco.my/information-sharing/sst-scope-threshold-rate</a></li>
+</ul>
+
+</main>
+</body></html>
