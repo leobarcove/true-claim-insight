@@ -7,7 +7,7 @@ validation work in §10 is done.
 
 | | |
 | --- | --- |
-| **Version** | Rev 7 · 30 July 2026 · draft for partner discussion |
+| **Version** | Rev 8 · 10 August 2026 · draft for partner discussion (§3 capability statement re-verified against the codebase; market figures unchanged from Rev 7) |
 | **Prepared by** | Leo — technical lead, True Claim Insight |
 | **Money** | All figures in Ringgit (RM), rounded; ranges are deliberate. Fees are quoted **excluding service tax** — whether SST applies to adjusting or TPA fees is still unverified (§6.4, §10). |
 
@@ -245,9 +245,10 @@ white-label engagement, with a multi-panel ambition thereafter. *Verbal, non-bin
 yet contracted — treat as a qualified prospect, not secured revenue. Client name withheld in
 this copy pending their consent to be named.*
 
-**Platform.** A working multi-tenant claims system, not a prototype: 144 commits across seven
+**Platform.** A working multi-tenant claims system, not a prototype: 221 commits across seven
 services (NestJS/Fastify APIs, React adjuster portal, claimant PWA) on PostgreSQL via Prisma,
-with 27 data models.
+with 59 data models and 590 automated tests running in CI. *(Figures re-verified against the
+repository 10 August 2026.)*
 
 | Capability | State |
 | --- | --- |
@@ -258,23 +259,34 @@ with 27 data models.
 | Per-insurer evidence checklists (`EvidenceRequirement`) — no code change per insurer | Built |
 | Remote video assessment (Daily.co integration) | Built |
 | Digital signing | Lifecycle and provider interface built; **stub provider only — no signing vendor integrated yet** |
-| eKYC / identity verification | Status tracking in the claim record; **no verification vendor integrated yet** |
-| Audit trail (`AuditTrail`) supporting BNM's 7-year retention obligation | Built |
-| Assessment-mode router (desk review / remote video / site visit / expert referral) | Designed, build pending |
+| eKYC / identity verification | Decision gate built — a claim cannot be decided for an unverified claimant; verification is a recorded, audited manual act. **No automated verification vendor integrated yet** |
+| Audit trail (`AuditTrail`) supporting BNM's 7-year retention obligation | Built; append-only at database level, with scheduled retention and legal-hold machinery |
+| Assessment-mode router (desk review / remote video / site visit / expert referral) | Built — per-insurer fast-track and inspection thresholds, every decision recorded with its reasons |
+| SLA / turnaround engine — CSP clocks on a Malaysian working-day calendar, pause and breach escalation | Built (2026 calendar gazetteer-verified; 2027 pending publication) |
+| Adjuster report engine — mandatory disclosure sections, senior countersign, immutable issued reports, rendered PDF | Built; the registered-mode hard gates ship inert behind a licence flag |
+| Billing — per-insurer fee scales, SST, fee notes with stored derivation, aged insurer statements | Built |
+| Conversational intake — web chat and Telegram with human-takeover inbox; FNOL email ingestion | Built |
+| Field-level encryption (NRIC, bank details) and PDPA consent capture gating claim opening | Built |
+| Compliance registers — conflicts of interest, CPD, fit & proper, background screening, Board events, BNM change notifications | Built, operating inert as a TPA pending registration |
 
-**Known gaps, disclosed.** No scheduler exists in the monorepo, so SLA/turnaround clocks are
-not yet enforced; billing is unbuilt (fee scales, time entries, disbursements, fee notes);
-there is no BNM change-notification register; and the licensed-mode hard gates
-(qualified-assignee-only, junior supervision with senior countersign, conflict-of-interest
-screening, CPD floor) are specified but not implemented. Third-party signing and eKYC vendors
-are not yet integrated. A clause-by-clause compliance audit of these gaps has been completed
-internally.
+**Known gaps, disclosed.** Third-party signing and eKYC verification vendors are not yet
+integrated (both sit behind provider interfaces; signing is a stub). AMLA/CTF screening is
+not built, pending a legal read on whether the obligation attaches to the firm directly.
+Document AI defaults to an offshore model, and several processors (video, voice analysis,
+messaging) handle claimant data outside Malaysia with no cross-border transfer basis yet
+established — an in-country inference path is scheduled but not yet real. There is no
+production deployment (staging only) and no observability stack. A clause-by-clause
+compliance audit is maintained internally and was last re-verified against the codebase on
+10 August 2026.
 
 **Data residency — an open commitment, not yet a property of the system.** Malaysian data
-residency (AWS ap-southeast-5) is the stated design target and is set as a configuration
-default, but the platform is **not yet containerised and has no deployment manifests**, so
-residency is not currently enforced by infrastructure. This will be an early question in any
-insurer's information-security review and is treated as a build prerequisite, not a claim.
+residency (AWS ap-southeast-5) is the stated design target. A containerised **staging**
+deployment now exists in that region (single instance, Docker Compose behind a TLS edge,
+synthetic data only), so the residency path is exercised rather than merely asserted — but
+there is **no production deployment**, and several third-party processors (document AI,
+video, voice analysis, messaging) still process claimant data outside Malaysia with no
+transfer basis established. This will be an early question in any insurer's
+information-security review and is treated as a build prerequisite, not a claim.
 
 **Legacy motor surface.** Motor code (`ClaimCategory.MOTOR`, motor rule engine, vehicle master
 data) remains in the repository and functional but is **not a target and will not be

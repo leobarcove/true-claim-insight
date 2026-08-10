@@ -176,6 +176,7 @@
   .chip.plan { color:var(--clay); background:var(--clay-soft); border-color:var(--clay); }
   .chip.gate { color:var(--slate); background:var(--slate-soft); border-color:var(--slate); }
   .chip.fail { color:var(--rose); background:var(--rose-soft); border-color:var(--rose); }
+  .chip.pass { color:var(--pine, #2d6a4f); background:var(--pine-soft, #e8f4ea); border-color:var(--pine, #2d6a4f); }
 
   footer { padding:3rem 0 0; margin-top:1rem; border-top:1px solid var(--rule);
     color:var(--ink-3); font-size:.83rem; }
@@ -1079,8 +1080,8 @@ legal holds`"]
             </thead>
             <tbody>
               <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
-              <tr><td>eKYC, and any gate on it</td><td><span class="chip fail">Not built</span></td><td>Identity is recorded and never enforced: nothing refuses a report or a decision on an unverified claimant, and 225 seeded claims are decided or reported on one. Needs the provider <em>and</em> a decision about what it blocks</td></tr>
-              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip plan">No screen</span></td><td>The CSP 11.16–11.18 evidence — outstanding notes per insurer, aged — exists on the server and is proxied, with nothing reading it</td></tr>
+              <tr><td>Automated eKYC</td><td><span class="chip plan">Partial</span></td><td>The gate is built: <code>REPORT_PENDING</code>, <code>APPROVED</code> and <code>REJECTED</code> refuse on an unverified claimant in registered mode and record the advisory as a TPA. Verification is an audited manual act with a mandatory basis — no verification vendor integrated</td></tr>
+              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
               <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td>video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>; case-service writes <code>claimant</code>. The list only shrinks</td></tr>
               <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
@@ -1090,7 +1091,7 @@ legal holds`"]
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
-              <tr><td>Site-visit <em>notification</em></td><td><span class="chip plan">Partial</span></td><td>Routing and the appointment are live — weekday business hours, on the claim and in the schedule. What is missing is telling the claimant when someone is coming, and a <code>SiteVisit</code> record of what was found</td></tr>
+              <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip plan">Partial</span></td><td>Routing, the appointment and the claimant notification are all live — <code>PATCH /claims/:id/appointment</code> books the visit, audits it and emails the claimant the date, Malaysian time and address. What is still missing is a <code>SiteVisit</code> record of what was found on the ground</td></tr>
             </tbody>
           </table>
         </div>

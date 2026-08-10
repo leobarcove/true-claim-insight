@@ -6,7 +6,7 @@ The operator runs an unlicensed TPA (claims administration for insurers; MSIG ve
 
 This plan was produced from: (1) a full codebase audit, (2) paragraph-level extraction of the regulatory documents, (3) the CSP timeline anchors, (4) market research on Malaysian adjusting practice, and (5) the economics in `docs/MARKET_RESEARCH_TPA_REVENUE.md`, which governs the sequencing in §5 and the feasibility position in §9. A per-requirement compliance verification audit produced the verdict column in §3.
 
-> **Cross-reference note.** Section numbers cited as "research §n" refer to `MARKET_RESEARCH_TPA_REVENUE.md` as at 30 July 2026 (§5 revenue paths, §6 cost/P&L, §7 verdict, §8 risk register, §9 partner ask, §10 unverified items). That document is actively revised — if its numbering shifts again, the figures used here (funding RM900k–1.4M vs RM300–500k, breakeven months 15–22, RM13–18M base steady state, RM8–12/claim Path C pricing) are the load-bearing values to re-verify, not the section labels.
+> **Cross-reference note.** Section numbers cited as "research §n" refer to `MARKET_RESEARCH_TPA_REVENUE.md` as at Rev 8, 10 August 2026 (§5 revenue paths, §6 cost/P&L, §7 verdict, §8 risk register, §9 partner ask, §10 unverified items — numbering re-verified at Rev 8). That document is actively revised — if its numbering shifts again, the figures used here (funding RM900k–1.4M vs RM300–500k, breakeven months 15–22, RM9.5M base obtainable share at maturity — RM5M downside / RM14M upside — RM8–12/claim Path C pricing) are the load-bearing values to re-verify, not the section labels. *(Exactly this happened once already: this note carried "RM13–18M base steady state" until the 10 Aug 2026 re-verification found the research now says RM9.5M base — the numbering had held, the figure had not.)*
 
 ### Scope — target claim lines
 
@@ -172,6 +172,13 @@ Only lines with a physical risk address belong in the policy. Travel does not:
 the loss happened overseas, which is what put 76 seeded travel claims on a mode
 no adjuster could have carried out.
 
+*(10 Aug 2026, audit: two corrections to this note. The fast track's
+evidence-complete condition was subtype-blind, so the travel fast track never
+actually fired at an opening decision — fixed the same day, see the §8 audit
+entry. And the seed is currently the only writer of `siteVisitCategories` /
+`siteVisitThresholds`: the tenant-config surface neither accepts nor returns
+them, so the inspection policy is real but unreachable by any operator.)*
+
 The demo firm is configured with FIRE/FLOOD/BURGLARY/LIGHTNING/HOH at
 **RM20,000** and travel fast-tracked to **RM5,000**. Both are business decisions
 recorded in the seed, not properties of the platform — RM20,000 sends an adjuster
@@ -197,7 +204,7 @@ Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, 
 
 ## 3. Compliance matrix (with current-state verdicts)
 
-Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 19 PASS, 11 PARTIAL, 1 FAIL** (re-audited 31 July 2026; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
+Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 20 PASS, 10 PARTIAL, 1 FAIL** (recounted from the rows 10 August 2026 — this headline had sat at 19/11/1 since 31 July while the retention row below moved to PASS, exactly the drift the next sentence warns about; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
 
 ### 3.1 BNM Adjuster PD (binding "S" paragraphs)
 
@@ -223,7 +230,7 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 
 | Anchor | Current | Target control | Phase |
 |---|---|---|---|
-| Firm ack of appointment ≤1 wkg day | **PARTIAL** — `Assignment` records the instruction and starts the clock from *when it arrived*, not when work began; acknowledging or declining stops it, since both answer the insurer. Verified live: received Fri 31 Jul → due Mon 3 Aug, and a claim cannot be opened on an unacknowledged appointment. Remains PARTIAL because the acknowledgement is recorded, not **sent** — that needs the notification layer, deferred with the hosting decision | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
+| Firm ack of appointment ≤1 wkg day | **PARTIAL** — `Assignment` records the instruction and starts the clock from *when it arrived*, not when work began; acknowledging or declining stops it, since both answer the insurer. Verified live: received Fri 31 Jul → due Mon 3 Aug, and a claim cannot be opened on an unacknowledged appointment. The acknowledgement has been **sent** since the notification layer landed 5 Aug (`assignment.acknowledged` template, delivery-logged) — this row's earlier "recorded, not sent" reason was stale by five days when the 10 Aug audit caught it. Remains PARTIAL only until the send path is verified live, per the rule that built is not the same as operating | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
 | Preliminary report ~7–14 days (market practice) | **PASS** — `SlaClock` starts on adjuster assignment (7 working days, per-insurer override, KL calendar) and is stopped by the act CSP measures: issuing the PRELIMINARY report through the report engine. Pauses on awaiting-documents and SIU referral bank the remaining days. Operating on real dates since the 2026 calendar was installed — verified live: assignment Fri 31 Jul → due Tue 11 Aug | 2027 calendar when gazetted | done |
 | Final report ≤14 wkg days from complete documents (CSP 10.13, non-motor) | **PASS** — the clock now anchors where CSP puts it: `documentsCompleteAt`, stamped when the last mandatory checklist item is uploaded (set-once — a later upload cannot move the anchor, a deletion cannot unset the fact), starting the fourteen-working-day clock from that moment. Verified live: the completing upload stamped the anchor and started the clock, 31 Jul → due 14 Aug. `REPORT_PENDING` remains an idempotent fallback start for claims with no checklist. Moving to REPORT_PENDING with mandatory evidence missing blocks in registered mode and is recorded as a TPA — §3.6 #8 closes with this | 2027 calendar when gazetted | done |
 | Supplementary claims 5 wkg days | **PASS** — no longer structurally precluded: `POST /claims/:id/supplementary` reopens a CLOSED claim (the one legal exit, reflected in the state machine so it tells the truth), starts the **5-working-day** `SUPPLEMENTARY_CLAIM` clock, requires the supplementary described, clears `closedAt` (retention re-anchors on the next closure), and works under a legal hold — the hold protects records, not work. Verified live: reopen Fri 31 Jul → due Fri 7 Aug; refused on a non-CLOSED claim. The response itself is the report engine's SUPPLEMENTARY type, which already stops this clock on issue | — | done |
@@ -240,7 +247,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 | s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs. **Applicability:** s.121 defines "financial service provider" as an *authorized* or *registered* person, so these duties attach **on registration**. Unregistered today, the operator is bound instead by (a) its contract with the insurer, which flows down the insurer's own Sch 7 duties, (b) the CSP PD via the insurer, and (c) general consumer-protection and misrepresentation law. Practically the same bar; state it accurately rather than overstating present direct exposure | **PARTIAL** — deception and fraud data no longer reach claimants (fixed in Phase 0, asserted by 8 tests); the adjuster report states in terms that the settlement decision rests with the insurer; AI contribution is disclosed per section rather than downplayed (§6). Still absent: versioned, compliance-approved claimant-facing templates | Versioned, compliance-approved templates; LLM output never verbatim to claimants | 0 (redaction, done) / 1 (template flag) / 5 (formal approval) |
 | s.143 | Produce documents/information to BNM in specified form | **PASS** — two forms on demand, compliance roles only, both audited at the gateway. `GET /claims/:id/export`: the complete machine-readable file (claim, claimant with NRIC decrypted, appointment, documents incl. soft-deleted, reports, SLA history, consents, transfer records, audit trail, sessions, notes); completeness is data (`BUNDLE_SECTIONS`) and a partial assembly refuses. `…/export/archive`: a ZIP an examiner walks away with — the sealed bundle plus the document binaries and rendered report PDFs, soft-deleted documents visibly separated, any unfetchable binary declared in MISSING_FILES.txt and on the audit row, never silent. Every export writes a **sha256-sealed** row to the append-only trail, and the seal is **fail-closed**: an export that cannot be recorded is refused, because an unprovable production to the regulator is worse than a delayed one. **Tests:** 15, in CI | The "specified form" is ultimately BNM's at request time; both forms exist to meet it | done |
 | s.146 | No-notice examination — audit-ready always | **PASS** — see the audit row above. An examiner arriving unannounced can be shown who did what, who accessed which personal data, which requests were refused, and that no row can have been altered after the fact | Append-only evidential audit trail + this matrix as live dashboard | 1 |
-| s.139 | "Insurance" naming restriction | **PARTIAL** — brand clean, but claimant-web title/PWA manifest say "Insurance Claims Made Easy"; refer to counsel | Policy note + legal review of taglines | 0 |
+| s.139 | "Insurance" naming restriction | **PARTIAL** — brand clean, but the claimant-web `<title>` says "Insurance Claims Made Easy"; the 10 Aug audit corrected this row (the PWA manifest is clean — "True Claim Insight") and widened it (the claimant welcome page carries "Assessments Made Simple" and two further taglines); refer to counsel | Policy note + legal review of taglines | 0 |
 | s.240 | Director personal liability | — | Motivates ComplianceEvent/Board register | 3 |
 
 ### 3.4 PDPA 2010 + AMLA
@@ -250,7 +257,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 | Consent (lawful basis, withdrawal) | **PASS** — machinery and wording both operative. v1 notices approved 31 July 2026 at the principal's direction, recorded under the firm-admin identity, following an AI-assisted substantive review against PDPA s.7, the 2024 Amendment and the CBPDT Guidelines. The review found and fixed two real defects: no contact particulars anywhere ("contact us" without a route fails s.7's substance — every notice now names the route and the Commissioner as the complaint avenue, in both languages), and the cross-border notice pointing at a privacy notice that did not exist — it now names each offshore recipient and country directly. Verified live: consent granted on approved wording, the biometric gate answering true, a second approval refused (approved wording is immutable; revisions ship as v2). **Independent Malaysian counsel review remains the standing recommendation**; counsel's changes would ship as v2, leaving v1 consents provably tied to v1 wording. **Tests:** 12, in CI | Counsel review → v2 if required | done |
 | NRIC/bank-detail protection | **PASS** — NRIC and bank account number encrypted at rest (AES-256-GCM envelope, versioned ciphertext); plaintext columns dropped, not merely shadowed; lookup via HMAC blind index; ciphertext and index omitted from query results by default so they cannot reach a browser; full value only through an audited firm-admin reveal. NRIC removed from logs; `verify-nric` throttled with non-enumerating errors. **Tests:** 15 crypto (incl. a simulated KMS custody migration) + a schema-reading omit-coverage test. **Qualified for messaging channels (6 Aug 2026):** the guarantee is end-to-end only where we control the transport. A claimant answering `bank-account-number` on Telegram (or, later, WhatsApp/Messenger) types the plaintext into the platform's own message history, where it persists offshore, outside our retention sweep and outside the claimant anonymisation job. Our column is still encrypted and the answer bag still masked — but the copy we do not hold is beyond both. This is a **decided position, not an oversight**: collecting payout details in-channel was chosen over a secure hand-off link for UX. `ChannelCapabilities.retainsPlaintext` records which channels carry the exposure. Revisit if a channel is used at volume, or if counsel reads s.129 as reaching it | Rotation drill and KMS custody transfer remain operational tasks; re-examine in-channel payout collection before the first non-pilot volume | done |
 | Retention/deletion | **PASS** — soft delete, scheduled document purge and legal hold, plus **claimant anonymisation** (6 Aug 2026): a nightly gateway sweep irreversibly destroys identity once every claim naming a person is closed and past the PD 12.8 floor, while the claim record survives. Replacements are random, never derived — a reversible transform is pseudonymisation and PDPA still applies to it. **Tests:** 15 | Purge of remaining non-document records as those contexts gain owners | done |
-| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim/Telegram) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. **Two paths added 6 Aug 2026, both recorded honestly rather than quietly.** Telegram carries claimant message content offshore for every conversational turn, and is *retentive* — what a claimant types stays in Meta's or Telegram's history, outside the retention sweep and the anonymisation job (see the payout-details qualification on the row above). And Gemini now receives free text a claimant typed, when deterministic parsing of an answer fails; that call writes a `TransferRecord` with an explicit data description for conversational text and `lawfulBasis: null`, because none is established. Neither is a new *kind* of gap — both are the same ungated-offshore gap this row already reports, now with two more paths in it. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, the in-country LLM path itself, and counsel on FSA 2013 secrecy over model inputs (§6.18) | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
+| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim/Telegram) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. **Two paths added 6 Aug 2026, both recorded honestly rather than quietly.** Telegram carries claimant message content offshore for every conversational turn, and is *retentive* — what a claimant types stays in Meta's or Telegram's history, outside the retention sweep and the anonymisation job (see the payout-details qualification on the row above). And Gemini now receives free text a claimant typed, when deterministic parsing of an answer fails; that call writes a `TransferRecord` with an explicit data description for conversational text and `lawfulBasis: null`, because none is established. Neither is a new *kind* of gap — both are the same ungated-offshore gap this row already reports, now with two more paths in it. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, the in-country LLM path itself, and counsel on FSA 2013 secrecy over model inputs (§6.18). **Widened again 10 Aug 2026 (audit):** the gateway's OCR module posts claim document images to a hardcoded third-party webhook (`smitherytech.zeabur.app`) that appears in no provider registry and writes no `TransferRecord`; and Telegram itself is absent from `OFFSHORE_PROVIDERS`, so its transfers *cannot* be recorded — the registry's exact-equality pinning test currently locks that omission in until both are amended together | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
 | AMLA/CTF screening | **FAIL** — no screening/CDD/STR concepts; `KycStatus` writer has zero callers, nothing gates on it | Sanctions/PEP screening plugin at claimant/payee registration; suspicious-matter → ComplianceEvent | 5 |
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
@@ -290,7 +297,7 @@ Read together: nothing in Phase 1 is wasted, but the *reason* to build it now is
 
 1. **Traceability**: every matrix row gets an ID; every implementing PR references row IDs; no control without a requirement, no requirement without a control.
 2. **Enforcement in code**: gates are server-side (guards/transactions), never UI-only — e.g. junior report cannot reach ISSUED without senior sign-off; documents cannot be hard-deleted; status transitions role-gated.
-3. **Compliance tests in CI**: automated tests assert each control ("junior cannot finalise report", "audit row written on every claim mutation", "SLA breach fires escalation"); the suite is demonstrable evidence in a s.146 examination. ✅ **This mechanism exists** — `.github/workflows/ci.yml` runs a typecheck job and a compliance job, and `pnpm test` covers every package. **282 tests across 26 suites in case-service alone**, 28 spec files repo-wide (recounted 5 Aug 2026, not carried forward by hand). The suites are pure functions, so CI needs no database. The A4 finding that this paragraph once carried is closed. What remains is coverage, not existence: each matrix row should name the test that asserts it, so a PASS points at an executable proof rather than at this list.
+3. **Compliance tests in CI**: automated tests assert each control ("junior cannot finalise report", "audit row written on every claim mutation", "SLA breach fires escalation"); the suite is demonstrable evidence in a s.146 examination. ✅ **This mechanism exists** — `.github/workflows/ci.yml` runs a typecheck job and a compliance job, and `pnpm test` covers every package. **509 tests across 39 suites in case-service alone**, 590 tests across 45 suites repo-wide (case-service and gateway/crypto run live, recounted 10 Aug 2026, not carried forward by hand). A coverage caveat the 10 Aug audit recorded: only three packages carry tests (case-service, api-gateway, crypto) — risk-engine and video-service run `--passWithNoTests`, and **risk-analyzer has no tests of any kind**, so nothing in CI verifies the Python service. The suites are pure functions, so CI needs no database. The A4 finding that this paragraph once carried is closed. What remains is coverage, not existence: each matrix row should name the test that asserts it, so a PASS points at an executable proof rather than at this list.
 4. **Live compliance dashboard** (Ph 3): matrix rendered from production data — e.g. % reports senior-signed, CPD standing, SLA hit rates, unresolved ComplianceEvents.
 
 ---
@@ -368,6 +375,9 @@ Rather than choosing between "move code into case-service" and "leave it and be 
 | `claims` | case-service | claim, case, caseDocument, document, policy, claimNote, floodClaim, travelClaim, evidenceRequirement, adjuster, auditTrail |
 | `assessment` | video-service + risk-engine | session, sessionClientInfo, videoUpload, deceptionScore, riskAssessment, trinityCheck, documentAnalysis, fraudSignal |
 | `reference` | api-gateway | vehicleMake, vehicleModel (motor legacy) |
+| `platform` | api-gateway **and** case-service — the two keyholders (standing decision 4) | encryptionKey |
+
+*(The `platform` row was missing from this table until the 10 Aug 2026 audit — the code had declared five contexts while the plan described four.)*
 
 Declared in `packages/prisma-client/src/data-ownership.ts`; enforced by `apps/case-service/src/common/data-ownership.spec.ts`, which scans every service's source for Prisma write calls and fails on any cross-context write. **Reads are permitted** — cross-context reads are a coupling smell, not a corruption hazard, and forbidding them would need an API layer that does not exist yet.
 
@@ -509,7 +519,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 10. **Three disconnected risk scores** (DeceptionScore, RiskAssessment, FraudSignal) — do not merge into one opaque number (itself a Sch 7/explainability risk); Ph 4 presents all three with provenance.
 11. **Portal scraping is not an available option — decided.** A proposal existed to scrape the insurer's agency portal for policy data and describe it externally as "a dedicated team reviewing policies". This plan rejects it on three independent grounds: the insurer has already stated that agents/adjusters may not log into its system, so automated access breaches the access terms and risks the Computer Crimes Act 1997; describing automation as a human team misrepresents the service to the client whose data is at stake; and either, if discovered during a vendor security assessment, ends the relationship and damages the registration application. **The sanctioned path is a structured policy file feed** (SFTP or an agreed inbox schema) — Phase 2, `PolicySource.FILE_FEED`. If the insurer declines a feed, the fallback is manual keying of the emailed data, not scraping.
 12. **AI is disclosed, not downplayed — decided.** A position existed to use AI internally while minimising it externally. BNM PD **12.6** requires the adjusting report to disclose the facts, assumptions, **methods**, sources and databases behind the assessment, so AI contribution to an assessment is a disclosable method. The defensible posture is the one the system already supports: human-in-the-loop sign-off, full audit trail with before/after values, explicit methodology sections, provenance kept on each risk signal, and no automated decision on medical claims. Downplaying invites the scrutiny it is meant to avoid; documented explainability answers the regulator's actual concern (accountability), and is also what insurer vendor assessments ask for.
-14. **Path B (platform sold *to* insurers and other adjusting firms) — kept open, not built.** The research values it at RM0.4M / RM2.3M / RM6–8M ARR and the §7 verdict names it one of only three routes to an outcome larger than a RM13–18M services business. This plan does **not** build it: with a TPA-first trajectory the near-term buyer is the insurer, not a peer adjusting firm. But it must not be foreclosed by accident, which is why item 5 is a Phase 1a fix rather than an accepted constraint. Decision rule: **keep multi-firm tenancy structurally possible at near-zero cost; build Path B only against a signed pilot with a firm that is not ours.** Revisit if an incumbent (Sedgwick / McLarens / Crawford / MAC) opens a licensing conversation — the research flags that as an untested but plausible channel.
+14. **Path B (platform sold *to* insurers and other adjusting firms) — kept open, not built.** The research values it at RM0.4M / RM2.3M / RM6–8M ARR and the §7 verdict names it one of only three routes to an outcome larger than a ~RM9.5M-at-maturity services business (base case; the research revised this down from RM13–18M). This plan does **not** build it: with a TPA-first trajectory the near-term buyer is the insurer, not a peer adjusting firm. But it must not be foreclosed by accident, which is why item 5 is a Phase 1a fix rather than an accepted constraint. Decision rule: **keep multi-firm tenancy structurally possible at near-zero cost; build Path B only against a signed pilot with a firm that is not ours.** Revisit if an incumbent (Sedgwick / McLarens / Crawford / MAC) opens a licensing conversation — the research flags that as an untested but plausible channel.
 15. **Do not claim in-country AI processing until it is true.** *(Scheduled: the principal set the local-LLM work for the week of 10 Aug 2026 — recorded as a dated decision rather than an open item. Note it lands in the same week as the MSIG sessions, so unless it ships first, the residency answer in those meetings is a dated commitment, not a present fact.)* The live default is Gemini (offshore) whenever `GEMINI_API_KEY` is set, and the "sovereign" Ollama path defaults to an ephemeral Cloudflare tunnel. Until Phase 2 lands real in-country hosting, any external statement must be framed as a dated architecture commitment, not a present fact. See §3.6 item 10 and §6.3.
 16. **Service-to-service trust is the largest single exposure (§4.3 A1).** Demonstrated: forged identity headers to `:3001` return real claim data, with services bound to `0.0.0.0` and no network policy. Every control in §3 — role gating, redaction, tenant isolation, audit — sits *behind* the gateway and is bypassed entirely by a direct call. Treat this as the first work item of Phase 0b, not a backlog entry. Until it is closed, do not expose any service beyond localhost and do not put real claimant data in a shared environment.
 17. **"Microservices" is currently a distributed monolith (§4.3 A2).** Four services write one database with no ownership boundaries, so a schema change can silently break three services and any service can corrupt any table — while cross-service operations have no transaction. The decided response is to enforce ownership at the API boundary rather than merge services, and to **stop adding services**. If ownership enforcement proves awkward, the fallback end state is two backend services (core API + `risk-analyzer`) plus two frontends.
@@ -957,10 +967,15 @@ sign-off and issue are separate acts, and an issued report renders read-only.
 Authorship is refused to a firm admin, which is correct — it is an adjusting
 employee's act under PD 12.7.
 
-**Also found, not fixed:** identity is recorded and never enforced. Nothing
+~~**Also found, not fixed:** identity is recorded and never enforced. Nothing
 refuses a report or a decision on an unverified claimant, and **225 seeded
 claims are decided or reported on one**. eKYC needs the provider *and* a
-decision about what it should block.
+decision about what it should block.~~ *Closed 6 Aug (`6633a38`), recorded 10
+Aug: REPORT_PENDING, APPROVED and REJECTED now refuse on an unverified claimant
+in registered mode and record `IDENTITY_UNVERIFIED_AT_DECISION` as a TPA — the
+licence-flip shape. Verification is an audited operator act with a mandatory
+basis (what was examined, by whom); automated eKYC remains future. See the 10
+Aug audit entry.*
 
 ### The final-report clock was four days tighter than the law requires (6 Aug 2026)
 
@@ -1187,6 +1202,143 @@ before a vendor assessment asks.
 
 **Constraint for now: synthetic and internal-tester data only on this path.**
 
+### Deep audit: plan vs codebase — 10 August 2026
+
+Four delegated auditors verified this document's claims against the working
+tree (HEAD `f52ad8e`), one cluster each: schema and migrations, case-service,
+the remaining services and deploy, tests and CI. Most claims held — the entity
+list, the append-only trigger, the retention CHECK, the router's four
+conditions and one-level escalation, the quantum ordering, the fail-closed
+export seal, the staging stack, the ownership ratchet at exactly six. What
+follows is what did not.
+
+**Five commits had shipped with no record here** — the §8 discipline lapsed for
+an afternoon and this document fell six commits behind its branch:
+
+- **Consent now gates the opening of a Case** (`f3e7693`). The §3.4 machinery
+  was PASS with 252 consent rows, every one seeded — nothing called it on the
+  live path. `CasesService.create` now refuses without a live CLAIM_PROCESSING
+  consent, and every channel (web, Telegram, staff capture, FNOL email) passes
+  through it. In code, deliberately not a flow step: a step lives in editable
+  data. Wiring it exposed a live authorisation hole, since fixed — the consent
+  routes carried no `@Roles`, and `RolesGuard` treats missing metadata as
+  allow-all, so any claimant could have granted, read or withdrawn consent for
+  any other.
+- **Identity now gates the decision** (`6633a38`) — see the corrected note in
+  the 6 Aug entry above. Includes the guard-ordering lesson: a method-level
+  `JwtAuthGuard` runs *after* a class-level `TenantGuard`, so the first cut of
+  the verify route succeeded with no basis and no audit row; the two claimants
+  verified while it was broken were reverted.
+- **A claimant can fix a mistake** (`0a1abbd`) — "back"/"edit" in English and
+  Malay, `Case.resumeStepId`, branch-aware resumption derived from the
+  `NextRule` structure rather than hand-listed. Also fixed: a finished claim
+  now releases its binding — previously a claimant could file exactly one
+  claim, ever.
+- **The insurer statement and the appointment** (`2887468`). The aged fee-note
+  statement gained its screen, and `PATCH /claims/:id/appointment` now writes
+  `scheduledAssessmentTime` — read in three places, previously written by
+  nobody — moves the claim to SCHEDULED, audits it, and notifies the claimant
+  (date, Malaysian time, address only for a site visit, a way to rearrange).
+  Refused in the past and on modes with nobody to meet.
+- **The ways a claimant gets it wrong** (`f52ad8e`) — non-answer refusal on
+  substance steps, dates echoed back spelled-out when the stored value differs
+  from what was typed, re-uploads superseding (never deleting) the wrong photo,
+  narrow question detection, and "human" as an escape hatch from anywhere.
+
+**Corrections to statements this document already made:**
+
+- The §3 headline still read 19/11/1 after the retention row moved to PASS —
+  recounted to **20/10/1**, now agreeing with §7 and the rows.
+- Test counts: **509 tests / 39 suites** in case-service, **590 / 45**
+  repo-wide (§3.5 carries the figure and a new coverage caveat: risk-analyzer
+  has no tests at all).
+- The NRIC entry above overstates the blind index: only `Claimant` carries
+  `nricHash`; claims, policies and cases are ciphertext + Last4 with no hash.
+  Right design — only Claimant is looked up by NRIC — wrong sentence.
+- `tripStartDate` was described as promoted to `Claim`; it lives on
+  `TravelClaim` (and `Policy`).
+- The §4.3 bounded-context table described four contexts while the code
+  declares five — `platform` (encryptionKey) added.
+- The §3.2 ack row's "recorded, not sent" reason had been stale since
+  notifications shipped on 5 Aug — corrected in place.
+- The PWA manifest does *not* carry the s.139 tagline (the §3.3 row said it
+  did); the `<title>` does, and the welcome page adds three more lines counsel
+  should see.
+- The research citation drifted: this plan carried "RM13–18M base steady
+  state" in three places, but `MARKET_RESEARCH_TPA_REVENUE.md` now puts the
+  obtainable share at maturity at **RM9.5M base / RM14M upside / RM5M
+  downside** (Year-5 base: RM2.2M net, ~31% EBITDA). All three corrected; the
+  other load-bearing values (RM900k–1.4M vs RM300–500k, months 15–22,
+  RM8–12/claim, Path B RM0.4M/RM2.3M/RM6–8M, RM60–150M addressable) re-verified
+  unchanged.
+
+**A real defect, found and fixed the same day: the travel fast track never
+fired.** The router's `isEvidenceComplete` queried evidence requirements by
+category alone while the claimant's checklist scoped by travel subtype, so a
+flight-delay claim was measured against all thirteen mandatory travel documents
+rather than its three — the fourth fast-track condition could never pass, and
+`DESK_REVIEW` was unreachable at opening for the very line the §2.5 COGS
+ceiling exists to protect. Two code paths answered "complete" differently:
+the §3.6 shape, with money on it. Fixed by extraction, not by patching the
+copy — `claims/evidence-requirements.ts` now holds the subtype filter and the
+four-level precedence as pure functions, both call sites resolve through it,
+and a source-scan test refuses either file dropping the import. The extraction
+also fixed a second latent defect: the old check counted tenant and global rows
+separately, so a tenant row relaxing a global mandatory requirement was still
+demanded. 9 tests; case-service at 509. **To re-verify: the 6 Aug "router
+agrees with the stored mode on every sampled claim" check ran against the buggy
+condition, so the seeded travel modes want re-sampling.**
+
+**Open findings, in priority order — recorded, not yet fixed:**
+
+1. **video-service `WebhooksController` has no guards at all** — no
+   `InternalAuthGuard`, no Daily.co signature check. `POST /webhooks/daily` and
+   the dev-only trigger route reach the analysis pipeline and are callable by
+   anyone who can reach :3002. Currently inert only because the outbound call
+   omits `x-internal-key` and risk-engine 403s it — a missing header standing
+   in for a control, and no consent check on that path. The A1 lesson, one
+   controller short of finished.
+2. **The OTP path carries a hardcoded universal bypass**: `code === '123123'`
+   verifies for any phone number with **no environment guard**, and codes come
+   from `Math.random()`, not a CSPRNG. Delivery itself is still console.log —
+   the §2.2 row was right about that part, but a bypass is worse than
+   "not built".
+3. **OCR ships claim document images offshore unrecorded** — see the widened
+   §3.4 row.
+4. **Telegram is unrecordable in the transfer register** — see the same row.
+5. **The site-visit inspection policy is unwritable** — see the §2.4 note.
+   The DTO and read path must expose `siteVisitCategories`/`siteVisitThresholds`
+   or the seed remains the only author of a spending decision.
+6. `TELEGRAM_POLLING_ENABLED` is opt-out (only the literal `'false'` stops it),
+   not the guard the 6 Aug entry implies — polling runs wherever a bot token is
+   present.
+7. The gateway's video module hand-rolls the internal key outside
+   `InternalHttpModule` and attaches it only `if (internalKey)` — failing open
+   at the caller, relying wholly on the receiver failing closed.
+8. ~~`docs/USER_FLOWS.md` (five commits stale) and the static site (six) still
+   call site-visit scheduling unbuilt and have missed the consent gate, the
+   identity gate and the intake-correction work.~~ **Closed later the same
+   day:** both refreshed — the appointment/notification flow drawn as live, the
+   consent gate and identity gate noted where their diagrams speak, the
+   intake-correction behaviour described, and the stale "identity never
+   enforced" row on the site replaced with the gate that now exists.
+9. ~~`MARKET_RESEARCH_TPA_REVENUE.md` §3 ("What exists today") describes the
+   late-July codebase~~ — **closed later the same day (Rev 8)**: §3 refreshed
+   against the tree (router, SLA engine, billing, `BnmNotification`, the
+   licence-flip gates and `deploy/staging/` now stated as built; 221 commits /
+   59 models / 590 CI tests; the residency paragraph now names the staging
+   deployment while keeping residency an open commitment). Every row was stale
+   in the *understating* direction — the safe way to be wrong, but the section
+   promises "a partner should be able to verify every line", and until Rev 8 a
+   partner verifying it could not. The signing-stub and eKYC-vendor rows were
+   accurate and stand.
+
+The §3.6 method note held again: every finding above came from reading what the
+code actually does or running it — none from re-reading this document's own
+assertions. And the counterpart lesson is new: a progress record that must be
+updated "after every completed item" drifted within one working day of the rule
+being ignored. The audit is the correction, not the substitute.
+
 ---
 
 ## 9. Feasibility check
@@ -1284,7 +1436,7 @@ That is three phases of work, not one — hence the 1a/1b/1c split. Add ~30% if 
 - **Feasible as a compliance-grade platform** — every BNM requirement in §3 is implementable, and the codebase already has the harder parts (multi-tenancy, document AI, video, fraud plugin architecture).
 - **Feasible as a business only with either** ~RM900k–1.4M to fund the registered route through a 15–22 month breakeven, **or** a deliberate decision to run unregistered travel/PA + TPA administration first (RM300k–500k) and register later once revenue supports the payroll.
 - **The riskiest assumptions are commercial, not technical:** unverified fee scales (G1), the travel-adjudication legal question (G3), and 6–12 month panel procurement. Engineering should not outrun them.
-- **Not venture-scale in Malaysia alone.** RM13–18M revenue at maturity (base case) on a 15–25% EBITDA margin. A larger outcome needs regional expansion, selling the platform *to* the industry, or the motor pool this scope deliberately excludes — and that is a strategy decision, not a system-design one.
+- **Not venture-scale in Malaysia alone.** RM9.5M revenue at maturity on the research's current base case (RM5M downside / RM14M upside; RM2.2M net by Year 5) — revised down 10 Aug 2026 from the RM13–18M this bullet previously carried — on a 15–25% steady-state EBITDA margin. A larger outcome needs regional expansion, selling the platform *to* the industry, or the motor pool this scope deliberately excludes — and that is a strategy decision, not a system-design one.
 
 ---
 

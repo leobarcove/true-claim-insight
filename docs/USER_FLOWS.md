@@ -64,7 +64,7 @@ final report 3 wkg days`"]
 Daily.co + risk-analyzer`"]
     MODE -->|"`property loss
 over the threshold`"| SITE["`Site visit or expert
-*visit is not yet scheduled*`"]
+appointment set · claimant notified`"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
@@ -152,7 +152,14 @@ stateDiagram-v2
 ## 3. Claimant submits a case
 
 The conversational intake: one question at a time, resumable via
-`currentStepId`, with the flow chosen by travel claim type.
+`currentStepId`, with the flow chosen by travel claim type. A claimant can also
+*correct* it: "back" / "edit" (English and Malay) re-ask an answered step and
+return via `resumeStepId` — unless the corrected answer feeds a branch, in
+which case the path re-walks and says why. Non-answers ("I don't know", "nil",
+"tak tahu") are refused by name on substance steps, ambiguous dates are echoed
+back spelled out, a re-uploaded document supersedes the wrong one rather than
+sitting beside it, and "human" hands the conversation to an agent from
+anywhere.
 
 ```mermaid
 sequenceDiagram
@@ -175,6 +182,7 @@ sequenceDiagram
     PWA->>CS: POST /consent — recorded against approved wording v1
 
     PWA->>CS: POST /cases {travelClaimType}
+    note over CS: refuses without a live CLAIM_PROCESSING consent —<br/>every channel passes this gate, and it is code, not a flow step
     CS-->>PWA: Case DRAFT + first step
 
     loop One step at a time
@@ -343,7 +351,21 @@ stateDiagram-v2
         is complete. Registered mode blocks the
         move. TPA mode records it.
     end note
+
+    note left of SCHEDULED
+        PATCH /claims/:id/appointment books the
+        visit, audits it and notifies the claimant
+        — refused in the past, and on modes with
+        nobody to meet.
+    end note
 ```
+
+> **Identity gates the decision.** `REPORT_PENDING`, `APPROVED` and `REJECTED`
+> refuse on an unverified claimant in registered mode and record
+> `IDENTITY_UNVERIFIED_AT_DECISION` as a TPA. Intake and assessment are
+> deliberately ungated — a control that turns away someone reporting a loss is
+> a barrier, not a control. Verification is an audited operator act with a
+> mandatory basis; automated eKYC remains future.
 
 Every claim state may also go straight to `CLOSED`, `APPROVED` or `REJECTED`
 from the early states — an insurer can withdraw at any point.
@@ -640,4 +662,8 @@ not merely an access check.
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
 | Local-LLM document validation | `validationStatus` is a labelled stub |
 | AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3 |
-| Site-visit **scheduling** | The router now sends a property loss over the firm's threshold to `SITE_VISIT` (MASTER_PLAN §2.4), but nothing schedules the visit, holds an appointment or tells the claimant when someone is coming |
+| Automated eKYC | Identity now *gates* decisions (see §6), but verification is a recorded manual act — no vendor integrated |
+
+*(Removed 10 Aug 2026: the site-visit scheduling row — `PATCH
+/claims/:id/appointment` now books the visit, audits it and notifies the
+claimant with the date, Malaysian time and, for a site visit, the address.)*
