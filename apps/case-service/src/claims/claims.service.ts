@@ -17,6 +17,7 @@ import { EncryptionService } from '@tci/crypto';
 import { SlaService } from '../sla/sla.service';
 import { SLA_TRANSITIONS } from '../sla/sla-transitions';
 import { CLAIM_STATUS_TRANSITIONS } from './claim-transitions';
+import { evidenceSubtypeFilter, resolveRequirements } from './evidence-requirements';
 import { assignmentEligibility } from '../adjusters/adjuster-competency';
 import { screeningStanding } from '../adjusters/background-screening';
 import { rotationAdvisory } from '../adjusters/rotation';
@@ -1009,11 +1010,10 @@ export class ClaimsService {
         : null;
     const subtype = travelClaim?.travelClaimType ?? null;
 
-    // Match rows for this subtype plus the subtype-generic rows. For non-travel
-    // categories only the generic rows exist, so this collapses to travelClaimType IS NULL.
-    const subtypeFilter = subtype
-      ? { OR: [{ travelClaimType: subtype }, { travelClaimType: null }] }
-      : { travelClaimType: null };
+    // Match rows for this subtype plus the subtype-generic rows. Shared with
+    // the assessment router's completeness check — the two must never again
+    // answer "which documents apply?" differently.
+    const subtypeFilter = evidenceSubtypeFilter(subtype);
 
     const [tenantReqs, globalReqs, uploadedDocs] = await Promise.all([
       claim.tenantId
@@ -1032,15 +1032,7 @@ export class ClaimsService {
       }),
     ]);
 
-    // Least specific first so the more specific row overwrites it.
-    const bySpecificity = <T extends { travelClaimType: unknown }>(rows: T[]) => [
-      ...rows.filter(r => r.travelClaimType === null),
-      ...rows.filter(r => r.travelClaimType !== null),
-    ];
-
-    const byType = new Map<string, (typeof globalReqs)[number]>();
-    for (const r of bySpecificity(globalReqs)) byType.set(r.documentType, r);
-    for (const r of bySpecificity(tenantReqs)) byType.set(r.documentType, r); // tenant overrides global
+    const requirements = resolveRequirements(globalReqs, tenantReqs);
 
     const uploadedByType = new Map<string, typeof uploadedDocs>();
     for (const d of uploadedDocs) {
@@ -1048,7 +1040,7 @@ export class ClaimsService {
       uploadedByType.get(d.type)!.push(d);
     }
 
-    return Array.from(byType.values()).map(req => ({
+    return requirements.map(req => ({
       documentType: req.documentType,
       isMandatory: req.isMandatory,
       description: req.description,

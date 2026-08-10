@@ -7,6 +7,7 @@ import {
   TravelClaimType,
 } from '@prisma/client';
 
+import { evidenceSubtypeFilter, resolveRequirements } from '../claims/evidence-requirements';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
@@ -184,27 +185,44 @@ export class AssessmentService {
    * Read here rather than trusted from a flag: the fast track turns on it, and
    * a stale boolean would let a claim skip an interview on evidence that is not
    * actually present.
+   *
+   * Resolved through the same subtype-scoped rules as the claimant's checklist
+   * (`evidence-requirements.ts`). This check once queried by category alone,
+   * which measured a travel claim against every subtype's mandatory documents
+   * — completeness the claimant could never reach, so the desk-review fast
+   * track never fired on the very line it exists for.
    */
   private async isEvidenceComplete(claimId: string): Promise<boolean> {
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
-      select: { category: true, tenantId: true, documents: { select: { type: true } } },
+      select: {
+        category: true,
+        tenantId: true,
+        documents: { select: { type: true } },
+        travelClaim: { select: { travelClaimType: true } },
+      },
     });
     if (!claim) return false;
 
-    const requirements = await this.prisma.evidenceRequirement.findMany({
-      where: {
-        category: claim.category,
-        isMandatory: true,
-        OR: [{ tenantId: claim.tenantId }, { tenantId: null }],
-      },
-      select: { documentType: true },
-    });
+    const subtypeFilter = evidenceSubtypeFilter(claim.travelClaim?.travelClaimType ?? null);
+    const [tenantRows, globalRows] = await Promise.all([
+      claim.tenantId
+        ? this.prisma.evidenceRequirement.findMany({
+            where: { tenantId: claim.tenantId, category: claim.category, ...subtypeFilter },
+            select: { documentType: true, travelClaimType: true, isMandatory: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.evidenceRequirement.findMany({
+        where: { tenantId: null, category: claim.category, ...subtypeFilter },
+        select: { documentType: true, travelClaimType: true, isMandatory: true },
+      }),
+    ]);
 
-    if (requirements.length === 0) return false;
+    const mandatory = resolveRequirements(globalRows, tenantRows).filter(row => row.isMandatory);
+    if (mandatory.length === 0) return false;
 
     const held = new Set(claim.documents.map(document => document.type));
-    return requirements.every(requirement => held.has(requirement.documentType));
+    return mandatory.every(requirement => held.has(requirement.documentType));
   }
 
   private async loadClaim(claimId: string, tenantContext: TenantContext) {

@@ -2,10 +2,11 @@
  * Malaysian working-day arithmetic.
  *
  * Every turnaround obligation the firm is held to is expressed in *working*
- * days — acknowledge an appointment within 1, issue the final report within 10
- * of complete documents, respond to a supplementary claim within 5 (BNM CSP PD
- * 029-69; PD 032-29 para 12.5). Counting calendar days would overstate how much
- * time the firm has and produce breaches it did not see coming.
+ * days — acknowledge an appointment within 1, issue the final report within 14
+ * of complete documents on non-motor lines (CSP para 10.13, held in
+ * CSP_ADJUSTING_WORKING_DAYS), respond to a supplementary claim within 5 (BNM
+ * CSP PD 029-69; PD 032-29 para 12.5). Counting calendar days would overstate
+ * how much time the firm has and produce breaches it did not see coming.
  *
  * Two things make this non-trivial in Malaysia:
  *
