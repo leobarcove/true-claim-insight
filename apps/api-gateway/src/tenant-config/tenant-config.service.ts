@@ -54,6 +54,8 @@ export class TenantConfigService {
         calendarState: stored.calendarState ?? 'Kuala Lumpur',
         fastTrackCategories: stored.fastTrackCategories ?? [],
         fastTrackLimits: stored.fastTrackLimits ?? {},
+        siteVisitCategories: stored.siteVisitCategories ?? [],
+        siteVisitThresholds: stored.siteVisitThresholds ?? {},
         brandingName: stored.brandingName ?? tenant.name,
       },
     };

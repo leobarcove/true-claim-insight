@@ -175,9 +175,11 @@ no adjuster could have carried out.
 *(10 Aug 2026, audit: two corrections to this note. The fast track's
 evidence-complete condition was subtype-blind, so the travel fast track never
 actually fired at an opening decision — fixed the same day, see the §8 audit
-entry. And the seed is currently the only writer of `siteVisitCategories` /
-`siteVisitThresholds`: the tenant-config surface neither accepts nor returns
-them, so the inspection policy is real but unreachable by any operator.)*
+entry. And the seed was the only writer of `siteVisitCategories` /
+`siteVisitThresholds` — the tenant-config surface neither accepted nor
+returned them. Also fixed the same day: both are now in the DTO and the read
+response, so the inspection policy is an operator's decision rather than the
+seed's.)*
 
 The demo firm is configured with FIRE/FLOOD/BURGLARY/LIGHTNING/HOH at
 **RM20,000** and travel fast-tracked to **RM5,000**. Both are business decisions
@@ -257,7 +259,7 @@ Working-day arithmetic requires a Malaysian holiday calendar (national + state) 
 | Consent (lawful basis, withdrawal) | **PASS** — machinery and wording both operative. v1 notices approved 31 July 2026 at the principal's direction, recorded under the firm-admin identity, following an AI-assisted substantive review against PDPA s.7, the 2024 Amendment and the CBPDT Guidelines. The review found and fixed two real defects: no contact particulars anywhere ("contact us" without a route fails s.7's substance — every notice now names the route and the Commissioner as the complaint avenue, in both languages), and the cross-border notice pointing at a privacy notice that did not exist — it now names each offshore recipient and country directly. Verified live: consent granted on approved wording, the biometric gate answering true, a second approval refused (approved wording is immutable; revisions ship as v2). **Independent Malaysian counsel review remains the standing recommendation**; counsel's changes would ship as v2, leaving v1 consents provably tied to v1 wording. **Tests:** 12, in CI | Counsel review → v2 if required | done |
 | NRIC/bank-detail protection | **PASS** — NRIC and bank account number encrypted at rest (AES-256-GCM envelope, versioned ciphertext); plaintext columns dropped, not merely shadowed; lookup via HMAC blind index; ciphertext and index omitted from query results by default so they cannot reach a browser; full value only through an audited firm-admin reveal. NRIC removed from logs; `verify-nric` throttled with non-enumerating errors. **Tests:** 15 crypto (incl. a simulated KMS custody migration) + a schema-reading omit-coverage test. **Qualified for messaging channels (6 Aug 2026):** the guarantee is end-to-end only where we control the transport. A claimant answering `bank-account-number` on Telegram (or, later, WhatsApp/Messenger) types the plaintext into the platform's own message history, where it persists offshore, outside our retention sweep and outside the claimant anonymisation job. Our column is still encrypted and the answer bag still masked — but the copy we do not hold is beyond both. This is a **decided position, not an oversight**: collecting payout details in-channel was chosen over a secure hand-off link for UX. `ChannelCapabilities.retainsPlaintext` records which channels carry the exposure. Revisit if a channel is used at volume, or if counsel reads s.129 as reaching it | Rotation drill and KMS custody transfer remain operational tasks; re-examine in-channel payout collection before the first non-pilot volume | done |
 | Retention/deletion | **PASS** — soft delete, scheduled document purge and legal hold, plus **claimant anonymisation** (6 Aug 2026): a nightly gateway sweep irreversibly destroys identity once every claim naming a person is closed and past the PD 12.8 floor, while the claim record survives. Replacements are random, never derived — a reversible transform is pseudonymisation and PDPA still applies to it. **Tests:** 15 | Purge of remaining non-document records as those contexts gain owners | done |
-| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim/Telegram) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. **Two paths added 6 Aug 2026, both recorded honestly rather than quietly.** Telegram carries claimant message content offshore for every conversational turn, and is *retentive* — what a claimant types stays in Meta's or Telegram's history, outside the retention sweep and the anonymisation job (see the payout-details qualification on the row above). And Gemini now receives free text a claimant typed, when deterministic parsing of an answer fails; that call writes a `TransferRecord` with an explicit data description for conversational text and `lawfulBasis: null`, because none is established. Neither is a new *kind* of gap — both are the same ungated-offshore gap this row already reports, now with two more paths in it. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, the in-country LLM path itself, and counsel on FSA 2013 secrecy over model inputs (§6.18). **Widened again 10 Aug 2026 (audit):** the gateway's OCR module posts claim document images to a hardcoded third-party webhook (`smitherytech.zeabur.app`) that appears in no provider registry and writes no `TransferRecord`; and Telegram itself is absent from `OFFSHORE_PROVIDERS`, so its transfers *cannot* be recorded — the registry's exact-equality pinning test currently locks that omission in until both are amended together | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
+| Cross-border transfer (Gemini/Hume/Daily.co/Supabase/Nominatim/Telegram) | **PARTIAL** — the biometric path (the sensitive-data one) is now consent-gated and fails closed, and a s.129 **transfer register** exists: every Hume, Gemini and Daily.co call writes a `TransferRecord` naming recipient, country, data description, purpose and basis. The register is honest — the gated biometric path records `CONSENT s.129(3)(a)`; the ungated Gemini/Daily paths record **no basis**, because none is established. **Two paths added 6 Aug 2026, both recorded honestly rather than quietly.** Telegram carries claimant message content offshore for every conversational turn, and is *retentive* — what a claimant types stays in Meta's or Telegram's history, outside the retention sweep and the anonymisation job (see the payout-details qualification on the row above). And Gemini now receives free text a claimant typed, when deterministic parsing of an answer fails; that call writes a `TransferRecord` with an explicit data description for conversational text and `lawfulBasis: null`, because none is established. Neither is a new *kind* of gap — both are the same ungated-offshore gap this row already reports, now with two more paths in it. Remaining: gate those paths (consent or local-LLM default), Supabase/Nominatim recording, the in-country LLM path itself, and counsel on FSA 2013 secrecy over model inputs (§6.18). **Widened, then narrowed, 10 Aug 2026 (audit):** the gateway's OCR module was posting claim document images to a *hardcoded* third-party webhook with no registry entry and no `TransferRecord`, and Telegram was absent from `OFFSHORE_PROVIDERS` entirely — its omission locked in by the registry's own pinning test. Fixed the same day: the OCR endpoint is env-configured and **off by default** (enabling it is a transfer decision, not a config convenience), and both providers are now registered and recordable, the pinning test updated with them. Still open: nothing yet *writes* a Telegram or OCR transfer record — `transferRecord` belongs to the assessment context, so those writes need an ownership-respecting home before either path carries more than synthetic data | Local LLM default for PII docs (real infrastructure, not tunnel); per-tenant provider policy; transfer register | 2 |
 | AMLA/CTF screening | **FAIL** — no screening/CDD/STR concepts; `KycStatus` writer has zero callers, nothing gates on it | Sanctions/PEP screening plugin at claimant/payee registration; suspicious-matter → ComplianceEvent | 5 |
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
@@ -1289,32 +1291,45 @@ demanded. 9 tests; case-service at 509. **To re-verify: the 6 Aug "router
 agrees with the stored mode on every sampled claim" check ran against the buggy
 condition, so the seeded travel modes want re-sampling.**
 
-**Open findings, in priority order — recorded, not yet fixed:**
+**Open findings, in priority order — all seven closed later the same day;**
+each carries what, if anything, remains:
 
-1. **video-service `WebhooksController` has no guards at all** — no
-   `InternalAuthGuard`, no Daily.co signature check. `POST /webhooks/daily` and
-   the dev-only trigger route reach the analysis pipeline and are callable by
-   anyone who can reach :3002. Currently inert only because the outbound call
-   omits `x-internal-key` and risk-engine 403s it — a missing header standing
-   in for a control, and no consent check on that path. The A1 lesson, one
-   controller short of finished.
-2. **The OTP path carries a hardcoded universal bypass**: `code === '123123'`
-   verifies for any phone number with **no environment guard**, and codes come
-   from `Math.random()`, not a CSPRNG. Delivery itself is still console.log —
-   the §2.2 row was right about that part, but a bypass is worse than
-   "not built".
-3. **OCR ships claim document images offshore unrecorded** — see the widened
-   §3.4 row.
-4. **Telegram is unrecordable in the transfer register** — see the same row.
-5. **The site-visit inspection policy is unwritable** — see the §2.4 note.
-   The DTO and read path must expose `siteVisitCategories`/`siteVisitThresholds`
-   or the seed remains the only author of a spending decision.
-6. `TELEGRAM_POLLING_ENABLED` is opt-out (only the literal `'false'` stops it),
-   not the guard the 6 Aug entry implies — polling runs wherever a bot token is
-   present.
-7. The gateway's video module hand-rolls the internal key outside
-   `InternalHttpModule` and attaches it only `if (internalKey)` — failing open
-   at the caller, relying wholly on the receiver failing closed.
+1. ~~**video-service `WebhooksController` has no guards at all.**~~ Closed:
+   `POST /webhooks/daily` now sits behind `DailyWebhookGuard` — a shared
+   secret (`DAILY_WEBHOOK_SECRET`, constant-time compared) carried in the
+   registered webhook URL, refusing everything when unconfigured, because
+   Daily cannot carry the internal key. The manual trigger route is behind
+   `InternalAuthGuard`. The outbound call now carries the internal key
+   deliberately rather than omitting it by accident — and passes the **same
+   biometric consent gate as the uploads path** first, so the webhook is no
+   longer the one entrance that skipped it. A consent refusal keeps the
+   recording and leaves analysis PENDING: a missing basis is not a failure.
+2. ~~**The OTP path carries a hardcoded universal bypass.**~~ Closed: the
+   `'123123'` bypass is deleted outright (no repo, doc or demo flow depended
+   on it — the console prints the real code in dev, so the bypass had no
+   legitimate use), and codes now come from `crypto.randomInt`. Delivery
+   itself is still console.log — that remains the §2.2 notifications gap, not
+   this finding.
+3. ~~**OCR ships claim document images offshore unrecorded.**~~ Closed as an
+   exposure — see the §3.4 row: hardcoded URL removed, `OCR_WEBHOOK_URL`
+   off-by-default, `N8N_OCR_WEBHOOK` registered. Residual (recorded on that
+   row): the transfer record for an *enabled* OCR path still needs an
+   ownership-respecting writer.
+4. ~~**Telegram is unrecordable in the transfer register.**~~ Closed at the
+   registry — entry added, pinning test updated. Same residual as 3: the
+   per-conversation write does not exist yet.
+5. ~~**The site-visit inspection policy is unwritable.**~~ Closed — the DTO
+   and the read response now carry `siteVisitCategories`/`siteVisitThresholds`
+   (decimal-string validated, same rule as the fast-track ceilings), so the
+   seed is no longer the only author of a spending decision.
+6. ~~`TELEGRAM_POLLING_ENABLED` is opt-out.~~ Closed — the poller now starts
+   only on the literal `'true'`, logging how to enable it; every default fails
+   closed (§4.2). Local `.env` and `.env.example` updated so the running bot
+   did not silently stop.
+7. ~~The gateway's video module fails open at the caller.~~ Closed —
+   `buildHeaders` refuses with "INTERNAL_API_KEY is not configured" instead of
+   sending a credential-less request, and the compliance test that previously
+   pinned the *omit* behaviour now pins the refusal.
 8. ~~`docs/USER_FLOWS.md` (five commits stale) and the static site (six) still
    call site-visit scheduling unbuilt and have missed the consent gate, the
    identity gate and the intake-correction work.~~ **Closed later the same

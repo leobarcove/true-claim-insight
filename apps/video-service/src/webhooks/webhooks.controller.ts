@@ -1,5 +1,7 @@
-import { Controller, Post, Body, Logger, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Logger, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
+import { DailyWebhookGuard } from './daily-webhook.guard';
 import { WebhooksService } from './webhooks.service';
 
 interface DailyWebhookPayload {
@@ -21,8 +23,9 @@ export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
 
   @Post('daily')
+  @UseGuards(DailyWebhookGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Handle Daily.co webhook events' })
+  @ApiOperation({ summary: 'Handle Daily.co webhook events (shared-secret guarded)' })
   async handleDailyWebhook(
     @Body() payload: DailyWebhookPayload,
   ) {
@@ -48,9 +51,12 @@ export class WebhooksController {
     return { received: true };
   }
 
-  // Endpoint to manually trigger analysis (for testing)
+  // Manual trigger for operators and development. Internal-key guarded: it
+  // reaches the same analysis pipeline as the webhook, so it must clear the
+  // same bar as every other service-to-service entrance (§4.3 A1).
   @Post('trigger-analysis/:sessionId')
-  @ApiOperation({ summary: 'Manually trigger analysis for a session (dev only)' })
+  @UseGuards(InternalAuthGuard)
+  @ApiOperation({ summary: 'Manually trigger analysis for a session (internal only)' })
   async triggerAnalysis(@Body() body: { sessionId: string }) {
     this.logger.log(`Manually triggering analysis for session: ${body.sessionId}`);
     await this.webhooksService.triggerAnalysisForSession(body.sessionId);
