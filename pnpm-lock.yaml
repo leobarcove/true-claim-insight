@@ -935,9 +935,6 @@ importers:
       '@prisma/client':
         specifier: ^6.2.0
         version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
-      '@tci/shared-types':
-        specifier: workspace:*
-        version: link:../shared-types
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1
@@ -945,6 +942,9 @@ importers:
       '@tci/crypto':
         specifier: workspace:*
         version: link:../crypto
+      '@tci/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       '@types/bcrypt':
         specifier: ^5.0.2
         version: 5.0.2
