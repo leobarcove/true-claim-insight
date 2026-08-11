@@ -104,6 +104,12 @@ export interface FlowStep {
   /** Present when answerType === 'document'. */
   documentType?: DocumentType;
   optional?: boolean;
+  /**
+   * Refuse a date after today. Set on steps recording something that has
+   * already occurred — an incident date above all, because a future one
+   * silently suppresses the CSP deadline flags rather than failing loudly.
+   */
+  notFuture?: boolean;
   validation?: {
     min?: number;
     max?: number;
@@ -192,6 +198,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     label: 'Incident date and time',
     answerType: 'datetime',
     system: true, // drives computeDeadlineFlags — notifiedLate / outOfWindow
+    notFuture: true, // a future date suppresses those very flags, silently
   },
 ];
 
@@ -694,6 +701,23 @@ export interface AnswerValidation {
  * without this it never reaches `validateAnswer` and an optional upload
  * becomes mandatory in practice.
  */
+/**
+ * Read an amount the way a Malaysian claimant types one.
+ *
+ * `Number()` alone was wrong in both directions: `Number('   ')` is **0**, so
+ * a blank-looking message recorded a zero claim amount with no error at all,
+ * and `Number('RM1,200')` is NaN, so the most natural way to write a sum was
+ * refused with a message that did not say why.
+ *
+ * Currency prefix and thousands separators are stripped; anything still
+ * unreadable stays NaN for the validator to refuse.
+ */
+export function parseAmount(raw: string): number {
+  const cleaned = raw.trim().replace(/^rm\s*/i, '').replace(/,/g, '').trim();
+  if (cleaned === '') return NaN;
+  return Number(cleaned);
+}
+
 export const SKIP_VALUE = 'skip';
 
 /**
@@ -773,8 +797,15 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
       return { valid: true };
     }
     case 'number': {
-      const num = typeof value === 'number' ? value : Number(value);
-      if (Number.isNaN(num)) return { valid: false, error: 'Please enter a number.' };
+      const num = typeof value === 'number' ? value : parseAmount(String(value));
+      if (Number.isNaN(num)) {
+        return {
+          valid: false,
+          // Names the two forms people actually type, because "please enter a
+          // number" to someone who just typed "RM1,200" is not a hint.
+          error: 'Please enter an amount in numbers, for example 1200 or 1200.50.',
+        };
+      }
       if (step.validation?.min !== undefined && num < step.validation.min) {
         return { valid: false, error: `Please enter a value of at least ${step.validation.min}.` };
       }
@@ -805,6 +836,24 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
       const date = new Date(text);
       if (Number.isNaN(date.getTime())) {
         return { valid: false, error: 'Please provide a valid date.' };
+      }
+
+      // A loss that has not happened yet is a typo, and a silent one: a
+      // mistyped year gives `computeDeadlineFlags` a negative age, so both the
+      // late-notification and out-of-window flags come back false and the CSP
+      // clock the flags exist to raise is never raised. Refusing costs the
+      // claimant one correction; accepting costs the firm a deadline.
+      //
+      // A day's grace, because a claimant in a later timezone can honestly
+      // report an incident that is still "tomorrow" to the server.
+      if (step.notFuture) {
+        const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+        if (date.getTime() > tomorrow) {
+          return {
+            valid: false,
+            error: 'That date is in the future. Please give the date the incident actually happened.',
+          };
+        }
       }
       return { valid: true };
     }

@@ -64,7 +64,7 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 | Identity binding | ✅ Verified contact, no OTP (11 Aug) |
 | Consent capture | ✅ Working, in the claimant's language (11 Aug) |
 | Question/answer loop | ✅ Working |
-| Answer correction (back/edit) | ⚠️ Works, wrong target after a branch |
+| Answer correction (back/edit) | ✅ Working (11 Aug) |
 | Document upload | ✅ Working, optional steps skippable (11 Aug) |
 | Review and submit | ✅ Working |
 | Human takeover | ✅ Working (11 Aug) |
@@ -142,23 +142,10 @@ belong to has been destroyed. That is a retention-design question, tracked in
 
 ### Tier 3 — wrong data, silently
 
-- **`back` after a branch reopens a step that was never asked.**
-  `previousAnsweredStep` walks definition order and never checks `answers`,
-  despite its name. On trip-cancellation's non-illness path it asks for a
-  medical report the branch deliberately excluded — which, per Tier 1, cannot
-  then be skipped.
-- **A failed send loses the question.** `patchAnswer` advances the cursor
-  before the send; if the send throws, the answer is stored and the claimant
-  never sees the next question. Their next message answers something they were
-  never asked. Nothing re-asks.
-- **`!nextStep` is treated unconditionally as "the review was confirmed".** A
-  rule resolving to null, a missing target, or the cycle guard all reach the
-  same branch: `submit()` throws, the Case is stranded with a null cursor, and
-  the claimant is told it "is with our team" when no operator will ever see it.
-- **Whitespace records RM 0** on amount steps (`Number('   ') === 0`).
-- **A future incident date suppresses the CSP deadline flags** — a mistyped
-  year yields a negative `hoursSince`, so both lateness flags read false.
-- **The Case channel is hardcoded `TELEGRAM`** regardless of adapter.
+**Closed 11 August 2026.** All six: `back` after a branch, a failed send
+losing the question, `!nextStep` read as a submission, whitespace recording
+RM 0, a future incident date suppressing the CSP flags, and the hardcoded
+channel. See §5.
 
 ### Tier 4 — silent loss and operations
 
@@ -213,6 +200,7 @@ belong to has been destroyed. That is a retention-design question, tracked in
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 3 closed.** `back` walks to a step the claimant actually answered, instead of the previous one in declaration order — on a branched flow that had been reopening a mandatory medical report the branch deliberately skipped. A question whose send failed is re-asked rather than having the next message stored as its answer. Running out of steps anywhere but a review hands to an agent instead of submitting an incomplete case and telling the claimant it is "with our team". `parseAmount` replaces `Number()`, so a blank message no longer records RM 0 and `RM1,200` is finally readable. A future incident date is refused, because it silently suppressed the very CSP flags it should raise. The Case channel comes from the turn rather than being hardcoded TELEGRAM. |
 | 11 Aug 2026 | **Tier 2 closed.** Every conversational turn writes a `TransferRecord` — the registry entry and its passing test had existed for a day while nothing wrote a row, the §3.6 shape inside the control added to close that very gap. `transferRecord` moved from the `assessment` context to a new cross-cutting `compliance` one: a s.129 register is evidence about the platform's own behaviour, and whoever makes the offshore call must be the one who records it. Telegram's `language_code` now drives both the consent notice and the flow's wording, so the approved Malay notice is finally shown to somebody; the overlay resolver has its first runtime caller. The transcript masks the payout account the claimant typed. |
 | 11 Aug 2026 | **Tier 1 closed.** A tapped button is acknowledged so it stops spinning, and its `callback_data` now names the step it was rendered for — a tap arriving after the conversation moved on is re-asked instead of being applied to the next question, which is what stored the claim type as the policy number. Optional document steps accept `skip`, so the luggage flow can reach review. Handover take-over no longer refuses every agent on a conversation nobody holds. |
 | 11 Aug 2026 | **The payout account survives the conversation.** `promoteAnswers` was re-encrypting the display mask over the real ciphertext on every turn after the one that supplied it; `lastDigits` strips the bullets, so every screen and the audited reveal read correctly while holding a mask. Affected every claim on every channel. **5 of 7 stored accounts on the demo book were already destroyed** — unrecoverable, the plaintext lives only in that column. |
