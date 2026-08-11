@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import {
   Body,
   Controller,
+  VERSION_NEUTRAL,
   ForbiddenException,
   Get,
   Headers,
@@ -33,7 +34,13 @@ import { WhatsAppAdapter, type WhatsAppInboundMessage } from './whatsapp.adapter
  * the only thing standing between this endpoint and anyone who can POST JSON.
  */
 @ApiExcludeController()
-@Controller('webhooks/whatsapp')
+/**
+ * Deliberately version-neutral, so the path is `/api/webhooks/whatsapp` and
+ * not `/api/v1/...`. The URL lives in Meta's console, not in our repo:
+ * bumping an internal API version must not silently stop a third party
+ * reaching us, and repointing it is a manual step in someone else's dashboard.
+ */
+@Controller({ path: 'webhooks/whatsapp', version: VERSION_NEUTRAL })
 export class WhatsAppWebhookController {
   private readonly logger = new Logger(WhatsAppWebhookController.name);
 

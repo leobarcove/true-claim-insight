@@ -16,6 +16,9 @@
 	# such route. The symptom would be a webhook that verifies and then
 	# receives nothing.
 	#
+	# Version-neutral on purpose: the URL lives in Meta's console, so an
+	# internal API version bump must not stop a third party reaching us.
+	#
 	# Not proxied through the gateway, also deliberately: the delivery is
 	# signed with HMAC-SHA256 over the exact bytes Meta sent, and every hop
 	# that parses and re-serialises JSON is a chance for those bytes to
@@ -25,7 +28,7 @@
 	# Public by necessity, because Meta is unauthenticated to us. The
 	# signature is the only control, and case-service discards every delivery
 	# when WHATSAPP_APP_SECRET is unset rather than trusting it.
-	handle /api/v1/webhooks/whatsapp* {
+	handle /api/webhooks/whatsapp* {
 		reverse_proxy case-service:3001
 	}
 
