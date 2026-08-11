@@ -990,7 +990,36 @@ export class ConversationGateway {
       // proof-of-ownership step could not be passed at all, and it sits just
       // before the bank details, which meant that whole flow could never reach
       // review over a messaging channel.
-      if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
+      if (payload.storedDocumentId) {
+        // Web chat: the bytes went through the upload endpoint before this
+        // turn was sent, so there is nothing to fetch. Ownership is checked
+        // rather than trusted — the id arrives from the claimant's browser,
+        // and an unchecked one would let any guessable document, including
+        // another claimant's, be offered as evidence on this claim.
+        const stored = await this.prisma.caseDocument.findFirst({
+          where: { id: payload.storedDocumentId, caseId: caseRow.id },
+        });
+        if (!stored) {
+          this.logger.error(
+            `Turn offered document ${payload.storedDocumentId} for case ${caseRow.id}, ` +
+              'which does not belong to it. Rejected.'
+          );
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.UNPARSEABLE,
+              stepId: step.id,
+              error: 'Document does not belong to this case',
+              processedAt: new Date(),
+            },
+          });
+          await this.say(adapter, binding.id, payload.platformUserId, {
+            text: 'We could not attach that file. Please try uploading it again.',
+          });
+          return;
+        }
+        value = stored.id;
+      } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;
       } else if (!payload.mediaRef) {
         await this.prisma.conversationMessage.update({

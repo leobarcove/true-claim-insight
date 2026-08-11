@@ -62,6 +62,21 @@ export interface InboundTurnPayload {
   /** Platform reference for an attachment, resolved lazily. */
   mediaRef?: string;
   /**
+   * A document already uploaded and stored, given as a CaseDocument id.
+   *
+   * The web alternative to `mediaRef`, and a real difference between the
+   * channels rather than a shortcut: a messaging platform holds the claimant's
+   * file on its own servers and hands us a reference to fetch, whereas a
+   * browser posts the bytes straight to our upload endpoint — which validates,
+   * scans and stores them before any turn is sent. Fetching would mean
+   * uploading it a second time to somewhere we already have it.
+   *
+   * The gateway verifies the document belongs to this Case before accepting
+   * it. Without that, a claimant could answer a document step with any id they
+   * could guess, including one from someone else's claim.
+   */
+  storedDocumentId?: string;
+  /**
    * A phone number the platform itself vouches for, and which the adapter has
    * confirmed belongs to the *sender* — Telegram's request_contact where
    * `contact.user_id` matches the sender, WhatsApp's verified wa_id.

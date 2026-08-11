@@ -38,9 +38,15 @@ describe('every @Throttle names a throttler that exists', () => {
     const dangling: string[] = [];
     for (const file of walk(SRC)) {
       const source = readFileSync(file, 'utf8');
-      for (const match of source.matchAll(/@Throttle\(\{\s*([A-Za-z_][\w]*)\s*:/g)) {
-        if (!configured.has(match[1])) {
-          dangling.push(`${file.replace(SRC, '')} → "${match[1]}"`);
+      // Every name in the decorator, not just the first: `@Throttle({ short: …,
+      // medium: … })` is one call carrying two overrides, and stopping at the
+      // first would wave the second through — the same silent pass this test
+      // was written to catch.
+      for (const call of source.matchAll(/@Throttle\(\s*\{([\s\S]*?)\}\s*\)/g)) {
+        for (const key of call[1].matchAll(/([A-Za-z_]\w*)\s*:\s*\{/g)) {
+          if (!configured.has(key[1])) {
+            dangling.push(`${file.replace(SRC, '')} → "${key[1]}"`);
+          }
         }
       }
     }
