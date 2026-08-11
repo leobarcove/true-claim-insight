@@ -89,11 +89,10 @@ describe('payee name check — wiring', () => {
 /**
  * The rule itself.
  *
- * Remove `.skip` once `comparePayeeName` is implemented. These are the cases
- * that are not really arguable — if the rule disagrees with any of them it is
- * wrong, whatever approach you took.
+ * These are the cases that are not really arguable — if the rule disagrees with
+ * any of them it is wrong, whatever approach was taken.
  */
-describe.skip('payee name check — comparison', () => {
+describe('payee name check — comparison', () => {
   it('matches a name against itself', () => {
     expect(comparePayeeName('Leo Boey', 'Leo Boey')).toBe('match');
   });
@@ -117,19 +116,77 @@ describe.skip('payee name check — comparison', () => {
 });
 
 /**
- * The contested cases — your call, not mine.
+ * The contested cases, now decided.
  *
- * Each of these has a defensible answer either way, and the right one depends
- * on how much adjuster time a false positive is worth against how much a missed
- * diversion costs. Write the assertion you want, then make it pass.
+ * Each had a defensible answer either way. The principle applied throughout:
+ * only `match` silences the warning, so `uncertain` is cheap — an adjuster
+ * glances — while a wrong `match` waves through the shape of payout diversion
+ * and a wrong `mismatch` teaches them to dismiss the badge. Where the two
+ * names are mechanically the same and only the *rendering* differs, match.
+ * Where the letters themselves differ, refer it.
  */
-describe('payee name check — decisions to make', () => {
-  it.todo("patronymic dropped by the bank: 'Amirul bin Rahman' vs 'Amirul Rahman'");
-  it.todo("bank field truncated at ~20 chars: 'Muhammad Amirul bin Rahman' vs 'MUHAMMAD AMIRUL BIN R'");
-  it.todo("Chinese name order reversed: 'Leo Boey' vs 'Boey Leo'");
-  it.todo("romanisation drift: 'Wong Chee Keong' vs 'Wong Chi Kiong'");
-  it.todo("honorific on one side only: 'Dato' Lim Chee Keong' vs 'Lim Chee Keong'");
-  it.todo("a/p and a/l dropped: 'Priya a/p Muthusamy' vs 'Priya Muthusamy'");
-  it.todo("punctuation drift: \"Nur'ain binti Yusof\" vs 'NURAIN BINTI YUSOF'");
-  it.todo('middle name present on one side only');
+describe('payee name check — the decisions', () => {
+  it('matches when the bank dropped the patronymic', () => {
+    // Routine on both sides: banks drop `bin`, and so do claimants in a hurry.
+    expect(comparePayeeName('Amirul bin Rahman', 'Amirul Rahman')).toBe('match');
+  });
+
+  it('matches a name the bank truncated mid-word', () => {
+    // ~20-character field. Refusing this would warn on a large share of
+    // ordinary Malaysian claims, which is how a warning stops being read.
+    expect(comparePayeeName('Muhammad Amirul bin Rahman', 'MUHAMMAD AMIRUL BIN R')).toBe('match');
+  });
+
+  it('matches a name written in the other order', () => {
+    // Every token is identical and only the order differs; which order a bank
+    // holds is arbitrary, and Chinese and Indian names vary in both directions.
+    expect(comparePayeeName('Leo Boey', 'Boey Leo')).toBe('match');
+  });
+
+  it('refers romanisation drift rather than guessing', () => {
+    // "Chee"/"Chi" and "Keong"/"Kiong" are probably one person — but probably
+    // is exactly what `uncertain` is for, and the surname alone is thin.
+    expect(comparePayeeName('Wong Chee Keong', 'Wong Chi Kiong')).toBe('uncertain');
+  });
+
+  it('matches across an honorific on one side only', () => {
+    expect(comparePayeeName("Dato' Lim Chee Keong", 'Lim Chee Keong')).toBe('match');
+  });
+
+  it('matches when a/p or a/l is dropped', () => {
+    expect(comparePayeeName('Priya a/p Muthusamy', 'Priya Muthusamy')).toBe('match');
+    expect(comparePayeeName('Kumaran a/l Muthusamy', 'KUMARAN MUTHUSAMY')).toBe('match');
+  });
+
+  it('matches across punctuation the bank did not keep', () => {
+    expect(comparePayeeName("Nur'ain binti Yusof", 'NURAIN BINTI YUSOF')).toBe('match');
+    // Hyphens separate rather than vanish — the name is written both ways.
+    expect(comparePayeeName('Siti-Aminah Yusof', 'SITI AMINAH YUSOF')).toBe('match');
+  });
+
+  it('matches when a middle name is present on one side only', () => {
+    expect(comparePayeeName('Muhammad Amirul Rahman', 'Amirul Rahman')).toBe('match');
+  });
+
+  it('never strips an honorific down to an empty name', () => {
+    // The failure guarded against: "Dato" reduced to nothing, which would then
+    // compare as an empty token list against every name on the book. The
+    // stripper only runs when something is left behind, so this stays a real
+    // token and reads as what it is — nothing in common with the payee.
+    expect(comparePayeeName('Dato', 'Lim Chee Keong')).toBe('mismatch');
+    // And the honorific is still stripped when a name follows it.
+    expect(comparePayeeName("Dato' Lim", 'Lim')).toBe('match');
+  });
+
+  it('does not treat a short shared prefix as a truncation', () => {
+    // The truncation rule is what makes "MUHAMMAD AMIRUL BIN R" work; it must
+    // not also make a common surname enough on its own.
+    expect(comparePayeeName('Lee', 'Lee Chong Wei')).toBe('uncertain');
+  });
+
+  it('still separates siblings when the bank truncated too', () => {
+    // The case that makes rule 4 load-bearing: same father, same rendering
+    // quirks, different people.
+    expect(comparePayeeName('Siti binti Abdul Rahman', 'AMIRUL BIN ABDUL RAHMAN')).toBe('mismatch');
+  });
 });
