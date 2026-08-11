@@ -8,7 +8,28 @@
 (app_common) {
 	encode gzip
 
-	# Everything under /api goes to the gateway — the frontends are built
+	# Meta's WhatsApp webhook, straight to case-service.
+	#
+	# Declared BEFORE /api/* deliberately: Caddy evaluates `handle` blocks in
+	# order and they are mutually exclusive, so the general API rule below
+	# would otherwise swallow this and send Meta to the gateway, which has no
+	# such route. The symptom would be a webhook that verifies and then
+	# receives nothing.
+	#
+	# Not proxied through the gateway, also deliberately: the delivery is
+	# signed with HMAC-SHA256 over the exact bytes Meta sent, and every hop
+	# that parses and re-serialises JSON is a chance for those bytes to
+	# differ — a signature that fails on whitespace is indistinguishable from
+	# an attack.
+	#
+	# Public by necessity, because Meta is unauthenticated to us. The
+	# signature is the only control, and case-service discards every delivery
+	# when WHATSAPP_APP_SECRET is unset rather than trusting it.
+	handle /api/v1/webhooks/whatsapp* {
+		reverse_proxy case-service:3001
+	}
+
+	# Everything else under /api goes to the gateway — the frontends are built
 	# with VITE_API_URL=/api/v1, so API traffic is same-origin.
 	handle /api/* {
 		reverse_proxy api-gateway:3000
