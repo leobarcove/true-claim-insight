@@ -78,10 +78,29 @@ export class TelegramAdapter implements ChannelAdapter {
       platformMessageId: String(update.update_id),
     };
 
-    // request_contact result. Telegram vouches for this number, which spares
-    // the claimant typing it — the one-time code still follows.
-    if (message.contact?.phone_number) {
-      payload.sharedPhone = this.normalisePhone(message.contact.phone_number);
+    // request_contact result — and the identity control for the whole channel,
+    // now that no one-time code follows it.
+    //
+    // `contact` arrives from two very different gestures. The keyboard button
+    // returns the sender's OWN number, with `user_id` equal to their id.
+    // Sharing a card from the address book returns an arbitrary number with a
+    // different `user_id`, or none. Reading `phone_number` without checking
+    // meant an attacker could share the victim's contact card and be bound as
+    // them; the OTP was the only thing standing in the way, because the code
+    // went to the real owner's handset.
+    //
+    // With the check, `sharedPhone` means what it says: Telegram asserts this
+    // account controls this number.
+    const contact = message.contact;
+    if (contact?.phone_number) {
+      if (message.from?.id !== undefined && contact.user_id === message.from.id) {
+        payload.sharedPhone = this.normalisePhone(contact.phone_number);
+      } else {
+        this.logger.warn(
+          `Chat ${message.chat.id} shared a contact that is not their own; refusing to bind.`
+        );
+        payload.sharedForeignContact = true;
+      }
     }
 
     if (message.text) payload.text = message.text;
@@ -96,8 +115,17 @@ export class TelegramAdapter implements ChannelAdapter {
       payload.mediaRef = message.document.file_id;
     }
 
-    // Nothing usable — not even a turn.
-    if (!payload.text && !payload.mediaRef && !payload.sharedPhone) return null;
+    // Nothing usable — not even a turn. A refused contact *is* a turn, though:
+    // the claimant tapped share and is waiting, so dropping it here would
+    // leave them staring at silence with no idea what went wrong.
+    if (
+      !payload.text &&
+      !payload.mediaRef &&
+      !payload.sharedPhone &&
+      !payload.sharedForeignContact
+    ) {
+      return null;
+    }
 
     return payload;
   }

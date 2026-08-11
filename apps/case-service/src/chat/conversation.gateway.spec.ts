@@ -12,7 +12,7 @@ import {
   type ChannelAdapter,
   type InboundTurnPayload,
 } from './channel-adapter.interface';
-import type { OtpVerifier } from './otp-verifier.interface';
+import type { ClaimantResolver } from './claimant-resolver.interface';
 import type { CasesService } from '../cases/cases.service';
 import type { FlowsService } from '../cases/flows.service';
 import type { PrismaService } from '../config/prisma.service';
@@ -55,6 +55,9 @@ describe('ConversationGateway', () => {
         create: jest.fn(async () => ({ id: 'msg-1' })),
         update: jest.fn(async () => ({})),
         updateMany: jest.fn(async () => ({ count: 1 })),
+        // Turns in the last minute, for the rate limit. One by default: the
+        // turn currently being handled.
+        count: jest.fn(async () => 1),
       },
       conversationBinding: {
         upsert: jest.fn(async () => binding),
@@ -80,9 +83,11 @@ describe('ConversationGateway', () => {
       fetchMedia: jest.fn(),
     };
 
-    const otp: OtpVerifier = {
-      send: jest.fn(async () => undefined),
-      verify: jest.fn(async () => ({ valid: true, claimantId: 'claimant-1', tenantId: 'tenant-1' })),
+    const claimants: ClaimantResolver = {
+      resolveByVerifiedPhone: jest.fn(async () => ({
+        claimantId: 'claimant-1',
+        tenantId: 'tenant-1',
+      })),
     };
 
     const cases = {
@@ -143,13 +148,13 @@ describe('ConversationGateway', () => {
       prisma as unknown as PrismaService,
       cases as unknown as CasesService,
       flows as unknown as FlowsService,
-      otp,
+      claimants,
       [adapter],
       normaliser,
       consent as never
     );
 
-    return { gateway, prisma, adapter, otp, cases, flows, sent, binding, normaliser, consent };
+    return { gateway, prisma, adapter, claimants, cases, flows, sent, binding, normaliser, consent };
   };
 
   const turn = (over: Partial<InboundTurnPayload> = {}): InboundTurnPayload => ({
@@ -188,44 +193,36 @@ describe('ConversationGateway', () => {
       expect(sent[0].text).not.toMatch(/claim number|policy|CSE-/i);
     });
 
-    it('sends a code when a phone is shared, despite Telegram vouching for it', async () => {
-      const { gateway, otp, sent } = setup();
+    it('refuses a contact that belongs to somebody else', async () => {
+      // The impersonation this closes: Telegram lets a user share ANY card
+      // from their address book. Reading phone_number without checking whose
+      // it is meant sharing a victim's contact bound you as them — the OTP
+      // was the only thing in the way, because the code went to the real
+      // owner. With no code, this check is the control.
+      const { gateway, claimants, sent } = setup();
+
+      await gateway.handleTurn(turn({ sharedForeignContact: true }));
+
+      expect(claimants.resolveByVerifiedPhone).not.toHaveBeenCalled();
+      expect(sent[0].text).toMatch(/belongs to someone else/i);
+      expect(sent[0].requestPhone).toBe(true);
+    });
+
+    it('never binds on a number the claimant merely typed', async () => {
+      // Typing is exactly how you would claim to be somebody else, so the
+      // typed path is not offered at all.
+      const { gateway, claimants, sent } = setup();
+
+      await gateway.handleTurn(turn({ text: '+60123456789' }));
+
+      expect(claimants.resolveByVerifiedPhone).not.toHaveBeenCalled();
+      expect(sent[0].requestPhone).toBe(true);
+    });
+
+    it('binds the claimant on a contact the platform vouches for', async () => {
+      const { gateway, prisma } = setup();
 
       await gateway.handleTurn(turn({ sharedPhone: '+60123456789' }));
-
-      expect(otp.send).toHaveBeenCalledWith('+60123456789');
-      expect(sent[0].text).toContain('code');
-    });
-
-    it('treats a wrong code as an ordinary turn and counts it', async () => {
-      const { gateway, otp, prisma, sent } = setup({
-        binding: { pendingPhone: '+60123456789' },
-      });
-      (otp.verify as jest.Mock).mockResolvedValueOnce({ valid: false });
-
-      await gateway.handleTurn(turn({ text: '000000' }));
-
-      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { otpAttempts: { increment: 1 } } })
-      );
-      expect(sent[0].text).toMatch(/not correct|expired/i);
-    });
-
-    it('stops accepting codes after too many failures', async () => {
-      const { gateway, otp, sent } = setup({
-        binding: { pendingPhone: '+60123456789', otpAttempts: 5 },
-      });
-
-      await gateway.handleTurn(turn({ text: '000000' }));
-
-      expect(otp.verify).not.toHaveBeenCalled();
-      expect(sent[0].text).toMatch(/too many/i);
-    });
-
-    it('binds the claimant on a correct code', async () => {
-      const { gateway, prisma } = setup({ binding: { pendingPhone: '+60123456789' } });
-
-      await gateway.handleTurn(turn({ text: '123456' }));
 
       expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -238,9 +235,9 @@ describe('ConversationGateway', () => {
     });
 
     it('asks the next question immediately after verifying, not on the next message', async () => {
-      const { gateway, adapter } = setup({ binding: { pendingPhone: '+60123456789' } });
+      const { gateway, adapter } = setup();
 
-      await gateway.handleTurn(turn({ text: '123456' }));
+      await gateway.handleTurn(turn({ sharedPhone: '+60123456789' }));
 
       // The regression this guards: the bot said "you are verified, let us
       // begin" and then asked nothing, so the conversation looked finished

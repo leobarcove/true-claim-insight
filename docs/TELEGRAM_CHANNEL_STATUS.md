@@ -15,10 +15,10 @@
 answer to "can a claimant actually use this yet?", which the roadmap in
 `MASTER_PLAN.md` §5 does not answer at the level of one channel.
 
-> **Verdict today: no.** The design is sound and most of the machinery works,
-> but a claimant cannot verify their identity (no SMS transport), and three
-> further defects each stop a real intake from completing. Synthetic and
-> internal-tester use only.
+> **Verdict today: not yet.** Identity binding works as of 11 August — a
+> claimant taps *Share my number* and is through, no SMS involved. Four
+> defects still stop a real intake from completing, listed in Tier 1.
+> Synthetic and internal-tester use only.
 
 References are by file and symbol rather than line, because line numbers rot
 faster than the code they point at.
@@ -45,8 +45,10 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 - **Five travel flows** — flight delay, luggage damage, luggage loss, trip
   cancellation, medical — held as data in `FlowDefinition`, pinned per Case at
   creation so publishing an edit cannot rewrite an intake in flight.
-- **The claimant journey**: share phone → OTP → consent notice → claim type →
-  the flow's questions → documents → review → submit.
+- **The claimant journey**: share contact → consent notice → claim type → the
+  flow's questions → documents → review → submit. No one-time code: binding
+  rests on Telegram confirming the shared number is the *sender's own*
+  (MASTER_PLAN §6 item 20).
 
 ---
 
@@ -55,7 +57,7 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 | Area | State |
 |---|---|
 | Ingress, idempotency, dedupe | ✅ Working |
-| Identity binding (OTP) | ⛔ **Unusable — no SMS transport** |
+| Identity binding | ✅ Verified contact, no OTP (11 Aug) |
 | Consent capture | ⚠️ Works, English only |
 | Question/answer loop | ✅ Working |
 | Answer correction (back/edit) | ⚠️ Works, wrong target after a branch |
@@ -110,11 +112,14 @@ Verified by running it, not by reading it.
 
 | Pending | Where | Note |
 |---|---|---|
-| **OTP is never sent** | `api-gateway/auth/otp.service.ts` | `console.log` under a `TODO`. Nobody can verify without server-log access. The code and phone number are also logged in plaintext. |
 | **Payout bank account destroyed one turn after capture** | `cases/cases.service.ts` `promoteAnswers` | **Not Telegram-specific — every claim, every channel.** `patchAnswer` re-derives the encrypted column from the *masked* stored bag, so the next turn encrypts `••••4567` over the real ciphertext. `bankAccountLast4` still reads correctly, so every screen and the audited reveal look fine. |
 | **Double-tap stores the claim type as the policy number** | `chat/telegram/telegram.adapter.ts`, `chat/conversation.gateway.ts` | Nothing calls `answerCallbackQuery`, so the button spins for ~30s and the claimant taps again. Two `update_id`s defeat the dedupe; tap two lands on `policy-number`, a free-text step that accepts anything. Verified on all five flows. |
 | **Optional documents cannot be skipped** | `conversation.gateway.ts` document branch | The prompt says *'Otherwise type "skip"'* and `validateAnswer` supports it, but the branch returns early without a file. Luggage-damage cannot reach review. |
 | **Handover take-over is broken** | `chat/conversations.service.ts` `takeOver` | Bot-initiated handovers never set `assignedUserId`, so `null !== userId` refuses **every** agent with "another agent already has this". The `"human"` escape hatch fills an unclaimable queue. |
+
+*(The OTP row that led this table is gone: as of 11 August the channel binds on
+Telegram's own verified contact and sends no code — see §5 and MASTER_PLAN §6
+item 20.)*
 
 ### Tier 2 — compliance
 
@@ -171,15 +176,12 @@ Verified by running it, not by reading it.
 - **Consent is checked at Case creation and never again**, so a withdrawal in
   the PWA does not stop Telegram collection.
 - **A verified binding never expires and cannot be revoked.**
-- **The OTP lockout resets** whenever a different phone is shared; there is no
-  per-binding cap on distinct numbers attempted.
 
 ### Tier 6 — friction, latent risks, documentation
 
 - No `answerCallbackQuery` — every button spins (the root cause of Tier 1 #3).
 - Typing instead of tapping loops silently at claim-type and consent.
 - `help` triggers handover — precisely what a stuck claimant types.
-- No OTP resend path; re-sharing the same number falls through.
 - Progress counter skips positions on branched flows and is absent on re-asks.
 - A long review summary is truncated at 4096 chars rather than split, so a
   claimant can be asked to confirm details clipped mid-line.
@@ -201,6 +203,7 @@ Verified by running it, not by reading it.
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Binding no longer uses an OTP.** A shared contact is accepted only when Telegram says it is the *sender's own* (`contact.user_id` matched against the sender) — a check that did not exist, and without which sharing a victim's contact card bound you as them. The typed-number path is removed, and a 20-turn-per-minute limit replaces identity as the answer to the realistic attack, which is volume. Decision and its reversal condition: MASTER_PLAN §6 item 20. |
 | 10 Aug 2026 | The hardcoded `123123` OTP bypass removed; codes now come from a CSPRNG. |
 
 ---
@@ -213,8 +216,9 @@ Verified by running it, not by reading it.
 | `TELEGRAM_POLLING_ENABLED` | Must be `true` on **exactly one** instance per bot token. Two pollers each receive half the updates, which presents as claimants being intermittently ignored rather than as an outage. Staging needs its own bot. |
 | `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis. |
 
-**Verifying a code in development:** there is no SMS transport, so the OTP is
-printed to the gateway console. The `123123` bypass was removed on 10 August.
+**Binding in development:** tap *Share my number* in Telegram. No code is sent
+and a typed number is refused — the button is the only way in, by design. The
+PWA still logs in by OTP, which prints to the gateway console.
 
 ---
 

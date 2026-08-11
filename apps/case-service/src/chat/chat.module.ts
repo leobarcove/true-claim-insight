@@ -8,8 +8,8 @@ import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { ANSWER_NORMALISER } from './answer-normaliser.interface';
 import { HttpAnswerNormaliser } from './http-answer-normaliser';
-import { HttpOtpVerifier } from './http-otp-verifier';
-import { OTP_VERIFIER } from './otp-verifier.interface';
+import { HttpClaimantResolver } from './http-claimant-resolver';
+import { CLAIMANT_RESOLVER } from './claimant-resolver.interface';
 import { TelegramAdapter } from './telegram/telegram.adapter';
 import { TelegramPoller } from './telegram/telegram.poller';
 
@@ -32,7 +32,7 @@ import { TelegramPoller } from './telegram/telegram.poller';
     ConversationsService,
     TelegramAdapter,
     TelegramPoller,
-    { provide: OTP_VERIFIER, useClass: HttpOtpVerifier },
+    { provide: CLAIMANT_RESOLVER, useClass: HttpClaimantResolver },
     { provide: ANSWER_NORMALISER, useClass: HttpAnswerNormaliser },
     {
       provide: CHANNEL_ADAPTERS,

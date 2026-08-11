@@ -34,11 +34,24 @@ export interface InboundTurnPayload {
   /** Platform reference for an attachment, resolved lazily. */
   mediaRef?: string;
   /**
-   * A phone number the platform itself vouches for — Telegram's
-   * request_contact, WhatsApp's verified wa_id. Still put through OTP; this
-   * only spares the claimant typing it.
+   * A phone number the platform itself vouches for, and which the adapter has
+   * confirmed belongs to the *sender* — Telegram's request_contact where
+   * `contact.user_id` matches the sender, WhatsApp's verified wa_id.
+   *
+   * This is the channel's identity control. An adapter must never populate it
+   * from a number the sender merely typed or forwarded: a contact card from an
+   * address book carries someone else's number, and binding on it would be
+   * impersonation.
    */
   sharedPhone?: string;
+  /**
+   * The sender shared a contact that is not their own.
+   *
+   * Distinguished from "no contact at all" so the claimant can be told why
+   * nothing happened. Silence after tapping share reads as a broken bot, and
+   * the honest explanation is short.
+   */
+  sharedForeignContact?: boolean;
 }
 
 /** What the gateway wants said next. Rendering is the adapter's problem. */
