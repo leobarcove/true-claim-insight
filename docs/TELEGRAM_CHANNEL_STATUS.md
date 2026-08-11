@@ -16,7 +16,7 @@ answer to "can a claimant actually use this yet?", which the roadmap in
 `MASTER_PLAN.md` §5 does not answer at the level of one channel.
 
 > **Verdict today: not yet.** Identity binding works as of 11 August — a
-> claimant taps *Share my number* and is through, no SMS involved. Four
+> claimant taps *Share my number* and is through, no SMS involved. Three
 > defects still stop a real intake from completing, listed in Tier 1.
 > Synthetic and internal-tester use only.
 
@@ -112,7 +112,6 @@ Verified by running it, not by reading it.
 
 | Pending | Where | Note |
 |---|---|---|
-| **Payout bank account destroyed one turn after capture** | `cases/cases.service.ts` `promoteAnswers` | **Not Telegram-specific — every claim, every channel.** `patchAnswer` re-derives the encrypted column from the *masked* stored bag, so the next turn encrypts `••••4567` over the real ciphertext. `bankAccountLast4` still reads correctly, so every screen and the audited reveal look fine. |
 | **Double-tap stores the claim type as the policy number** | `chat/telegram/telegram.adapter.ts`, `chat/conversation.gateway.ts` | Nothing calls `answerCallbackQuery`, so the button spins for ~30s and the claimant taps again. Two `update_id`s defeat the dedupe; tap two lands on `policy-number`, a free-text step that accepts anything. Verified on all five flows. |
 | **Optional documents cannot be skipped** | `conversation.gateway.ts` document branch | The prompt says *'Otherwise type "skip"'* and `validateAnswer` supports it, but the branch returns early without a file. Luggage-damage cannot reach review. |
 | **Handover take-over is broken** | `chat/conversations.service.ts` `takeOver` | Bot-initiated handovers never set `assignedUserId`, so `null !== userId` refuses **every** agent with "another agent already has this". The `"human"` escape hatch fills an unclaimable queue. |
@@ -203,6 +202,7 @@ item 20.)*
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **The payout account survives the conversation.** `promoteAnswers` was re-encrypting the display mask over the real ciphertext on every turn after the one that supplied it; `lastDigits` strips the bullets, so every screen and the audited reveal read correctly while holding a mask. Affected every claim on every channel. **5 of 7 stored accounts on the demo book were already destroyed** — unrecoverable, the plaintext lives only in that column. |
 | 11 Aug 2026 | **Binding no longer uses an OTP.** A shared contact is accepted only when Telegram says it is the *sender's own* (`contact.user_id` matched against the sender) — a check that did not exist, and without which sharing a victim's contact card bound you as them. The typed-number path is removed, and a 20-turn-per-minute limit replaces identity as the answer to the realistic attack, which is volume. Decision and its reversal condition: MASTER_PLAN §6 item 20. |
 | 10 Aug 2026 | The hardcoded `123123` OTP bypass removed; codes now come from a CSPRNG. |
 
