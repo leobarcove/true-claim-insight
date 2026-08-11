@@ -686,7 +686,15 @@ export interface AnswerValidation {
   error?: string;
 }
 
-const SKIP_VALUE = 'skip';
+/**
+ * What a claimant types to decline an optional step.
+ *
+ * Exported because the channel gateways have to recognise it *before* they
+ * interpret an answer — a document step returns early looking for a file, so
+ * without this it never reaches `validateAnswer` and an optional upload
+ * becomes mandatory in practice.
+ */
+export const SKIP_VALUE = 'skip';
 
 /**
  * Things people type when they do not want to answer.

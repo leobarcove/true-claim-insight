@@ -81,6 +81,7 @@ describe('ConversationGateway', () => {
         sent.push({ to, text: prompt.text, requestPhone: prompt.requestPhone });
       }),
       fetchMedia: jest.fn(),
+      acknowledgeCallback: jest.fn(async () => undefined),
     };
 
     const claimants: ClaimantResolver = {
@@ -277,6 +278,48 @@ describe('ConversationGateway', () => {
       flowDefinitionId: 'flow-1',
       travelClaimType: 'FLIGHT_DELAY',
     };
+
+    it('ignores a tap meant for a question the conversation has moved past', async () => {
+      // The corruption this closes, reproduced: nothing acknowledged a tap, so
+      // the button spun for up to thirty seconds and the claimant tapped
+      // again. Two taps are two update ids, which the dedupe cannot connect —
+      // the first advanced the cursor and the second landed on whatever came
+      // next. On the opening menu that stored the claim type as the policy
+      // number, because a free-text step accepts anything.
+      const { gateway, cases, adapter } = setup({ binding: verified, caseRow });
+
+      await gateway.handleTurn(
+        turn({ callbackValue: 'FLIGHT_DELAY', callbackStepId: '__claim-type' })
+      );
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      // Re-asked, not apologised for: from the claimant's side they tapped
+      // twice and the conversation simply moved on, which is correct.
+      const prompts = (adapter.send as jest.Mock).mock.calls.map(c => c[1]);
+      expect(prompts.some(p => p.step?.id === 'airline')).toBe(true);
+    });
+
+    it('accepts a tap that names the step it is answering', async () => {
+      const { gateway, cases } = setup({ binding: verified, caseRow });
+
+      await gateway.handleTurn(turn({ callbackValue: 'AirAsia', callbackStepId: 'airline' }));
+
+      expect(cases.patchAnswer).toHaveBeenCalledWith(
+        'case-1',
+        { stepId: 'airline', value: 'AirAsia' },
+        expect.anything()
+      );
+    });
+
+    it('acknowledges a tap so the button stops spinning', async () => {
+      const { gateway, adapter } = setup({ binding: verified, caseRow });
+
+      await gateway.handleTurn(
+        turn({ callbackValue: 'AirAsia', callbackStepId: 'airline', callbackAckId: 'cbq-9' })
+      );
+
+      expect(adapter.acknowledgeCallback).toHaveBeenCalledWith('cbq-9');
+    });
 
     it('routes the answer through patchAnswer as the claimant who owns the case', async () => {
       const { gateway, cases } = setup({ binding: verified, caseRow });
