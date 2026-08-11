@@ -46,6 +46,7 @@ import {
   CASE_FLOWS,
   TRAVEL_CLAIM_TYPE_LABELS,
   TravelClaimType,
+  checkPayeeName,
   type FlowStep,
 } from '@tci/shared-types';
 import {
@@ -143,6 +144,13 @@ export function CaseDetailPage() {
     const value = caseData?.answers?.['claimant-name'];
     return typeof value === 'string' && value.trim() ? value.trim() : null;
   }, [caseData]);
+
+  /**
+   * Whether the person claiming is the person being paid. Never blocks — the
+   * rule surfaces the divergence and the adjuster decides. See
+   * `payee-name-check.ts` for why the comparison is deliberately conservative.
+   */
+  const payeeCheck = useMemo(() => checkPayeeName(caseData?.answers), [caseData]);
 
   if (isLoading || !caseData) {
     return (
@@ -504,6 +512,29 @@ export function CaseDetailPage() {
                   </>
                 ) : (
                   <p className="text-muted-foreground">Not provided yet</p>
+                )}
+
+                {/*
+                  A payee who is not the claimant is usually innocent — a parent,
+                  a spouse, a company card — and is also what payout diversion
+                  looks like. Surfaced, never blocking: rejection stays a human
+                  decision (MASTER_PLAN §3.2).
+                */}
+                {payeeCheck.shouldWarn && (
+                  <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 mt-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-amber-900 dark:text-amber-200">
+                        {payeeCheck.verdict === 'mismatch'
+                          ? 'Payee differs from the claimant'
+                          : 'Check the payee against the claimant'}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Claim is in the name of {payeeCheck.claimantName}; the account
+                        is held by {payeeCheck.payeeName}.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

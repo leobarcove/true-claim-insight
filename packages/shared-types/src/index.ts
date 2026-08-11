@@ -748,6 +748,15 @@ export {
 export { canPublish, systemStepIds, validateFlowDefinition } from './flow-publish-gate';
 export type { FlowProblem, FlowProblemKind } from './flow-publish-gate';
 
+// Payee name check — is the person claiming the person being paid?
+export {
+  checkPayeeName,
+  comparePayeeName,
+  CLAIMANT_NAME_STEP,
+  PAYEE_NAME_STEP,
+} from './payee-name-check';
+export type { PayeeMatchVerdict, PayeeNameCheck } from './payee-name-check';
+
 // Flow overlay resolution — merges canonical structure with per-channel and
 // per-locale wording. Same explicit-re-export rule as above.
 export {
