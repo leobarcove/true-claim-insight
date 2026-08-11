@@ -17,6 +17,7 @@ import {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   getStep,
+  parseAmount,
   parseTextDate,
   ANSWER_MASK_PREFIX,
   SENSITIVE_ANSWER_STEPS,
@@ -474,11 +475,53 @@ export class ConversationGateway {
     // The same structure, worded for this channel and this claimant's
     // language. Structure is never overlaid — a Telegram conversation and a
     // browser one on the same Case walk identical steps.
+    // Did the last thing we tried to say actually reach them?
+    //
+    // `patchAnswer` advances the cursor before the next question is sent, so a
+    // send that throws — a rate limit, a blocked bot, a network blip — leaves
+    // the claimant looking at the *previous* question while the Case has moved
+    // on. Their next message was then stored as the answer to something they
+    // had never been shown. Re-asking costs one message; the alternative is
+    // wrong data with nothing to indicate it.
+    const lastOutbound = await this.prisma.conversationMessage.findFirst({
+      where: { bindingId: binding.id, direction: MessageDirection.OUTBOUND },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, stepId: true },
+    });
+
     const flow = await this.flows.forCase(caseRow, {
       channel: payload.channel,
       locale: noticeLocale(binding.locale),
     });
     const step = caseRow.currentStepId ? getStep(flow, caseRow.currentStepId) : null;
+
+    if (step && lastOutbound?.status === ConversationMessageStatus.FAILED) {
+      this.logger.warn(
+        `Binding ${binding.id}: last question failed to send; re-asking "${step.id}" ` +
+          'rather than reading this message as its answer.'
+      );
+      // Marked handled so the next turn is not caught by the same check —
+      // otherwise a claimant could never get past a single failed send.
+      await this.prisma.conversationMessage.update({
+        where: { id: lastOutbound.id },
+        data: { status: ConversationMessageStatus.PROCESSED, error: 'Re-sent after failure' },
+      });
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          stepId: step.id,
+          error: 'Previous question never delivered',
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'Sorry — our last message may not have reached you. Here it is again.',
+      });
+      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      return;
+    }
+
     if (!step) {
       // The active claim has no question left. Release the binding and offer a
       // fresh one rather than dead-ending.
@@ -525,7 +568,7 @@ export class ConversationGateway {
     const word = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
 
     if (BACK_WORDS.has(word)) {
-      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, step.id, true);
+      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, step.id, true);
       return;
     }
 
@@ -571,7 +614,7 @@ export class ConversationGateway {
 
     if (typeof raw === 'string' && raw.startsWith(EDIT_CALLBACK_PREFIX)) {
       const target = raw.slice(EDIT_CALLBACK_PREFIX.length);
-      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, target, false);
+      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, target, false);
       return;
     }
 
@@ -723,7 +766,11 @@ export class ConversationGateway {
           value = raw;
         }
       } else {
-        value = step.answerType === 'number' ? Number(raw) : raw;
+        // parseAmount, not Number(): `Number('   ')` is 0, so a blank-looking
+        // message recorded a zero claim amount with no error, and
+        // `Number('RM1,200')` is NaN, so the most natural way to write a sum
+        // was refused. Both are how people actually type on a phone.
+        value = step.answerType === 'number' ? parseAmount(String(raw)) : raw;
       }
     }
 
@@ -844,9 +891,35 @@ export class ConversationGateway {
       }
     }
 
+    if (!result.nextStep && step.answerType !== 'confirm') {
+      // The flow ran out somewhere other than the review. `resolveNextStep`
+      // also returns null for a rule resolving to nothing, a target that does
+      // not exist, and its own cycle guard — and treating those as "the
+      // claimant confirmed" called submit() on an incomplete Case, which threw,
+      // stranded the cursor at null, and then told the claimant on their next
+      // message that their claim "is with our team" when no operator would
+      // ever see it. Three wrong things, the last one a lie.
+      //
+      // A person is the right answer here: the flow is misconfigured and no
+      // amount of re-asking will fix it from the claimant's side.
+      this.logger.error(
+        `Flow ${flow.travelClaimType} ran out of steps at "${step.id}", which is not a review. ` +
+          'Handing to an agent rather than submitting an incomplete case.'
+      );
+      await this.handOverToAgent(
+        messageId,
+        payload,
+        adapter,
+        binding,
+        step.id,
+        `Flow ran out of steps at "${step.label}" without reaching a review`
+      );
+      return;
+    }
+
     if (!result.nextStep) {
-      // The conversation has run out of steps. On this channel that means the
-      // claimant just confirmed the review — so submit, here, now.
+      // The conversation has run out of steps at the review — so submit,
+      // here, now.
       //
       // Previously this said "submit your claim in the app", which was wrong
       // twice: a Telegram claimant has no app and was never told of one, and
@@ -1009,7 +1082,11 @@ export class ConversationGateway {
     const created = await this.cases.create(
       {
         travelClaimType: chosen,
-        channel: CaseChannel.TELEGRAM,
+        // Whichever channel this turn arrived on. Hardcoding TELEGRAM was
+        // harmless while it was the only adapter and wrong the moment a
+        // second one registered — WhatsApp cases would have been labelled
+        // Telegram, in the column an operator filters by.
+        channel: payload.channel,
         initiatedBy: CaseInitiator.CLAIMANT,
       } as CreateCaseDto,
       this.claimantContext(binding)
@@ -1070,6 +1147,7 @@ export class ConversationGateway {
     binding: { id: string; claimantId: string | null; tenantId: string | null },
     caseRow: { id: string; currentStepId: string | null; resumeStepId: string | null },
     flow: CaseFlow,
+    answers: CaseAnswers,
     targetStepId: string,
     isBack: boolean
   ): Promise<void> {
@@ -1090,7 +1168,9 @@ export class ConversationGateway {
       return;
     }
 
-    const previousId = isBack ? this.previousAnsweredStep(flow, caseRow.currentStepId) : targetStepId;
+    const previousId = isBack
+      ? this.previousAnsweredStep(flow, caseRow.currentStepId, answers)
+      : targetStepId;
     if (!previousId) {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: 'There is nothing before this to change yet.',
@@ -1136,12 +1216,29 @@ export class ConversationGateway {
     await this.ask(adapter, binding.id, payload.platformUserId, stepToRedo);
   }
 
-  /** The last step before `fromStepId` that the claimant actually answered. */
-  private previousAnsweredStep(flow: CaseFlow, fromStepId: string | null): string | null {
+  /**
+   * The last step before `fromStepId` that the claimant actually answered.
+   *
+   * It now checks, which the name always promised and the code never did: it
+   * returned the previous step in *declaration* order regardless. A branch
+   * skips steps, so on trip-cancellation's non-illness path "back" reopened
+   * `doc-medical-report` — a mandatory upload the branch had deliberately
+   * excluded, which the claimant had never been asked for and could not
+   * satisfy. Walking back over unanswered steps is the whole fix.
+   */
+  private previousAnsweredStep(
+    flow: CaseFlow,
+    fromStepId: string | null,
+    answers: CaseAnswers
+  ): string | null {
     const order = flow.steps.map(step => step.id);
     const index = fromStepId ? order.indexOf(fromStepId) : order.length;
     if (index <= 0) return null;
-    return order[index - 1];
+
+    for (let i = index - 1; i >= 0; i--) {
+      if (answers[order[i]] !== undefined) return order[i];
+    }
+    return null;
   }
 
   /**

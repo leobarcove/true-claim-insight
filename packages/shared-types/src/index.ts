@@ -689,6 +689,7 @@ export {
   validateAnswer,
   computeDeadlineFlags,
   computeCompleteness,
+  parseAmount,
   SKIP_VALUE,
   SENSITIVE_ANSWER_STEPS,
   ANSWER_MASK_PREFIX,

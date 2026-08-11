@@ -58,6 +58,8 @@ describe('ConversationGateway', () => {
         // Turns in the last minute, for the rate limit. One by default: the
         // turn currently being handled.
         count: jest.fn(async () => 1),
+        // The last thing we said. Null by default — nothing failed to send.
+        findFirst: jest.fn(async () => null),
       },
       conversationBinding: {
         upsert: jest.fn(async () => binding),
@@ -410,6 +412,45 @@ describe('ConversationGateway', () => {
       expect(adapter.acknowledgeCallback).toHaveBeenCalledWith('cbq-9');
     });
 
+    it('re-asks rather than reading a reply to a question that never arrived', async () => {
+      // patchAnswer advances the cursor before the next question is sent, so a
+      // send that throws leaves the claimant looking at the previous question
+      // while the Case has moved on. Their next message was then stored as the
+      // answer to something they had never been shown.
+      const { gateway, cases, adapter, prisma } = setup({ binding: verified, caseRow });
+      (prisma.conversationMessage.findFirst as jest.Mock).mockResolvedValueOnce({
+        id: 'out-1',
+        status: ConversationMessageStatus.FAILED,
+        stepId: 'airline',
+      });
+
+      await gateway.handleTurn(turn({ text: 'AirAsia' }));
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      const prompts = (adapter.send as jest.Mock).mock.calls.map(c => c[1]);
+      expect(prompts.some(p => p.step?.id === 'airline')).toBe(true);
+    });
+
+    it('does not strand the claimant behind a single failed send', async () => {
+      // The failed outbound is marked handled, so the very next turn is read
+      // as an answer rather than triggering the same recovery forever.
+      const { gateway, prisma } = setup({ binding: verified, caseRow });
+      (prisma.conversationMessage.findFirst as jest.Mock).mockResolvedValueOnce({
+        id: 'out-1',
+        status: ConversationMessageStatus.FAILED,
+        stepId: 'airline',
+      });
+
+      await gateway.handleTurn(turn({ text: 'AirAsia' }));
+
+      expect(prisma.conversationMessage.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'out-1' },
+          data: expect.objectContaining({ status: ConversationMessageStatus.PROCESSED }),
+        })
+      );
+    });
+
     it('routes the answer through patchAnswer as the claimant who owns the case', async () => {
       const { gateway, cases } = setup({ binding: verified, caseRow });
 
@@ -589,7 +630,12 @@ describe('ConversationGateway', () => {
       });
       (caseRow as any).currentStepId = 'amount';
 
-      await gateway.handleTurn(turn({ text: 'RM 1,200' }));
+      // Words, not a number in any notation. `RM 1,200` used to sit here and
+      // no longer reaches the model at all: `parseAmount` reads it
+      // deterministically now, which is the fallback-only design paying off —
+      // every parsing improvement shrinks the model's surface, and with it the
+      // cost, the latency and the AI-scope exposure (MASTER_PLAN §6.19).
+      await gateway.handleTurn(turn({ text: 'about twelve hundred ringgit' }));
 
       expect(normaliser.normalise).toHaveBeenCalled();
       expect(cases.patchAnswer).toHaveBeenCalledWith(
