@@ -181,6 +181,10 @@ guess at recovering it.
 
 ### Tier 6 — friction, latent risks, documentation
 
+*(Two entries were struck on 11 Aug after a check found them already closed by
+the Tier 1 work — `answerCallbackQuery` and the callback_data cap. A tracker
+drifts in both directions.)*
+
 - `"skip"` is stored literally, so the review reads *"Policy number: skip"*.
 - `promoteAnswers` re-queries `Policy` on every turn, not only when the policy
   number changes.
@@ -191,7 +195,6 @@ guess at recovering it.
   isolation and backoff are untested, and they are the parts whose failure is
   silent.
 
-- No `answerCallbackQuery` — every button spins (the root cause of Tier 1 #3).
 - Typing instead of tapping loops silently at claim-type and consent.
 - `help` triggers handover — precisely what a stuck claimant types.
 - Progress counter skips positions on branched flows and is absent on re-asks.
@@ -200,7 +203,9 @@ guess at recovering it.
 - Consent offers agreement with no rendered way to decline.
 - The publish gate misses one-armed cycles, non-total switches, empty prompts
   and uncompilable regex patterns — latent while the seed is the only author.
-- `callback_data`'s 64-byte cap is unenforced for authored flows.
+  (`callback_data`'s 64-byte cap *is* enforced now, at render time — but the
+  gate is still the right place to refuse a step id that would exceed it,
+  rather than silently dropping the staleness check for that step.)
 - `USER_FLOWS.md` has no Telegram section; the user-flow site draws overlay
   resolution as live; roughly a dozen shipped behaviours are undocumented.
 
