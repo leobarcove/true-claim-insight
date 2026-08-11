@@ -210,13 +210,7 @@ export class ConversationsService {
     );
 
     // Everything the claimant was waiting on has now been answered by a human.
-    await this.prisma.conversationMessage.updateMany({
-      where: {
-        bindingId: binding.id,
-        status: ConversationMessageStatus.AWAITING_AGENT,
-      },
-      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
-    });
+    await this.clearAwaitingAgent(binding.id);
 
     // An agent speaking to a claimant on the firm's behalf is a claims-handling
     // act. The message body is deliberately not copied into the audit row — it
@@ -227,11 +221,6 @@ export class ConversationsService {
     });
   }
 
-  /**
-   * Hand back to the bot. The flow resumes at the step the Case is pinned to,
-   * because nothing about the conversation moved it — the bot was silent, not
-   * lost.
-   */
   /**
    * Break the link between this chat and the claimant.
    *
@@ -266,10 +255,37 @@ export class ConversationsService {
       oldValues: { claimantId: binding.claimantId, verifiedAt: binding.verifiedAt },
       metadata: { reason },
     });
+    await this.clearAwaitingAgent(binding.id);
     this.logger.warn(`Binding ${binding.id} unbound by ${tenantContext.userId}: ${reason}`);
     return updated;
   }
 
+  /**
+   * Nothing on this conversation is waiting for a person any more.
+   *
+   * Called wherever the wait ends, which is not only when an agent replies:
+   * handing back to the bot and unbinding both end it too. Only `reply` cleared
+   * it, so an agent who read a conversation, decided no answer was needed and
+   * handed it back left the badge showing for ever — a queue that counts work
+   * nobody has to do is a queue people stop believing.
+   *
+   * `PROCESSED` rather than a status of its own. It slightly overstates things
+   * — the bot resuming is not the same as a human answering — but the column
+   * drives one question, "is somebody waiting?", and the honest answer here is
+   * no. A new status would have to be taught to every screen that renders one.
+   */
+  private async clearAwaitingAgent(bindingId: string) {
+    await this.prisma.conversationMessage.updateMany({
+      where: { bindingId, status: ConversationMessageStatus.AWAITING_AGENT },
+      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+    });
+  }
+
+  /**
+   * Hand back to the bot. The flow resumes at the step the Case is pinned to,
+   * because nothing about the conversation moved it — the bot was silent, not
+   * lost.
+   */
   async resolve(id: string, tenantContext: TenantContext) {
     const binding = await this.getBinding(id, tenantContext);
 
@@ -296,6 +312,8 @@ export class ConversationsService {
         resolvedAt: new Date(),
       },
     });
+
+    await this.clearAwaitingAgent(binding.id);
 
     await this.audit(binding.id, 'CONVERSATION_RESOLVED', tenantContext, {
       oldValues: { assignedUserId: binding.assignedUserId },
