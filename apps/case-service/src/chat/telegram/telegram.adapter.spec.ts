@@ -32,6 +32,10 @@ describe('TelegramAdapter', () => {
 
   const message = (over: Record<string, unknown> = {}) => ({
     message_id: 1,
+    // In a private chat the sender id and the chat id are the same. `from`
+    // matters now: a shared contact is only trusted when its user_id is the
+    // sender's own.
+    from: { id: 55501, is_bot: false },
     chat: { id: 55501, type: 'private' },
     date: 0,
     ...over,
@@ -87,13 +91,45 @@ describe('TelegramAdapter', () => {
       expect(payload?.text).toBeUndefined();
     });
 
-    it('normalises a shared contact into a phone number', () => {
+    it('normalises the sender\'s own shared contact into a phone number', () => {
       const { adapter } = makeAdapter('token');
       const payload = adapter.parseUpdate(
-        update({ message: message({ contact: { phone_number: '60123456789' } }) })
+        update({
+          message: message({ contact: { phone_number: '60123456789', user_id: 55501 } }),
+        })
       );
 
       expect(payload?.sharedPhone).toBe('+60123456789');
+      expect(payload?.sharedForeignContact).toBeUndefined();
+    });
+
+    it('refuses a contact card belonging to somebody else', () => {
+      // COMPLIANCE-ADJACENT: this is the channel's identity control now that
+      // no one-time code follows. Telegram lets a user share ANY card from
+      // their address book, and reading phone_number without checking whose
+      // it is meant an attacker could share the victim's contact and be bound
+      // as them. Previously the OTP hid this, because the code went to the
+      // real owner's handset.
+      const { adapter } = makeAdapter('token');
+      const payload = adapter.parseUpdate(
+        update({
+          message: message({ contact: { phone_number: '60999888777', user_id: 99999 } }),
+        })
+      );
+
+      expect(payload?.sharedPhone).toBeUndefined();
+      expect(payload?.sharedForeignContact).toBe(true);
+    });
+
+    it('refuses a contact card with no owner at all', () => {
+      // A manually typed card carries no user_id. Absence is not a match.
+      const { adapter } = makeAdapter('token');
+      const payload = adapter.parseUpdate(
+        update({ message: message({ contact: { phone_number: '60999888777' } }) })
+      );
+
+      expect(payload?.sharedPhone).toBeUndefined();
+      expect(payload?.sharedForeignContact).toBe(true);
     });
 
     it('keeps the largest photo rendition as a reference, not bytes', () => {

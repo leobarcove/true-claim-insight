@@ -41,10 +41,7 @@ import {
   type OutboundPrompt,
 } from './channel-adapter.interface';
 import { ANSWER_NORMALISER, type AnswerNormaliser } from './answer-normaliser.interface';
-import { OTP_VERIFIER, type OtpVerifier } from './otp-verifier.interface';
-
-/** Rejected after this many wrong codes, so a stranger cannot grind a phone. */
-const MAX_OTP_ATTEMPTS = 5;
+import { CLAIMANT_RESOLVER, type ClaimantResolver } from './claimant-resolver.interface';
 
 // EDIT_CALLBACK_PREFIX, CONSENT_AGREED_VALUE and PAGE_CALLBACK_PREFIX are
 // imported from @tci/shared-types: the transcript renderer has to name these
@@ -65,6 +62,20 @@ const EDIT_WORDS = new Set(['edit', 'change', 'correct', '/edit', 'ubah']);
 
 /** Asking for a person. Nothing in intake should trap someone who wants one. */
 const HUMAN_WORDS = new Set(['human', 'agent', 'help', 'support', '/human', 'bantuan']);
+
+/**
+ * Inbound turns one chat may send per minute before we stop answering.
+ *
+ * The realistic attack on an open bot is not impersonation — the platform
+ * vouches for the number and the channel discloses nothing back — it is
+ * volume: junk intakes filling the vetting queue, or a script driving cost
+ * through the analyser and the model. That is a throughput problem and wants
+ * a throughput control.
+ *
+ * Set well above a real conversation. A claimant answering briskly sends a
+ * message every few seconds; twenty a minute is someone or something else.
+ */
+const MAX_TURNS_PER_MINUTE = 20;
 
 /**
  * Callback value behind the "I agree" button on the consent notice.
@@ -100,7 +111,7 @@ export class ConversationGateway {
     private readonly prisma: PrismaService,
     private readonly cases: CasesService,
     private readonly flows: FlowsService,
-    @Inject(OTP_VERIFIER) private readonly otp: OtpVerifier,
+    @Inject(CLAIMANT_RESOLVER) private readonly claimants: ClaimantResolver,
     @Inject(CHANNEL_ADAPTERS) private readonly adapters: ChannelAdapter[],
     @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
     private readonly consent: ConsentService
@@ -200,6 +211,32 @@ export class ConversationGateway {
       data: { bindingId: binding.id },
     });
 
+    // Counted from the transcript rather than memory, so it survives a restart
+    // and cannot be reset by whoever is causing it. The turn is still recorded
+    // — a flood is exactly what an operator needs to be able to see — but
+    // nothing further is done with it, and only the first refusal replies, so
+    // the bot cannot be made to amplify the flood it is refusing.
+    const recentTurns = await this.prisma.conversationMessage.count({
+      where: {
+        bindingId: binding.id,
+        direction: MessageDirection.INBOUND,
+        createdAt: { gte: new Date(Date.now() - 60_000) },
+      },
+    });
+    if (recentTurns > MAX_TURNS_PER_MINUTE) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: { status: ConversationMessageStatus.FAILED, error: 'Rate limited', processedAt: new Date() },
+      });
+      if (recentTurns === MAX_TURNS_PER_MINUTE + 1) {
+        this.logger.warn(`Binding ${binding.id} exceeded ${MAX_TURNS_PER_MINUTE} turns/minute.`);
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text: 'You are sending messages faster than we can read them. Please wait a moment.',
+        });
+      }
+      return;
+    }
+
     // 3. Nothing about a claim is served to an unverified sender.
     if (!binding.verifiedAt) {
       await this.runOnboarding(messageId, payload, adapter, binding);
@@ -223,93 +260,75 @@ export class ConversationGateway {
   }
 
   /**
-   * Phone share, then one-time code.
+   * Bind this chat to a claimant, on the platform's own evidence.
    *
-   * Telegram's request_contact supplies a number the platform already
-   * verified, which spares the claimant typing it — but the code is still
-   * sent, because platform verification happened at signup and proves nothing
-   * about who holds the handset today.
+   * One step: share the contact. No one-time code (decided 11 Aug 2026,
+   * MASTER_PLAN §6). The code was going to the very number Telegram had
+   * already vouched for, so it added little on this path — while the path it
+   * genuinely protected, a typed number, is one this channel no longer offers.
+   *
+   * What carries the weight instead is the adapter's check that the shared
+   * contact is the *sender's own*. `sharedPhone` is populated only when the
+   * platform says so; a number the claimant types is not accepted at all,
+   * because typing is exactly how you would claim to be somebody else.
    */
   private async runOnboarding(
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; pendingPhone: string | null; otpAttempts: number }
+    binding: { id: string }
   ): Promise<void> {
     await this.prisma.conversationMessage.update({
       where: { id: messageId },
       data: { status: ConversationMessageStatus.ONBOARDING, processedAt: new Date() },
     });
 
-    const phone = payload.sharedPhone ?? this.asPhone(payload.text);
-
-    // A phone arriving at any point restarts verification for that number.
-    if (phone && phone !== binding.pendingPhone) {
-      await this.prisma.conversationBinding.update({
-        where: { id: binding.id },
-        data: { pendingPhone: phone, otpAttempts: 0 },
-      });
-      await this.otp.send(phone);
-      await this.say(adapter, binding.id, payload.platformUserId, {
-        text: `Thank you. We have sent a 6-digit code to ${phone}. Please reply with the code to continue.`,
-      });
-      return;
-    }
-
-    if (!binding.pendingPhone) {
+    // Someone shared a card from their address book. Refused, and said so:
+    // silence after tapping share reads as a broken bot, and the honest
+    // explanation is one sentence.
+    if (payload.sharedForeignContact) {
+      this.logger.warn(`Binding ${binding.id}: foreign contact refused.`);
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'Welcome to True Claim Insight. Before we begin, we need to confirm who you are. ' +
-          'Please share your mobile number.',
+          'That contact belongs to someone else, so we cannot use it. Please use the ' +
+          '"Share my number" button below to send your own.',
         requestPhone: true,
       });
       return;
     }
 
-    const code = this.asOtpCode(payload.text);
-    if (!code) {
-      await this.say(adapter, binding.id, payload.platformUserId, {
-        text: `Please reply with the 6-digit code we sent to ${binding.pendingPhone}.`,
-      });
-      return;
-    }
-
-    if (binding.otpAttempts >= MAX_OTP_ATTEMPTS) {
+    if (!payload.sharedPhone) {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'Too many incorrect codes. For your security this conversation is paused — ' +
-          'please contact our support desk to continue.',
+          'Welcome to True Claim Insight. Before we begin, we need to know who you are. ' +
+          'Please tap the button below to share your mobile number — typing it will not work, ' +
+          'because we rely on Telegram confirming the number is yours.',
+        requestPhone: true,
       });
       return;
     }
 
-    const result = await this.otp.verify(binding.pendingPhone, code);
-    if (!result.valid) {
-      await this.prisma.conversationBinding.update({
-        where: { id: binding.id },
-        data: { otpAttempts: { increment: 1 } },
-      });
-      await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'That code was not correct or has expired. Please check and try again.',
-      });
-      return;
-    }
+    const resolved = await this.claimants.resolveByVerifiedPhone(
+      payload.sharedPhone,
+      payload.channel
+    );
 
     const verified = await this.prisma.conversationBinding.update({
       where: { id: binding.id },
       data: {
-        claimantId: result.claimantId ?? null,
-        tenantId: result.tenantId ?? null,
+        claimantId: resolved.claimantId,
+        tenantId: resolved.tenantId ?? null,
         verifiedAt: new Date(),
-        otpAttempts: 0,
         pendingPhone: null,
       },
     });
 
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: 'Thank you, you are verified.',
+      text: 'Thank you. Let us begin.',
     });
-    this.logger.log(`Binding ${binding.id} verified on ${payload.channel}.`);
+    this.logger.log(
+      `Binding ${binding.id} bound on ${payload.channel} via a platform-verified contact.`
+    );
 
     // Carry straight on into the claim-type question.
     //
@@ -1241,16 +1260,5 @@ export class ConversationGateway {
     }
   }
 
-  /** Malaysian mobile in any of the forms people actually type. */
-  private asPhone(text?: string): string | undefined {
-    if (!text) return undefined;
-    const digits = text.replace(/[\s()-]/g, '');
-    return /^(\+?60|0)\d{8,10}$/.test(digits) ? digits : undefined;
-  }
 
-  private asOtpCode(text?: string): string | undefined {
-    if (!text) return undefined;
-    const digits = text.replace(/\D/g, '');
-    return digits.length === 6 ? digits : undefined;
-  }
 }

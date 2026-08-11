@@ -10,6 +10,7 @@ import {
   Req,
   UnauthorizedException,
   Delete,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
@@ -22,6 +23,8 @@ import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto, LoginDto, ChangePasswordDto, RegisterVerifyDto } from './dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResolveChannelClaimantDto } from './dto/resolve-channel-claimant.dto';
+import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -29,6 +32,8 @@ import { CurrentUser } from './decorators/current-user.decorator';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly otpService: OtpService,
@@ -197,6 +202,37 @@ export class AuthController {
       path: '/api/v1/auth/refresh',
     });
     return { message: 'Account deleted successfully' };
+  }
+
+  // ============ CHANNEL BINDING (internal) ============
+
+  /**
+   * Resolve the Claimant behind a phone number a messaging platform has
+   * verified belongs to the sender.
+   *
+   * Internal only, and deliberately so: find-or-create on a bare phone number
+   * is a claimant-creation and enumeration oracle, and the only thing making
+   * it safe is that the caller has the platform's own evidence — Telegram's
+   * `contact.user_id` matching the sender. That check lives in the adapter,
+   * where the evidence is; this route trusts it and says so.
+   *
+   * It exists because `claimant` is identity-context data that only this
+   * service may write, which is also the recorded resolution for the
+   * case-service → claimant ownership exception.
+   */
+  @Post('channel/resolve-claimant')
+  @Public()
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resolve a claimant from a platform-verified phone (internal)' })
+  async resolveChannelClaimant(@Body() dto: ResolveChannelClaimantDto) {
+    const claimant = await this.claimantsService.findOrCreateByPhone(dto.phoneNumber);
+    const tenantId = await this.claimantsService.getFirstTenantId(claimant.id);
+
+    this.logger.log(
+      `Channel binding: ${dto.channel} resolved a platform-verified number to claimant ${claimant.id}.`
+    );
+    return { claimantId: claimant.id, tenantId };
   }
 
   // ============ CLAIMANT OTP AUTHENTICATION ============
