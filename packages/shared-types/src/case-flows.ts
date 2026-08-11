@@ -697,6 +697,19 @@ export interface AnswerValidation {
 export const SKIP_VALUE = 'skip';
 
 /**
+ * Steps whose answer must never be stored in the clear.
+ *
+ * Shared rather than duplicated: the Case answer bag masks these before
+ * persisting, and the conversation transcript has to mask the same ones. Two
+ * lists would drift, and the drift would be invisible — a plaintext account
+ * number in a column nobody thinks of as sensitive.
+ */
+export const SENSITIVE_ANSWER_STEPS: ReadonlySet<string> = new Set(['bank-account-number']);
+
+/** The display mask a redacted answer carries. */
+export const ANSWER_MASK_PREFIX = '••••';
+
+/**
  * Things people type when they do not want to answer.
  *
  * Deliberately a small, literal list rather than a clever heuristic: rejecting

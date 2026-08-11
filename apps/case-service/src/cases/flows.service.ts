@@ -2,12 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   CASE_FLOWS,
   getFlow,
+  resolveFlow,
   validateFlowDefinition,
+  type CaseChannel as SharedCaseChannel,
   type CaseFlow,
+  type FlowOverlayRecord,
   type FlowStep,
   type TravelClaimTypeLike,
 } from '@tci/shared-types';
-import { FlowStatus, TravelClaimType } from '@prisma/client';
+import { CaseChannel, FlowStatus, TravelClaimType } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 
 /** What a new Case needs: the flow to walk, and the pin to record against it. */
@@ -104,13 +107,31 @@ export class FlowsService {
   /**
    * The flow an existing Case is walking — the version pinned at creation, or
    * the built-in flow for a Case created before flows became data.
+   *
+   * `presentation` selects the wording: the same structure, worded for this
+   * channel and this claimant's language. Omit it and the base wording is
+   * used, which is what every caller did until 11 Aug 2026 — the overlay
+   * resolver had no caller at all outside its own spec, so a Malay claimant
+   * read English and the per-channel wording the schema goes to some lengths
+   * to make safe was never applied to anything.
+   *
+   * Structure is never overlaid, only presentation. That guarantee is in the
+   * shape of `FlowOverlay`, which has no `next` and no `answerType`, so a
+   * channel cannot diverge into asking different questions.
    */
-  async forCase(caseRow: {
-    flowDefinitionId: string | null;
-    travelClaimType: TravelClaimType | string | null;
-  }): Promise<CaseFlow> {
+  async forCase(
+    caseRow: {
+      flowDefinitionId: string | null;
+      travelClaimType: TravelClaimType | string | null;
+    },
+    presentation?: { channel: CaseChannel; locale: string }
+  ): Promise<CaseFlow> {
     if (!caseRow.flowDefinitionId) {
-      return getFlow(caseRow.travelClaimType as TravelClaimTypeLike);
+      return this.dress(
+        getFlow(caseRow.travelClaimType as TravelClaimTypeLike),
+        null,
+        presentation
+      );
     }
 
     const cached = this.cache.get(caseRow.flowDefinitionId);
@@ -129,15 +150,59 @@ export class FlowsService {
         `Case pins flow ${caseRow.flowDefinitionId}, which no longer exists. ` +
           'Falling back to the built-in flow; the conversation may not match what was started.'
       );
-      return getFlow(caseRow.travelClaimType as TravelClaimTypeLike);
+      return this.dress(
+        getFlow(caseRow.travelClaimType as TravelClaimTypeLike),
+        null,
+        presentation
+      );
     }
 
-    return this.hydrate(
+    const flow = this.hydrate(
       row.id,
       row.entryStepId,
       row.steps,
       row.travelClaimType as TravelClaimType
     );
+    return this.dress(flow, row.id, presentation);
+  }
+
+  /**
+   * Apply the per-channel and per-locale wording, if any is published.
+   *
+   * Deliberately fail-soft: an overlay is *presentation*, so a broken or
+   * missing one must degrade to the base wording rather than stop a claimant
+   * mid-intake. Losing a translation is a bad day; losing the conversation is
+   * a lost claim.
+   */
+  private async dress(
+    flow: CaseFlow,
+    flowDefinitionId: string | null,
+    presentation?: { channel: CaseChannel; locale: string }
+  ): Promise<CaseFlow> {
+    if (!presentation || !flowDefinitionId) return flow;
+
+    try {
+      const overlays = await this.prisma.flowOverlay.findMany({
+        where: { flowDefinitionId },
+      });
+      if (overlays.length === 0) return flow;
+
+      return resolveFlow(
+        flow,
+        overlays as unknown as FlowOverlayRecord[],
+        // Prisma's CaseChannel and the shared-types enum carry identical
+        // members but are nominally distinct to TypeScript. Pinned equal by
+        // channel-enums.spec.ts, so this cast cannot rot silently.
+        presentation.channel as unknown as SharedCaseChannel,
+        presentation.locale
+      );
+    } catch (error) {
+      this.logger.error(
+        `Could not resolve overlays for flow ${flowDefinitionId}; serving base wording.`,
+        error instanceof Error ? error.message : String(error)
+      );
+      return flow;
+    }
   }
 
   /** Testing seam — the cache is process-local and survives between requests. */

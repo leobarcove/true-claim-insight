@@ -690,6 +690,8 @@ export {
   computeDeadlineFlags,
   computeCompleteness,
   SKIP_VALUE,
+  SENSITIVE_ANSWER_STEPS,
+  ANSWER_MASK_PREFIX,
 } from './case-flows';
 export type {
   AnswerType,

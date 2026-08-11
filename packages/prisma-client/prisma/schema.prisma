@@ -2647,6 +2647,12 @@ model FlowOverlay {
 /// Telegram mid-intake, comes back a day later, and the next message continues
 /// where the Case left off rather than starting again.
 model ConversationBinding {
+  /// The language this claimant reads, from the platform's own account
+  /// setting (Telegram's `language_code`). Drives the consent notice and the
+  /// flow's wording. Null means the platform did not say — fall back to the
+  /// default rather than guess, because guessing a language is worse than
+  /// defaulting to one.
+  locale String?
   id             String      @id @default(uuid())
   channel        CaseChannel
   /// Telegram chat id, WhatsApp wa_id, Messenger PSID. Opaque, per channel.

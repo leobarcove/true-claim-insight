@@ -96,6 +96,9 @@ export class TelegramAdapter implements ChannelAdapter {
       channel: this.channel,
       platformUserId: String(message.chat.id),
       platformMessageId: String(update.update_id),
+      // The account's own language setting, so nobody has to be asked which
+      // language they read — and so the consent notice can be shown in it.
+      locale: message.from?.language_code,
     };
 
     // request_contact result — and the identity control for the whole channel,

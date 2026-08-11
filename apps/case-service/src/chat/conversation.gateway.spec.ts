@@ -70,6 +70,7 @@ describe('ConversationGateway', () => {
         findUnique: jest.fn(async () => over.caseRow ?? null),
         update: jest.fn(async () => ({})),
       },
+      transferRecord: { create: jest.fn(async () => ({ id: 'transfer-1' })) },
     };
 
     const sent: Array<{ to: string; text: string; requestPhone?: boolean }> = [];
@@ -163,6 +164,94 @@ describe('ConversationGateway', () => {
     platformUserId: '55501',
     platformMessageId: '101',
     ...over,
+  });
+
+  describe('sensitive answers in the transcript', () => {
+    const verifiedBank = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+    const bankCase = {
+      id: 'case-1',
+      currentStepId: 'bank-account-number',
+      answers: {},
+      flowDefinitionId: null,
+      travelClaimType: 'FLIGHT_DELAY',
+    };
+
+    it('never stores a payout account in the transcript', async () => {
+      // The Case answer bag masks it and the encrypted column holds the real
+      // value — but the claimant *typed* it, so the transcript kept a
+      // plaintext copy in a column that is not encrypted, not omitted from
+      // query results, not reached by the retention sweep or the
+      // anonymisation job, and readable by any adjuster in the tenant.
+      const { gateway, prisma, flows } = setup({ binding: verifiedBank, caseRow: bankCase });
+      (flows.forCase as jest.Mock).mockResolvedValue({
+        travelClaimType: 'FLIGHT_DELAY',
+        entryStepId: 'bank-account-number',
+        steps: [
+          {
+            id: 'bank-account-number',
+            prompt: 'Account number?',
+            label: 'Account number',
+            answerType: 'text',
+            next: { type: 'end' },
+          },
+        ],
+      });
+
+      await gateway.handleTurn(turn({ text: '157098234567' }));
+
+      const texts = (prisma.conversationMessage.update as jest.Mock).mock.calls
+        .map(call => call[0]?.data?.text)
+        .filter(Boolean);
+      expect(texts).toContain('••••4567');
+      expect(texts.join(' ')).not.toContain('157098234567');
+    });
+  });
+
+  describe('cross-border transfer register (PDPA s.129)', () => {
+    it('records every conversational turn as a transfer', async () => {
+      // The turn IS the transfer: the claimant's words reached Telegram's
+      // servers abroad before we saw them. The registry entry and its passing
+      // test existed for a day while nothing wrote a row — the §3.6 shape
+      // inside the control added to close that very gap.
+      const { gateway, prisma } = setup();
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      expect(prisma.transferRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            provider: 'TELEGRAM',
+            sourceService: 'case-service',
+          }),
+        })
+      );
+    });
+
+    it('records no lawful basis, because none is established', async () => {
+      // A register that invents a basis is worse than the gap it papers over:
+      // the honest row is what keeps the gap visible enough to close.
+      const { gateway, prisma } = setup();
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      const written = (prisma.transferRecord.create as jest.Mock).mock.calls[0][0].data;
+      expect(written.lawfulBasis).toBeNull();
+    });
+
+    it('names the country and what was sent, from the shared registry', async () => {
+      const { gateway, prisma } = setup();
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      const written = (prisma.transferRecord.create as jest.Mock).mock.calls[0][0].data;
+      expect(written.country).toMatch(/United Arab Emirates/);
+      expect(written.dataDescription).toMatch(/conversation content/i);
+    });
   });
 
   describe('idempotency', () => {
@@ -338,7 +427,14 @@ describe('ConversationGateway', () => {
 
       await gateway.handleTurn(turn({ text: 'AirAsia' }));
 
-      expect(flows.forCase).toHaveBeenCalledWith(expect.objectContaining({ flowDefinitionId: 'flow-1' }));
+      // Structure from the pinned definition; wording for this channel and
+      // this claimant's language. The pin is only worth having if every
+      // renderer respects it, and the presentation is only applied because
+      // the resolver finally has a caller.
+      expect(flows.forCase).toHaveBeenCalledWith(
+        expect.objectContaining({ flowDefinitionId: 'flow-1' }),
+        { channel: CaseChannel.TELEGRAM, locale: 'en' }
+      );
     });
 
     it('prefers a tapped button over typed text', async () => {
