@@ -5,8 +5,11 @@ import {
   MessageDirection,
 } from '@prisma/client';
 
+import { getStep } from '@tci/shared-types';
+
 import { PrismaService } from '../config/prisma.service';
 import { ConversationGateway } from './conversation.gateway';
+import { FlowsService } from '../cases/flows.service';
 import type { TenantContext } from '../common/guards/tenant.guard';
 
 /**
@@ -25,7 +28,8 @@ export class ClaimantConversationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: ConversationGateway
+    private readonly gateway: ConversationGateway,
+    private readonly flows: FlowsService
   ) {}
 
   /**
@@ -144,6 +148,7 @@ export class ClaimantConversationService {
       // leaving the claimant typing into a bot that has stood down.
       withAgent: binding.mode === ConversationMode.HANDOVER,
       caseId: binding.activeCaseId,
+      currentStep: await this.openQuestion(binding),
       messages: messages.map(message => ({
         id: message.id,
         direction: message.direction,
@@ -154,6 +159,63 @@ export class ClaimantConversationService {
         createdAt: message.createdAt,
       })),
     };
+  }
+
+  /**
+   * The question the claimant is being asked, if any.
+   *
+   * Resolved here rather than in the browser, and this is the load-bearing
+   * decision of the whole channel. A push adapter is handed the step and
+   * renders its keyboard from it; a pull client has only what was persisted,
+   * and the transcript stores text, not choices. If the PWA had to work out
+   * the current step for itself it would need the flow, the answers and the
+   * branching rules — which is precisely the second intake implementation this
+   * work exists to delete. So the server says what is open and the PWA renders
+   * a control for it.
+   *
+   * Null while a person has the conversation: the bot is not asking anything,
+   * and offering a date picker under an agent's message would be a lie about
+   * what happens next.
+   */
+  private async openQuestion(binding: {
+    id: string;
+    mode: ConversationMode;
+    activeCaseId: string | null;
+    locale: string | null;
+  }) {
+    if (binding.mode === ConversationMode.HANDOVER) return null;
+
+    // Before a Case exists the open question is consent, or which kind of
+    // claim this is. Neither belongs to a flow — no flow has been chosen — so
+    // the gateway rebuilds whichever was last asked. Delegated rather than
+    // matched on here: a synthetic step added later would otherwise render as
+    // a question with no controls, which is how a claimant gets stranded.
+    if (!binding.activeCaseId) {
+      const last = await this.prisma.conversationMessage.findFirst({
+        where: { bindingId: binding.id, direction: MessageDirection.OUTBOUND },
+        orderBy: { createdAt: 'desc' },
+        select: { stepId: true },
+      });
+      if (!last?.stepId) return null;
+      return this.gateway.synthesiseStep(last.stepId, binding.locale);
+    }
+
+    const caseRow = await this.prisma.case.findUnique({
+      where: { id: binding.activeCaseId },
+      select: { currentStepId: true, travelClaimType: true, flowDefinitionId: true },
+    });
+    if (!caseRow?.currentStepId) return null;
+
+    // The pinned version, not the built-in flow: a Case walks the wording and
+    // structure it started with, and showing the claimant a newer prompt than
+    // the one they are answering is how the two drift apart.
+    // Overlaid for this channel and language, so a Malay claimant reads the
+    // Malay wording — the same resolution Telegram gets, from the same place.
+    const flow = await this.flows.forCase(caseRow, {
+      channel: CaseChannel.WEB_CHAT,
+      locale: binding.locale ?? 'en',
+    });
+    return getStep(flow, caseRow.currentStepId) ?? null;
   }
 
   /**

@@ -52,6 +52,8 @@ describe('web chat', () => {
     let handleTurn: jest.Mock;
     let findMany: jest.Mock;
     let count: jest.Mock;
+    let findFirst: jest.Mock;
+    let forCase: jest.Mock;
     let service: ClaimantConversationService;
 
     beforeEach(() => {
@@ -59,13 +61,21 @@ describe('web chat', () => {
       handleTurn = jest.fn().mockResolvedValue(undefined);
       findMany = jest.fn().mockResolvedValue([]);
       count = jest.fn().mockResolvedValue(0);
+      findFirst = jest.fn().mockResolvedValue(null);
+      forCase = jest.fn().mockResolvedValue({ steps: [] });
 
       service = new ClaimantConversationService(
         {
           conversationBinding: { upsert },
-          conversationMessage: { findMany, count },
+          conversationMessage: { findMany, count, findFirst },
+          case: { findUnique: jest.fn().mockResolvedValue(null) },
         } as never,
-        { handleTurn } as never
+        {
+          handleTurn,
+          synthesiseStep: async (stepId: string) =>
+            stepId === '__claim-type' ? { id: '__claim-type', answerType: 'choice' } : null,
+        } as never,
+        { forCase } as never
       );
     });
 
@@ -152,6 +162,80 @@ describe('web chat', () => {
       await service.transcript(context);
       const [args] = findMany.mock.calls[0];
       expect(args.where.status).toEqual({ not: 'FAILED' });
+    });
+
+    describe('the question the PWA renders a control for', () => {
+      it('is resolved from the pinned flow, not the built-in one', async () => {
+        const step = { id: 'airline', answerType: 'text', prompt: 'Which airline?' };
+        forCase.mockResolvedValue({ steps: [step] });
+        service = new ClaimantConversationService(
+          {
+            conversationBinding: { upsert },
+            conversationMessage: { findMany, count, findFirst },
+            case: {
+              findUnique: jest.fn().mockResolvedValue({
+                currentStepId: 'airline',
+                travelClaimType: 'FLIGHT_DELAY',
+                flowDefinitionId: 'flow-1',
+              }),
+            },
+          } as never,
+          { handleTurn } as never,
+          { forCase } as never
+        );
+
+        const result = await service.transcript(context);
+        expect(result.currentStep).toEqual(step);
+        // Showing a newer prompt than the one being answered is how the
+        // conversation and the pinned flow drift apart.
+        expect(forCase).toHaveBeenCalledWith(
+          expect.objectContaining({ flowDefinitionId: 'flow-1' }),
+          expect.objectContaining({ channel: CaseChannel.WEB_CHAT })
+        );
+      });
+
+      it('is the claim-type menu before a case exists', async () => {
+        upsert.mockResolvedValue({ ...binding, activeCaseId: null });
+        findFirst.mockResolvedValue({ stepId: '__claim-type' });
+        const result = await service.transcript(context);
+        expect(result.currentStep).toEqual(
+          expect.objectContaining({ id: '__claim-type', answerType: 'choice' })
+        );
+      });
+
+      it('asks the gateway to rebuild any pre-flow step, not just the menu', async () => {
+        // Consent is the other one, and it is the question with no alternative
+        // route: a claimant who cannot render "I agree" cannot claim at all.
+        const synthesiseStep = jest.fn().mockResolvedValue({
+          id: '__consent',
+          answerType: 'choice',
+          choices: [{ value: 'ok', label: 'I agree' }],
+        });
+        upsert.mockResolvedValue({ ...binding, activeCaseId: null, locale: 'ms' });
+        findFirst.mockResolvedValue({ stepId: '__consent' });
+        service = new ClaimantConversationService(
+          {
+            conversationBinding: { upsert },
+            conversationMessage: { findMany, count, findFirst },
+            case: { findUnique: jest.fn() },
+          } as never,
+          { handleTurn, synthesiseStep } as never,
+          { forCase } as never
+        );
+
+        const result = await service.transcript(context);
+        expect(result.currentStep).toEqual(expect.objectContaining({ id: '__consent' }));
+        // In the claimant's own language, like every other channel.
+        expect(synthesiseStep).toHaveBeenCalledWith('__consent', 'ms');
+      });
+
+      it('is nothing while a person has the conversation', async () => {
+        upsert.mockResolvedValue({ ...binding, mode: 'HANDOVER' });
+        const result = await service.transcript(context);
+        // A date picker under an agent's message promises the bot will act on
+        // it, and the bot has stood down.
+        expect(result.currentStep).toBeNull();
+      });
     });
   });
 });

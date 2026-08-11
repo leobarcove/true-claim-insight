@@ -71,6 +71,23 @@ export interface ChannelCapabilities {
   readonly retainsPlaintext: boolean;
 }
 
+/**
+ * How a channel is named to staff.
+ *
+ * Raw enums leaked onto the operator's screen as "WEB_CHAT" the moment a
+ * second channel existed. More than cosmetic: an agent has to know which
+ * channel a thread is on before they type, because the channels do not behave
+ * the same — see `retainsPlaintext`.
+ */
+export const CHANNEL_LABELS: Record<string, string> = {
+  [Channel.WEB_CHAT]: 'Web chat',
+  [Channel.STAFF]: 'Staff',
+  [Channel.EMAIL]: 'Email',
+  [Channel.WHATSAPP]: 'WhatsApp',
+  [Channel.TELEGRAM]: 'Telegram',
+  [Channel.MESSENGER]: 'Messenger',
+};
+
 export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
   [Channel.WEB_CHAT]: {
     channel: Channel.WEB_CHAT,

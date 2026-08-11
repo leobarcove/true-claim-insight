@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bot, Loader2, MessageSquare, Send, User, UserCheck } from 'lucide-react';
-import { describeCallbackValue } from '@tci/shared-types';
+import { CHANNEL_CAPABILITIES, CHANNEL_LABELS, describeCallbackValue } from '@tci/shared-types';
 
 import { Header } from '@/components/layout/header';
 import { AttachmentThumbnail } from '@/components/conversations/attachment-thumbnail';
@@ -335,7 +335,7 @@ export function ConversationsPage() {
                     {thread.claimant?.fullName || thread.claimant?.phoneNumber || 'Unknown claimant'}
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2">
-                    <span>{thread.channel}</span>
+                    <ChannelTag channel={thread.channel} />
                     {thread.case && (
                       <>
                         <span>·</span>
@@ -484,7 +484,7 @@ function ConversationRow({
         {conversation.lastMessage?.text || 'No messages yet'}
       </div>
       <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
-        <span>{conversation.channel}</span>
+        <ChannelTag channel={conversation.channel} />
         {conversation.case && (
           <>
             <span>·</span>
@@ -569,5 +569,34 @@ function MessageBubble({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Which channel a thread is on, and whether it keeps what is typed.
+ *
+ * Not decoration. `retainsPlaintext` says the claimant's copy lives in a third
+ * party's message history — offshore, outside our retention sweep, and beyond
+ * anything we can delete. An agent about to type a payout reference into a
+ * Telegram thread is making a disclosure they cannot take back, and the only
+ * moment that is worth saying is before they type it.
+ */
+function ChannelTag({ channel }: { channel: string }) {
+  const label = CHANNEL_LABELS[channel] ?? channel;
+  const retains = CHANNEL_CAPABILITIES[channel]?.retainsPlaintext;
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>{label}</span>
+      {retains && (
+        <span
+          title={`${label} keeps a copy of this conversation on its own servers. Avoid sending anything that should not persist there.`}
+          className="text-amber-600 dark:text-amber-500"
+          aria-label="This channel retains message history off-platform"
+        >
+          ⚠
+        </span>
+      )}
+    </span>
   );
 }
