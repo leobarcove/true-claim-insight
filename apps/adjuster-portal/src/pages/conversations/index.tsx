@@ -4,6 +4,8 @@ import { Bot, Loader2, MessageSquare, Send, User, UserCheck } from 'lucide-react
 import { describeCallbackValue } from '@tci/shared-types';
 
 import { Header } from '@/components/layout/header';
+import { AttachmentThumbnail } from '@/components/conversations/attachment-thumbnail';
+import { EvidenceViewer } from '@/components/cases/evidence-viewer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -125,6 +127,8 @@ export function ConversationsPage() {
 
   const [draft, setDraft] = useState('');
   const [reason, setReason] = useState('');
+  const [viewingAttachment, setViewingAttachment] =
+    useState<NonNullable<ConversationMessage['attachment']> | null>(null);
   const { toast } = useToast();
 
   const { data: conversations, isLoading } = useConversations(
@@ -320,7 +324,11 @@ export function ConversationsPage() {
 
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
                 {thread.messages.map(message => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    onOpenAttachment={setViewingAttachment}
+                  />
                 ))}
               </div>
 
@@ -370,6 +378,19 @@ export function ConversationsPage() {
           )}
         </div>
       </div>
+
+      {viewingAttachment && (
+        <EvidenceViewer
+          caseId={viewingAttachment.caseId}
+          document={{
+            id: viewingAttachment.id,
+            fileName: viewingAttachment.fileName,
+            documentType: viewingAttachment.documentType,
+            mimeType: viewingAttachment.mimeType,
+          }}
+          onClose={() => setViewingAttachment(null)}
+        />
+      )}
     </div>
   );
 }
@@ -424,7 +445,13 @@ function ConversationRow({
   );
 }
 
-function MessageBubble({ message }: { message: ConversationMessage }) {
+function MessageBubble({
+  message,
+  onOpenAttachment,
+}: {
+  message: ConversationMessage;
+  onOpenAttachment: (attachment: NonNullable<ConversationMessage['attachment']>) => void;
+}) {
   const speaker = speakerOf(message);
   const style = SPEAKER_STYLE[speaker];
   const Icon = style.icon;
@@ -444,20 +471,31 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
           <span>{time(message.createdAt)}</span>
         </div>
         <div className={cn('rounded-lg px-3 py-2 text-sm whitespace-pre-wrap', style.bubble)}>
-          {/* describeCallbackValue covers a tap the gateway could not resolve
-              to a label. Turns recorded before the value was stored have
-              nothing to show and cannot be reconstructed — they say so rather
-              than rendering a dash, which reads as "the claimant sent an empty
-              message" and is a different, wrong fact. */}
-          {message.text ||
+          {/* An attachment shows the file itself: an operator vetting a damage
+              photo needs to see it, not read its name. */}
+          {message.attachment ? (
+            <AttachmentThumbnail
+              attachment={message.attachment}
+              onOpen={() => onOpenAttachment(message.attachment!)}
+            />
+          ) : (
+            /* describeCallbackValue covers a tap the gateway could not resolve
+               to a label. Turns recorded before the value was stored have
+               nothing to show and cannot be reconstructed — they say so rather
+               than rendering a dash, which reads as "the claimant sent an empty
+               message" and is a different, wrong fact. */
+            message.text ||
             describeCallbackValue(message.callbackValue) ||
             (message.mediaRef ? (
-              '📎 Attachment'
+              <span className="italic text-muted-foreground">
+                Attachment not linked — this turn predates the fix
+              </span>
             ) : (
               <span className="italic text-muted-foreground">
                 Selection not recorded — this turn predates the fix
               </span>
-            ))}
+            ))
+          )}
         </div>
         {/* A message the bot could not interpret is the raw material of any
             performance review — surfaced, not hidden behind a status column. */}

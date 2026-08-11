@@ -20,6 +20,10 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  */
 export const AUDITED_READ_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\/cases\/[^/]+\/payout-details/, reason: 'decrypts bank account details' },
+  {
+    pattern: /\/cases\/[^/]+\/documents\/[^/]+\/content/,
+    reason: 'claimant-supplied evidence leaving the system — MyKad, receipts, damage photos',
+  },
   { pattern: /\/claimants\/[^/]+$/, reason: 'claimant personal data' },
   { pattern: /\/reports\/[^/]+\/pdf/, reason: 'full report content leaving the system' },
   { pattern: /\/claims\/[^/]+\/export/, reason: 'complete claim file incl. decrypted NRIC (s.143)' },

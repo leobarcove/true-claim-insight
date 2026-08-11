@@ -33,10 +33,15 @@ export interface CaseDocumentSummary {
   id: string;
   documentType: string;
   fileName: string;
+  /** Resolved server-side; decides whether the viewer can render it in place. */
+  mimeType?: string | null;
+  sizeBytes?: number | null;
   stepId?: string | null;
   validationStatus: DocumentValidationStatus | string;
   validationNote?: string | null;
   createdAt: string;
+  /** Set when a later upload replaced this one. Kept, never deleted (PD 12.8). */
+  supersededAt?: string | null;
 }
 
 export interface CaseSummary {

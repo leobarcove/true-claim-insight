@@ -26,6 +26,17 @@ export interface ConversationMessage {
   callbackValue: string | null;
   mediaRef: string | null;
   stepId: string | null;
+  /**
+   * The stored file this turn produced, with the case that owns it — the
+   * platform's own `mediaRef` points at their servers and cannot be served.
+   */
+  attachment: {
+    id: string;
+    caseId: string;
+    fileName: string;
+    mimeType: string | null;
+    documentType: string;
+  } | null;
   /** Null on an outbound message means the bot said it; a value means an agent did. */
   sentByUserId: string | null;
   status: ConversationMessageStatus;

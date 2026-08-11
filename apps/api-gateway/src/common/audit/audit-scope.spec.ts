@@ -74,6 +74,24 @@ describe('Audit scope', () => {
         expect(entry.reason.trim().length).toBeGreaterThan(10);
       }
     });
+
+    it('records an operator fetching claimant-supplied evidence', () => {
+      // The file itself leaves the system — a MyKad, a receipt, a damage
+      // photo. PDPA asks who accessed personal data, not only who changed it,
+      // and this route was built precisely so people would look at it.
+      const path = '/api/v1/cases/8b1f6c2e-1111-4222-8333-444455556666/documents/'
+        + '9c2f7d3f-2222-4333-8444-555566667777/content';
+      expect(shouldAudit('GET', path, 200)).toBe(true);
+      expect(shouldAudit('GET', path, 403)).toBe(true);
+    });
+
+    it('does not record merely listing what is attached', () => {
+      // The list is metadata an operator sees on every visit to the screen;
+      // recording it would bury the fetches that actually disclosed a file.
+      expect(
+        shouldAudit('GET', '/api/v1/cases/8b1f6c2e-1111-4222-8333-444455556666/documents', 200)
+      ).toBe(false);
+    });
   });
 
   describe('mapping a request to an entity', () => {

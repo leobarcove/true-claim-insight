@@ -35,6 +35,7 @@ import { AuditService } from '../common/audit/audit.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
+import { isInlineRenderable, resolveMimeType } from './document-media';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { render } from '../notifications/templates';
@@ -449,10 +450,15 @@ export class CasesService {
     const stepId = (file.fields?.stepId?.value as string) || null;
 
     const buffer = await file.toBuffer();
+    // Resolved rather than trusted: Telegram's file download returns an
+    // unhelpful content-type, so every upload from that channel was stored as
+    // application/octet-stream — which serves back as a download prompt
+    // instead of the photo an operator is trying to look at.
+    const mimeType = resolveMimeType(file.filename, file.mimetype);
     const storagePath = await this.storageService.uploadFile(
       buffer,
       file.filename,
-      file.mimetype,
+      mimeType,
       `cases/${id}`
     );
 
@@ -478,7 +484,7 @@ export class CasesService {
         documentType,
         fileName: file.filename,
         storagePath,
-        mimeType: file.mimetype,
+        mimeType,
         sizeBytes: buffer.length,
         stepId,
       },
@@ -494,6 +500,73 @@ export class CasesService {
       newValues: { documentId: stored.id, documentType, fileName: file.filename, stepId },
     });
     return stored;
+  }
+
+  /**
+   * The evidence attached to a case, as an operator needs to see it.
+   *
+   * Superseded documents are included and marked rather than filtered out:
+   * what the claimant sent and when is part of the record (PD 12.8), and an
+   * operator looking at a re-upload should be able to see what it replaced.
+   * The checklist filters to live rows; this is the file, not the checklist.
+   */
+  async listDocuments(id: string, tenantContext: TenantContext) {
+    const caseRow = await this.findOne(id, tenantContext);
+
+    const documents = await this.prisma.caseDocument.findMany({
+      where: { caseId: caseRow.id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        documentType: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        stepId: true,
+        validationStatus: true,
+        createdAt: true,
+        supersededAt: true,
+      },
+    });
+
+    return documents.map(document => {
+      // Stored types are corrected on read as well as on write: the rows
+      // written before the capture fix carry octet-stream, and a backfill
+      // cannot reach a file whose bytes were never wrong in the first place.
+      const mimeType = resolveMimeType(document.fileName, document.mimeType);
+      return { ...document, mimeType, inlineRenderable: isInlineRenderable(mimeType) };
+    });
+  }
+
+  /**
+   * One document's bytes, for an operator who has to look at the evidence.
+   *
+   * Streamed through the service rather than handed out as a storage URL: the
+   * local filesystem driver has no signing, and a URL that outlives the check
+   * that authorised it is a URL that can be forwarded. Every fetch therefore
+   * passes tenant scoping, and the gateway records it as a sensitive read —
+   * PDPA asks who *accessed* personal data, not only who changed it.
+   */
+  async readDocument(id: string, documentId: string, tenantContext: TenantContext) {
+    const caseRow = await this.findOne(id, tenantContext);
+
+    const document = await this.prisma.caseDocument.findFirst({
+      where: { id: documentId, caseId: caseRow.id },
+    });
+    // Scoped to the case, so a document id belonging to another case reads as
+    // absent rather than forbidden — the same existence-check reasoning the
+    // rest of the service uses.
+    if (!document) throw new NotFoundException('Document not found on this case');
+
+    const buffer = await this.storageService.readFile(document.storagePath);
+    const mimeType = resolveMimeType(document.fileName, document.mimeType);
+
+    return {
+      buffer,
+      fileName: document.fileName,
+      mimeType,
+      inlineRenderable: isInlineRenderable(mimeType),
+    };
   }
 
   async submit(id: string, tenantContext: TenantContext) {

@@ -1,4 +1,10 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+  StreamableFile,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -59,14 +65,22 @@ export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T
     const request = context.switchToHttp().getRequest();
 
     return next.handle().pipe(
-      map(data => ({
-        success: true,
-        data: serializeDecimals(data),
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      }))
+      map(data => {
+        // A binary body is the response, not something to put inside one.
+        // Wrapping a StreamableFile produced "Attempted to send payload of
+        // invalid type 'object'" — Fastify cannot serialise it, and an
+        // envelope around a JPEG would be meaningless even if it could.
+        if (data instanceof StreamableFile) return data as unknown as ApiResponse<T>;
+
+        return {
+          success: true,
+          data: serializeDecimals(data),
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: request.id,
+          },
+        };
+      })
     );
   }
 }

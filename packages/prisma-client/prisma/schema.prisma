@@ -2743,7 +2743,17 @@ model ConversationMessage {
   callbackValue String?
   /// Platform reference for an attachment, resolved lazily — media is fetched
   /// only when a document step is actually expecting one.
+  ///
+  /// This is the *platform's* id (a Telegram file_id), not ours: it points at
+  /// their servers, is short-lived, and cannot be served to an operator. The
+  /// file we keep is `caseDocumentId`.
   mediaRef String?
+  /// The document this turn produced, once a step consumed the attachment.
+  ///
+  /// Stored rather than inferred from (case, step): a claimant may file more
+  /// than one claim from the same conversation, so matching on the binding's
+  /// *current* case would attach an old photo to a new claim.
+  caseDocumentId String?
   /// Step this message answered or asked, once known. Null when the turn was
   /// consumed by identity binding (phone share, OTP) rather than by the flow.
   stepId   String?

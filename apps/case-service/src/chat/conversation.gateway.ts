@@ -507,6 +507,14 @@ export class ConversationGateway {
         this.claimantContext(binding)
       );
       value = document.id;
+
+      // Tie the turn to the file it produced, so the transcript can show the
+      // photo rather than the word "Attachment". Recorded here because this is
+      // the only moment both are in hand.
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: { caseDocumentId: document.id },
+      });
     } else {
       if (raw === undefined) {
         await this.prisma.conversationMessage.update({
