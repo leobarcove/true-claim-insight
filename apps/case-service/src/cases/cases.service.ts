@@ -19,11 +19,13 @@ import {
 } from '@prisma/client';
 import {
   ANSWER_MASK_PREFIX,
+  branchInputSteps,
   CaseAnswers,
   computeCompleteness,
   computeDeadlineFlags,
   evaluateNext,
   getStep,
+  pathSteps,
   resolveNextStep,
   SENSITIVE_ANSWER_STEPS,
   validateAnswer,
@@ -456,6 +458,19 @@ export class CasesService {
       include: { policy: true },
     });
 
+    // Editing a branch input rewrites the path retroactively. A claimant who
+    // switches a cancellation reason from illness to a natural disaster leaves
+    // a medical report attached to a claim that no longer asks for one, and an
+    // adjuster reading the file sees evidence contradicting the claim.
+    //
+    // Retired, never deleted: what the claimant submitted and when is the
+    // record PD 12.8 exists to keep. Superseding drops it out of the live
+    // reads — the checklist, the claim conversion — while leaving it in the
+    // file with its own history intact.
+    if (branchInputSteps(flow).has(dto.stepId)) {
+      await this.retireOffPathDocuments(id, flow, answers);
+    }
+
     return {
       accepted: true,
       case: await this.withFlowState(updated),
@@ -593,6 +608,31 @@ export class CasesService {
       mimeType,
       inlineRenderable: isInlineRenderable(mimeType),
     };
+  }
+
+  /**
+   * Supersede documents attached to steps this claimant's answers no longer
+   * reach. Called only after a branch input changes, since nothing else can
+   * move a step off the path.
+   */
+  private async retireOffPathDocuments(caseId: string, flow: CaseFlow, answers: CaseAnswers) {
+    const onPath = pathSteps(flow, answers);
+
+    const live = await this.prisma.caseDocument.findMany({
+      where: { caseId, supersededAt: null, stepId: { not: null } },
+      select: { id: true, stepId: true },
+    });
+    const stranded = live.filter(document => document.stepId && !onPath.has(document.stepId));
+    if (stranded.length === 0) return;
+
+    await this.prisma.caseDocument.updateMany({
+      where: { id: { in: stranded.map(document => document.id) } },
+      data: { supersededAt: new Date() },
+    });
+    this.logger.log(
+      `Case ${caseId}: retired ${stranded.length} document(s) at steps the answers no longer reach ` +
+        `(${stranded.map(document => document.stepId).join(', ')}).`
+    );
   }
 
   async submit(id: string, tenantContext: TenantContext) {

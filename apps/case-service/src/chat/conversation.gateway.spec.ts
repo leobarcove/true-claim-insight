@@ -750,6 +750,7 @@ describe('ConversationGateway', () => {
           prompt: 'Please review your details, then confirm.',
           label: 'Review and confirm',
           answerType: 'confirm',
+          isReview: true,
           next: { type: 'end' },
         },
       ],
@@ -762,6 +763,34 @@ describe('ConversationGateway', () => {
       travelClaimType: 'FLIGHT_DELAY',
       tenantId: 'tenant-1',
     };
+
+    it('does NOT submit on a confirm step that is not the review', async () => {
+      // The medical flow carries a mid-flow specialist-review *notice* which
+      // is also a confirm step. Reading "confirm" as "the claimant submitted"
+      // was safe there only because the notice sits mid-flow; a flow ending on
+      // one would have submitted an incomplete case and told the claimant it
+      // was with the team. `isReview` is now explicit for exactly that reason.
+      const { gateway, cases, flows } = setup({ binding: verified, caseRow: reviewCase });
+      (flows.forCase as jest.Mock).mockResolvedValue({
+        travelClaimType: 'MEDICAL',
+        entryStepId: 'notice',
+        steps: [
+          {
+            id: 'notice',
+            prompt: 'Your claim will be reviewed by a specialist.',
+            label: 'Specialist review notice',
+            answerType: 'confirm',
+            next: { type: 'end' },
+          },
+        ],
+      });
+      (reviewCase as any).currentStepId = 'notice';
+
+      await gateway.handleTurn(turn({ callbackValue: 'true', callbackStepId: 'notice' }));
+
+      expect(cases.submit).not.toHaveBeenCalled();
+      (reviewCase as any).currentStepId = 'review';
+    });
 
     it('submits the case when the claimant confirms', async () => {
       const { gateway, cases, flows, sent } = setup({ binding: verified, caseRow: reviewCase });

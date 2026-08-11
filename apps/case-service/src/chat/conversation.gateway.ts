@@ -875,10 +875,23 @@ export class ConversationGateway {
     // rather than re-walking everything after the step they fixed.
     if (caseRow.resumeStepId) {
       const resumeStep = getStep(flow, caseRow.resumeStepId);
+      // Only move the cursor somewhere that exists. This wrote the resume id
+      // and cleared the marker *before* checking, so a stale one left the Case
+      // pointing at no step at all — and the turn then fell through to the
+      // end-of-flow branch. Clearing the marker alone lets the normal
+      // next-step logic take over, which is the correct recovery.
       await this.prisma.case.update({
         where: { id: caseRow.id },
-        data: { currentStepId: caseRow.resumeStepId, resumeStepId: null },
+        data: resumeStep
+          ? { currentStepId: caseRow.resumeStepId, resumeStepId: null }
+          : { resumeStepId: null },
       });
+      if (!resumeStep) {
+        this.logger.error(
+          `Case ${caseRow.id} wanted to resume at "${caseRow.resumeStepId}", which is not in ` +
+            'its pinned flow. Carrying on from the next step instead.'
+        );
+      }
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: `\u2713 Updated "${step.label}".`,
       });
@@ -891,7 +904,7 @@ export class ConversationGateway {
       }
     }
 
-    if (!result.nextStep && step.answerType !== 'confirm') {
+    if (!result.nextStep && !step.isReview) {
       // The flow ran out somewhere other than the review. `resolveNextStep`
       // also returns null for a rule resolving to nothing, a target that does
       // not exist, and its own cycle guard — and treating those as "the
@@ -902,6 +915,10 @@ export class ConversationGateway {
       //
       // A person is the right answer here: the flow is misconfigured and no
       // amount of re-asking will fix it from the claimant's side.
+      // `isReview`, not `answerType === 'confirm'`: a confirm step is not
+      // necessarily a review. The medical flow carries a mid-flow specialist
+      // notice that is also a confirm, and reading one as the other would
+      // submit an incomplete case the moment such a step fell last.
       this.logger.error(
         `Flow ${flow.travelClaimType} ran out of steps at "${step.id}", which is not a review. ` +
           'Handing to an agent rather than submitting an incomplete case.'
@@ -1430,7 +1447,10 @@ export class ConversationGateway {
     // answers in the message. Otherwise the claimant is asked to agree to
     // details they cannot see — and what they are agreeing to is a claim
     // submission.
-    if (step.answerType === 'confirm' && review && capabilities?.summaryPanel === false) {
+    // Only under the actual review. Keyed on `answerType === 'confirm'` this
+    // pasted the entire answer dump beneath the medical flow's specialist
+    // notice, which asks the claimant to acknowledge something quite different.
+    if (step.isReview && review && capabilities?.summaryPanel === false) {
       const summary = summariseAnswers(review.steps, review.answers);
       if (summary) text += `\n\n${summary}`;
     }

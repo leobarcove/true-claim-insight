@@ -308,8 +308,21 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   /** Telegram returns numbers with or without a +; store one shape. */
+  /**
+   * One shape for every number, not one for Malaysia and another for the rest.
+   *
+   * This prefixed `+` only when the number began `60`, so a Singaporean or
+   * British claimant was stored as bare digits while a Malaysian got E.164 —
+   * two formats in one column. Travel claimants are *by definition* abroad, so
+   * this was the common case, and the cost is a duplicate Claimant: the same
+   * person binding by Telegram would not match the record their PWA login
+   * created, and their claims would sit under two identities.
+   *
+   * Telegram's request_contact always returns an international number, so
+   * prefixing the digits is correct for every country.
+   */
   private normalisePhone(raw: string): string {
     const digits = raw.replace(/[^\d]/g, '');
-    return digits.startsWith('60') ? `+${digits}` : digits;
+    return digits ? `+${digits}` : digits;
   }
 }
