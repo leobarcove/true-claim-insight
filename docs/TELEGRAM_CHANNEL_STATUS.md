@@ -1,5 +1,16 @@
 # Claimant Telegram channel — current status
 
+> ⏳ **This file is temporary. Delete it once the issues below are fixed.**
+>
+> It is a work queue for one remediation push, not a description of the
+> system. Left behind once empty it would become the stalest file in `docs/` —
+> the §3.6 false-comfort pattern in a new coat. On deletion, also remove its
+> two pointers (`CLAUDE.md`'s supporting-documents list, and the
+> `MASTER_PLAN.md` §8 entry that introduces it), and first move anything
+> durable — the operating notes in §6, above all the singleton-poller footgun
+> — into `USER_FLOWS.md` or `NON_MOTOR_ARCHITECTURE.md` rather than losing it
+> with the file.
+
 **As at 11 August 2026.** Keep this current when the channel changes; it is the
 answer to "can a claimant actually use this yet?", which the roadmap in
 `MASTER_PLAN.md` §5 does not answer at the level of one channel.
