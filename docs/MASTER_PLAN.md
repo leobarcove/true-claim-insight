@@ -1215,7 +1215,9 @@ before a vendor assessment asks.
 
 A four-way audit of the claimant Telegram channel (transport, flow engine,
 security, documentation) found enough that it warranted its own living
-document rather than another §8 entry: **`docs/TELEGRAM_CHANNEL_STATUS.md`**.
+document rather than another §8 entry: **`docs/TELEGRAM_CHANNEL_STATUS.md`**
+(deliberately **temporary** — a work queue, to be deleted along with this
+paragraph once its issues are closed).
 It answers the question this plan does not — *can a claimant actually use this
 yet?* — and today the answer is no: there is no SMS transport, so nobody can
 verify, and three further defects each stop a real intake completing.
