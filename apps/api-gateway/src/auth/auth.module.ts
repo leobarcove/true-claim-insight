@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { OtpService } from './otp.service';
 import { OTP_TRANSPORT } from './otp-transport.interface';
 import { ConsoleOtpTransport } from './console-otp.transport';
+import { WhatsAppOtpTransport } from './whatsapp-otp.transport';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
@@ -35,10 +36,19 @@ import { ClaimantsModule } from '../claimants/claimants.module';
     OtpService,
     JwtStrategy,
     LocalStrategy,
-    // One transport today. An SMS provider becomes a second implementation
-    // bound to this token — no caller changes, and production stops failing
-    // closed the moment one is configured.
-    { provide: OTP_TRANSPORT, useClass: ConsoleOtpTransport },
+    ConsoleOtpTransport,
+    WhatsAppOtpTransport,
+    {
+      // WhatsApp when it is configured, the console stub otherwise. Selected
+      // by `isConfigured()` rather than by an environment flag, so there is no
+      // state where the flag says one thing and the credentials say another —
+      // and a deployment that has not set up a WABA yet degrades to something
+      // that works locally instead of failing at startup.
+      provide: OTP_TRANSPORT,
+      useFactory: (whatsapp: WhatsAppOtpTransport, fallback: ConsoleOtpTransport) =>
+        whatsapp.isConfigured() ? whatsapp : fallback,
+      inject: [WhatsAppOtpTransport, ConsoleOtpTransport],
+    },
   ],
   exports: [AuthService, OtpService, JwtModule],
 })
