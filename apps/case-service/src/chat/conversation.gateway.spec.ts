@@ -35,7 +35,14 @@ describe('ConversationGateway', () => {
       clientVersion: 'test',
     });
 
-  const setup = (over: { binding?: Record<string, unknown>; caseRow?: Record<string, unknown> } = {}) => {
+  const setup = (
+    over: {
+      binding?: Record<string, unknown>;
+      caseRow?: Record<string, unknown>;
+      /** A stored CaseDocument the ownership check will find, or null for none. */
+      storedDocument?: Record<string, unknown> | null;
+    } = {}
+  ) => {
     const binding = {
       id: 'bind-1',
       channel: CaseChannel.TELEGRAM,
@@ -76,6 +83,9 @@ describe('ConversationGateway', () => {
         update: jest.fn(async () => ({})),
       },
       transferRecord: { create: jest.fn(async () => ({ id: 'transfer-1' })) },
+      // Web chat sends a document that is already stored. The gateway looks it
+      // up scoped to the Case, so an id from another claim finds nothing.
+      caseDocument: { findFirst: jest.fn(async () => over.storedDocument ?? null) },
     };
 
     const sent: Array<{ to: string; text: string; requestPhone?: boolean }> = [];
@@ -1451,6 +1461,103 @@ describe('ConversationGateway', () => {
       const { gateway, prisma } = setup();
       await gateway.handleTurn(turn({ channel: CaseChannel.WHATSAPP }));
       expect(prisma.conversationMessage.create).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Documents that arrive already stored — the web-chat path.
+   *
+   * A messaging platform hands us a reference we fetch from *their* servers,
+   * so the file's provenance is the platform's. A browser posts the bytes to
+   * our upload endpoint and then names the resulting id on the turn, which
+   * means the id is claimant-supplied input on a route that attaches evidence
+   * to a claim. Checked, never trusted.
+   */
+  describe('a document that arrives already stored', () => {
+    const documentFlow = {
+      travelClaimType: 'FLIGHT_DELAY',
+      entryStepId: 'doc-boarding-pass',
+      steps: [
+        {
+          id: 'doc-boarding-pass',
+          prompt: 'Please upload your boarding pass.',
+          label: 'Boarding pass',
+          answerType: 'document',
+          documentType: 'BOARDING_PASS',
+          next: { type: 'end' },
+        },
+      ],
+    };
+
+    const ready = (storedDocument: Record<string, unknown> | null) =>
+      setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: 'case-1',
+          verifiedAt: new Date(),
+        },
+        caseRow: {
+          id: 'case-1',
+          caseNumber: 'CSE-1',
+          tenantId: 'tenant-1',
+          currentStepId: 'doc-boarding-pass',
+          answers: {},
+          travelClaimType: 'FLIGHT_DELAY',
+          status: 'IN_PROGRESS',
+        },
+        storedDocument,
+      });
+
+    it('accepts one that belongs to this case', async () => {
+      const { gateway, cases, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(
+        turn({ channel: CaseChannel.TELEGRAM, storedDocumentId: 'doc-7' })
+      );
+
+      expect(cases.patchAnswer).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ stepId: 'doc-boarding-pass', value: 'doc-7' }),
+        expect.anything()
+      );
+    });
+
+    it('refuses one that does not, and never records it as an answer', async () => {
+      // The scoped lookup finds nothing: the id is real but belongs to another
+      // claim. Accepting it would attach a stranger's document as evidence.
+      const { gateway, cases, sent, flows } = ready(null);
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(
+        turn({ channel: CaseChannel.TELEGRAM, storedDocumentId: 'doc-from-another-claim' })
+      );
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(sent.at(-1)?.text).toMatch(/could not attach/i);
+    });
+
+    it('scopes the lookup by case rather than filtering afterwards', async () => {
+      const { gateway, prisma, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(turn({ storedDocumentId: 'doc-7' }));
+
+      // A findUnique followed by an `if` is the same check until someone
+      // deletes the `if`. The constraint belongs in the query.
+      expect(prisma.caseDocument.findFirst).toHaveBeenCalledWith({
+        where: { id: 'doc-7', caseId: 'case-1' },
+      });
+    });
+
+    it('never fetches media when the document is already stored', async () => {
+      const { gateway, adapter, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(turn({ storedDocumentId: 'doc-7' }));
+
+      expect(adapter.fetchMedia).not.toHaveBeenCalled();
     });
   });
 });

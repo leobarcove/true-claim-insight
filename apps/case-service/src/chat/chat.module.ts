@@ -11,6 +11,9 @@ import { HttpAnswerNormaliser } from './http-answer-normaliser';
 import { HttpClaimantResolver } from './http-claimant-resolver';
 import { CLAIMANT_RESOLVER } from './claimant-resolver.interface';
 import { TelegramAdapter } from './telegram/telegram.adapter';
+import { WebChatAdapter } from './web-chat/web-chat.adapter';
+import { ClaimantConversationController } from './claimant-conversation.controller';
+import { ClaimantConversationService } from './claimant-conversation.service';
 import { TelegramPoller } from './telegram/telegram.poller';
 
 /**
@@ -39,18 +42,20 @@ import { TelegramPoller } from './telegram/telegram.poller';
     CasesModule,
     ConsentModule,
   ],
-  controllers: [ConversationsController],
+  controllers: [ConversationsController, ClaimantConversationController],
   providers: [
     ConversationGateway,
     ConversationsService,
     TelegramAdapter,
     TelegramPoller,
+    WebChatAdapter,
+    ClaimantConversationService,
     { provide: CLAIMANT_RESOLVER, useClass: HttpClaimantResolver },
     { provide: ANSWER_NORMALISER, useClass: HttpAnswerNormaliser },
     {
       provide: CHANNEL_ADAPTERS,
-      useFactory: (telegram: TelegramAdapter) => [telegram],
-      inject: [TelegramAdapter],
+      useFactory: (telegram: TelegramAdapter, webChat: WebChatAdapter) => [telegram, webChat],
+      inject: [TelegramAdapter, WebChatAdapter],
     },
   ],
   exports: [ConversationGateway, ConversationsService],
