@@ -722,6 +722,16 @@ export type {
   RenderableChoice,
 } from './channel-capabilities';
 
+// Transcript rendering — what a tapped button reads as to an operator. A tap
+// carries a value, not a sentence, and a transcript of blanks is unreviewable.
+export {
+  CONSENT_AGREED_VALUE,
+  describeCallbackValue,
+  EDIT_CALLBACK_PREFIX,
+  PAGE_CALLBACK_PREFIX,
+  SHARED_PHONE_DESCRIPTION,
+} from './conversation-display';
+
 // Publish gate — what a FlowDefinition must satisfy before claimants walk it.
 export { canPublish, systemStepIds, validateFlowDefinition } from './flow-publish-gate';
 export type { FlowProblem, FlowProblemKind } from './flow-publish-gate';
