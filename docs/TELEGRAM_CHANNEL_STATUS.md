@@ -1,0 +1,230 @@
+# Claimant Telegram channel — current status
+
+**As at 11 August 2026.** Keep this current when the channel changes; it is the
+answer to "can a claimant actually use this yet?", which the roadmap in
+`MASTER_PLAN.md` §5 does not answer at the level of one channel.
+
+> **Verdict today: no.** The design is sound and most of the machinery works,
+> but a claimant cannot verify their identity (no SMS transport), and three
+> further defects each stop a real intake from completing. Synthetic and
+> internal-tester use only.
+
+References are by file and symbol rather than line, because line numbers rot
+faster than the code they point at.
+
+---
+
+## 1. What the channel is
+
+One conversational intake, shared with web chat, driven by the same flow
+definitions and the same write path:
+
+```
+Telegram ─┐
+Web chat ─┼─► ConversationGateway ─► CasesService.patchAnswer ─► Case
+FNOL mail ┘        (per-turn state)      (validation, redaction,
+                                          policy match, audit)
+```
+
+- **Ingress** is long-polling (`chat/telegram/telegram.poller.ts`), so there is
+  no public surface and local development needs no tunnel.
+- **Everything channel-specific** sits behind `ChannelAdapter`; everything
+  claim-specific behind `CasesService`. Telegram is currently the only
+  registered adapter (`chat/chat.module.ts`).
+- **Five travel flows** — flight delay, luggage damage, luggage loss, trip
+  cancellation, medical — held as data in `FlowDefinition`, pinned per Case at
+  creation so publishing an edit cannot rewrite an intake in flight.
+- **The claimant journey**: share phone → OTP → consent notice → claim type →
+  the flow's questions → documents → review → submit.
+
+---
+
+## 2. Status at a glance
+
+| Area | State |
+|---|---|
+| Ingress, idempotency, dedupe | ✅ Working |
+| Identity binding (OTP) | ⛔ **Unusable — no SMS transport** |
+| Consent capture | ⚠️ Works, English only |
+| Question/answer loop | ✅ Working |
+| Answer correction (back/edit) | ⚠️ Works, wrong target after a branch |
+| Document upload | ⚠️ Works, optional steps unskippable |
+| Review and submit | ✅ Working |
+| Human takeover | ⛔ **Broken — no agent can claim it** |
+| Operator transcript | ✅ Working (fixed 11 Aug) |
+| Cross-border transfer record | ⛔ Not written |
+
+---
+
+## 3. What is built and verified working
+
+Verified by running it, not by reading it.
+
+- **The poll loop.** Monotonic offset advanced before handling, per-update
+  error isolation so one bad message cannot kill the loop, 5s backoff, an HTTP
+  timeout longer than the long poll, `allowed_updates` scoping, clean shutdown.
+- **Idempotency.** Insert-first on `(channel, platformMessageId)` with the
+  unique violation *as* the "already seen" branch, so the database arbitrates
+  and a platform retry cannot double-answer.
+- **One write path.** Answers route through `CasesService.patchAnswer`, the
+  same method the PWA calls, which carries validation, sensitive-answer
+  masking, policy promotion, deadline warnings and the audit row. A Telegram
+  sender provably cannot reach another claimant's Case: `assertAccess` is the
+  same code the browser passes through.
+- **No cross-claimant data path.** Four independent auditors and a manual read
+  looked for one and none was found.
+- **Plain text only.** No `parse_mode` is ever set, so the classic Telegram
+  escaping failure (an underscore in a flight number producing a 400) cannot
+  occur.
+- **Version pinning.** `FlowsService.forCase` honours the pinned definition and
+  logs loudly rather than silently falling back.
+- **Day-first dates.** `parseTextDate` reads `06/08/2026` as 6 August with a
+  round-trip check, and `validateAnswer` refuses slash dates outright rather
+  than handing them to `new Date()`.
+- **Consent is a precondition in code, not a flow step.** `CasesService.create`
+  refuses without a live `CLAIM_PROCESSING` consent, so no channel can open a
+  Case around the gate, and intake is refused outright when no notice is
+  approved.
+- **Document upload works** end to end — lazy media reference, fetched only
+  when a document step wants it, then the PWA's own upload path with
+  supersession of an earlier file at the same step.
+- **Handover stands the bot down** completely; tenant scoping holds on both the
+  inbox and the send path.
+
+---
+
+## 4. Pending
+
+### Tier 1 — a claimant cannot finish
+
+| Pending | Where | Note |
+|---|---|---|
+| **OTP is never sent** | `api-gateway/auth/otp.service.ts` | `console.log` under a `TODO`. Nobody can verify without server-log access. The code and phone number are also logged in plaintext. |
+| **Payout bank account destroyed one turn after capture** | `cases/cases.service.ts` `promoteAnswers` | **Not Telegram-specific — every claim, every channel.** `patchAnswer` re-derives the encrypted column from the *masked* stored bag, so the next turn encrypts `••••4567` over the real ciphertext. `bankAccountLast4` still reads correctly, so every screen and the audited reveal look fine. |
+| **Double-tap stores the claim type as the policy number** | `chat/telegram/telegram.adapter.ts`, `chat/conversation.gateway.ts` | Nothing calls `answerCallbackQuery`, so the button spins for ~30s and the claimant taps again. Two `update_id`s defeat the dedupe; tap two lands on `policy-number`, a free-text step that accepts anything. Verified on all five flows. |
+| **Optional documents cannot be skipped** | `conversation.gateway.ts` document branch | The prompt says *'Otherwise type "skip"'* and `validateAnswer` supports it, but the branch returns early without a file. Luggage-damage cannot reach review. |
+| **Handover take-over is broken** | `chat/conversations.service.ts` `takeOver` | Bot-initiated handovers never set `assignedUserId`, so `null !== userId` refuses **every** agent with "another agent already has this". The `"human"` escape hatch fills an unclaimable queue. |
+
+### Tier 2 — compliance
+
+| Pending | Note |
+|---|---|
+| **No Telegram `TransferRecord`** | The `TELEGRAM` registry entry exists and its pinning test passes; nothing instantiates `TransferRegister` in `chat/`. Every turn is an unrecorded cross-border transfer with no lawful basis (§3.4). The passing test is what makes the absence invisible. |
+| **Consent is English-only** | `requireConsentThenStart` hardcodes `'en'`. Approved Malay wording exists — `approveNotice` requires it — and is never shown. |
+| **The overlay resolver has no runtime caller** | `resolveFlow`/`applyOverride` are referenced only by a spec. `FlowsService.forCase` takes neither channel nor locale, and neither `Case` nor `ConversationBinding` carries one. This is the root of the line above. |
+| **The transcript is an unprotected copy** | `ConversationMessage.text` holds what the claimant typed verbatim — including the raw bank account and OTP codes — outside `SENSITIVE_FIELD_OMIT`, outside the retention sweep and anonymisation job, readable by any adjuster or support-desk user in the tenant. The recorded trade in `CLAUDE.md` covers *Telegram's* retention, not our own column. |
+
+### Tier 3 — wrong data, silently
+
+- **`back` after a branch reopens a step that was never asked.**
+  `previousAnsweredStep` walks definition order and never checks `answers`,
+  despite its name. On trip-cancellation's non-illness path it asks for a
+  medical report the branch deliberately excluded — which, per Tier 1, cannot
+  then be skipped.
+- **A failed send loses the question.** `patchAnswer` advances the cursor
+  before the send; if the send throws, the answer is stored and the claimant
+  never sees the next question. Their next message answers something they were
+  never asked. Nothing re-asks.
+- **`!nextStep` is treated unconditionally as "the review was confirmed".** A
+  rule resolving to null, a missing target, or the cycle guard all reach the
+  same branch: `submit()` throws, the Case is stranded with a null cursor, and
+  the claimant is told it "is with our team" when no operator will ever see it.
+- **Whitespace records RM 0** on amount steps (`Number('   ') === 0`).
+- **A future incident date suppresses the CSP deadline flags** — a mistyped
+  year yields a negative `hoursSince`, so both lateness flags read false.
+- **The Case channel is hardcoded `TELEGRAM`** regardless of adapter.
+
+### Tier 4 — silent loss and operations
+
+- Voice notes, video, stickers, locations produce **no row, no reply, no
+  trace**; a photo's caption is dropped.
+- **`/start` mid-flow is stored as an answer** — the universal Telegram restart
+  gesture is unhandled.
+- **A crash mid-turn loses the message permanently**: the offset is advanced
+  before handling, the row is stuck `PENDING`, redelivery is suppressed by the
+  dedupe index, and nothing sweeps it.
+- **A brief database outage is silent** — the claimant gets nothing and the
+  message is gone.
+- **No HTTP timeout** on sends or downloads, on a strictly serial loop: one
+  black-holed connection freezes the channel for every claimant.
+- **No 429 handling**, while a single answer can fire four sends back to back.
+- **Files over 20 MB** report "something went wrong on our side".
+- **409/401 are indistinguishable** from a transient blip — infinite 5s retry.
+
+### Tier 5 — privacy and access
+
+- **No `chat.type` check**, so the bot operates in group chats with the group
+  bound as one claimant.
+- **The Case is disclosed before `assertAccess`** — safe today only because
+  `activeCaseId` is never claimant-supplied.
+- **Consent is checked at Case creation and never again**, so a withdrawal in
+  the PWA does not stop Telegram collection.
+- **A verified binding never expires and cannot be revoked.**
+- **The OTP lockout resets** whenever a different phone is shared; there is no
+  per-binding cap on distinct numbers attempted.
+
+### Tier 6 — friction, latent risks, documentation
+
+- No `answerCallbackQuery` — every button spins (the root cause of Tier 1 #3).
+- Typing instead of tapping loops silently at claim-type and consent.
+- `help` triggers handover — precisely what a stuck claimant types.
+- No OTP resend path; re-sharing the same number falls through.
+- Progress counter skips positions on branched flows and is absent on re-asks.
+- A long review summary is truncated at 4096 chars rather than split, so a
+  claimant can be asked to confirm details clipped mid-line.
+- Consent offers agreement with no rendered way to decline.
+- The publish gate misses one-armed cycles, non-total switches, empty prompts
+  and uncompilable regex patterns — latent while the seed is the only author.
+- `callback_data`'s 64-byte cap is unenforced for authored flows.
+- `USER_FLOWS.md` has no Telegram section; the user-flow site draws overlay
+  resolution as live; roughly a dozen shipped behaviours are undocumented.
+
+---
+
+## 5. Recently closed
+
+| Date | Change |
+|---|---|
+| 11 Aug 2026 | **Evidence can be looked at.** `GET /cases/:id/documents` and `…/:documentId/content` — staff-only, tenant-scoped, audited as a sensitive read. Case documents had no read path at all, so an operator was vetting evidence they could not see. Telegram attachments now render in the transcript. |
+| 11 Aug 2026 | **Tapped answers reach the transcript.** Every button press stored NULL and rendered "—"; `callbackValue` is now persisted and resolved to the label the claimant saw. |
+| 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
+| 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
+| 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 10 Aug 2026 | The hardcoded `123123` OTP bypass removed; codes now come from a CSPRNG. |
+
+---
+
+## 6. Operating it
+
+| Setting | Effect |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Unset ⇒ the channel is off entirely. |
+| `TELEGRAM_POLLING_ENABLED` | Must be `true` on **exactly one** instance per bot token. Two pollers each receive half the updates, which presents as claimants being intermittently ignored rather than as an outage. Staging needs its own bot. |
+| `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis. |
+
+**Verifying a code in development:** there is no SMS transport, so the OTP is
+printed to the gateway console. The `123123` bypass was removed on 10 August.
+
+---
+
+## 7. How this was audited
+
+The findings above came from a four-way parallel audit on 10 August 2026 —
+transport, flow engine, security/privacy, and documentation — plus a manual
+read of the gateway and empirical probes against the real flow definitions and
+the live database.
+
+Two observations worth carrying forward:
+
+1. **Everything material was found by running the system**, not by reasoning
+   about the code — the same lesson `MASTER_PLAN.md` §3.6 records.
+2. **The two defects fixed on 11 August were both found by a person using the
+   screen**, not by the audit that had just read the same code closely. An
+   audit narrows the search; it does not replace using the thing.
+
+---
+
+*Related: `MASTER_PLAN.md` §3.4 (cross-border transfer), §6.3 and §6.18–6.19
+(the LLM normaliser and its open questions), `docs/USER_FLOWS.md` §3 (the
+intake state machine), `docs/NON_MOTOR_ARCHITECTURE.md` (the channel-adapter
+split).*

@@ -1211,6 +1211,35 @@ before a vendor assessment asks.
 
 **Constraint for now: synthetic and internal-tester data only on this path.**
 
+### The Telegram channel has its own status record — 11 August 2026
+
+A four-way audit of the claimant Telegram channel (transport, flow engine,
+security, documentation) found enough that it warranted its own living
+document rather than another §8 entry: **`docs/TELEGRAM_CHANNEL_STATUS.md`**.
+It answers the question this plan does not — *can a claimant actually use this
+yet?* — and today the answer is no: there is no SMS transport, so nobody can
+verify, and three further defects each stop a real intake completing.
+
+Two findings there reach beyond the channel and belong here:
+
+- **The payout bank account is destroyed one turn after it is captured, on
+  every channel.** `patchAnswer` re-derives the encrypted column from the
+  already-masked answer bag, so the following turn encrypts `••••4567` over
+  the real ciphertext. `bankAccountLast4` still reads correctly, so every
+  operator screen and the audited firm-admin reveal look right while returning
+  a mask. This is the encryption of standing decision 4 protecting nothing —
+  and it wants a check of what has already been lost as well as a fix.
+- **Nothing writes a Telegram `TransferRecord`.** The registry entry added on
+  10 Aug and its passing test make the control look present; no writer is
+  instantiated in `chat/`, so §3.4's ungated-offshore gap is wider than that
+  row currently states.
+
+Method note worth keeping: the two defects fixed on 11 August — a transcript
+that recorded no tapped answer, and case evidence with no read path at all —
+were both found by a person using the screen, *after* four auditors had read
+the same code closely. An audit narrows the search; it does not replace using
+the thing.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working
