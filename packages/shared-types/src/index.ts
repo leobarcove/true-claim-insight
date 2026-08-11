@@ -685,6 +685,7 @@ export {
   evaluateNext,
   branchInputSteps,
   ruleTargets,
+  pathSteps,
   resolveNextStep,
   validateAnswer,
   computeDeadlineFlags,

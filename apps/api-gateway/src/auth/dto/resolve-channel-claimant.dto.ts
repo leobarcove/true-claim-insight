@@ -11,10 +11,16 @@ import { IsIn, IsString, Matches } from 'class-validator';
 export class ResolveChannelClaimantDto {
   @ApiProperty({ example: '+60123456789' })
   @IsString()
-  // Malaysian mobile in the forms people actually have, normalised by the
-  // adapter before it gets here. Constrained rather than free text because
-  // this route creates a Claimant if none exists.
-  @Matches(/^(\+?60|0)\d{8,10}$/, { message: 'phoneNumber must be a Malaysian mobile number' })
+  // E.164, normalised by the adapter before it gets here. Constrained rather
+  // than free text because this route creates a Claimant if none exists.
+  //
+  // Not Malaysia-only: the pattern was `^(\+?60|0)\d{8,10}$`, which refused
+  // every foreign number — on the one line whose claimants are, by definition,
+  // abroad. A travel claimant with a Singaporean or British handset could not
+  // bind at all, and the 400 would have read as a bug in the bot.
+  @Matches(/^\+[1-9]\d{7,14}$/, {
+    message: 'phoneNumber must be an international number in E.164 form, e.g. +60123456789',
+  })
   phoneNumber!: string;
 
   @ApiProperty({ example: 'TELEGRAM', enum: ['TELEGRAM', 'WHATSAPP', 'MESSENGER', 'WEB_CHAT'] })

@@ -110,6 +110,17 @@ export interface FlowStep {
    * silently suppresses the CSP deadline flags rather than failing loudly.
    */
   notFuture?: boolean;
+  /**
+   * This step is the final confirmation: answering it submits the Case.
+   *
+   * Explicit rather than inferred from `answerType === 'confirm'`, because a
+   * confirm step is not necessarily a review. The medical flow has two — a
+   * mid-flow specialist-review *notice* and the actual review — and reading
+   * "confirm" as "the claimant just submitted" was safe there only by the
+   * accident that the notice sits mid-flow. It also meant the notice had the
+   * whole answer summary pasted underneath it.
+   */
+  isReview?: boolean;
   validation?: {
     min?: number;
     max?: number;
@@ -227,6 +238,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   },
   {
     id: 'review',
+    isReview: true,
     // Channel-neutral on purpose. "the summary below" was true only of the PWA,
     // which renders a panel under the chat; on a messaging thread there is no
     // below, and the bot pointed at something that did not exist. Channels with
@@ -667,6 +679,32 @@ export const ruleTargets = (rule: NextRule): string[] => {
  * already present (e.g. pre-filled by a SYSTEM-initiated case) are skipped.
  * Returns null when the flow is complete.
  */
+/**
+ * The steps this claimant's answers actually lead through.
+ *
+ * Distinct from the publish gate's `reachableSteps`, which follows *every*
+ * branch to prove no step is orphaned. This follows only the branch the
+ * answers select, which is what "the claim as it stands" means.
+ *
+ * Needed because editing a branch input changes the path retroactively. A
+ * claimant who switches a cancellation reason from illness to a natural
+ * disaster leaves a medical report attached to a claim that no longer asks
+ * for one — and an adjuster reading it sees evidence that contradicts the
+ * claim. What was uploaded is never deleted (PD 12.8); it is simply no longer
+ * presented as part of the live claim.
+ */
+export const pathSteps = (flow: CaseFlow, answers: CaseAnswers): Set<string> => {
+  const onPath = new Set<string>();
+  let current: FlowStep | undefined = getStep(flow, flow.entryStepId);
+
+  while (current && !onPath.has(current.id)) {
+    onPath.add(current.id);
+    const nextId = evaluateNext(current.next, answers);
+    current = nextId ? getStep(flow, nextId) : undefined;
+  }
+  return onPath;
+};
+
 export const resolveNextStep = (
   flow: CaseFlow,
   stepId: string,
