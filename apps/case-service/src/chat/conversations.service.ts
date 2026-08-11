@@ -153,7 +153,19 @@ export class ConversationsService {
   async takeOver(id: string, reason: string, tenantContext: TenantContext) {
     const binding = await this.getBinding(id, tenantContext);
 
-    if (binding.mode === ConversationMode.HANDOVER && binding.assignedUserId !== tenantContext.userId) {
+    // Only refuse when somebody else genuinely holds it. An *unassigned*
+    // handover is the common case, not a conflict: the bot hands over on its
+    // own when a claimant types "human" or asks to change a detail at the
+    // review, and those paths set no assignee. Comparing a null assignee
+    // against a user id made `null !== userId` true, so every agent was told
+    // "another agent already has this" about a conversation nobody had — the
+    // escape hatch filled a queue that could not be emptied.
+    const heldBySomeoneElse =
+      binding.mode === ConversationMode.HANDOVER &&
+      binding.assignedUserId !== null &&
+      binding.assignedUserId !== tenantContext.userId;
+
+    if (heldBySomeoneElse) {
       throw new BadRequestException(
         'Another agent already has this conversation. Ask them to hand it back first.'
       );
@@ -222,6 +234,21 @@ export class ConversationsService {
    */
   async resolve(id: string, tenantContext: TenantContext) {
     const binding = await this.getBinding(id, tenantContext);
+
+    // Handing a conversation back restarts the bot, so an agent doing it to
+    // somebody else's live exchange puts the machine mid-sentence between an
+    // agent and a claimant. Whoever holds it may hand it back; an unassigned
+    // one is anybody's; and a firm admin can always clear a conversation whose
+    // agent has gone home, because the alternative is a thread nobody can free.
+    const heldBySomeoneElse =
+      binding.assignedUserId !== null && binding.assignedUserId !== tenantContext.userId;
+    const isAdmin = tenantContext.userRole === 'FIRM_ADMIN' || tenantContext.userRole === 'SUPER_ADMIN';
+
+    if (heldBySomeoneElse && !isAdmin) {
+      throw new BadRequestException(
+        'Another agent has this conversation. They can hand it back, or a firm admin can.'
+      );
+    }
 
     const updated = await this.prisma.conversationBinding.update({
       where: { id: binding.id },

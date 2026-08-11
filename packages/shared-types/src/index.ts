@@ -689,6 +689,7 @@ export {
   validateAnswer,
   computeDeadlineFlags,
   computeCompleteness,
+  SKIP_VALUE,
 } from './case-flows';
 export type {
   AnswerType,

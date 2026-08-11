@@ -13,6 +13,16 @@ import {
 import type { TelegramUpdate } from './telegram.types';
 
 /**
+ * Separates the step id from the value inside `callback_data`.
+ *
+ * A pipe because no step id or choice value in any flow contains one, and the
+ * publish gate rejects ids that would. Telegram caps callback_data at 64
+ * bytes, which the builder below enforces rather than discovering as a 400.
+ */
+const CALLBACK_SEPARATOR = '|';
+const CALLBACK_DATA_LIMIT = 64;
+
+/**
  * Telegram Bot API adapter.
  *
  * Inert without `TELEGRAM_BOT_TOKEN`: `isConfigured()` returns false and the
@@ -61,11 +71,21 @@ export class TelegramAdapter implements ChannelAdapter {
     // A tapped inline button. Preferred over text: the value is exact.
     if (update.callback_query) {
       const query = update.callback_query;
+      // callback_data is "<stepId>|<value>" where the sender knew the step.
+      // Split on the FIRST separator only: a value may legitimately contain
+      // one (`__consent:agree` does not, but an authored choice might).
+      const raw = query.data ?? '';
+      const cut = raw.indexOf(CALLBACK_SEPARATOR);
+      const callbackStepId = cut > 0 ? raw.slice(0, cut) : undefined;
+      const callbackValue = cut > 0 ? raw.slice(cut + 1) : raw || undefined;
+
       return {
         channel: this.channel,
         platformUserId: String(query.message?.chat.id ?? query.from.id),
         platformMessageId: String(update.update_id),
-        callbackValue: query.data,
+        callbackValue,
+        callbackStepId,
+        callbackAckId: query.id,
       };
     }
 
@@ -130,6 +150,29 @@ export class TelegramAdapter implements ChannelAdapter {
     return payload;
   }
 
+  /**
+   * Stop the button spinning.
+   *
+   * Telegram shows a loading indicator on a tapped inline button until the bot
+   * answers the callback — up to thirty seconds. Nothing did, so every tap
+   * looked like it had hung, and a claimant naturally tapped again. That is
+   * how this became a data defect rather than a cosmetic one: the second tap
+   * carried the same value into whatever question had taken its place.
+   *
+   * Never throws. An unacknowledged tap is a blemish; failing the turn over
+   * one would be worse than the blemish.
+   */
+  async acknowledgeCallback(ackId: string): Promise<void> {
+    if (!this.isConfigured()) return;
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.api}/answerCallbackQuery`, { callback_query_id: ackId })
+      );
+    } catch (error) {
+      this.logger.warn(`Could not acknowledge callback ${ackId}: ${(error as Error).message}`);
+    }
+  }
+
   async send(platformUserId: string, prompt: OutboundPrompt): Promise<void> {
     if (!this.isConfigured()) {
       this.logger.warn('TELEGRAM_BOT_TOKEN not set; message not sent.');
@@ -185,6 +228,26 @@ export class TelegramAdapter implements ChannelAdapter {
    * same on every channel even though Telegram's ceiling is high enough that
    * it rarely engages.
    */
+  /**
+   * Pack the step id alongside the value, within Telegram's 64-byte cap.
+   *
+   * Over the cap Telegram rejects the whole send with a 400, which would take
+   * out the question rather than just the safeguard — so the step id is
+   * dropped and the value sent alone, loudly. The tap then behaves as it did
+   * before this existed: accepted against whatever step is current. Better a
+   * question that works with a known gap than a flow nobody can answer.
+   */
+  private callbackData(stepId: string, value: string): string {
+    const packed = `${stepId}${CALLBACK_SEPARATOR}${value}`;
+    if (Buffer.byteLength(packed, 'utf8') <= CALLBACK_DATA_LIMIT) return packed;
+
+    this.logger.warn(
+      `callback_data for step "${stepId}" exceeds ${CALLBACK_DATA_LIMIT} bytes; ` +
+        'sending the value without its step, so a stale tap cannot be detected here.'
+    );
+    return value.slice(0, CALLBACK_DATA_LIMIT);
+  }
+
   private replyMarkup(prompt: OutboundPrompt): Record<string, unknown> | undefined {
     if (prompt.requestPhone) {
       return {
@@ -201,11 +264,14 @@ export class TelegramAdapter implements ChannelAdapter {
       const page = prompt.choicePage ?? 0;
       const rendering = renderChoices(this.capabilities, step.choices, page);
       const rows = rendering.options.map(option => [
-        { text: option.label, callback_data: option.value },
+        { text: option.label, callback_data: this.callbackData(step.id, option.value) },
       ]);
       if (rendering.hasMore) {
         rows.push([
-          { text: 'More options ▸', callback_data: `${PAGE_CALLBACK_PREFIX}${page + 1}` },
+          {
+            text: 'More options ▸',
+            callback_data: this.callbackData(step.id, `${PAGE_CALLBACK_PREFIX}${page + 1}`),
+          },
         ]);
       }
       return { inline_keyboard: rows };
@@ -215,8 +281,8 @@ export class TelegramAdapter implements ChannelAdapter {
       return {
         inline_keyboard: [
           [
-            { text: '✅ Confirm', callback_data: 'true' },
-            { text: '✏️ Change something', callback_data: 'false' },
+            { text: '✅ Confirm', callback_data: this.callbackData(step.id, 'true') },
+            { text: '✏️ Change something', callback_data: this.callbackData(step.id, 'false') },
           ],
         ],
       };

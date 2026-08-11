@@ -15,10 +15,14 @@
 answer to "can a claimant actually use this yet?", which the roadmap in
 `MASTER_PLAN.md` §5 does not answer at the level of one channel.
 
-> **Verdict today: not yet.** Identity binding works as of 11 August — a
-> claimant taps *Share my number* and is through, no SMS involved. Three
-> defects still stop a real intake from completing, listed in Tier 1.
-> Synthetic and internal-tester use only.
+> **Verdict today: a claimant can complete a claim.** Tier 1 is empty as of
+> 11 August — intake works end to end on all five flows, and an operator can
+> take over, read the transcript and open the evidence. What is left is
+> compliance (Tier 2) and the unhappy paths (Tiers 3–6).
+>
+> **Still synthetic and internal-tester data only**, because Tier 2 is not
+> optional: no cross-border transfer record is written for any turn, and the
+> consent notice is shown in English only.
 
 References are by file and symbol rather than line, because line numbers rot
 faster than the code they point at.
@@ -61,9 +65,9 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 | Consent capture | ⚠️ Works, English only |
 | Question/answer loop | ✅ Working |
 | Answer correction (back/edit) | ⚠️ Works, wrong target after a branch |
-| Document upload | ⚠️ Works, optional steps unskippable |
+| Document upload | ✅ Working, optional steps skippable (11 Aug) |
 | Review and submit | ✅ Working |
-| Human takeover | ⛔ **Broken — no agent can claim it** |
+| Human takeover | ✅ Working (11 Aug) |
 | Operator transcript | ✅ Working (fixed 11 Aug) |
 | Cross-border transfer record | ⛔ Not written |
 
@@ -110,15 +114,13 @@ Verified by running it, not by reading it.
 
 ### Tier 1 — a claimant cannot finish
 
-| Pending | Where | Note |
-|---|---|---|
-| **Double-tap stores the claim type as the policy number** | `chat/telegram/telegram.adapter.ts`, `chat/conversation.gateway.ts` | Nothing calls `answerCallbackQuery`, so the button spins for ~30s and the claimant taps again. Two `update_id`s defeat the dedupe; tap two lands on `policy-number`, a free-text step that accepts anything. Verified on all five flows. |
-| **Optional documents cannot be skipped** | `conversation.gateway.ts` document branch | The prompt says *'Otherwise type "skip"'* and `validateAnswer` supports it, but the branch returns early without a file. Luggage-damage cannot reach review. |
-| **Handover take-over is broken** | `chat/conversations.service.ts` `takeOver` | Bot-initiated handovers never set `assignedUserId`, so `null !== userId` refuses **every** agent with "another agent already has this". The `"human"` escape hatch fills an unclaimable queue. |
+**Empty as of 11 August 2026.** All five closed: OTP delivery (replaced by
+verified-contact binding), the payout-account destruction, the double-tap
+corruption, unskippable optional documents, and handover take-over. See §5.
 
-*(The OTP row that led this table is gone: as of 11 August the channel binds on
-Telegram's own verified contact and sends no code — see §5 and MASTER_PLAN §6
-item 20.)*
+A claimant can now complete an intake end to end on every one of the five
+flows, and an operator can pick up, read and act on it. What remains is Tiers
+2–6: compliance obligations, the unhappy paths, and friction.
 
 ### Tier 2 — compliance
 
@@ -202,6 +204,7 @@ item 20.)*
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 1 closed.** A tapped button is acknowledged so it stops spinning, and its `callback_data` now names the step it was rendered for — a tap arriving after the conversation moved on is re-asked instead of being applied to the next question, which is what stored the claim type as the policy number. Optional document steps accept `skip`, so the luggage flow can reach review. Handover take-over no longer refuses every agent on a conversation nobody holds. |
 | 11 Aug 2026 | **The payout account survives the conversation.** `promoteAnswers` was re-encrypting the display mask over the real ciphertext on every turn after the one that supplied it; `lastDigits` strips the bullets, so every screen and the audited reveal read correctly while holding a mask. Affected every claim on every channel. **5 of 7 stored accounts on the demo book were already destroyed** — unrecoverable, the plaintext lives only in that column. |
 | 11 Aug 2026 | **Binding no longer uses an OTP.** A shared contact is accepted only when Telegram says it is the *sender's own* (`contact.user_id` matched against the sender) — a check that did not exist, and without which sharing a victim's contact card bound you as them. The typed-number path is removed, and a 20-turn-per-minute limit replaces identity as the answer to the realistic attack, which is volume. Decision and its reversal condition: MASTER_PLAN §6 item 20. |
 | 10 Aug 2026 | The hardcoded `123123` OTP bypass removed; codes now come from a CSPRNG. |

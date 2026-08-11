@@ -19,6 +19,7 @@ import {
   getStep,
   parseTextDate,
   SHARED_PHONE_DESCRIPTION,
+  SKIP_VALUE,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
   validateAnswer,
@@ -166,6 +167,13 @@ export class ConversationGateway {
         return;
       }
       throw error;
+    }
+
+    // Acknowledged before anything else is attempted, so the button stops
+    // spinning even if the turn then fails. A claimant staring at a loading
+    // indicator taps again, and the second tap is the one that corrupts.
+    if (payload.callbackAckId && adapter.acknowledgeCallback) {
+      await adapter.acknowledgeCallback(payload.callbackAckId);
     }
 
     try {
@@ -495,18 +503,57 @@ export class ConversationGateway {
       return;
     }
 
+    // A tap meant for a question that has since moved on.
+    //
+    // Navigation callbacks have already returned above, so anything still here
+    // is an answer — and an answer to the wrong question is worse than none.
+    // The failure this closes: nothing acknowledged the tap, so the button
+    // spun, the claimant tapped again, and the two taps produced two distinct
+    // update ids that the dedupe could not connect. The first was applied and
+    // advanced the cursor; the second landed on whatever came next. On the
+    // opening menu that stored the claim type as the policy number — a
+    // free-text step accepts anything — silently, on the first interaction.
+    if (payload.callbackStepId && payload.callbackStepId !== step.id) {
+      this.logger.log(
+        `Ignoring a tap for "${payload.callbackStepId}"; the conversation is at "${step.id}".`
+      );
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          stepId: step.id,
+          error: `Stale tap for ${payload.callbackStepId}`,
+          processedAt: new Date(),
+        },
+      });
+      // Re-ask rather than apologise: from the claimant's side they tapped a
+      // button twice and the conversation simply moved on, which is correct.
+      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      return;
+    }
+
     let value: string | number | boolean;
     if (step.answerType === 'document') {
-      if (!payload.mediaRef) {
+      // An optional document the claimant does not have. The prompt invites
+      // "skip" and `validateAnswer` accepts it, but this branch returned early
+      // looking for a file and never reached either — so the luggage flow's
+      // proof-of-ownership step could not be passed at all, and it sits just
+      // before the bank details, which meant that whole flow could never reach
+      // review over a messaging channel.
+      if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
+        value = SKIP_VALUE;
+      } else if (!payload.mediaRef) {
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
           data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
         });
         await this.say(adapter, binding.id, payload.platformUserId, {
-          text: 'Please send the document as a photo or a file.',
+          text: step.optional
+            ? 'Please send the document as a photo or a file — or type "skip" if you do not have it.'
+            : 'Please send the document as a photo or a file.',
         });
         return;
-      }
+      } else {
 
       // Fetched only now — a claimant sending unrelated pictures earlier cost
       // nothing, because media is carried as a reference until a step wants it.
@@ -530,10 +577,11 @@ export class ConversationGateway {
       // Tie the turn to the file it produced, so the transcript can show the
       // photo rather than the word "Attachment". Recorded here because this is
       // the only moment both are in hand.
-      await this.prisma.conversationMessage.update({
-        where: { id: messageId },
-        data: { caseDocumentId: document.id },
-      });
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: { caseDocumentId: document.id },
+        });
+      }
     } else {
       if (raw === undefined) {
         await this.prisma.conversationMessage.update({

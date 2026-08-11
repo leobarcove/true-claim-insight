@@ -31,6 +31,19 @@ export interface InboundTurnPayload {
    * and needs no parsing.
    */
   callbackValue?: string;
+  /**
+   * The step whose keyboard carried the tapped button.
+   *
+   * Present when the platform can round-trip it. The gateway compares it with
+   * the step now current and ignores a mismatch: without it, a second tap on
+   * a button whose spinner never stopped was applied to whatever question had
+   * moved into its place. On the claim-type menu that meant the claim type
+   * being stored as the policy number, silently, on the claimant's very first
+   * interaction.
+   */
+  callbackStepId?: string;
+  /** Platform handle for acknowledging the tap, so the button stops spinning. */
+  callbackAckId?: string;
   /** Platform reference for an attachment, resolved lazily. */
   mediaRef?: string;
   /**
@@ -86,6 +99,17 @@ export interface ChannelAdapter {
 
   /** Send one prompt to one recipient. Throws on failure; the caller records it. */
   send(platformUserId: string, prompt: OutboundPrompt): Promise<void>;
+
+  /**
+   * Tell the platform the tap was received, so the button stops spinning.
+   *
+   * Optional because not every channel has the concept. Where it does and this
+   * is not called, the claimant sees a loading indicator for up to thirty
+   * seconds and taps again — which is how a double-tap became a data defect
+   * rather than a cosmetic one. Never throws: an unacknowledged tap is a
+   * blemish, and must not take down the turn it belongs to.
+   */
+  acknowledgeCallback?(ackId: string): Promise<void>;
 
   /**
    * Fetch an attachment the claimant sent.

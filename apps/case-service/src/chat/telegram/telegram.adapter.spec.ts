@@ -179,12 +179,40 @@ describe('TelegramAdapter', () => {
         },
       });
 
+      // callback_data carries the step it was rendered for, so a tap that
+      // arrives after the conversation has moved on can be told apart from an
+      // answer to the current question.
       expect(sentBody(http).reply_markup).toEqual({
         inline_keyboard: [
-          [{ text: 'Serious illness', callback_data: 'ILLNESS' }],
-          [{ text: 'Other reason', callback_data: 'OTHER' }],
+          [{ text: 'Serious illness', callback_data: 'cancellation-reason|ILLNESS' }],
+          [{ text: 'Other reason', callback_data: 'cancellation-reason|OTHER' }],
         ],
       });
+    });
+
+    it('drops the step id rather than exceeding Telegram\'s 64-byte cap', async () => {
+      // Over the cap Telegram rejects the send outright with a 400, which
+      // would take out the question itself. Losing the staleness check is the
+      // lesser failure, and it is logged.
+      const { adapter, http } = makeAdapter('token');
+      http.post.mockReturnValue({ subscribe: (o: any) => o.next({ data: {} }) });
+      const longStepId = 'a-step-id-of-quite-unreasonable-length-for-an-authored-flow';
+
+      await adapter.send('55501', {
+        text: 'Pick one',
+        step: {
+          id: longStepId,
+          prompt: 'Pick one',
+          label: 'Pick',
+          answerType: 'choice',
+          choices: [{ value: 'SOMETHING_FAIRLY_LONG_TOO', label: 'Something' }],
+          next: { type: 'end' },
+        },
+      });
+
+      const data = sentBody(http).reply_markup.inline_keyboard[0][0].callback_data;
+      expect(Buffer.byteLength(data, 'utf8')).toBeLessThanOrEqual(64);
+      expect(data).toBe('SOMETHING_FAIRLY_LONG_TOO');
     });
 
     it('offers a contact button when a phone is requested', async () => {
