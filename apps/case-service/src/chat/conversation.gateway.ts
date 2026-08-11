@@ -123,6 +123,16 @@ const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 const CONSENT_DECLINED = '__consent:decline';
 
 /**
+ * Ids for the two questions asked before any flow is chosen.
+ *
+ * Named because three places now key on them — the handlers that answer them,
+ * and `synthesiseStep`, which rebuilds them for a channel that has to ask
+ * again from the transcript alone.
+ */
+const CONSENT_STEP_ID = '__consent';
+const CLAIM_TYPE_STEP_ID = '__claim-type';
+
+/**
  * The turn could not be written down at all.
  *
  * Separate from a turn that failed to *process*: that one has a row, an error
@@ -1463,18 +1473,49 @@ export class ConversationGateway {
         : 'Before we take any details, here is how we handle them. ' +
           `Please read this and let us know you are happy to continue.\n\n` +
           `${notice.title}\n\n${notice.body}`,
-      step: {
-        id: '__consent',
-        prompt: notice.title,
-        label: 'Consent',
-        answerType: 'choice',
-        choices: [
-          { value: CONSENT_AGREED, label: 'I agree' },
-          { value: CONSENT_DECLINED, label: 'I do not agree' },
-        ],
-        next: { type: 'end' },
-      },
+      step: this.consentStep(notice.title),
     });
+  }
+
+  /** The consent question, shaped as a step so adapters render it normally. */
+  private consentStep(title: string): FlowStep {
+    return {
+      id: CONSENT_STEP_ID,
+      prompt: title,
+      label: 'Consent',
+      answerType: 'choice',
+      choices: [
+        { value: CONSENT_AGREED, label: 'I agree' },
+        { value: CONSENT_DECLINED, label: 'I do not agree' },
+      ],
+      next: { type: 'end' },
+    };
+  }
+
+  /**
+   * Rebuild a step that belongs to no flow.
+   *
+   * Two questions are asked before a Case exists — consent, and which kind of
+   * claim this is — and neither is in any flow definition, because no flow has
+   * been chosen yet. A push channel never needs them again: the adapter was
+   * handed the step and drew its keyboard on the spot. A pull channel has only
+   * what was persisted, and the transcript stores text, not choices.
+   *
+   * Without this the PWA reaches the consent notice and renders no way to
+   * agree to it — a claimant stopped at the gate by the one question that has
+   * no alternative route. Returning the ids rather than duplicating the steps
+   * keeps a single definition of each.
+   */
+  async synthesiseStep(stepId: string, locale: string | null): Promise<FlowStep | null> {
+    if (stepId === CLAIM_TYPE_STEP_ID) return this.claimTypeMenu();
+    if (stepId === CONSENT_STEP_ID) {
+      const notice = await this.consent.currentNotice(
+        ConsentPurpose.CLAIM_PROCESSING,
+        noticeLocale(locale)
+      );
+      return notice ? this.consentStep(notice.title) : null;
+    }
+    return null;
   }
 
   /**
@@ -1579,10 +1620,16 @@ export class ConversationGateway {
     }
   }
 
-  /** The claim-type chooser, shaped as a flow step so adapters render it normally. */
-  private claimTypeMenu(): FlowStep {
+  /**
+   * The claim-type chooser, shaped as a flow step so adapters render it normally.
+   *
+   * Public because a pull channel needs it too: the PWA asks what question is
+   * open and renders the answer control from the step, and this one belongs to
+   * no flow — there is no Case yet to pin one.
+   */
+  claimTypeMenu(): FlowStep {
     return {
-      id: '__claim-type',
+      id: CLAIM_TYPE_STEP_ID,
       prompt: 'What has happened?',
       label: 'Claim type',
       answerType: 'choice',

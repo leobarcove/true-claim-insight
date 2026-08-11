@@ -720,6 +720,7 @@ export type {
 // Messenger instead of forking into one flow per channel.
 export {
   CHANNEL_CAPABILITIES,
+  CHANNEL_LABELS,
   parseTextDate,
   renderChoices,
   formatDateAnswer,
