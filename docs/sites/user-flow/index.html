@@ -222,6 +222,7 @@
         <ol>
           <li><a href="#s9"><span>09</span><span>FNOL email intake</span></a></li>
           <li><a href="#s9b"><span>9b</span><span>Telegram intake</span></a></li>
+          <li><a href="#s9bb"><span>9b·2</span><span>WhatsApp intake</span></a></li>
           <li><a href="#s9c"><span>9c</span><span>How a flow is authored</span></a></li>
           <li><a href="#s10"><span>10</span><span>Small-claims fast-track</span></a></li>
         </ol>
@@ -282,6 +283,8 @@ flowchart TD
 PWA`"]
         C5["`Claimant
 Telegram`"]
+        C6["`Claimant
+WhatsApp`"]
         C2["`Agent or broker
 email`"]
         C3["`Insurer forwards
@@ -291,8 +294,9 @@ portal`"]
     end
 
     C1 --> CASE
-    C5 --> BIND["`Verify the sender
-phone share + OTP`"]
+    C5 --> BIND["`Bind on the platform's
+verified contact`"]
+    C6 --> BIND
     BIND --> CASE
     C2 --> ING["`FNOL email ingestion
 deterministic parse + policy match`"]
@@ -906,6 +910,93 @@ from the pinned flow`"]
           reviewable — and it is why the operator inbox can show three voices rather than two.
           When an agent takes over, the bot stands down entirely until the conversation is
           handed back.
+        </p>
+      </section>
+
+      <section id="s9bb">
+        <div class="head"><span class="num">9b·2</span><h3>WhatsApp intake</h3></div>
+        <p class="lede">
+          The same conversation as §9b, on the channel most Malaysians already use. Identical
+          flow, identical questions, identical rules — one engine, a different adapter.
+        </p>
+        <p class="note">
+          <strong>Nothing about the conversation is duplicated.</strong> The gateway decides the
+          next question, validates the answer and advances the Case against the flow pinned on
+          it; the adapter knows only how to say things on WhatsApp. Everything built for the
+          messaging side — <code>back</code> and <code>edit</code>, the progress count, the
+          answer summary at review, handover to a person — arrives here for free because there
+          is one implementation of it.
+        </p>
+        <div class="plate"><pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor CL as Claimant
+    participant WA as WhatsApp
+    participant HK as Webhook
+    participant CS as case-service
+    participant OP as Operator
+
+    CL->>WA: First message
+    WA->>HK: POST, signed with the app secret
+    HK->>HK: verify HMAC-SHA256, else discard
+    HK->>CS: handleTurn
+    note over CS: wa_id IS the verified number —<br/>no share step, no code
+    CS->>CS: resolve claimant, bind, set tenant
+    CS-->>CL: consent notice, EN / BM
+
+    CL->>WA: I agree
+    CS-->>CL: What has happened? (interactive list)
+
+    loop One question at a time
+        CL->>WA: Answer, or tap a row
+        WA->>HK: POST
+        HK->>CS: handleTurn
+        CS->>CS: validateAnswer, then against the other answers
+        CS-->>CL: Next question
+    end
+
+    CL->>WA: Upload a document
+    CS->>CS: resolve media id, download, store
+    CS-->>CL: Review, with the summary in the message body
+    CL->>WA: Confirm
+    CS-->>CL: Claim submitted
+
+    CL->>WA: "human"
+    CS->>OP: Conversation appears in the portal queue
+    OP-->>CL: Agent replies; the bot stands down
+        </pre></div>
+        <p class="note">
+          <strong>Three platform differences that are not cosmetic.</strong>
+          Identity arrives free — <code>wa_id</code> is on every inbound message, so there is no
+          "Share my number" step and nothing to spoof.
+          Choices render as an interactive list capped at <strong>ten rows</strong>, where
+          Telegram holds about a hundred, so pagination genuinely fires here and
+          <code>renderChoices</code> reserves a row for "More options".
+          And a <strong>24-hour service window</strong> applies: replies inside it are free-form
+          and free of charge, but a conversation left overnight cannot be reopened by us without
+          an approved template.
+        </p>
+        <p class="note">
+          <strong>Push, not poll.</strong> Meta delivers to a webhook, so there is no offset to
+          advance and no singleton constraint — every instance may receive updates, and the
+          gateway's insert-first dedupe on the message id is what makes that safe. The Telegram
+          footgun, where two pollers each take half the updates and claimants appear to be
+          intermittently ignored, does not exist on this channel.
+        </p>
+        <p class="note">
+          The endpoint is public, because Meta is unauthenticated to us, so the
+          <code>X-Hub-Signature-256</code> HMAC is the only thing between it and anyone who can
+          POST JSON — and the payload names a claimant's phone number. With no app secret
+          configured every delivery is discarded rather than trusted. It always answers 200:
+          Meta retries a non-200 for seven days, and a payload that can never succeed would be
+          redelivered all week with every later message queued behind it.
+        </p>
+        <p class="note">
+          <strong>Offshore, like Telegram.</strong> Message content reaches Meta in the United
+          States and is retained in WhatsApp's own history, beyond our retention sweep. Every
+          turn writes a <code>TransferRecord</code> with <code>lawfulBasis: null</code>, because
+          none is established — synthetic and internal-tester data only until it is
+          (MASTER_PLAN §3.4).
         </p>
       </section>
 
