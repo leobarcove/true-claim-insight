@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConversationMode } from '@prisma/client';
 import { ConversationsService } from './conversations.service';
-import { ReplyDto, TakeOverDto } from './dto/conversation.dto';
+import { ReplyDto, TakeOverDto, UnbindConversationDto } from './dto/conversation.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
@@ -75,6 +75,21 @@ export class ConversationsController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.service.reply(id, dto.text, tenantContext);
+  }
+
+  /**
+   * Revoke a binding. Firm admins only: this severs a claimant's link to their
+   * own conversation, which is a heavier act than taking a thread over.
+   */
+  @Post(':id/unbind')
+  @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Break the link between this chat and the claimant' })
+  unbind(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UnbindConversationDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.unbind(id, dto.reason, tenantContext);
   }
 
   @Post(':id/resolve')

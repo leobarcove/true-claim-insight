@@ -51,6 +51,14 @@ export interface InboundTurnPayload {
    * platform already knows. Drives the consent notice and the flow's wording.
    */
   locale?: string;
+  /**
+   * Where the message came from — `private`, `group`, `supergroup`, `channel`.
+   *
+   * A claim conversation only makes sense one-to-one. In a group the platform
+   * id identifies the *group*, so a single binding would put one claimant's
+   * intake in front of everyone in it.
+   */
+  chatType?: string;
   /** Platform reference for an attachment, resolved lazily. */
   mediaRef?: string;
   /**

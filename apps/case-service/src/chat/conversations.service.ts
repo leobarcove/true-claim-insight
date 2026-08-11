@@ -232,6 +232,44 @@ export class ConversationsService {
    * because nothing about the conversation moved it — the bot was silent, not
    * lost.
    */
+  /**
+   * Break the link between this chat and the claimant.
+   *
+   * A binding was otherwise permanent: `verifiedAt` is written once, and
+   * without this there was no way to undo it — a claimant who bound the wrong
+   * (but owned) number, or one whose Telegram account was taken over, could
+   * only be helped by editing the database.
+   *
+   * The row is kept rather than deleted, so the transcript and its history
+   * survive; only the identity link and the active case are cleared. The next
+   * message from that chat starts at "share your number", which is the correct
+   * place for someone we can no longer vouch for.
+   */
+  async unbind(id: string, reason: string, tenantContext: TenantContext) {
+    const binding = await this.getBinding(id, tenantContext);
+
+    const updated = await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        verifiedAt: null,
+        claimantId: null,
+        activeCaseId: null,
+        pendingPhone: null,
+        mode: ConversationMode.BOT,
+        assignedUserId: null,
+      },
+    });
+
+    // Who unbound whom, and why. Revoking someone's access to their own claim
+    // conversation is an act that has to be explicable afterwards.
+    await this.audit(binding.id, 'CONVERSATION_UNBOUND', tenantContext, {
+      oldValues: { claimantId: binding.claimantId, verifiedAt: binding.verifiedAt },
+      metadata: { reason },
+    });
+    this.logger.warn(`Binding ${binding.id} unbound by ${tenantContext.userId}: ${reason}`);
+    return updated;
+  }
+
   async resolve(id: string, tenantContext: TenantContext) {
     const binding = await this.getBinding(id, tenantContext);
 
