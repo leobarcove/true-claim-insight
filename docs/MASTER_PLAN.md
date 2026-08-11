@@ -1377,6 +1377,78 @@ gate conversion server-side later without the two copies drifting — the failur
 mode §4.3 A2 is about. **Not yet wired to AMLA screening (gate G8):** this
 surfaces the divergence to a human and screens nobody.
 
+### A third channel, and a door claimants can actually open — 11 August 2026
+
+**WhatsApp is a conversational channel** (`b63d573`), on the same engine as
+Telegram and web chat. Identical flow — same gateway, same flow definitions,
+same questions, same validation, same `back`/`edit`, same handover — because
+the adapter knows only how to *say* things on one platform. Everything built
+for the messaging side over the past week arrived here without being written
+again, which is the whole return on the flow-as-data design.
+
+It matters commercially more than Telegram does: WhatsApp is how Malaysia
+messages, and reach on the intake channel is the constraint on volume, not
+features.
+
+Three platform differences that are not cosmetic:
+
+- **Identity arrives free.** `wa_id` is on every inbound message and Meta
+  vouches for it, so there is no "Share my number" step and no foreign-contact
+  case. The claimant is bound, tenanted and verified on their first message —
+  which is also what puts the thread in the operator queue. Verified against
+  the queue's own query rather than reasoned about.
+- **Choices are a ten-row interactive list.** Telegram holds around a hundred
+  inline buttons, so pagination never fired there; it genuinely fires here.
+- **A 24-hour service window.** Replies inside it are free-form and free of
+  charge; outside it only an approved template may be sent, so a conversation
+  left overnight cannot be reopened by us. Meta's 131047 is named explicitly in
+  the error path, because the generic failure gives no hint and the fix is not
+  a retry.
+
+**Push, not poll**, which removes the Telegram footgun rather than repeating
+it. No offset, no singleton constraint: every instance may receive deliveries
+and the insert-first dedupe makes that safe. The webhook is public because Meta
+is unauthenticated to us, so the `X-Hub-Signature-256` HMAC is the only control
+on an endpoint whose payload names a claimant's phone number — with no app
+secret set, every delivery is discarded rather than trusted.
+
+Offshore, and recorded: a `WHATSAPP` entry joins `OFFSHORE_PROVIDERS`, content
+reaches Meta in the United States and persists in WhatsApp's own history beyond
+our retention sweep, and every turn writes a record with `lawfulBasis: null`.
+The same §3.4 constraint as Telegram — synthetic and internal-tester data only.
+
+**A claimant could not log into the PWA at all** (`b71db55`, `d436944`). The
+web app's login sends an SMS OTP; there was no SMS provider, `sendOtp` printed
+the code to the server console behind a `TODO`, and the universal dev code was
+correctly removed on 10 Aug. So the offshore channel worked and the in-country
+one — the only path crossing no border — was unreachable by any real person.
+That inverts the residency story this plan had been telling, and it went
+unnoticed because nobody had tried to log in.
+
+Framed as the missing provider it is. `OtpTransport` joins the port pattern,
+with a console implementation and a WhatsApp one. Outside production an
+undelivered code is returned in the response so login works; **in production
+the request fails**, because returning a live credential over HTTP to an
+unauthenticated caller is indistinguishable from having no authentication. An
+unset `NODE_ENV` counts as production. Verification itself is untouched — the
+code is still CSPRNG-generated, stored, expiring, rate limited and
+attempt-counted; only delivery was ever stubbed.
+
+Register the WABA **in Malaysia**: authentication messages to Malaysian numbers
+from an account registered elsewhere are billed at ~RM 0.1685 rather than
+~RM 0.0564. One-tap and zero-tap autofill need a native Android package name
+and signature hash, so a PWA gets copy-code — which is also the universally
+supported option.
+
+**Two smaller repairs.** The five payout ciphertexts holding only their own
+display mask are cleared (`35a9ce0`), each with an audit row naming the defect
+and stating the claimant must be asked again; `revealPayoutDetails` now
+distinguishes "captured and lost" from "never captured", which are the same
+blank field and call for opposite actions. And "Would you like to start another
+claim?" now waits for the answer (`ab34282`) — it was asked and answered in the
+same turn, so the claim-type menu arrived one second later and anyone messaging
+to ask after the claim they had just filed was pushed into filing a second one.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working
