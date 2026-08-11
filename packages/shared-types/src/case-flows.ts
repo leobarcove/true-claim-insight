@@ -12,6 +12,15 @@
  */
 import type { DocumentType, TravelClaimType } from './index';
 
+/**
+ * Id of the final confirmation step.
+ *
+ * A named constant because three separate places outside the flow definition
+ * key on it — `resolveNextStep`, `submit()` and the completeness check — and a
+ * bare `'review'` in each gives no hint that they must agree.
+ */
+export const REVIEW_STEP_ID = 'review';
+
 /*
  * IMPORTANT: type-only import above. index.ts re-exports this module, so a
  * runtime value import of the enums would create an index ⇄ case-flows
@@ -245,7 +254,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     answerType: 'text',
   },
   {
-    id: 'review',
+    id: REVIEW_STEP_ID,
     isReview: true,
     // Channel-neutral on purpose. "the summary below" was true only of the PWA,
     // which renders a panel under the chat; on a messaging thread there is no
@@ -589,6 +598,44 @@ export const getFlow = (type: TravelClaimTypeLike): CaseFlow =>
 export const getStep = (flow: CaseFlow, stepId: string): FlowStep | undefined =>
   flow.steps.find(step => step.id === stepId);
 
+/**
+ * Put `isReview` back on a stored flow that was published before the flag
+ * existed.
+ *
+ * A Case walks the flow *version it pinned*, loaded from the database — so
+ * adding a field to the definition in this file does not reach any claim
+ * already in flight, and every platform flow was published without it. The
+ * absence is not cosmetic: the review step stops being recognised as one, so
+ * the answer summary is never attached (the claimant is asked to confirm
+ * details they cannot see) and submission refuses to fire, handing a finished
+ * claim to an agent as "ran out of steps without reaching a review".
+ *
+ * Repaired by step id against the reference definition, never by looking for
+ * `answerType === 'confirm'`: the medical flow has two confirm steps, and
+ * choosing the wrong one is the exact failure `isReview` was introduced to
+ * prevent. `REVIEW_STEP_ID` is the fallback because the publish gate already
+ * requires that id to exist and be reachable in any flow it accepts.
+ *
+ * A no-op once the stored rows carry the flag, so it stays correct rather than
+ * becoming a second source of truth.
+ */
+export const restoreReviewFlag = (flow: CaseFlow, reference?: CaseFlow): CaseFlow => {
+  if (flow.steps.some(step => step.isReview)) return flow;
+
+  const fromReference = new Set(
+    (reference?.steps ?? []).filter(step => step.isReview).map(step => step.id)
+  );
+  const isTheReview = (step: FlowStep): boolean =>
+    fromReference.size > 0 ? fromReference.has(step.id) : step.id === REVIEW_STEP_ID;
+
+  if (!flow.steps.some(isTheReview)) return flow;
+
+  return {
+    ...flow,
+    steps: flow.steps.map(step => (isTheReview(step) ? { ...step, isReview: true } : step)),
+  };
+};
+
 /** Evaluate one condition against the answers captured so far. */
 const testCondition = (condition: NextCondition, answers: CaseAnswers): boolean => {
   const actual = answers[condition.stepId];
@@ -727,7 +774,7 @@ export const resolveNextStep = (
     if (!nextId) return null;
     const nextStep = getStep(flow, nextId);
     if (!nextStep) return null;
-    const answered = answers[nextStep.id] !== undefined && nextStep.id !== 'review';
+    const answered = answers[nextStep.id] !== undefined && nextStep.id !== REVIEW_STEP_ID;
     if (!answered) return nextStep.id;
     current = nextStep;
   }

@@ -27,6 +27,7 @@ import {
   getStep,
   pathSteps,
   resolveNextStep,
+  REVIEW_STEP_ID,
   SENSITIVE_ANSWER_STEPS,
   validateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -649,7 +650,7 @@ export class CasesService {
       seen.add(stepId);
       const step = getStep(flow, stepId);
       if (!step) break;
-      if (step.id !== 'review' && !step.optional && answers[step.id] === undefined) {
+      if (step.id !== REVIEW_STEP_ID && !step.optional && answers[step.id] === undefined) {
         missing.push(step.label);
       }
       stepId = evaluateNext(step.next, answers);
