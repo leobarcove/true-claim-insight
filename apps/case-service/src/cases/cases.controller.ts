@@ -9,8 +9,11 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CasesService } from './cases.service';
 import { CreateCaseDto } from './dto/create-case.dto';
@@ -99,6 +102,47 @@ export class CasesController {
     const file = await req.file();
     if (!file) throw new BadRequestException('No file uploaded');
     return this.service.uploadDocument(id, file, tenantContext);
+  }
+
+  @Get(':id/documents')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'The evidence attached to a case' })
+  listDocuments(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
+    return this.service.listDocuments(id, tenantContext);
+  }
+
+  /**
+   * The bytes of one document.
+   *
+   * Staff only, and never the claimant: this returns whatever was uploaded to
+   * a case, and a claimant proving ownership of one document is not a reason
+   * to hand them the rest. Vetting is the reason it exists — an operator was
+   * being asked to approve evidence they had no way to look at.
+   */
+  @Get(':id/documents/:documentId/content')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Download or display one evidence document' })
+  async documentContent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Tenant() tenantContext: TenantContext,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ) {
+    const file = await this.service.readDocument(id, documentId, tenantContext);
+
+    // Only known-safe types render in place. Anything else downloads, because
+    // displaying claimant-supplied markup on the portal's own origin would run
+    // it with an operator's session.
+    const disposition = file.inlineRenderable ? 'inline' : 'attachment';
+    reply.header('Content-Type', file.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `${disposition}; filename="${encodeURIComponent(file.fileName)}"`
+    );
+    // Personal data: cacheable by the operator's own browser for the session,
+    // never by anything in between.
+    reply.header('Cache-Control', 'private, max-age=300');
+    return new StreamableFile(file.buffer);
   }
 
   @Post(':id/submit')

@@ -100,6 +100,7 @@ export class ConversationsService {
         // reconciling a disputed answer needs the value, not only the label.
         callbackValue: true,
         mediaRef: true,
+        caseDocumentId: true,
         stepId: true,
         sentByUserId: true,
         status: true,
@@ -107,6 +108,24 @@ export class ConversationsService {
         createdAt: true,
       },
     });
+
+    // The case each attachment belongs to, so an operator can open it. Read
+    // from the document rather than from the binding's *current* case: a
+    // claimant who files a second claim would otherwise have their earlier
+    // photos addressed against the new one, and 404.
+    const documentIds = messages.map(m => m.caseDocumentId).filter((v): v is string => Boolean(v));
+    const documents = documentIds.length
+      ? await this.prisma.caseDocument.findMany({
+          where: { id: { in: documentIds } },
+          select: { id: true, caseId: true, fileName: true, mimeType: true, documentType: true },
+        })
+      : [];
+    const byId = new Map(documents.map(document => [document.id, document]));
+
+    const withAttachments = messages.map(message => ({
+      ...message,
+      attachment: message.caseDocumentId ? (byId.get(message.caseDocumentId) ?? null) : null,
+    }));
 
     return {
       id: binding.id,
@@ -120,7 +139,7 @@ export class ConversationsService {
       case: binding.activeCase,
       // `sentByUserId === null` on an outbound row means the bot said it. That
       // is the distinction the whole screen exists to show.
-      messages,
+      messages: withAttachments,
     };
   }
 

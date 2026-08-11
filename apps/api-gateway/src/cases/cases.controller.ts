@@ -9,12 +9,15 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import type { FastifyReply } from 'fastify';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Observable } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -156,6 +159,47 @@ export class CasesController {
       }),
       'Failed to upload document'
     );
+  }
+
+  @Get(':id/documents')
+  @ApiOperation({ summary: 'The evidence attached to a case' })
+  listDocuments(@Param('id') id: string, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.get(`${this.caseServiceUrl}/api/v1/cases/${id}/documents`, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to load case documents'
+    );
+  }
+
+  /**
+   * Stream one document's bytes back to the portal.
+   *
+   * Not `unwrap`ped: this is a binary body, not an envelope. The downstream
+   * content type and disposition are copied through unchanged, because
+   * case-service decides what may render inline — a decision that must not be
+   * made twice and disagreed on.
+   */
+  @Get(':id/documents/:documentId/content')
+  @ApiOperation({ summary: 'Download or display one evidence document' })
+  async documentContent(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Req() req: any,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ) {
+    const response = await firstValueFrom(
+      this.httpService.get(
+        `${this.caseServiceUrl}/api/v1/cases/${id}/documents/${documentId}/content`,
+        { headers: this.identityHeaders(req), responseType: 'arraybuffer' }
+      )
+    );
+
+    for (const header of ['content-type', 'content-disposition', 'cache-control']) {
+      const value = response.headers[header];
+      if (value) reply.header(header, value as string);
+    }
+    return new StreamableFile(Buffer.from(response.data as ArrayBuffer));
   }
 
   @Post(':id/submit')

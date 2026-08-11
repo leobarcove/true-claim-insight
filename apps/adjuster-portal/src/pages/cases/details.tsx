@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Eye,
   FileQuestion,
   FileText,
   Landmark,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
+import { EvidenceViewer, type EvidenceDocument } from '@/components/cases/evidence-viewer';
 import { getCategoryConfig } from '@/lib/category-config';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,6 +86,7 @@ export function CaseDetailPage() {
 
   const [uploadType, setUploadType] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const [viewing, setViewing] = useState<EvidenceDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const flow = caseData?.travelClaimType
@@ -320,15 +323,25 @@ export function CaseDetailPage() {
                 {(caseData.documents?.length || 0) > 0 && (
                   <div className="pt-3 border-t border-border mt-3 space-y-2">
                     {caseData.documents!.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between text-sm">
-                        <span className="truncate">{doc.fileName}</span>
+                      // Clickable, because vetting means looking at the
+                      // evidence rather than at a filename.
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => setViewing(doc)}
+                        className="flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-sm hover:bg-muted/60"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{doc.fileName}</span>
+                        </span>
                         <span className="flex items-center gap-2 shrink-0">
                           <Badge variant="secondary">{convertToTitleCase(doc.documentType)}</Badge>
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(doc.createdAt), 'dd MMM')}
                           </span>
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -562,6 +575,10 @@ export function CaseDetailPage() {
           </div>
         </div>
       </div>
+
+      {viewing && (
+        <EvidenceViewer caseId={id!} document={viewing} onClose={() => setViewing(null)} />
+      )}
     </div>
   );
 }
