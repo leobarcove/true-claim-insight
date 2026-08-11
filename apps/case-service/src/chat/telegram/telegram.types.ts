@@ -18,6 +18,8 @@ export interface TelegramUser {
   id: number;
   is_bot: boolean;
   first_name?: string;
+  /** IETF tag from the account's own setting, e.g. `en`, `ms`, `zh-hans`. */
+  language_code?: string;
 }
 
 export interface TelegramContact {

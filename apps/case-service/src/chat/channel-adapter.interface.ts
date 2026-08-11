@@ -44,6 +44,13 @@ export interface InboundTurnPayload {
   callbackStepId?: string;
   /** Platform handle for acknowledging the tap, so the button stops spinning. */
   callbackAckId?: string;
+  /**
+   * The language the sender's account is set to, where the platform says.
+   *
+   * Not a preference we ask for: asking costs a turn and gets skipped, and the
+   * platform already knows. Drives the consent notice and the flow's wording.
+   */
+  locale?: string;
   /** Platform reference for an attachment, resolved lazily. */
   mediaRef?: string;
   /**

@@ -62,14 +62,14 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 |---|---|
 | Ingress, idempotency, dedupe | ✅ Working |
 | Identity binding | ✅ Verified contact, no OTP (11 Aug) |
-| Consent capture | ⚠️ Works, English only |
+| Consent capture | ✅ Working, in the claimant's language (11 Aug) |
 | Question/answer loop | ✅ Working |
 | Answer correction (back/edit) | ⚠️ Works, wrong target after a branch |
 | Document upload | ✅ Working, optional steps skippable (11 Aug) |
 | Review and submit | ✅ Working |
 | Human takeover | ✅ Working (11 Aug) |
 | Operator transcript | ✅ Working (fixed 11 Aug) |
-| Cross-border transfer record | ⛔ Not written |
+| Cross-border transfer record | ✅ Written per turn, honest null basis (11 Aug) |
 
 ---
 
@@ -124,12 +124,21 @@ flows, and an operator can pick up, read and act on it. What remains is Tiers
 
 ### Tier 2 — compliance
 
-| Pending | Note |
-|---|---|
-| **No Telegram `TransferRecord`** | The `TELEGRAM` registry entry exists and its pinning test passes; nothing instantiates `TransferRegister` in `chat/`. Every turn is an unrecorded cross-border transfer with no lawful basis (§3.4). The passing test is what makes the absence invisible. |
-| **Consent is English-only** | `requireConsentThenStart` hardcodes `'en'`. Approved Malay wording exists — `approveNotice` requires it — and is never shown. |
-| **The overlay resolver has no runtime caller** | `resolveFlow`/`applyOverride` are referenced only by a spec. `FlowsService.forCase` takes neither channel nor locale, and neither `Case` nor `ConversationBinding` carries one. This is the root of the line above. |
-| **The transcript is an unprotected copy** | `ConversationMessage.text` holds what the claimant typed verbatim — including the raw bank account and OTP codes — outside `SENSITIVE_FIELD_OMIT`, outside the retention sweep and anonymisation job, readable by any adjuster or support-desk user in the tenant. The recorded trade in `CLAUDE.md` covers *Telegram's* retention, not our own column. |
+**Closed 11 August 2026.** Every turn now writes a `TransferRecord`; the
+consent notice and the flow's wording follow the claimant's own language; and
+the transcript no longer keeps a plaintext payout account. See §5.
+
+**What remains open, and is a decision rather than a defect:** those transfer
+records carry `lawfulBasis: null`, because no s.129 basis is established for
+this channel. The register is honest about the gap rather than papering over
+it — but the gap is real, and it is what still keeps this channel on synthetic
+and internal-tester data (MASTER_PLAN §3.4, §6.3).
+
+One residual worth naming: the transcript survives claimant anonymisation.
+Masking the payout account removes the acute exposure, but a claimant's own
+words — names, addresses, circumstances — remain after the identity they
+belong to has been destroyed. That is a retention-design question, tracked in
+§3.4 rather than here.
 
 ### Tier 3 — wrong data, silently
 
@@ -204,6 +213,7 @@ flows, and an operator can pick up, read and act on it. What remains is Tiers
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 2 closed.** Every conversational turn writes a `TransferRecord` — the registry entry and its passing test had existed for a day while nothing wrote a row, the §3.6 shape inside the control added to close that very gap. `transferRecord` moved from the `assessment` context to a new cross-cutting `compliance` one: a s.129 register is evidence about the platform's own behaviour, and whoever makes the offshore call must be the one who records it. Telegram's `language_code` now drives both the consent notice and the flow's wording, so the approved Malay notice is finally shown to somebody; the overlay resolver has its first runtime caller. The transcript masks the payout account the claimant typed. |
 | 11 Aug 2026 | **Tier 1 closed.** A tapped button is acknowledged so it stops spinning, and its `callback_data` now names the step it was rendered for — a tap arriving after the conversation moved on is re-asked instead of being applied to the next question, which is what stored the claim type as the policy number. Optional document steps accept `skip`, so the luggage flow can reach review. Handover take-over no longer refuses every agent on a conversation nobody holds. |
 | 11 Aug 2026 | **The payout account survives the conversation.** `promoteAnswers` was re-encrypting the display mask over the real ciphertext on every turn after the one that supplied it; `lastDigits` strips the bullets, so every screen and the audited reveal read correctly while holding a mask. Affected every claim on every channel. **5 of 7 stored accounts on the demo book were already destroyed** — unrecoverable, the plaintext lives only in that column. |
 | 11 Aug 2026 | **Binding no longer uses an OTP.** A shared contact is accepted only when Telegram says it is the *sender's own* (`contact.user_id` matched against the sender) — a check that did not exist, and without which sharing a victim's contact card bound you as them. The typed-number path is removed, and a 20-turn-per-minute limit replaces identity as the answer to the realistic attack, which is volume. Decision and its reversal condition: MASTER_PLAN §6 item 20. |

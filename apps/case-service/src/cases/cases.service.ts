@@ -18,12 +18,14 @@ import {
   TravelClaimType,
 } from '@prisma/client';
 import {
+  ANSWER_MASK_PREFIX,
   CaseAnswers,
   computeCompleteness,
   computeDeadlineFlags,
   evaluateNext,
   getStep,
   resolveNextStep,
+  SENSITIVE_ANSWER_STEPS,
   validateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
   type CaseFlow,
@@ -81,10 +83,6 @@ const CASE_STATUS_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
  * screen. The mask still reads as "answered" to the flow engine, so the
  * conversation does not loop back and ask again.
  */
-const SENSITIVE_ANSWER_STEPS = new Set(['bank-account-number']);
-
-/** What a redacted answer starts with. The display mask, not a value. */
-const ANSWER_MASK_PREFIX = '••••';
 
 /**
  * Is this stored answer a display mask rather than the claimant's own value?

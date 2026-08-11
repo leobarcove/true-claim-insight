@@ -25,7 +25,13 @@
  * an identity-service is ever extracted.
  */
 
-export type DataContext = 'identity' | 'claims' | 'assessment' | 'reference' | 'platform';
+export type DataContext =
+  | 'identity'
+  | 'claims'
+  | 'assessment'
+  | 'reference'
+  | 'platform'
+  | 'compliance';
 
 /** Which context owns each Prisma model (lower-camel model names). */
 export const MODEL_OWNERSHIP: Record<string, DataContext> = {
@@ -116,7 +122,6 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   conversationMessage: 'claims',
 
   // assessment — how a loss was examined and scored
-  transferRecord: 'assessment',
   session: 'assessment',
   sessionClientInfo: 'assessment',
   videoUpload: 'assessment',
@@ -131,6 +136,28 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // read the same rows rather than create competing key versions.
   encryptionKey: 'platform',
 
+  // compliance — registers of what the system did, owned by no domain.
+  //
+  // `transferRecord` was in `assessment` while the only offshore callers were
+  // video-service (Hume, Daily.co) and risk-engine (Gemini). That stopped
+  // being true when a messaging channel started carrying claimant text abroad:
+  // a Telegram turn is a claims concern, and confining the register to one
+  // context left case-service with a choice between an HTTP hop per message
+  // and writing no record at all. It wrote no record — every turn an
+  // unrecorded cross-border transfer, while the registry entry and its passing
+  // test made the control look present.
+  //
+  // A s.129 register is evidence about the platform's own behaviour, like the
+  // audit trail: whoever makes the call must be the one who records it. So it
+  // is declared cross-cutting rather than owned, and granted to exactly the
+  // services that can make an offshore call.
+  //
+  // (`auditTrail` is the same shape and remains under `claims` — its writes
+  // all route through the shared AuditWriter, so no service names the table
+  // directly. Left alone deliberately: moving it would change nothing that
+  // runs, and this comment is the honest record of why the two differ.)
+  transferRecord: 'compliance',
+
   // reference — master data (motor legacy; see MASTER_PLAN scope note)
   vehicleMake: 'reference',
   vehicleModel: 'reference',
@@ -141,9 +168,12 @@ export const SERVICE_CONTEXTS: Record<string, DataContext[]> = {
   // 'platform': the gateway encrypts identity data (Claimant NRIC), so it is a
   // legitimate holder of key material — not an exception.
   'api-gateway': ['identity', 'reference', 'platform'],
-  'case-service': ['claims', 'platform'],
-  'video-service': ['assessment'],
-  'risk-engine': ['assessment'],
+  // 'compliance': each of these three makes calls that leave Malaysia —
+  // case-service via the messaging channels, video-service via Daily.co and
+  // Hume, risk-engine via Gemini — and each must record its own.
+  'case-service': ['claims', 'platform', 'compliance'],
+  'video-service': ['assessment', 'compliance'],
+  'risk-engine': ['assessment', 'compliance'],
 };
 
 /**

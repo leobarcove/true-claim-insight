@@ -1,0 +1,11 @@
+-- The language the claimant reads.
+--
+-- Every prompt and the consent notice were English regardless of who was
+-- reading them: nothing carried a locale, so `currentNotice` was called with a
+-- hardcoded 'en' and the flow overlay resolver — which exists precisely to
+-- serve per-locale wording — had no locale to resolve against.
+--
+-- Telegram supplies the account's own `language_code`, so the claimant never
+-- has to be asked. Nullable: absent means fall back to the platform default
+-- rather than guess.
+ALTER TABLE "conversation_bindings" ADD COLUMN "locale" TEXT;

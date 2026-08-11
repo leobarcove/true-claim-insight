@@ -18,6 +18,8 @@ import {
   EDIT_CALLBACK_PREFIX,
   getStep,
   parseTextDate,
+  ANSWER_MASK_PREFIX,
+  SENSITIVE_ANSWER_STEPS,
   SHARED_PHONE_DESCRIPTION,
   SKIP_VALUE,
   summariseAnswers,
@@ -27,6 +29,7 @@ import {
   type CaseFlow,
   type FlowStep,
 } from '@tci/shared-types';
+import { TransferRegister, type OffshoreProviderKey } from '@tci/prisma-client';
 import { PrismaService } from '../config/prisma.service';
 import { CasesService } from '../cases/cases.service';
 import type { CreateCaseDto } from '../cases/dto/create-case.dto';
@@ -88,6 +91,31 @@ const MAX_TURNS_PER_MINUTE = 20;
 const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 
 /**
+ * Which approved notice to show, from a platform language tag.
+ *
+ * Only the two locales the approval gate guarantees exist. A tag we do not
+ * publish falls back to English rather than failing: a notice in the wrong
+ * language is a comprehension problem, but no notice at all refuses the claim
+ * outright, and PDPA s.7 is better served by the former while the latter is
+ * being fixed. Region subtags are ignored — `ms-MY` and `ms` read the same.
+ */
+/**
+ * What a sensitive answer looks like in the transcript.
+ *
+ * The last four digits only, matching the answer bag, so an operator can still
+ * tell one account from another without the transcript becoming a second
+ * plaintext copy of it.
+ */
+function maskForTranscript(typed: string): string {
+  const digits = typed.replace(/\D/g, '');
+  return `${ANSWER_MASK_PREFIX}${digits.slice(-4)}`;
+}
+
+function noticeLocale(tag?: string | null): string {
+  return tag?.toLowerCase().startsWith('ms') ? 'ms' : 'en';
+}
+
+/**
  * Handles one inbound turn from any messaging channel.
  *
  * Everything channel-specific lives behind ChannelAdapter; everything
@@ -107,6 +135,7 @@ const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 @Injectable()
 export class ConversationGateway {
   private readonly logger = new Logger(ConversationGateway.name);
+  private readonly transfers: TransferRegister;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -116,7 +145,48 @@ export class ConversationGateway {
     @Inject(CHANNEL_ADAPTERS) private readonly adapters: ChannelAdapter[],
     @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
     private readonly consent: ConsentService
-  ) {}
+  ) {
+    // Every conversational turn crosses a border: the claimant's words reach
+    // the platform's servers abroad, and ours reach them the same way. The
+    // register entry and its passing test existed while nothing wrote a row —
+    // the §3.6 shape, in the control added to close the very same gap.
+    this.transfers = new TransferRegister(this.prisma, 'case-service', (entry, error) =>
+      this.logger.error(
+        `TRANSFER UNRECORDED: ${entry.provider} for a conversational turn`,
+        error instanceof Error ? error.message : String(error)
+      )
+    );
+  }
+
+  /**
+   * Which registered offshore provider carries this channel, if any.
+   *
+   * Null for a channel we host ourselves: web chat crosses no border, and
+   * recording one would make the register useless by filling it with
+   * non-events. A channel absent from the registry is a bug in the registry,
+   * not a reason to skip the record — hence the log.
+   */
+  private offshoreProviderFor(channel: CaseChannel): OffshoreProviderKey | null {
+    // Channels we host ourselves cross no border. Recording one would fill the
+    // register with non-events and make the real rows harder to find.
+    const inCountry: CaseChannel[] = [CaseChannel.WEB_CHAT, CaseChannel.STAFF, CaseChannel.EMAIL];
+    if (inCountry.includes(channel)) return null;
+
+    const byChannel: Partial<Record<CaseChannel, OffshoreProviderKey>> = {
+      [CaseChannel.TELEGRAM]: 'TELEGRAM',
+    };
+    const provider = byChannel[channel];
+    if (!provider) {
+      // A messaging channel with no registry entry is a bug in the registry,
+      // not a reason to transfer silently — WHATSAPP and MESSENGER will land
+      // here the day an adapter for either is registered.
+      this.logger.error(
+        `Channel ${channel} has no entry in OFFSHORE_PROVIDERS; its transfers cannot be recorded.`
+      );
+      return null;
+    }
+    return provider;
+  }
 
   private adapterFor(channel: CaseChannel): ChannelAdapter | undefined {
     return this.adapters.find(adapter => adapter.channel === channel);
@@ -207,10 +277,11 @@ export class ConversationGateway {
           platformUserId: payload.platformUserId,
         },
       },
-      update: { lastSeenAt: new Date() },
+      update: { lastSeenAt: new Date(), ...(payload.locale ? { locale: payload.locale } : {}) },
       create: {
         channel: payload.channel,
         platformUserId: payload.platformUserId,
+        locale: payload.locale ?? null,
       },
     });
 
@@ -243,6 +314,24 @@ export class ConversationGateway {
         });
       }
       return;
+    }
+
+    // The turn itself is the transfer: the claimant's words reached the
+    // platform's servers abroad before we saw them, and the reply goes back
+    // the same way. Recorded once per turn rather than per message, and after
+    // the binding so the row can name the claimant it concerns.
+    //
+    // `lawfulBasis` is null on purpose. None is established for this channel
+    // (§3.4), and a register that invents one is worse than the gap it papers
+    // over — the honest row is what makes the gap visible enough to close.
+    const provider = this.offshoreProviderFor(payload.channel);
+    if (provider) {
+      await this.transfers.record({
+        provider,
+        purpose: 'Conversational claim intake',
+        lawfulBasis: null,
+        claimantId: binding.claimantId,
+      });
     }
 
     // 3. Nothing about a claim is served to an unverified sender.
@@ -360,7 +449,13 @@ export class ConversationGateway {
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; activeCaseId: string | null; claimantId: string | null; tenantId: string | null }
+    binding: {
+      id: string;
+      activeCaseId: string | null;
+      claimantId: string | null;
+      tenantId: string | null;
+      locale?: string | null;
+    }
   ): Promise<void> {
     if (!binding.activeCaseId) {
       await this.requireConsentThenStart(messageId, payload, adapter, binding);
@@ -376,7 +471,13 @@ export class ConversationGateway {
       return;
     }
 
-    const flow = await this.flows.forCase(caseRow);
+    // The same structure, worded for this channel and this claimant's
+    // language. Structure is never overlaid — a Telegram conversation and a
+    // browser one on the same Case walk identical steps.
+    const flow = await this.flows.forCase(caseRow, {
+      channel: payload.channel,
+      locale: noticeLocale(binding.locale),
+    });
     const step = caseRow.currentStepId ? getStep(flow, caseRow.currentStepId) : null;
     if (!step) {
       // The active claim has no question left. Release the binding and offer a
@@ -691,9 +792,19 @@ export class ConversationGateway {
         // that was actually on the button rather than the enum behind it —
         // "Illness or injury", not ILLNESS. Only for taps: a typed answer is
         // already the claimant's own words and must not be rewritten.
-        ...(payload.callbackValue
-          ? { text: describeCallbackValue(payload.callbackValue, step.choices) }
-          : {}),
+        //
+        // Except where those words are a payout account. The Case answer bag
+        // masks it, and the encrypted column holds the real value — but the
+        // claimant *typed* it, so the transcript kept a plaintext copy in a
+        // column that is neither encrypted, nor omitted from query results,
+        // nor reached by the retention sweep or the anonymisation job, and is
+        // readable by any adjuster or support-desk user in the tenant. The
+        // mask is what the operator needs to see anyway.
+        ...(SENSITIVE_ANSWER_STEPS.has(step.id)
+          ? { text: maskForTranscript(typed) }
+          : payload.callbackValue
+            ? { text: describeCallbackValue(payload.callbackValue, step.choices) }
+            : {}),
       },
     });
 
@@ -794,7 +905,7 @@ export class ConversationGateway {
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; claimantId: string | null; tenantId: string | null }
+    binding: { id: string; claimantId: string | null; tenantId: string | null; locale?: string | null }
   ): Promise<void> {
     if (!binding.claimantId) {
       this.logger.error(`Binding ${binding.id} is verified but has no claimant; cannot proceed.`);
@@ -812,13 +923,24 @@ export class ConversationGateway {
         claimantId: binding.claimantId,
         purpose: ConsentPurpose.CLAIM_PROCESSING,
         capturedVia: ConsentChannel.MESSAGING,
+        // Tied to the wording they were actually shown. A consent recorded
+        // against a version the claimant never read is unprovable later,
+        // which is the whole reason notices are versioned and immutable.
+        locale: noticeLocale(binding.locale),
       });
       this.logger.log(`Consent captured on ${payload.channel} for claimant ${binding.claimantId}.`);
       await this.startCase(messageId, payload, adapter, binding);
       return;
     }
 
-    const notice = await this.consent.currentNotice(ConsentPurpose.CLAIM_PROCESSING, 'en');
+    // In the claimant's own language. The approval gate already requires both
+    // English and Bahasa Malaysia to exist before a version can be approved
+    // (PDPA s.7), and until now the Malay one was written, reviewed, approved
+    // — and never shown to anybody, because this call hardcoded 'en'.
+    const notice = await this.consent.currentNotice(
+      ConsentPurpose.CLAIM_PROCESSING,
+      noticeLocale(binding.locale)
+    );
     if (!notice) {
       // Refuse rather than proceed. Taking a claim with no approved wording to
       // record against is the failure this whole gate exists to prevent.
