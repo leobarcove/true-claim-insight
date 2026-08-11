@@ -687,6 +687,7 @@ export {
   ruleTargets,
   pathSteps,
   resolveNextStep,
+  whatYouWillNeed,
   validateAnswer,
   computeDeadlineFlags,
   computeCompleteness,
