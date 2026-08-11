@@ -419,6 +419,16 @@ stateDiagram-v2
           Conversational intake: one question at a time, resumable through
           <code>currentStepId</code>, with the question set chosen by travel claim type.
         </p>
+        <p class="note">
+          <strong>One engine, two channels, as of 11 August 2026.</strong> The PWA used to
+          walk the flow itself — the page chose the next step and patched each answer — so
+          every rule existed twice and only the messaging copy was maintained. It now posts
+          turns to the same <code>ConversationGateway</code> that answers Telegram and renders
+          the transcript it gets back. What the browser gains for free is everything built on
+          the messaging side and never ported: the transcript itself, <code>back</code> and
+          <code>edit</code>, the progress count, and a route to a human that web claimants
+          did not previously have at all.
+        </p>
         <div class="plate"><pre class="mermaid">
 sequenceDiagram
     autonumber
@@ -445,23 +455,25 @@ sequenceDiagram
     loop One step at a time
         PWA->>CL: Ask step prompt
         CL->>PWA: Answer
-        PWA->>CS: PATCH /cases/:id/answers
-        CS->>CS: validateAnswer against the flow rule
+        PWA->>CS: POST /conversation/turn
+        CS->>CS: validateAnswer — the field, then against the other answers
         alt bank account number
             CS->>CS: encrypt, mask in answers, last4 in the clear
         end
-        CS-->>PWA: next step + completeness
+        CS-->>PWA: transcript + the open question
     end
 
     loop Required documents
         CL->>PWA: Upload evidence
-        PWA->>CS: POST /cases/:id/documents
+        PWA->>CS: POST /cases/:id/documents/upload
         CS->>ST: store file
+        PWA->>CS: POST /conversation/turn with storedDocumentId
+        CS->>CS: resolve the id scoped to this Case
         CS->>CS: stamp documentsCompleteAt on the last mandatory item
     end
 
-    CL->>PWA: Review and submit
-    PWA->>CS: POST /cases/:id/submit
+    CL->>PWA: Review and confirm
+    CS->>CS: only a step marked isReview submits
     CS->>CS: policy auto-match, then CSP 24h / 30-day flags
     CS-->>CL: Case SUBMITTED — reference number
         </pre></div>
@@ -883,8 +895,10 @@ from the pinned flow`"]
           check runs as in the browser.
         </p>
         <p class="note">
-          Telegram vouches for a shared number, and the code is still sent. Platform
-          verification happened at signup; it says nothing about who holds the handset today.
+          Binding is the platform's own verified contact — <em>Share my number</em> — and a
+          typed number is refused, because a contact card from an address book carries
+          somebody else's. The adapter accepts it only when Telegram says the contact belongs
+          to the sender.
         </p>
         <p class="note">
           Every message is stored in both directions, and an outbound one records whether the

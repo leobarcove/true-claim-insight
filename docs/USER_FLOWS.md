@@ -161,6 +161,13 @@ back spelled out, a re-uploaded document supersedes the wrong one rather than
 sitting beside it, and "human" hands the conversation to an agent from
 anywhere.
 
+**One engine, two channels (11 Aug 2026).** The PWA used to walk the flow
+itself — the React page chose the next step and patched each answer — which
+meant every rule existed twice and only the messaging copy was maintained. It
+now posts turns to `ConversationGateway` through `WebChatAdapter`, exactly as
+Telegram does, and renders the transcript the server returns. The sequence
+below is therefore the *same* engine as §9b; only the transport differs.
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -188,23 +195,25 @@ sequenceDiagram
     loop One step at a time
         PWA->>CL: Ask step prompt
         CL->>PWA: Answer
-        PWA->>CS: PATCH /cases/:id/answers
+        PWA->>CS: POST /conversation/turn
         CS->>CS: validateAnswer against the flow rule
         alt bank account number
             CS->>CS: encrypt, store mask in answers, last4 in the clear
         end
-        CS-->>PWA: next step + completeness
+        CS-->>PWA: transcript + the open question
     end
 
     loop Required documents
         CL->>PWA: Upload evidence
-        PWA->>CS: POST /cases/:id/documents
+        PWA->>CS: POST /cases/:id/documents/upload
         CS->>ST: store file
+        PWA->>CS: POST /conversation/turn {storedDocumentId}
+        note over CS: the id is resolved scoped to the Case —<br/>claimant-supplied input attaching evidence to a claim
         CS->>CS: stamp documentsCompleteAt when last mandatory item lands
     end
 
-    CL->>PWA: Review and submit
-    PWA->>CS: POST /cases/:id/submit
+    CL->>PWA: Review and confirm
+    note over CS: only a step marked isReview submits
     CS->>CS: policy auto-match, then CSP 24h / 30-day flags
     CS-->>CL: Case SUBMITTED — reference number
 ```
@@ -734,10 +743,12 @@ not merely an access check.
 | Policy file feed from the insurer | Planned, gated on **G9** |
 | Proactive flight-delay detection | Needs G9 data plus a WhatsApp channel |
 | Local-LLM document validation | `validationStatus` is a labelled stub |
-| AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3 |
+| AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3. Its practical blocker cleared on 11 Aug: intake now captures the claimant's name, so there is finally something to screen |
 | Automated eKYC | Identity now *gates* decisions (see §6), but verification is a recorded manual act — no vendor integrated |
 | A lawful basis for the messaging channel | Every Telegram turn is recorded as a cross-border transfer with **no basis established** (§9b). Synthetic and internal-tester data only until the in-country path or a consent basis exists |
-| WhatsApp and Messenger | `ChannelCapabilities` describes them and the flow engine is channel-agnostic, but only the Telegram adapter is registered |
+| WhatsApp and Messenger | `ChannelCapabilities` describes them and the flow engine is channel-agnostic. Telegram and web chat are both registered adapters as of 11 Aug 2026; these two are not |
+| AI reply suggestions and thread summaries in the console | Table stakes in every 2026 support console surveyed, and blocked by residency rather than effort: every available provider is offshore, and claim content is a materially larger transfer than the message text Telegram already sees. Waits on the in-country model |
+| Encryption of claimant name, email and date of birth | `Claimant` encrypts only NRIC. Now that the intake asks for a name (11 Aug), the plaintext personal-data surface grows with every claim — see MASTER_PLAN §8 |
 
 *(Removed 10 Aug 2026: the site-visit scheduling row — `PATCH
 /claims/:id/appointment` now books the visit, audits it and notifies the
