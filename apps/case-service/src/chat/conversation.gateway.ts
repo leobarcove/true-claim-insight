@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   CaseChannel,
   CaseInitiator,
@@ -246,7 +247,8 @@ export class ConversationGateway {
     @Inject(CLAIMANT_RESOLVER) private readonly claimants: ClaimantResolver,
     @Inject(CHANNEL_ADAPTERS) private readonly adapters: ChannelAdapter[],
     @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
-    private readonly consent: ConsentService
+    private readonly consent: ConsentService,
+    private readonly config: ConfigService
   ) {
     // Every conversational turn crosses a border: the claimant's words reach
     // the platform's servers abroad, and ours reach them the same way. The
@@ -658,7 +660,17 @@ export class ConversationGateway {
       where: { id: binding.id },
       data: {
         claimantId: resolved.claimantId,
-        tenantId: resolved.tenantId ?? null,
+        // A first-time claimant has no tenant to derive: the resolver reads it
+        // from an existing claim, and there is none yet. Left null the binding
+        // is invisible in the operator queue, which filters by tenant — so a
+        // claimant who types "human" at the consent gate, before choosing a
+        // claim type, asks for help that reaches nobody. That is precisely
+        // when a confused person asks.
+        //
+        // The handling firm is the honest answer for a conversation with no
+        // claim behind it: it is the firm taking the intake. Overwritten with
+        // the real tenant the moment a Case is created.
+        tenantId: resolved.tenantId ?? this.handlingFirmTenantId(),
         verifiedAt: new Date(),
         pendingPhone: null,
       },
@@ -1686,6 +1698,26 @@ export class ConversationGateway {
     if (created.currentStep) {
       await this.ask(adapter, binding.id, payload.platformUserId, created.currentStep, 0, undefined, undefined, flow);
     }
+  }
+
+  /**
+   * The firm that owns a conversation with no claim behind it yet.
+   *
+   * Returns null rather than throwing when unconfigured — unlike Case
+   * creation, which refuses. Refusing here would stop a claimant talking to
+   * the bot at all over a queue-visibility concern. Logged as an error
+   * instead, because the consequence is silent: conversations no operator sees.
+   */
+  private handlingFirmTenantId(): string | null {
+    const configured = this.config.get<string>('HANDLING_FIRM_TENANT_ID');
+    if (!configured) {
+      this.logger.error(
+        'HANDLING_FIRM_TENANT_ID is not set, so this conversation has no tenant until a Case ' +
+          'is created — it will not appear in any operator queue until then.'
+      );
+      return null;
+    }
+    return configured;
   }
 
   /**

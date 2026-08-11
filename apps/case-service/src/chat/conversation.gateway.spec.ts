@@ -171,7 +171,10 @@ describe('ConversationGateway', () => {
       claimants,
       [adapter],
       normaliser,
-      consent as never
+      consent as never,
+      // A handling firm is configured, as it is in every real deployment. The
+      // null case has its own test.
+      { get: (key: string) => (key === 'HANDLING_FIRM_TENANT_ID' ? 'tenant-handling' : undefined) } as never
     );
 
     return { gateway, prisma, adapter, claimants, cases, flows, sent, binding, normaliser, consent };
@@ -1657,6 +1660,52 @@ describe('ConversationGateway', () => {
         '__another:yes',
         '__another:no',
       ]);
+    });
+  });
+
+
+  /**
+   * A conversation nobody can see is a claimant nobody can help.
+   *
+   * The operator queue filters by tenant, and a first-time claimant has none:
+   * the resolver derives it from an existing claim and there is not one yet.
+   * The binding is backfilled when a Case is created — but the window before
+   * that covers consent and claim-type selection, which is exactly when a
+   * confused person types "human".
+   */
+  describe('the tenant on a brand-new binding', () => {
+    const unknownClaimant = () => {
+      const harness = setup();
+      (harness.claimants.resolveByVerifiedPhone as jest.Mock).mockResolvedValue({
+        claimantId: 'claimant-new',
+        // No claim yet, so no tenant to derive.
+        tenantId: null,
+      });
+      return harness;
+    };
+
+    it('falls back to the handling firm rather than leaving it null', async () => {
+      const { gateway, prisma } = unknownClaimant();
+
+      await gateway.handleTurn(turn({ sharedPhone: '+60123456789' }));
+
+      const wrote = (prisma.conversationBinding.update as jest.Mock).mock.calls.find(
+        ([args]) => args?.data?.verifiedAt
+      );
+      expect(wrote?.[0].data.tenantId).toBe('tenant-handling');
+    });
+
+    it('keeps the claimant’s real tenant when there is one', async () => {
+      // The fallback must not override a claimant who already belongs
+      // somewhere — a returning claimant's second conversation.
+      const { gateway, prisma } = setup();
+
+      await gateway.handleTurn(turn({ sharedPhone: '+60123456789' }));
+
+      const wrote = (prisma.conversationBinding.update as jest.Mock).mock.calls.find(
+        ([args]) => args?.data?.verifiedAt
+      );
+      expect(wrote?.[0].data.tenantId).toBe('tenant-1');
     });
   });
 });
