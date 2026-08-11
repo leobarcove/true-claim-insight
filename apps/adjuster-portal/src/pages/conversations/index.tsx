@@ -141,9 +141,57 @@ export function ConversationsPage() {
   const resolve = useResolveConversation();
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  /**
+   * Whether the view should stay stuck to the newest message.
+   *
+   * True on landing and while the operator is reading the bottom; false the
+   * moment they scroll up, because yanking someone back down while they are
+   * reading history is worse than the problem this solves.
+   */
+  const pinnedRef = useRef(true);
+
+  /**
+   * Land on the newest message, and stay there while the transcript settles.
+   *
+   * Three things were wrong. The scroll was keyed only on message *count*, so
+   * switching to another thread of the same length did not re-run it. It
+   * animated, which on a long transcript means watching hundreds of messages
+   * fly past instead of simply arriving at the end. And attachment thumbnails
+   * are fetched as blobs *after* mount, so the content grew by a couple of
+   * thousand pixels once the images decoded — long after the one scroll had
+   * finished, leaving the view stranded mid-conversation.
+   *
+   * Hence a ResizeObserver rather than a single call: the correct moment to
+   * be at the bottom is "whenever the content stops changing", which is not
+   * knowable in advance.
+   */
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [thread?.messages.length]);
+    const container = scrollRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+
+    pinnedRef.current = true;
+    const pin = () => {
+      if (pinnedRef.current) container.scrollTop = container.scrollHeight;
+    };
+
+    pin();
+    const observer = new ResizeObserver(pin);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [selectedId, thread?.messages.length]);
+
+  /** Reading history unpins; returning to the bottom pins again. */
+  const handleScroll = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    // A few pixels of tolerance: sub-pixel layout and zoom mean an exact
+    // equality would read as "scrolled up" when the operator is at the end.
+    pinnedRef.current = distanceFromBottom < 40;
+  };
 
   // Half-typed text belongs to the thread it was typed in. Now that switching
   // threads is a navigation, a leftover draft could be sent to the wrong
@@ -322,14 +370,23 @@ export function ConversationsPage() {
                 </div>
               )}
 
-              <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                {thread.messages.map(message => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    onOpenAttachment={setViewingAttachment}
-                  />
-                ))}
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-6 py-4"
+              >
+                {/* Inner wrapper so the ResizeObserver watches the content's
+                    height rather than the fixed-height viewport, which never
+                    changes and would therefore never fire. */}
+                <div ref={contentRef} className="space-y-3">
+                  {thread.messages.map(message => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      onOpenAttachment={setViewingAttachment}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Composer */}

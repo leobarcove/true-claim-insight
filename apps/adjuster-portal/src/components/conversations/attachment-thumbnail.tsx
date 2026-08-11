@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -24,10 +24,45 @@ export function AttachmentThumbnail({
 }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const holderRef = useRef<HTMLSpanElement>(null);
   const isImage = Boolean(attachment.mimeType?.startsWith('image/'));
 
+  /**
+   * Fetch only once the thumbnail is actually on screen.
+   *
+   * Eagerly loading every attachment in a transcript was wrong three times
+   * over. Thirteen simultaneous requests tripped the gateway's rate limit, so
+   * some thumbnails silently degraded to a filename. It pulled claimant
+   * evidence nobody had asked to see. And each fetch is an *audited sensitive
+   * read* — so the trail recorded an operator opening thirteen documents when
+   * they had opened none, which is a false record in the one table that
+   * cannot be corrected.
+   *
+   * Loading on visibility makes the audit row true again: what was fetched is
+   * what was shown.
+   */
   useEffect(() => {
-    if (!isImage) return;
+    const holder = holderRef.current;
+    if (!isImage || !holder || visible) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      // A little ahead of the viewport, so scrolling feels immediate without
+      // reaching for images the operator will never arrive at.
+      { rootMargin: '200px' }
+    );
+    observer.observe(holder);
+    return () => observer.disconnect();
+  }, [isImage, visible]);
+
+  useEffect(() => {
+    if (!isImage || !visible) return;
     let cancelled = false;
     let url: string | null = null;
 
@@ -48,7 +83,7 @@ export function AttachmentThumbnail({
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [attachment.caseId, attachment.id, isImage]);
+  }, [attachment.caseId, attachment.id, isImage, visible]);
 
   // Anything that is not an image, or would not load, stays a named link
   // rather than a broken frame — the filename is still information.
@@ -66,10 +101,18 @@ export function AttachmentThumbnail({
   }
 
   if (!objectUrl) {
+    // Roughly the footprint the image will occupy. Reserving it keeps the
+    // transcript from lurching as blobs arrive at their own pace — the scroll
+    // pinning copes either way, but a page that jumps while being read is its
+    // own bug. It is also what the IntersectionObserver watches, so it must
+    // exist before the image does.
     return (
-      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Loading attachment…
+      <span
+        ref={holderRef}
+        className="flex h-32 w-[220px] items-center justify-center gap-1.5 rounded border border-border text-sm text-muted-foreground"
+      >
+        {visible && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        {visible ? 'Loading…' : ''}
       </span>
     );
   }
