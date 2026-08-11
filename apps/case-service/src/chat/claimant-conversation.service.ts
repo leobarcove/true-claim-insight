@@ -126,6 +126,12 @@ export class ClaimantConversationService {
     const messages = await this.prisma.conversationMessage.findMany({
       where: {
         bindingId: binding.id,
+        // Only the two directions the claimant is party to. Notes agents leave
+        // each other live on the same thread — that is the point of them — and
+        // an allow-list is the only safe way to read it: a query that excluded
+        // INTERNAL by name would start leaking the day a third internal kind
+        // is added, and it would leak silently.
+        direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
         // A turn we could not read is not part of the conversation the
         // claimant had — they saw our "please send that as a file" reply, and
         // showing the unreadable original back to them explains nothing.

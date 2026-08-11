@@ -93,4 +93,44 @@ export class ConversationsProxyController {
         .pipe(map(response => unwrapEnvelope(response.data)))
     );
   }
+
+  @Get('agents')
+  @ApiOperation({ summary: 'Colleagues a conversation can be handed to' })
+  agents(@Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .get(this.base('/agents'), { headers: this.forward(req) })
+        .pipe(map(response => unwrapEnvelope(response.data)))
+    );
+  }
+
+  @Post(':id/assign')
+  @ApiOperation({ summary: 'Hand the conversation to a colleague, or release it' })
+  assign(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .post(this.base(`/${id}/assign`), body, { headers: this.forward(req) })
+        .pipe(map(response => unwrapEnvelope(response.data)))
+    );
+  }
+
+  @Post(':id/status')
+  @ApiOperation({ summary: 'Move the conversation through the queue' })
+  setStatus(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .post(this.base(`/${id}/status`), body, { headers: this.forward(req) })
+        .pipe(map(response => unwrapEnvelope(response.data)))
+    );
+  }
+
+  @Post(':id/notes')
+  @ApiOperation({ summary: 'Leave a note for colleagues' })
+  addNote(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .post(this.base(`/${id}/notes`), body, { headers: this.forward(req) })
+        .pipe(map(response => unwrapEnvelope(response.data)))
+    );
+  }
 }
