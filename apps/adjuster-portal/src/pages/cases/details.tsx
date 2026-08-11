@@ -125,6 +125,25 @@ export function CaseDetailPage() {
       }));
   }, [flow, caseData]);
 
+  /**
+   * The name the claimant gave during intake.
+   *
+   * `Claimant.fullName` is deliberately not written until the case is converted
+   * to a claim — see the comment in `cases.service.ts` `convertToClaim()`: a
+   * name typed into a chat must never overwrite a better-verified one from eKYC
+   * or a staff-entered record. That rule is right, but it left this panel
+   * showing "Unknown" while the answers column two inches away displayed the
+   * name in full, which reads to an adjuster as data loss rather than as a
+   * deliberate deferral.
+   *
+   * So: show what the claimant stated, and label it as stated rather than
+   * verified. The database rule is untouched.
+   */
+  const statedName = useMemo(() => {
+    const value = caseData?.answers?.['claimant-name'];
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }, [caseData]);
+
   if (isLoading || !caseData) {
     return (
       <div className="flex flex-col h-full">
@@ -393,7 +412,18 @@ export function CaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-1">
-                <p className="font-medium">{caseData.claimant?.fullName || 'Unknown'}</p>
+                {caseData.claimant?.fullName ? (
+                  <p className="font-medium">{caseData.claimant.fullName}</p>
+                ) : statedName ? (
+                  <>
+                    <p className="font-medium">{statedName}</p>
+                    <Badge variant="outline" className="font-normal">
+                      Stated at intake · not verified
+                    </Badge>
+                  </>
+                ) : (
+                  <p className="font-medium text-muted-foreground">Unknown</p>
+                )}
                 <p className="text-muted-foreground">{caseData.claimant?.phoneNumber}</p>
               </CardContent>
             </Card>

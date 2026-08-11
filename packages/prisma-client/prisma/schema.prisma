@@ -2686,6 +2686,17 @@ model ConversationBinding {
   handoverReason String?
   resolvedAt     DateTime?
 
+  /// Work state, independent of who is talking. See ConversationStatus.
+  status       ConversationStatus @default(BOT)
+  /// When a snoozed conversation should come back. Null unless SNOOZED.
+  snoozedUntil DateTime?
+  /// When a human first replied after this conversation needed one.
+  ///
+  /// The first-response clock every support operation is measured on. Written
+  /// once and never overwritten: the question it answers is "how long did the
+  /// claimant wait for a person", and a later reply does not change that.
+  firstRespondedAt DateTime?
+
   lastSeenAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -2698,6 +2709,8 @@ model ConversationBinding {
   @@index([claimantId])
   @@index([activeCaseId])
   @@index([mode, handoverAt])
+  @@index([status, assignedUserId])
+  @@index([status, snoozedUntil])
   @@map("conversation_bindings")
 }
 
@@ -2792,6 +2805,14 @@ model ConversationMessage {
 enum MessageDirection {
   INBOUND
   OUTBOUND
+  /// A note an agent wrote for colleagues. Never sent, never shown to the
+  /// claimant. Stored on the thread rather than in a side channel because the
+  /// context is worthless anywhere else — the whole reason notes exist is that
+  /// the next person to open the conversation needs them without asking.
+  ///
+  /// Every query filtering on direction has to decide about this value. The
+  /// claimant-facing transcript excludes it explicitly, and a test holds that.
+  INTERNAL
 }
 
 enum ConversationMessageStatus {
@@ -2809,6 +2830,27 @@ enum ConversationMessageStatus {
 }
 
 /// Who is answering a conversation.
+/// Does anybody owe this conversation anything?
+///
+/// Distinct from `ConversationMode`, which answers a different question — is
+/// the bot talking? The two genuinely diverge: an agent who has taken a
+/// conversation, answered, and is waiting on the claimant is mode HANDOVER
+/// (the bot is still standing down) and status PENDING (nothing is owed by
+/// us). Collapsing them would make "waiting for them" indistinguishable from
+/// "waiting for us", which is the single thing a queue exists to tell you.
+enum ConversationStatus {
+  /// The bot has it. Nothing for a person to do.
+  BOT
+  /// A person owes the claimant a reply.
+  OPEN
+  /// Answered; waiting on the claimant.
+  PENDING
+  /// Deliberately deferred until `snoozedUntil`, then it returns to OPEN.
+  SNOOZED
+  /// Dealt with. Reopens by itself if the claimant writes again.
+  RESOLVED
+}
+
 enum ConversationMode {
   BOT
   /// A human has it. The bot stands down entirely until resolved, then the

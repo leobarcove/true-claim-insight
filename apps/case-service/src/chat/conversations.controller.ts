@@ -1,8 +1,15 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ConversationMode } from '@prisma/client';
+import { ConversationMode, ConversationStatus } from '@prisma/client';
 import { ConversationsService } from './conversations.service';
-import { ReplyDto, TakeOverDto, UnbindConversationDto } from './dto/conversation.dto';
+import {
+  AddNoteDto,
+  AssignConversationDto,
+  ReplyDto,
+  SetConversationStatusDto,
+  TakeOverDto,
+  UnbindConversationDto,
+} from './dto/conversation.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
@@ -39,6 +46,13 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Conversations for this tenant, most recent first' })
   list(@Tenant() tenantContext: TenantContext, @Query('mode') mode?: ConversationMode) {
     return this.service.list(tenantContext, mode ? { mode } : undefined);
+  }
+
+  @Get('agents')
+  @Roles(...AGENT_ROLES)
+  @ApiOperation({ summary: 'Colleagues a conversation can be handed to' })
+  agents(@Tenant() tenantContext: TenantContext) {
+    return this.service.assignableAgents(tenantContext);
   }
 
   @Get(':id')
@@ -97,5 +111,43 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Hand back to the bot; the flow resumes at the pinned step' })
   resolve(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
     return this.service.resolve(id, tenantContext);
+  }
+
+  @Post(':id/assign')
+  @Roles(...AGENT_ROLES)
+  @ApiOperation({ summary: 'Hand the conversation to a colleague, or release it' })
+  assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AssignConversationDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.assign(id, body.assigneeId ?? null, tenantContext);
+  }
+
+  @Post(':id/status')
+  @Roles(...AGENT_ROLES)
+  @ApiOperation({ summary: 'Move the conversation through the queue' })
+  setStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: SetConversationStatusDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.setStatus(
+      id,
+      body.status as ConversationStatus,
+      body.snoozedUntil ? new Date(body.snoozedUntil) : null,
+      tenantContext
+    );
+  }
+
+  @Post(':id/notes')
+  @Roles(...AGENT_ROLES)
+  @ApiOperation({ summary: 'Leave a note for colleagues; never sent to the claimant' })
+  addNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AddNoteDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.addNote(id, body.text, tenantContext);
   }
 }

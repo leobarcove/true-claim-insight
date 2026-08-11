@@ -1,9 +1,30 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ConversationMessageStatus, ConversationMode, MessageDirection } from '@prisma/client';
+import {
+  ConversationMessageStatus,
+  ConversationMode,
+  ConversationStatus,
+  MessageDirection,
+  UserRole,
+  UserTenantStatus,
+} from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import type { TenantContext } from '../common/guards/tenant.guard';
 import { ConversationGateway } from './conversation.gateway';
+
+/**
+ * Roles that can hold a claimant conversation.
+ *
+ * The same list the controller gates on, in one place: a role that can be
+ * assigned work but cannot open the queue has been handed a conversation into
+ * a room it cannot enter, and that is indistinguishable from dropping it.
+ */
+export const ASSIGNABLE_ROLES = [
+  UserRole.ADJUSTER,
+  UserRole.FIRM_ADMIN,
+  UserRole.SUPPORT_DESK,
+  UserRole.SUPER_ADMIN,
+] as const;
 
 /**
  * The operator-facing side of conversational intake: read the transcript, take
@@ -49,6 +70,12 @@ export class ConversationsService {
           select: { id: true, caseNumber: true, status: true, travelClaimType: true },
         },
         messages: {
+          // The preview is what the conversation said, so an internal note is
+          // excluded: a queue row reading "note: chase the policy number" next
+          // to a claimant's name looks like something we sent them.
+          where: {
+            direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+          },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: { text: true, direction: true, createdAt: true, sentByUserId: true },
@@ -74,6 +101,17 @@ export class ConversationsService {
       id: binding.id,
       channel: binding.channel,
       mode: binding.mode,
+      // A snooze whose time has passed reads as OPEN rather than being woken by
+      // a scheduler. Computed, so there is no job to fall over and no window in
+      // which a due conversation is invisible because the sweep has not run.
+      status:
+        binding.status === ConversationStatus.SNOOZED &&
+        binding.snoozedUntil !== null &&
+        binding.snoozedUntil <= new Date()
+          ? ConversationStatus.OPEN
+          : binding.status,
+      snoozedUntil: binding.snoozedUntil,
+      firstRespondedAt: binding.firstRespondedAt,
       assignedUserId: binding.assignedUserId,
       handoverAt: binding.handoverAt,
       handoverReason: binding.handoverReason,
@@ -82,6 +120,31 @@ export class ConversationsService {
       case: binding.activeCase,
       lastMessage: binding.messages[0] ?? null,
       awaitingAgent: waiting.get(binding.id) ?? 0,
+    }));
+  }
+
+  /**
+   * Who this conversation can be handed to.
+   *
+   * Derived from tenant membership rather than a configured list, so somebody
+   * who joins the firm can be assigned work without a second setup step, and
+   * somebody who leaves stops appearing the moment their membership ends.
+   */
+  async assignableAgents(tenantContext: TenantContext) {
+    const memberships = await this.prisma.userTenant.findMany({
+      where: {
+        tenantId: tenantContext.tenantId ?? undefined,
+        status: UserTenantStatus.ACTIVE,
+        role: { in: [...ASSIGNABLE_ROLES] },
+      },
+      select: { role: true, user: { select: { id: true, fullName: true } } },
+      orderBy: { user: { fullName: 'asc' } },
+    });
+
+    return memberships.map(membership => ({
+      id: membership.user.id,
+      fullName: membership.user.fullName,
+      role: membership.role,
     }));
   }
 
@@ -131,6 +194,9 @@ export class ConversationsService {
       id: binding.id,
       channel: binding.channel,
       mode: binding.mode,
+      status: binding.status,
+      snoozedUntil: binding.snoozedUntil,
+      firstRespondedAt: binding.firstRespondedAt,
       assignedUserId: binding.assignedUserId,
       handoverAt: binding.handoverAt,
       handoverReason: binding.handoverReason,
@@ -175,6 +241,8 @@ export class ConversationsService {
       where: { id: binding.id },
       data: {
         mode: ConversationMode.HANDOVER,
+        status: ConversationStatus.OPEN,
+        snoozedUntil: null,
         assignedUserId: tenantContext.userId,
         handoverAt: new Date(),
         handoverReason: reason,
@@ -211,6 +279,19 @@ export class ConversationsService {
 
     // Everything the claimant was waiting on has now been answered by a human.
     await this.clearAwaitingAgent(binding.id);
+
+    // The ball is with the claimant, and the first-response clock stops. Both
+    // written here rather than in the UI because a reply *is* the event —
+    // deriving either from message timestamps later means reconstructing which
+    // outbound row was the first one that counted.
+    await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        status: ConversationStatus.PENDING,
+        snoozedUntil: null,
+        ...(binding.firstRespondedAt ? {} : { firstRespondedAt: new Date() }),
+      },
+    });
 
     // An agent speaking to a claimant on the firm's behalf is a claims-handling
     // act. The message body is deliberately not copied into the audit row — it
@@ -261,6 +342,183 @@ export class ConversationsService {
   }
 
   /**
+   * Statuses an agent may set directly.
+   *
+   * `BOT` and `RESOLVED` are absent deliberately: both mean "the bot has it
+   * back", and that is `resolve()` — a real transition with its own side
+   * effects, not a label. Letting it be set as a status would leave a
+   * conversation reading as resolved while the bot was still stood down, so
+   * the claimant's next message met silence.
+   */
+  private static readonly AGENT_SETTABLE: ConversationStatus[] = [
+    ConversationStatus.OPEN,
+    ConversationStatus.PENDING,
+    ConversationStatus.SNOOZED,
+  ];
+
+  /**
+   * May this operator change who holds the conversation, or its state?
+   *
+   * The holder may, an unheld conversation is anybody's, and an admin may
+   * always — because the alternative is a thread frozen by whoever went home
+   * with it assigned. Same rule as `resolve`, extracted so the four actions
+   * cannot drift into four different answers.
+   */
+  private assertMayManage(
+    binding: { assignedUserId: string | null },
+    tenantContext: TenantContext
+  ) {
+    const heldBySomeoneElse =
+      binding.assignedUserId !== null && binding.assignedUserId !== tenantContext.userId;
+    const isAdmin =
+      tenantContext.userRole === 'FIRM_ADMIN' || tenantContext.userRole === 'SUPER_ADMIN';
+
+    if (heldBySomeoneElse && !isAdmin) {
+      throw new BadRequestException(
+        'Another agent has this conversation. They can hand it on, or a firm admin can.'
+      );
+    }
+  }
+
+  /**
+   * Hand the conversation to a colleague.
+   *
+   * Distinct from `takeOver`, which is only ever self-service. Passing work to
+   * somebody else is the ordinary case in a team of more than one — the shift
+   * ends, the question needs the person who knows the policy — and until now
+   * it was impossible: an agent could take a conversation or hand it back to
+   * the bot, and nothing in between.
+   *
+   * The assignee is checked to be a real user in this tenant with a role that
+   * can actually answer. Assigning to somebody who cannot open the queue is
+   * indistinguishable from dropping the conversation, and reads as done.
+   */
+  async assign(id: string, assigneeId: string | null, tenantContext: TenantContext) {
+    const binding = await this.getBinding(id, tenantContext);
+    this.assertMayManage(binding, tenantContext);
+
+    if (assigneeId) {
+      // Membership, not `User.tenantId` — that column is deprecated and a user
+      // can belong to several firms. The role that matters is the one they
+      // hold *in this tenant*, which is the only place it is recorded.
+      const membership = await this.prisma.userTenant.findFirst({
+        where: {
+          userId: assigneeId,
+          tenantId: tenantContext.tenantId ?? undefined,
+          status: UserTenantStatus.ACTIVE,
+          role: { in: [...ASSIGNABLE_ROLES] },
+        },
+        select: { userId: true },
+      });
+      if (!membership) {
+        throw new BadRequestException(
+          'That person cannot take conversations — check they are active in your firm.'
+        );
+      }
+    }
+
+    const updated = await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        assignedUserId: assigneeId,
+        // Handing work over implies there is work: an assignment while the bot
+        // is still answering would otherwise sit in nobody's queue.
+        ...(binding.mode === ConversationMode.HANDOVER && assigneeId
+          ? { status: ConversationStatus.OPEN, snoozedUntil: null }
+          : {}),
+      },
+    });
+
+    await this.audit(binding.id, 'CONVERSATION_ASSIGNED', tenantContext, {
+      oldValues: { assignedUserId: binding.assignedUserId },
+      newValues: { assignedUserId: assigneeId },
+    });
+    return updated;
+  }
+
+  /**
+   * Move the conversation through the queue without saying anything.
+   *
+   * The distinction that earns this its own action: "waiting on them" and
+   * "waiting on us" look identical in a list sorted by time, and only one of
+   * them is anybody's problem.
+   */
+  async setStatus(
+    id: string,
+    status: ConversationStatus,
+    snoozedUntil: Date | null,
+    tenantContext: TenantContext
+  ) {
+    const binding = await this.getBinding(id, tenantContext);
+    this.assertMayManage(binding, tenantContext);
+
+    if (!ConversationsService.AGENT_SETTABLE.includes(status)) {
+      throw new BadRequestException(
+        'Use hand back to the bot to close a conversation, rather than setting its status.'
+      );
+    }
+    if (status === ConversationStatus.SNOOZED && !snoozedUntil) {
+      // A snooze with no wake time is a conversation nobody will ever see
+      // again — the failure mode of every "later" pile.
+      throw new BadRequestException('Say when it should come back.');
+    }
+    if (snoozedUntil && snoozedUntil.getTime() <= Date.now()) {
+      throw new BadRequestException('Choose a time in the future.');
+    }
+
+    const updated = await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        status,
+        snoozedUntil: status === ConversationStatus.SNOOZED ? snoozedUntil : null,
+      },
+    });
+
+    await this.audit(binding.id, 'CONVERSATION_STATUS_CHANGED', tenantContext, {
+      oldValues: { status: binding.status },
+      newValues: { status, snoozedUntil },
+    });
+    return updated;
+  }
+
+  /**
+   * Leave a note for whoever picks this up next.
+   *
+   * Stored on the thread, in order, alongside what was actually said — because
+   * the context is worth nothing anywhere else. A note in a side channel is a
+   * note the next person does not have.
+   *
+   * `direction: INTERNAL` keeps it off every claimant-facing path, and those
+   * paths allow-list the two directions they may show rather than excluding
+   * this one by name: an exclusion list starts leaking the day a third
+   * internal kind is added, and it does so silently.
+   */
+  async addNote(id: string, text: string, tenantContext: TenantContext) {
+    const binding = await this.getBinding(id, tenantContext);
+
+    const note = await this.prisma.conversationMessage.create({
+      data: {
+        channel: binding.channel,
+        direction: MessageDirection.INTERNAL,
+        bindingId: binding.id,
+        text,
+        sentByUserId: tenantContext.userId,
+        // Never sent anywhere, so it is complete the moment it is written.
+        status: ConversationMessageStatus.PROCESSED,
+        processedAt: new Date(),
+      },
+    });
+
+    // Audited like any other note on a claim file. The body is deliberately
+    // not copied into the audit row — it is already on the thread, and a
+    // second copy widens the retention surface for nothing.
+    await this.audit(binding.id, 'CONVERSATION_NOTE_ADDED', tenantContext, {
+      metadata: { characters: text.length },
+    });
+    return note;
+  }
+
+  /**
    * Nothing on this conversation is waiting for a person any more.
    *
    * Called wherever the wait ends, which is not only when an agent replies:
@@ -308,6 +566,8 @@ export class ConversationsService {
       where: { id: binding.id },
       data: {
         mode: ConversationMode.BOT,
+        status: ConversationStatus.RESOLVED,
+        snoozedUntil: null,
         assignedUserId: null,
         resolvedAt: new Date(),
       },
