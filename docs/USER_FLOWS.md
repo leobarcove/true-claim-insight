@@ -12,7 +12,7 @@ Read `MASTER_PLAN.md` §2 for the narrative these diagrams formalise.
 
 ## 1. The whole journey, end to end
 
-Five intake channels converge on one Case funnel; a vetted Case converts to a
+Six intake channels converge on one Case funnel; a vetted Case converts to a
 Claim, which is the regulated engagement.
 
 ```mermaid
@@ -642,6 +642,49 @@ synthetic and internal-tester data (`MASTER_PLAN.md` §3.4).
 
 ---
 
+
+## 9b·2. WhatsApp intake — the same conversation, the channel Malaysia uses
+
+Identical to §9b in every respect that matters: same gateway, same flow
+definitions, same questions, same validation, same `back`/`edit`, same handover.
+`WhatsAppAdapter` knows how to *say* things on WhatsApp and nothing about what
+to say, so everything built for the messaging side arrives here without being
+written twice.
+
+Three platform differences carry weight:
+
+- **Identity arrives free.** `wa_id` is on every inbound message and WhatsApp
+  vouches for it, so there is no "Share my number" step and no foreign-contact
+  case — a message can only come from the account that sent it. A claimant is
+  bound, tenanted and verified on their first message, which is also what puts
+  the thread straight into the operator queue.
+- **Choices are an interactive list, ten rows.** Telegram's inline keyboard
+  holds around a hundred, so pagination never fired there. It genuinely fires
+  here, and `renderChoices` already reserves a row for "More options".
+- **A 24-hour service window.** Replies inside it are free-form and free of
+  charge. Outside it only an approved template may be sent, so a conversation
+  left overnight cannot be reopened by us — the claimant has to speak first.
+
+**Push, not poll.** Meta delivers to `POST /webhooks/whatsapp`, so there is no
+offset and no singleton constraint: every instance may receive updates, and the
+gateway's insert-first dedupe on the message id makes that safe. The Telegram
+footgun — two pollers each taking half the updates, presenting as claimants
+being intermittently ignored — cannot occur on this channel.
+
+The endpoint is public because Meta is unauthenticated to us, so the
+`X-Hub-Signature-256` HMAC is the only control on it, and the payload names a
+claimant's phone number. With no `WHATSAPP_APP_SECRET` set, every delivery is
+discarded rather than trusted. It always answers 200: Meta retries a non-200
+for seven days, and a payload that can never succeed would be redelivered all
+week with every later message queued behind it.
+
+**Offshore, like Telegram.** Content reaches Meta in the United States and
+persists in WhatsApp's own history beyond our retention sweep. Every turn writes
+a `TransferRecord` with `lawfulBasis: null` — synthetic and internal-tester data
+only until a basis exists (MASTER_PLAN §3.4).
+
+---
+
 ## 10. Small-claims fast-track
 
 ```mermaid
@@ -746,7 +789,7 @@ not merely an access check.
 | AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3. Its practical blocker cleared on 11 Aug: intake now captures the claimant's name, so there is finally something to screen |
 | Automated eKYC | Identity now *gates* decisions (see §6), but verification is a recorded manual act — no vendor integrated |
 | A lawful basis for the messaging channel | Every Telegram turn is recorded as a cross-border transfer with **no basis established** (§9b). Synthetic and internal-tester data only until the in-country path or a consent basis exists |
-| WhatsApp and Messenger | `ChannelCapabilities` describes them and the flow engine is channel-agnostic. Telegram and web chat are both registered adapters as of 11 Aug 2026; these two are not |
+| Messenger | `ChannelCapabilities` describes it and the flow engine is channel-agnostic, but no adapter is registered. Telegram, web chat and WhatsApp are all live as of 11 Aug 2026 |
 | AI reply suggestions and thread summaries in the console | Table stakes in every 2026 support console surveyed, and blocked by residency rather than effort: every available provider is offshore, and claim content is a materially larger transfer than the message text Telegram already sees. Waits on the in-country model |
 | Encryption of claimant name, email and date of birth | `Claimant` encrypts only NRIC. Now that the intake asks for a name (11 Aug), the plaintext personal-data surface grows with every claim — see MASTER_PLAN §8 |
 
