@@ -129,6 +129,10 @@ export class TelegramAdapter implements ChannelAdapter {
       // The account's own language setting, so nobody has to be asked which
       // language they read — and so the consent notice can be shown in it.
       locale: message.from?.language_code,
+      // A group is not a claimant. Carried up rather than filtered here, so
+      // the gateway can answer once instead of the bot going mute in a chat
+      // somebody deliberately added it to.
+      chatType: message.chat.type,
     };
 
     // request_contact result — and the identity control for the whole channel,

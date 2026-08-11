@@ -67,7 +67,7 @@ FNOL mail ┘        (per-turn state)      (validation, redaction,
 | Answer correction (back/edit) | ✅ Working (11 Aug) |
 | Document upload | ✅ Working, optional steps skippable (11 Aug) |
 | Review and submit | ✅ Working |
-| Human takeover | ✅ Working (11 Aug) |
+| Human takeover | ✅ Working; bot cannot speak over an agent (11 Aug) |
 | Operator transcript | ✅ Working (fixed 11 Aug) |
 | Cross-border transfer record | ✅ Written per turn, honest null basis (11 Aug) |
 
@@ -165,19 +165,10 @@ guess at recovering it.
 
 ### Tier 5 — privacy and access
 
-- **The bot speaks during handover on two paths.** `safeSend` in the error
-  handler fires unconditionally, and `runOnboarding` runs *before* the
-  handover check — so an unverified binding in handover still receives bot
-  messages. Narrow (the second needs a SUPER_ADMIN to reach), but talking over
-  an agent is what handover exists to prevent.
-
-- **No `chat.type` check**, so the bot operates in group chats with the group
-  bound as one claimant.
-- **The Case is disclosed before `assertAccess`** — safe today only because
-  `activeCaseId` is never claimant-supplied.
-- **Consent is checked at Case creation and never again**, so a withdrawal in
-  the PWA does not stop Telegram collection.
-- **A verified binding never expires and cannot be revoked.**
+**Closed 11 August 2026.** Group chats refused before a binding exists; the
+Case access-checked before any of it is read; consent re-checked every turn;
+bindings that expire after 90 days and can be revoked outright; and both paths
+where the bot could speak over an agent. See §5.
 
 ### Tier 6 — friction, latent risks, documentation
 
@@ -220,6 +211,7 @@ drifts in both directions.)*
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 5 closed.** A group chat is refused before any binding exists — the platform id there identifies the *group*, so one binding would have put a claimant's case number, answers and deadline warnings in front of everyone in it. The Case is access-checked the moment it is loaded, through the same `assertAccess` the browser passes, rather than relying on `activeCaseId` never being wrong. Consent is re-checked every turn, so a withdrawal in the PWA now stops collection here instead of being faithfully recorded and ignored. A binding expires after 90 days — it was an indefinite credential, written once and never read — and `POST /conversations/:id/unbind` can revoke one outright, firm-admin only, with a mandatory reason on the audit row. The two paths where the bot could still speak over an agent are closed: the handover check now precedes onboarding, and the error-path apology asks first. |
 | 11 Aug 2026 | **Tier 4 closed.** A voice note, video, sticker or location is now named and refused instead of vanishing with no row, no reply and no trace; a photo's caption is read as the answer it is. `/start` mid-flow re-asks rather than being stored as the answer. A turn the database refused is left *unacknowledged* so Telegram redelivers it — losing a claimant's message to a transient outage was the worst of the silent failures — and turns recorded but abandoned are swept into view every five minutes rather than sitting PENDING forever. The chat HTTP client finally has a timeout: the poll loop is strictly serial, so one black-holed connection froze the channel for everyone until TCP keepalive. 429 is honoured with its own `retry_after` instead of failing the turn. A file over 20 MB is explained rather than reported as our fault. 409 names the second poller it proves, and 401 stops rather than retrying a revoked token forever. |
 | 11 Aug 2026 | **Tier 3 re-audit — four more, and a weakness in one of the fixes.** Re-reading the original reports found findings that had never reached any tier. `normalisePhone` prefixed `+` only for Malaysian numbers, so a foreign one was stored as bare digits — two shapes in one column, on the one line whose claimants are by definition abroad, risking a duplicate Claimant whose Telegram and PWA claims never join up. The DTO behind it refused foreign numbers outright, so such a claimant could not bind at all. A stale `resumeStepId` still persisted a cursor pointing at no step. Editing a branch input left documents attached to a path the claim no longer takes. And the earlier `!nextStep` fix had used `answerType === 'confirm'` as a proxy for "this is the review" — the medical flow has *two* confirm steps and proves the two are not the same thing, so `isReview` is now explicit and the answer summary no longer lands under a specialist-review notice. |
 | 11 Aug 2026 | **Tier 3 closed.** `back` walks to a step the claimant actually answered, instead of the previous one in declaration order — on a branched flow that had been reopening a mandatory medical report the branch deliberately skipped. A question whose send failed is re-asked rather than having the next message stored as its answer. Running out of steps anywhere but a review hands to an agent instead of submitting an incomplete case and telling the claimant it is "with our team". `parseAmount` replaces `Number()`, so a blank message no longer records RM 0 and `RM1,200` is finally readable. A future incident date is refused, because it silently suppressed the very CSP flags it should raise. The Case channel comes from the turn rather than being hardcoded TELEGRAM. |

@@ -915,7 +915,13 @@ export class CasesService {
     return { tenantId: tenantContext.tenantId };
   }
 
-  private assertAccess(
+  /**
+   * Public so a caller that has loaded a Case by another route can apply the
+   * *same* check before disclosing any of it, rather than writing a second
+   * one that drifts. The conversation gateway loads a Case by the id on the
+   * binding and needs exactly this.
+   */
+  assertAccess(
     caseRow: { tenantId: string; claimantId: string | null },
     tenantContext: TenantContext
   ) {

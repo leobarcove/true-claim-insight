@@ -30,3 +30,20 @@ export class ReplyDto {
   @MaxLength(1024)
   text!: string;
 }
+
+export class UnbindConversationDto {
+  /**
+   * Why the link is being broken. Required for the same reason take-over's is,
+   * only more so: this revokes a claimant's access to their own claim
+   * conversation, and "who did this and why" is the first question anyone
+   * will ask afterwards.
+   */
+  @ApiProperty({
+    example: 'Claimant reports their Telegram account was compromised',
+    description: 'Why the binding is being revoked. Recorded on the audit row.',
+  })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string;
+}

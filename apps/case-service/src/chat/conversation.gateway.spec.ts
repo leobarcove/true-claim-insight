@@ -63,6 +63,9 @@ describe('ConversationGateway', () => {
       },
       conversationBinding: {
         upsert: jest.fn(async () => binding),
+        // Read on the error path, to check whether an agent has the
+        // conversation before the bot apologises over them.
+        findUnique: jest.fn(async () => binding),
         // Prisma returns the updated row; returning {} made a freshly-verified
         // binding look like it had no claimant, which is not a state that can
         // occur in production.
@@ -109,6 +112,9 @@ describe('ConversationGateway', () => {
         currentStep: null,
       })),
       uploadDocument: jest.fn(async () => ({ id: 'doc-1' })),
+      // The gateway applies the same ownership check the browser does, before
+      // reading anything off the Case it loaded by id.
+      assertAccess: jest.fn(),
     };
 
     const flows = {
@@ -278,6 +284,99 @@ describe('ConversationGateway', () => {
           data: expect.objectContaining({ status: ConversationMessageStatus.FAILED }),
         })
       );
+    });
+  });
+
+  describe('privacy and access', () => {
+    const verifiedMid2 = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+    const midCase2 = {
+      id: 'case-1',
+      currentStepId: 'airline',
+      answers: {},
+      flowDefinitionId: null,
+      travelClaimType: 'FLIGHT_DELAY',
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+    };
+
+    it('never binds a group chat to a claimant', async () => {
+      // The platform id in a group identifies the *group*, so one binding
+      // would put a claimant's case number, answers and deadline warnings in
+      // front of everyone in it.
+      const { gateway, prisma, adapter } = setup();
+
+      await gateway.handleTurn(turn({ text: '/start', chatType: 'group' }));
+
+      expect(prisma.conversationBinding.upsert).not.toHaveBeenCalled();
+      const said = (adapter.send as jest.Mock).mock.calls.map(c => c[1].text).join(' ');
+      expect(said).toMatch(/private chat/i);
+    });
+
+    it('checks access before reading anything off the Case', async () => {
+      const { gateway, cases } = setup({ binding: verifiedMid2, caseRow: midCase2 });
+
+      await gateway.handleTurn(turn({ text: 'AirAsia' }));
+
+      expect(cases.assertAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'case-1' }),
+        expect.objectContaining({ userId: 'claimant-1', userRole: 'CLAIMANT' })
+      );
+    });
+
+    it('stops collecting once consent is withdrawn', async () => {
+      // Consent is a condition of processing, not a box ticked at the start.
+      // It was checked when the Case opened and never again, so a withdrawal
+      // in the PWA did not stop this channel storing answers.
+      const { gateway, cases, consent, sent } = setup({
+        binding: verifiedMid2,
+        caseRow: midCase2,
+      });
+      consent.hasConsent.mockResolvedValue(false);
+
+      await gateway.handleTurn(turn({ text: 'AirAsia' }));
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(sent[0].text).toMatch(/withdrawn your consent/i);
+    });
+
+    it('asks a long-stale binding to confirm again', async () => {
+      // A binding was an indefinite credential: verifiedAt was written once
+      // and never read, so an account takeover kept working forever.
+      const { gateway, prisma, sent } = setup({
+        binding: {
+          ...verifiedMid2,
+          verifiedAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000),
+        },
+        caseRow: midCase2,
+      });
+
+      await gateway.handleTurn(turn({ text: 'AirAsia' }));
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { verifiedAt: null } })
+      );
+      expect(sent.some(m => /been a while/i.test(m.text))).toBe(true);
+    });
+
+    it('stays silent on the error path when an agent has the conversation', async () => {
+      // The one place the machine could still speak over a human: the apology
+      // in the catch fired unconditionally.
+      const { gateway, prisma, adapter } = setup({
+        binding: { ...verifiedMid2, mode: ConversationMode.HANDOVER },
+      });
+      (prisma.conversationMessage.update as jest.Mock).mockRejectedValueOnce(
+        new Error('boom')
+      );
+
+      await gateway.handleTurn(turn({ text: 'hello' }));
+
+      const said = (adapter.send as jest.Mock).mock.calls.map(c => c[1].text).join(' ');
+      expect(said).not.toMatch(/something went wrong/i);
     });
   });
 

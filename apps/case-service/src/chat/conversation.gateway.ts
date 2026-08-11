@@ -83,6 +83,20 @@ const HUMAN_WORDS = new Set(['human', 'agent', 'help', 'support', '/human', 'ban
 const MAX_TURNS_PER_MINUTE = 20;
 
 /**
+ * How long a channel binding stands before the claimant re-confirms.
+ *
+ * A binding was an indefinite credential: `verifiedAt` was set once and never
+ * read again, so a Telegram account takeover gave permanent access to that
+ * claimant's intake with no further challenge, and nothing could revoke it.
+ *
+ * Ninety days is long enough to sit out a claim from notification to
+ * settlement without interrupting anyone mid-flow, and short enough that a
+ * stale account does not stay useful forever. Re-confirming is one tap, which
+ * is the reason a bound period can be this cheap.
+ */
+const BINDING_MAX_AGE_DAYS = 90;
+
+/**
  * Callback value behind the "I agree" button on the consent notice.
  *
  * Prefixed like the pagination marker so it can never collide with a real
@@ -236,6 +250,12 @@ export class ConversationGateway {
     return provider;
   }
 
+  /** Has this confirmation gone stale? */
+  private bindingExpired(verifiedAt: Date): boolean {
+    const ageMs = Date.now() - verifiedAt.getTime();
+    return ageMs > BINDING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  }
+
   private adapterFor(channel: CaseChannel): ChannelAdapter | undefined {
     return this.adapters.find(adapter => adapter.channel === channel);
   }
@@ -295,6 +315,31 @@ export class ConversationGateway {
       throw new TurnNotRecordedError(payload.platformMessageId, error as Error);
     }
 
+    // A group is not a claimant. Refused before the binding upsert, so no
+    // group ever acquires one: the platform id in a group identifies the
+    // *group*, meaning a single binding would put one person's intake — case
+    // number, answers, deadline warnings — in front of everyone in it.
+    //
+    // Answered rather than ignored, because somebody added the bot on purpose.
+    // The reply carries nothing about any claim.
+    if (payload.chatType && payload.chatType !== 'private') {
+      this.logger.warn(`Refusing a ${payload.chatType} chat: claims are one-to-one.`);
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          error: `Refused: ${payload.chatType} chat`,
+          processedAt: new Date(),
+        },
+      });
+      await this.safeSend(adapter, payload.platformUserId, {
+        text:
+          'I can only help with a claim in a private chat, so that your details stay between ' +
+          'us. Please message me directly.',
+      });
+      return;
+    }
+
     // Acknowledged before anything else is attempted, so the button stops
     // spinning even if the turn then fails. A claimant staring at a loading
     // indicator taps again, and the second tap is the one that corrupts.
@@ -313,10 +358,27 @@ export class ConversationGateway {
         where: { id: messageId },
         data: { status: ConversationMessageStatus.FAILED, error: (error as Error).message },
       });
-      // The claimant is told something went wrong rather than left waiting.
-      await this.safeSend(adapter, payload.platformUserId, {
-        text: 'Sorry — something went wrong on our side. Please try again in a moment.',
-      });
+      // The claimant is told something went wrong rather than left waiting —
+      // unless an agent has the conversation, in which case the bot staying
+      // quiet matters more than the apology. This path fired unconditionally
+      // and was the one place the machine could still speak over a human.
+      const inHandover = await this.prisma.conversationBinding
+        .findUnique({
+          where: {
+            channel_platformUserId: {
+              channel: payload.channel,
+              platformUserId: payload.platformUserId,
+            },
+          },
+          select: { mode: true },
+        })
+        .catch(() => null);
+
+      if (inHandover?.mode !== ConversationMode.HANDOVER) {
+        await this.safeSend(adapter, payload.platformUserId, {
+          text: 'Sorry — something went wrong on our side. Please try again in a moment.',
+        });
+      }
     }
   }
 
@@ -436,22 +498,43 @@ export class ConversationGateway {
       return;
     }
 
-    // 3. Nothing about a claim is served to an unverified sender.
-    if (!binding.verifiedAt) {
-      await this.runOnboarding(messageId, payload, adapter, binding);
-      return;
-    }
-
-    // 4. A human has this conversation. Record what the claimant said and say
-    //    nothing automated — a bot answering over an agent mid-exchange reads
-    //    to the claimant as one confused party rather than two, and can
-    //    overwrite a correction the agent just made.
+    // 3. A human has this conversation. Checked BEFORE onboarding, not after:
+    //    an unverified binding in handover was still receiving bot messages,
+    //    because the verification branch returned first. Rare, but the whole
+    //    point of handover is that the machine stops talking.
+    //
+    //    Record what the claimant said and say nothing automated — a bot
+    //    answering over an agent mid-exchange reads to the claimant as one
+    //    confused party rather than two, and can overwrite a correction the
+    //    agent just made.
     if (binding.mode === ConversationMode.HANDOVER) {
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
         data: { status: ConversationMessageStatus.AWAITING_AGENT, processedAt: new Date() },
       });
       this.logger.debug(`Binding ${binding.id} is in handover; bot standing down.`);
+      return;
+    }
+
+    // 4. Nothing about a claim is served to an unverified sender — including
+    //    one whose confirmation has simply gone stale.
+    if (binding.verifiedAt && this.bindingExpired(binding.verifiedAt)) {
+      this.logger.log(`Binding ${binding.id} verified over ${BINDING_MAX_AGE_DAYS} days ago; re-confirming.`);
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        // The claimant link is kept: re-confirming the same number resolves to
+        // the same person, and clearing it would orphan the active Case.
+        data: { verifiedAt: null },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'It has been a while since we last confirmed it was you.',
+      });
+      await this.runOnboarding(messageId, payload, adapter, binding);
+      return;
+    }
+
+    if (!binding.verifiedAt) {
+      await this.runOnboarding(messageId, payload, adapter, binding);
       return;
     }
 
@@ -565,6 +648,18 @@ export class ConversationGateway {
     }
 
     const caseRow = await this.prisma.case.findUnique({ where: { id: binding.activeCaseId } });
+
+    // Checked before a single field of it is used. `patchAnswer` asserts
+    // access too, but by then the case number, the answer bag and the review
+    // summary have already been read from this row and may have been sent.
+    // The guarantee rested entirely on `activeCaseId` never being wrong; one
+    // future write path setting it from user input would have turned that into
+    // a cross-claimant disclosure. Same function the browser passes through,
+    // not a second copy of the rule.
+    if (caseRow) {
+      this.cases.assertAccess(caseRow, this.claimantContext(binding));
+    }
+
     if (!caseRow) {
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
@@ -589,6 +684,30 @@ export class ConversationGateway {
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true, stepId: true },
     });
+
+    // Consent is a condition of *processing*, not a box ticked once at the
+    // start. It was checked when the Case was opened and never again, so a
+    // claimant who withdrew in the PWA carried on being asked questions here
+    // and having the answers stored — contrary to the withdrawal the consent
+    // service had faithfully recorded.
+    if (binding.claimantId && !(await this.consent.hasConsent(binding.claimantId, ConsentPurpose.CLAIM_PROCESSING))) {
+      this.logger.warn(`Binding ${binding.id}: consent withdrawn; collection stops here.`);
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          error: 'Consent withdrawn',
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          'You have withdrawn your consent for us to process this claim, so we have stopped ' +
+          'here. Your claim request is unaffected — please contact our support desk if you ' +
+          'would like to continue.',
+      });
+      return;
+    }
 
     const flow = await this.flows.forCase(caseRow, {
       channel: payload.channel,
