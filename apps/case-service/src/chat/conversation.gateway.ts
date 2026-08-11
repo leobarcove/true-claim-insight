@@ -17,6 +17,7 @@ import {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   getStep,
+  formatDateAnswer,
   missingSteps,
   parseAmount,
   parseTextDate,
@@ -1763,18 +1764,11 @@ export class ConversationGateway {
     if (String(stored) === typed) return null;
 
     if (step.answerType === 'date' || step.answerType === 'datetime') {
-      const parsed = new Date(String(stored));
-      if (Number.isNaN(parsed.getTime())) return null;
-      const shown = parsed.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        ...(step.answerType === 'datetime' ? { hour: '2-digit', minute: '2-digit' } : {}),
-        timeZone: 'UTC',
-      });
-      // Spelled month, deliberately: "16/06" and "06/16" look alike and that
-      // ambiguity is the exact thing being confirmed.
-      return `Recorded as ${shown}. Type "back" if that is not right.`;
+      // Shared with the review summary rather than formatted again here. The
+      // two disagreeing is how a claimant confirms "11 August 2026" mid-flow
+      // and then reads back "2026-08-11T00:00:00.000Z" at the review.
+      const shown = formatDateAnswer(String(stored), step.answerType);
+      return shown === null ? null : `Recorded as ${shown}. Type "back" if that is not right.`;
     }
 
     if (step.answerType === 'number') {
