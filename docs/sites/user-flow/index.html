@@ -222,6 +222,7 @@
         <ol>
           <li><a href="#s9"><span>09</span><span>FNOL email intake</span></a></li>
           <li><a href="#s9b"><span>9b</span><span>Telegram intake</span></a></li>
+          <li><a href="#s9bb"><span>9b·2</span><span>WhatsApp intake</span></a></li>
           <li><a href="#s9c"><span>9c</span><span>How a flow is authored</span></a></li>
           <li><a href="#s10"><span>10</span><span>Small-claims fast-track</span></a></li>
         </ol>
@@ -282,6 +283,8 @@ flowchart TD
 PWA`"]
         C5["`Claimant
 Telegram`"]
+        C6["`Claimant
+WhatsApp`"]
         C2["`Agent or broker
 email`"]
         C3["`Insurer forwards
@@ -291,8 +294,9 @@ portal`"]
     end
 
     C1 --> CASE
-    C5 --> BIND["`Verify the sender
-phone share + OTP`"]
+    C5 --> BIND["`Bind on the platform's
+verified contact`"]
+    C6 --> BIND
     BIND --> CASE
     C2 --> ING["`FNOL email ingestion
 deterministic parse + policy match`"]
@@ -419,6 +423,16 @@ stateDiagram-v2
           Conversational intake: one question at a time, resumable through
           <code>currentStepId</code>, with the question set chosen by travel claim type.
         </p>
+        <p class="note">
+          <strong>One engine, two channels, as of 11 August 2026.</strong> The PWA used to
+          walk the flow itself — the page chose the next step and patched each answer — so
+          every rule existed twice and only the messaging copy was maintained. It now posts
+          turns to the same <code>ConversationGateway</code> that answers Telegram and renders
+          the transcript it gets back. What the browser gains for free is everything built on
+          the messaging side and never ported: the transcript itself, <code>back</code> and
+          <code>edit</code>, the progress count, and a route to a human that web claimants
+          did not previously have at all.
+        </p>
         <div class="plate"><pre class="mermaid">
 sequenceDiagram
     autonumber
@@ -445,23 +459,25 @@ sequenceDiagram
     loop One step at a time
         PWA->>CL: Ask step prompt
         CL->>PWA: Answer
-        PWA->>CS: PATCH /cases/:id/answers
-        CS->>CS: validateAnswer against the flow rule
+        PWA->>CS: POST /conversation/turn
+        CS->>CS: validateAnswer — the field, then against the other answers
         alt bank account number
             CS->>CS: encrypt, mask in answers, last4 in the clear
         end
-        CS-->>PWA: next step + completeness
+        CS-->>PWA: transcript + the open question
     end
 
     loop Required documents
         CL->>PWA: Upload evidence
-        PWA->>CS: POST /cases/:id/documents
+        PWA->>CS: POST /cases/:id/documents/upload
         CS->>ST: store file
+        PWA->>CS: POST /conversation/turn with storedDocumentId
+        CS->>CS: resolve the id scoped to this Case
         CS->>CS: stamp documentsCompleteAt on the last mandatory item
     end
 
-    CL->>PWA: Review and submit
-    PWA->>CS: POST /cases/:id/submit
+    CL->>PWA: Review and confirm
+    CS->>CS: only a step marked isReview submits
     CS->>CS: policy auto-match, then CSP 24h / 30-day flags
     CS-->>CL: Case SUBMITTED — reference number
         </pre></div>
@@ -484,6 +500,10 @@ sequenceDiagram
 flowchart TD
     S["Case SUBMITTED"] --> OPEN["`Operator opens it
 → UNDER_REVIEW`"]
+    OPEN -.-> PAYEE["`**Payee name check**
+warns when the account holder
+is not the claimant —
+advisory, never blocks`"]
     OPEN --> Q1{"Policy matched?"}
 
     Q1 -->|no| LINK["`needsPolicyReview = true
@@ -523,10 +543,29 @@ reason recorded`"]
     style EXPERT stroke:#C77A2E,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
+    style PAYEE stroke:#C77A2E,stroke-width:2.5px
         </pre></div>
         <p class="note">
           The loop <code>INFO_REQUESTED → SUBMITTED → UNDER_REVIEW</code> may run any number of
           times. Every pass writes an audit row carrying before and after values.
+        </p>
+        <p class="note">
+          <strong>Two things the panel says about identity.</strong> The claimant's name is
+          shown as <em>"Stated at intake · not verified"</em> until the case converts — the
+          name is what the claimant typed, no eKYC vendor is integrated, and a panel that
+          displayed it plainly would imply a check nobody performed.
+        </p>
+        <p class="note">
+          The <strong>payee name check</strong> compares that name against the account holder.
+          A divergence is usually innocent — a parent, a spouse, a company card — and is also
+          what payout diversion looks like, so it <em>warns and never blocks</em>. The verdict
+          is three-valued: only a match silences the warning, and <code>uncertain</code> exists
+          so borderline Malaysian names are not forced into a false accusation. Banks drop
+          <code>bin</code>, <code>binti</code> and <code>a/p</code>, truncate the account-name
+          field around twenty characters, and Chinese name order is arbitrary — so
+          <code>Wong Chee Keong</code> against <code>Wong Chi Kiong</code> is referred to the
+          operator rather than guessed at. It screens nobody: AMLA/CTF screening remains
+          <span class="chip gate">Gate G8</span>.
         </p>
       </section>
 
@@ -883,8 +922,10 @@ from the pinned flow`"]
           check runs as in the browser.
         </p>
         <p class="note">
-          Telegram vouches for a shared number, and the code is still sent. Platform
-          verification happened at signup; it says nothing about who holds the handset today.
+          Binding is the platform's own verified contact — <em>Share my number</em> — and a
+          typed number is refused, because a contact card from an address book carries
+          somebody else's. The adapter accepts it only when Telegram says the contact belongs
+          to the sender.
         </p>
         <p class="note">
           Every message is stored in both directions, and an outbound one records whether the
@@ -892,6 +933,93 @@ from the pinned flow`"]
           reviewable — and it is why the operator inbox can show three voices rather than two.
           When an agent takes over, the bot stands down entirely until the conversation is
           handed back.
+        </p>
+      </section>
+
+      <section id="s9bb">
+        <div class="head"><span class="num">9b·2</span><h3>WhatsApp intake</h3></div>
+        <p class="lede">
+          The same conversation as §9b, on the channel most Malaysians already use. Identical
+          flow, identical questions, identical rules — one engine, a different adapter.
+        </p>
+        <p class="note">
+          <strong>Nothing about the conversation is duplicated.</strong> The gateway decides the
+          next question, validates the answer and advances the Case against the flow pinned on
+          it; the adapter knows only how to say things on WhatsApp. Everything built for the
+          messaging side — <code>back</code> and <code>edit</code>, the progress count, the
+          answer summary at review, handover to a person — arrives here for free because there
+          is one implementation of it.
+        </p>
+        <div class="plate"><pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor CL as Claimant
+    participant WA as WhatsApp
+    participant HK as Webhook
+    participant CS as case-service
+    participant OP as Operator
+
+    CL->>WA: First message
+    WA->>HK: POST, signed with the app secret
+    HK->>HK: verify HMAC-SHA256, else discard
+    HK->>CS: handleTurn
+    note over CS: wa_id IS the verified number —<br/>no share step, no code
+    CS->>CS: resolve claimant, bind, set tenant
+    CS-->>CL: consent notice, EN / BM
+
+    CL->>WA: I agree
+    CS-->>CL: What has happened? (interactive list)
+
+    loop One question at a time
+        CL->>WA: Answer, or tap a row
+        WA->>HK: POST
+        HK->>CS: handleTurn
+        CS->>CS: validateAnswer, then against the other answers
+        CS-->>CL: Next question
+    end
+
+    CL->>WA: Upload a document
+    CS->>CS: resolve media id, download, store
+    CS-->>CL: Review, with the summary in the message body
+    CL->>WA: Confirm
+    CS-->>CL: Claim submitted
+
+    CL->>WA: "human"
+    CS->>OP: Conversation appears in the portal queue
+    OP-->>CL: Agent replies; the bot stands down
+        </pre></div>
+        <p class="note">
+          <strong>Three platform differences that are not cosmetic.</strong>
+          Identity arrives free — <code>wa_id</code> is on every inbound message, so there is no
+          "Share my number" step and nothing to spoof.
+          Choices render as an interactive list capped at <strong>ten rows</strong>, where
+          Telegram holds about a hundred, so pagination genuinely fires here and
+          <code>renderChoices</code> reserves a row for "More options".
+          And a <strong>24-hour service window</strong> applies: replies inside it are free-form
+          and free of charge, but a conversation left overnight cannot be reopened by us without
+          an approved template.
+        </p>
+        <p class="note">
+          <strong>Push, not poll.</strong> Meta delivers to a webhook, so there is no offset to
+          advance and no singleton constraint — every instance may receive updates, and the
+          gateway's insert-first dedupe on the message id is what makes that safe. The Telegram
+          footgun, where two pollers each take half the updates and claimants appear to be
+          intermittently ignored, does not exist on this channel.
+        </p>
+        <p class="note">
+          The endpoint is public, because Meta is unauthenticated to us, so the
+          <code>X-Hub-Signature-256</code> HMAC is the only thing between it and anyone who can
+          POST JSON — and the payload names a claimant's phone number. With no app secret
+          configured every delivery is discarded rather than trusted. It always answers 200:
+          Meta retries a non-200 for seven days, and a payload that can never succeed would be
+          redelivered all week with every later message queued behind it.
+        </p>
+        <p class="note">
+          <strong>Offshore, like Telegram.</strong> Message content reaches Meta in the United
+          States and is retained in WhatsApp's own history, beyond our retention sweep. Every
+          turn writes a <code>TransferRecord</code> with <code>lawfulBasis: null</code>, because
+          none is established — synthetic and internal-tester data only until it is
+          (MASTER_PLAN §3.4).
         </p>
       </section>
 

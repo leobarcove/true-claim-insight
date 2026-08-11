@@ -35,6 +35,11 @@ export const OFFSHORE_PROVIDERS = {
     country: 'United Arab Emirates (distributed infrastructure)',
     what: 'Claimant conversation content during Telegram intake — every message both ways, retained in Telegram’s own message history beyond our retention sweep',
   },
+  WHATSAPP: {
+    provider: 'WHATSAPP',
+    country: 'United States (Meta Platforms)',
+    what: 'Claimant phone number and a six-digit login code, sent as a WhatsApp authentication template. No claim content — materially narrower than the Telegram entry above, which carries the whole conversation',
+  },
   N8N_OCR_WEBHOOK: {
     provider: 'N8N_OCR_WEBHOOK',
     country: 'Unverified — third-party n8n workflow, hosting region not established',

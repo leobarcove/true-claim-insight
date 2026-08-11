@@ -35,7 +35,14 @@ describe('ConversationGateway', () => {
       clientVersion: 'test',
     });
 
-  const setup = (over: { binding?: Record<string, unknown>; caseRow?: Record<string, unknown> } = {}) => {
+  const setup = (
+    over: {
+      binding?: Record<string, unknown>;
+      caseRow?: Record<string, unknown>;
+      /** A stored CaseDocument the ownership check will find, or null for none. */
+      storedDocument?: Record<string, unknown> | null;
+    } = {}
+  ) => {
     const binding = {
       id: 'bind-1',
       channel: CaseChannel.TELEGRAM,
@@ -76,6 +83,9 @@ describe('ConversationGateway', () => {
         update: jest.fn(async () => ({})),
       },
       transferRecord: { create: jest.fn(async () => ({ id: 'transfer-1' })) },
+      // Web chat sends a document that is already stored. The gateway looks it
+      // up scoped to the Case, so an id from another claim finds nothing.
+      caseDocument: { findFirst: jest.fn(async () => over.storedDocument ?? null) },
     };
 
     const sent: Array<{ to: string; text: string; requestPhone?: boolean }> = [];
@@ -1451,6 +1461,202 @@ describe('ConversationGateway', () => {
       const { gateway, prisma } = setup();
       await gateway.handleTurn(turn({ channel: CaseChannel.WHATSAPP }));
       expect(prisma.conversationMessage.create).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Documents that arrive already stored — the web-chat path.
+   *
+   * A messaging platform hands us a reference we fetch from *their* servers,
+   * so the file's provenance is the platform's. A browser posts the bytes to
+   * our upload endpoint and then names the resulting id on the turn, which
+   * means the id is claimant-supplied input on a route that attaches evidence
+   * to a claim. Checked, never trusted.
+   */
+  describe('a document that arrives already stored', () => {
+    const documentFlow = {
+      travelClaimType: 'FLIGHT_DELAY',
+      entryStepId: 'doc-boarding-pass',
+      steps: [
+        {
+          id: 'doc-boarding-pass',
+          prompt: 'Please upload your boarding pass.',
+          label: 'Boarding pass',
+          answerType: 'document',
+          documentType: 'BOARDING_PASS',
+          next: { type: 'end' },
+        },
+      ],
+    };
+
+    const ready = (storedDocument: Record<string, unknown> | null) =>
+      setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: 'case-1',
+          verifiedAt: new Date(),
+        },
+        caseRow: {
+          id: 'case-1',
+          caseNumber: 'CSE-1',
+          tenantId: 'tenant-1',
+          currentStepId: 'doc-boarding-pass',
+          answers: {},
+          travelClaimType: 'FLIGHT_DELAY',
+          status: 'IN_PROGRESS',
+        },
+        storedDocument,
+      });
+
+    it('accepts one that belongs to this case', async () => {
+      const { gateway, cases, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(
+        turn({ channel: CaseChannel.TELEGRAM, storedDocumentId: 'doc-7' })
+      );
+
+      expect(cases.patchAnswer).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ stepId: 'doc-boarding-pass', value: 'doc-7' }),
+        expect.anything()
+      );
+    });
+
+    it('refuses one that does not, and never records it as an answer', async () => {
+      // The scoped lookup finds nothing: the id is real but belongs to another
+      // claim. Accepting it would attach a stranger's document as evidence.
+      const { gateway, cases, sent, flows } = ready(null);
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(
+        turn({ channel: CaseChannel.TELEGRAM, storedDocumentId: 'doc-from-another-claim' })
+      );
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(sent.at(-1)?.text).toMatch(/could not attach/i);
+    });
+
+    it('scopes the lookup by case rather than filtering afterwards', async () => {
+      const { gateway, prisma, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(turn({ storedDocumentId: 'doc-7' }));
+
+      // A findUnique followed by an `if` is the same check until someone
+      // deletes the `if`. The constraint belongs in the query.
+      expect(prisma.caseDocument.findFirst).toHaveBeenCalledWith({
+        where: { id: 'doc-7', caseId: 'case-1' },
+      });
+    });
+
+    it('never fetches media when the document is already stored', async () => {
+      const { gateway, adapter, flows } = ready({ id: 'doc-7', caseId: 'case-1' });
+      flows.forCase.mockResolvedValue(documentFlow as never);
+
+      await gateway.handleTurn(turn({ storedDocumentId: 'doc-7' }));
+
+      expect(adapter.fetchMedia).not.toHaveBeenCalled();
+    });
+  });
+
+
+  /**
+   * "Would you like to start another claim?"
+   *
+   * It used to be rhetorical — the bot asked, then started the claim in the
+   * same breath, so the claim-type menu landed underneath the question and the
+   * answer was never wanted. A claimant messaging to ask after the claim they
+   * had just filed was pushed into filing a second one.
+   */
+  describe('offering another claim after one is finished', () => {
+    const finished = () =>
+      setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: 'case-1',
+          verifiedAt: new Date(),
+        },
+        caseRow: {
+          id: 'case-1',
+          caseNumber: 'CSE-2026-000024',
+          tenantId: 'tenant-1',
+          currentStepId: null,
+          answers: {},
+          travelClaimType: 'FLIGHT_DELAY',
+          status: 'SUBMITTED',
+        },
+      });
+
+    it('asks, and waits — no claim-type menu underneath it', async () => {
+      const { gateway, sent } = finished();
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      expect(sent.at(-1)?.text).toMatch(/would you like to start another claim/i);
+      // The bug: the menu arrived in the same turn, so the question was fake.
+      expect(sent.map(message => message.text).join(' ')).not.toMatch(/what has happened/i);
+    });
+
+    it('releases the finished case so a second claim is possible at all', async () => {
+      const { gateway, prisma } = finished();
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: null }) })
+      );
+    });
+
+    it('starts one when the claimant says yes', async () => {
+      // The previous turn released the case, so the follow-up tap arrives on a
+      // binding with nothing active — which is the state this answer is for.
+      const { gateway, consent, sent } = setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: null,
+          verifiedAt: new Date(),
+        },
+      });
+
+      await gateway.handleTurn(turn({ callbackValue: '__another:yes' }));
+
+      // Into the consent gate, which is where a new claim begins.
+      expect(consent.hasConsent).toHaveBeenCalled();
+      expect(sent.length).toBeGreaterThan(0);
+    });
+
+    it('stops when the claimant says no, without starting anything', async () => {
+      const { gateway, sent, cases } = setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: null,
+          verifiedAt: new Date(),
+        },
+      });
+
+      await gateway.handleTurn(turn({ callbackValue: '__another:no' }));
+
+      expect(sent.at(-1)?.text).toMatch(/no problem/i);
+      expect(cases.create).not.toHaveBeenCalled();
+    });
+
+    it('can be rebuilt for a pull channel, like the other pre-flow steps', async () => {
+      // The PWA renders from the transcript, which stores text and not choices.
+      // A synthetic step the gateway cannot rebuild arrives there as a question
+      // with no controls — a dead end.
+      const { gateway } = setup();
+      const step = await gateway.synthesiseStep('__another-claim', 'en');
+
+      expect(step?.answerType).toBe('choice');
+      expect(step?.choices?.map(choice => choice.value)).toEqual([
+        '__another:yes',
+        '__another:no',
+      ]);
     });
   });
 });

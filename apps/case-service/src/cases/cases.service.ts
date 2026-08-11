@@ -25,8 +25,10 @@ import {
   computeDeadlineFlags,
   evaluateNext,
   getStep,
+  missingSteps,
   pathSteps,
   resolveNextStep,
+  REVIEW_STEP_ID,
   SENSITIVE_ANSWER_STEPS,
   validateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -229,7 +231,13 @@ export class CasesService {
     for (const [stepId, value] of Object.entries(answers)) {
       const step = getStep(flow, stepId);
       if (!step) throw new BadRequestException(`Unknown step: ${stepId}`);
-      const result = validateAnswer(step, value);
+      // Checked against the whole pre-filled bag, not just itself: a staff form
+      // or a parsed FNOL email arrives with every date at once, which is
+      // precisely where a trip that ends before it starts gets in.
+      const result = validateAnswer(step, value, {
+        answers,
+        travelClaimType: flow.travelClaimType,
+      });
       if (!result.valid) {
         throw new BadRequestException(`Invalid answer for ${stepId}: ${result.error}`);
       }
@@ -427,7 +435,10 @@ export class CasesService {
     const step = getStep(flow, dto.stepId);
     if (!step) throw new BadRequestException(`Unknown step: ${dto.stepId}`);
 
-    const result = validateAnswer(step, dto.value);
+    const result = validateAnswer(step, dto.value, {
+      answers: caseRow.answers as CaseAnswers,
+      travelClaimType: flow.travelClaimType,
+    });
     if (!result.valid) {
       return { accepted: false, error: result.error, step };
     }
@@ -640,20 +651,10 @@ export class CasesService {
     const flow = await this.flows.forCase(caseRow);
     const answers = caseRow.answers as CaseAnswers;
 
-    // Walk the flow from entry and require every reachable mandatory step
-    // (documents included — their answers carry the CaseDocument id).
-    const missing: string[] = [];
-    let stepId: string | null = flow.entryStepId;
-    const seen = new Set<string>();
-    while (stepId && !seen.has(stepId)) {
-      seen.add(stepId);
-      const step = getStep(flow, stepId);
-      if (!step) break;
-      if (step.id !== 'review' && !step.optional && answers[step.id] === undefined) {
-        missing.push(step.label);
-      }
-      stepId = evaluateNext(step.next, answers);
-    }
+    // Every reachable mandatory step (documents included — their answers carry
+    // the CaseDocument id). Shared with the conversation, which routes the
+    // claimant to the first of these rather than letting them reach here.
+    const missing = missingSteps(flow, answers).map(step => step.label);
     if (missing.length > 0) {
       throw new BadRequestException(
         `Please complete the following before submitting: ${missing.join(', ')}`
@@ -747,14 +748,39 @@ export class CasesService {
     });
     const accountNumber = await this.encryption.decrypt(secret.bankAccountNumberEncrypted);
 
+    /**
+     * A tail with no account behind it means the value was captured and then
+     * lost — not that the claimant never gave one. The two look identical as a
+     * blank field and call for opposite actions: one needs the claimant asked
+     * again, the other needs nothing.
+     *
+     * Derived rather than stored, because the combination *is* the fact: a
+     * `last4` exists only if an account was once promoted, and a null
+     * ciphertext beside it can only mean the account is gone.
+     *
+     * Five cases are in this state on the demo book, from the defect fixed in
+     * `ecd342a` — `patchAnswer` re-encrypted the display mask over the real
+     * ciphertext on the turn after capture. Their plaintext is unrecoverable
+     * by design: it lived solely in the column that was overwritten.
+     */
+    const lost = accountNumber === null && caseRow.bankAccountLast4 !== null;
+
     await this.audit(id, 'PAYOUT_DETAILS_REVEALED', tenantContext, {
-      metadata: { reason: 'operator requested payout details', last4: caseRow.bankAccountLast4 },
+      metadata: {
+        reason: 'operator requested payout details',
+        last4: caseRow.bankAccountLast4,
+        // Recorded so the trail distinguishes a reveal that returned something
+        // from one that could not. An examiner asking "who saw this account"
+        // should not be shown a row where nobody could have.
+        ...(lost ? { outcome: 'unrecoverable' } : {}),
+      },
     });
 
     return {
       bankName: caseRow.bankName,
       bankAccountHolderName: caseRow.bankAccountHolderName,
       bankAccountNumber: accountNumber,
+      unrecoverable: lost,
     };
   }
 
@@ -814,6 +840,22 @@ export class CasesService {
     });
 
     const converted = await this.prisma.$transaction(async tx => {
+      // Record the claimant's own name, which until now no channel captured:
+      // a messaging claimant is created from a verified phone number alone, so
+      // the row sat nameless and the only name on the claim was whoever the
+      // payout account belongs to — not necessarily the same person.
+      //
+      // Only ever filled in, never overwritten. A claimant who already has a
+      // name from eKYC or a staff-entered record has a better-verified one than
+      // free text typed into a chat, and a second claim must not downgrade it.
+      const claimantName = this.answerString(answers['claimant-name']);
+      if (claimantName && caseRow.claimantId) {
+        await tx.claimant.updateMany({
+          where: { id: caseRow.claimantId, fullName: null },
+          data: { fullName: claimantName },
+        });
+      }
+
       const claim = await tx.claim.create({
         data: {
           claimNumber,

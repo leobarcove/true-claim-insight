@@ -10,6 +10,11 @@ import { AxiosError } from 'axios';
 interface LocationState {
   phoneNumber: string;
   expiresIn: number;
+  /**
+   * The code, when no SMS provider could send it. Only ever populated outside
+   * production — the server refuses to return one there.
+   */
+  prefillCode?: string;
   from?: string;
 }
 
@@ -18,7 +23,12 @@ export function VerifyOtpPage() {
   const navigate = useNavigate();
   const state = location.state as LocationState | null;
 
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  // Prefilled when the server had no way to text it. Verification is
+  // unchanged: this is still the real code, still expiring, still checked.
+  const [otp, setOtp] = useState<string[]>(() => {
+    const prefill = (location.state as LocationState | null)?.prefillCode;
+    return prefill && prefill.length === 6 ? prefill.split('') : ['', '', '', '', '', ''];
+  });
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(state?.expiresIn || 300);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);

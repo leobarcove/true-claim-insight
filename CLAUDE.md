@@ -254,7 +254,6 @@ Supporting documents:
 
 - **Market and cost analysis:** `docs/MARKET_RESEARCH_TPA_REVENUE.md` (fee pool, year-1 P&L, the three revenue paths — governs §5 sequencing and §9)
 - **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
-- **Claimant Telegram channel status:** `docs/TELEGRAM_CHANNEL_STATUS.md` — what works, what is pending and why, per tier. Read it before demoing or extending the conversational intake; the roadmap does not answer "can a claimant actually use this yet?" at the level of one channel. **Temporary — delete it, and this line, once its issues are fixed**
 - **Business requirements:** `docs/REQUIREMENTS.md`
 - **Technical architecture:** `docs/ARCHITECTURE.md`
 - **Task progress:** `docs/PROGRESS.md` (older; the plan's §8 progress record is more current)

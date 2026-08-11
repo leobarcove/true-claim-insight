@@ -17,6 +17,8 @@ import {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   getStep,
+  formatDateAnswer,
+  missingSteps,
   parseAmount,
   parseTextDate,
   ANSWER_MASK_PREFIX,
@@ -119,6 +121,29 @@ const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 
 /** Declining. Prefixed like the others so it cannot collide with a real value. */
 const CONSENT_DECLINED = '__consent:decline';
+
+/**
+ * Ids for the two questions asked before any flow is chosen.
+ *
+ * Named because three places now key on them — the handlers that answer them,
+ * and `synthesiseStep`, which rebuilds them for a channel that has to ask
+ * again from the transcript alone.
+ */
+const CONSENT_STEP_ID = '__consent';
+const CLAIM_TYPE_STEP_ID = '__claim-type';
+
+/**
+ * "Would you like to start another claim?" — asked, and then actually waited on.
+ *
+ * It used to be rhetorical: the bot posed the question and started the new
+ * claim in the same breath, so the claim-type menu arrived underneath it and
+ * the claimant's answer was never wanted. Anyone messaging for another reason —
+ * asking after the claim they had just filed, most obviously — was pushed into
+ * filing a second one.
+ */
+const ANOTHER_CLAIM_STEP_ID = '__another-claim';
+const ANOTHER_CLAIM_YES = '__another:yes';
+const ANOTHER_CLAIM_NO = '__another:no';
 
 /**
  * The turn could not be written down at all.
@@ -683,6 +708,39 @@ export class ConversationGateway {
     }
   ): Promise<void> {
     if (!binding.activeCaseId) {
+      // The answer to "would you like to start another claim?". Handled before
+      // anything else, because the binding has no active case at this point and
+      // every other path here assumes the claimant wants to open one.
+      if (payload.callbackValue === ANOTHER_CLAIM_NO) {
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: {
+            status: ConversationMessageStatus.PROCESSED,
+            stepId: ANOTHER_CLAIM_STEP_ID,
+            processedAt: new Date(),
+          },
+        });
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            'No problem. Your claim is with our team and we will be in touch.\n\n' +
+            'Message us any time to start another, or type "human" to reach a person.',
+        });
+        return;
+      }
+
+      if (payload.callbackValue === ANOTHER_CLAIM_YES) {
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: {
+            status: ConversationMessageStatus.PROCESSED,
+            stepId: ANOTHER_CLAIM_STEP_ID,
+            processedAt: new Date(),
+          },
+        });
+        await this.requireConsentThenStart(messageId, payload, adapter, binding);
+        return;
+      }
+
       await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
@@ -795,9 +853,11 @@ export class ConversationGateway {
         data: { activeCaseId: null },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: `Your claim request ${caseRow.caseNumber} is with our team. Would you like to start another claim?`,
+        text:
+          `Your claim request ${caseRow.caseNumber} is with our team. ` +
+          'Would you like to start another claim?',
+        step: this.anotherClaimMenu(),
       });
-      await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
 
@@ -988,7 +1048,36 @@ export class ConversationGateway {
       // proof-of-ownership step could not be passed at all, and it sits just
       // before the bank details, which meant that whole flow could never reach
       // review over a messaging channel.
-      if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
+      if (payload.storedDocumentId) {
+        // Web chat: the bytes went through the upload endpoint before this
+        // turn was sent, so there is nothing to fetch. Ownership is checked
+        // rather than trusted — the id arrives from the claimant's browser,
+        // and an unchecked one would let any guessable document, including
+        // another claimant's, be offered as evidence on this claim.
+        const stored = await this.prisma.caseDocument.findFirst({
+          where: { id: payload.storedDocumentId, caseId: caseRow.id },
+        });
+        if (!stored) {
+          this.logger.error(
+            `Turn offered document ${payload.storedDocumentId} for case ${caseRow.id}, ` +
+              'which does not belong to it. Rejected.'
+          );
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.UNPARSEABLE,
+              stepId: step.id,
+              error: 'Document does not belong to this case',
+              processedAt: new Date(),
+            },
+          });
+          await this.say(adapter, binding.id, payload.platformUserId, {
+            text: 'We could not attach that file. Please try uploading it again.',
+          });
+          return;
+        }
+        value = stored.id;
+      } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;
       } else if (!payload.mediaRef) {
         await this.prisma.conversationMessage.update({
@@ -1272,6 +1361,34 @@ export class ConversationGateway {
       // nothing submitted the Case at all. It stayed IN_PROGRESS and never
       // reached the operator vetting queue — a completed intake that no human
       // would ever see.
+      // A required step with no answer means submit() would throw, and the
+      // claimant would be told at the very last moment that something is
+      // missing by a bot that never asks for it. Reachable whenever a
+      // published flow gains a required step while claims are in flight —
+      // adding the claimant's name did exactly that to twelve of them.
+      // Asking is the only useful response.
+      const answers = (result.case?.answers ?? caseRow.answers ?? {}) as CaseAnswers;
+      const [firstMissing] = missingSteps(flow, answers);
+      if (firstMissing) {
+        this.logger.warn(
+          `Case ${caseRow.caseNumber} reached the review without "${firstMissing.id}". ` +
+            'Asking for it rather than failing the submission.'
+        );
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text: 'One more thing before we submit — we are missing an answer.',
+        });
+        await this.ask(
+          adapter,
+          binding.id,
+          payload.platformUserId,
+          firstMissing,
+          0,
+          { steps: flow.steps, answers },
+          this.progressOf(flow, firstMissing.id)
+        );
+        return;
+      }
+
       const submitted = await this.cases.submit(caseRow.id, this.claimantContext(binding));
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
@@ -1404,18 +1521,69 @@ export class ConversationGateway {
         : 'Before we take any details, here is how we handle them. ' +
           `Please read this and let us know you are happy to continue.\n\n` +
           `${notice.title}\n\n${notice.body}`,
-      step: {
-        id: '__consent',
-        prompt: notice.title,
-        label: 'Consent',
-        answerType: 'choice',
-        choices: [
-          { value: CONSENT_AGREED, label: 'I agree' },
-          { value: CONSENT_DECLINED, label: 'I do not agree' },
-        ],
-        next: { type: 'end' },
-      },
+      step: this.consentStep(notice.title),
     });
+  }
+
+  /**
+   * The "another claim?" question, shaped as a step so adapters render it
+   * normally — buttons on Telegram, a list row on WhatsApp, a choice control
+   * in the PWA.
+   */
+  private anotherClaimMenu(): FlowStep {
+    return {
+      id: ANOTHER_CLAIM_STEP_ID,
+      prompt: 'Would you like to start another claim?',
+      label: 'Another claim',
+      answerType: 'choice',
+      choices: [
+        { value: ANOTHER_CLAIM_YES, label: 'Yes, start another' },
+        { value: ANOTHER_CLAIM_NO, label: 'No, thank you' },
+      ],
+      next: { type: 'end' },
+    };
+  }
+
+  /** The consent question, shaped as a step so adapters render it normally. */
+  private consentStep(title: string): FlowStep {
+    return {
+      id: CONSENT_STEP_ID,
+      prompt: title,
+      label: 'Consent',
+      answerType: 'choice',
+      choices: [
+        { value: CONSENT_AGREED, label: 'I agree' },
+        { value: CONSENT_DECLINED, label: 'I do not agree' },
+      ],
+      next: { type: 'end' },
+    };
+  }
+
+  /**
+   * Rebuild a step that belongs to no flow.
+   *
+   * Two questions are asked before a Case exists — consent, and which kind of
+   * claim this is — and neither is in any flow definition, because no flow has
+   * been chosen yet. A push channel never needs them again: the adapter was
+   * handed the step and drew its keyboard on the spot. A pull channel has only
+   * what was persisted, and the transcript stores text, not choices.
+   *
+   * Without this the PWA reaches the consent notice and renders no way to
+   * agree to it — a claimant stopped at the gate by the one question that has
+   * no alternative route. Returning the ids rather than duplicating the steps
+   * keeps a single definition of each.
+   */
+  async synthesiseStep(stepId: string, locale: string | null): Promise<FlowStep | null> {
+    if (stepId === CLAIM_TYPE_STEP_ID) return this.claimTypeMenu();
+    if (stepId === ANOTHER_CLAIM_STEP_ID) return this.anotherClaimMenu();
+    if (stepId === CONSENT_STEP_ID) {
+      const notice = await this.consent.currentNotice(
+        ConsentPurpose.CLAIM_PROCESSING,
+        noticeLocale(locale)
+      );
+      return notice ? this.consentStep(notice.title) : null;
+    }
+    return null;
   }
 
   /**
@@ -1520,10 +1688,16 @@ export class ConversationGateway {
     }
   }
 
-  /** The claim-type chooser, shaped as a flow step so adapters render it normally. */
-  private claimTypeMenu(): FlowStep {
+  /**
+   * The claim-type chooser, shaped as a flow step so adapters render it normally.
+   *
+   * Public because a pull channel needs it too: the PWA asks what question is
+   * open and renders the answer control from the step, and this one belongs to
+   * no flow — there is no Case yet to pin one.
+   */
+  claimTypeMenu(): FlowStep {
     return {
-      id: '__claim-type',
+      id: CLAIM_TYPE_STEP_ID,
       prompt: 'What has happened?',
       label: 'Claim type',
       answerType: 'choice',
@@ -1734,18 +1908,11 @@ export class ConversationGateway {
     if (String(stored) === typed) return null;
 
     if (step.answerType === 'date' || step.answerType === 'datetime') {
-      const parsed = new Date(String(stored));
-      if (Number.isNaN(parsed.getTime())) return null;
-      const shown = parsed.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        ...(step.answerType === 'datetime' ? { hour: '2-digit', minute: '2-digit' } : {}),
-        timeZone: 'UTC',
-      });
-      // Spelled month, deliberately: "16/06" and "06/16" look alike and that
-      // ambiguity is the exact thing being confirmed.
-      return `Recorded as ${shown}. Type "back" if that is not right.`;
+      // Shared with the review summary rather than formatted again here. The
+      // two disagreeing is how a claimant confirms "11 August 2026" mid-flow
+      // and then reads back "2026-08-11T00:00:00.000Z" at the review.
+      const shown = formatDateAnswer(String(stored), step.answerType);
+      return shown === null ? null : `Recorded as ${shown}. Type "back" if that is not right.`;
     }
 
     if (step.answerType === 'number') {

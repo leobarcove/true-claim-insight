@@ -686,15 +686,19 @@ export {
   branchInputSteps,
   ruleTargets,
   pathSteps,
+  missingSteps,
   resolveNextStep,
   whatYouWillNeed,
   validateAnswer,
+  validateAgainstAnswers,
   computeDeadlineFlags,
   computeCompleteness,
   parseAmount,
   SKIP_VALUE,
   SENSITIVE_ANSWER_STEPS,
   ANSWER_MASK_PREFIX,
+  REVIEW_STEP_ID,
+  restoreReviewFlag,
 } from './case-flows';
 export type {
   AnswerType,
@@ -716,8 +720,10 @@ export type {
 // Messenger instead of forking into one flow per channel.
 export {
   CHANNEL_CAPABILITIES,
+  CHANNEL_LABELS,
   parseTextDate,
   renderChoices,
+  formatDateAnswer,
   summariseAnswers,
   supportsAnswerType,
 } from './channel-capabilities';
@@ -741,6 +747,15 @@ export {
 // Publish gate — what a FlowDefinition must satisfy before claimants walk it.
 export { canPublish, systemStepIds, validateFlowDefinition } from './flow-publish-gate';
 export type { FlowProblem, FlowProblemKind } from './flow-publish-gate';
+
+// Payee name check — is the person claiming the person being paid?
+export {
+  checkPayeeName,
+  comparePayeeName,
+  CLAIMANT_NAME_STEP,
+  PAYEE_NAME_STEP,
+} from './payee-name-check';
+export type { PayeeMatchVerdict, PayeeNameCheck } from './payee-name-check';
 
 // Flow overlay resolution — merges canonical structure with per-channel and
 // per-locale wording. Same explicit-re-export rule as above.

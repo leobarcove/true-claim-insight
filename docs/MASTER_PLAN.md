@@ -1221,18 +1221,36 @@ before a vendor assessment asks.
 
 **Constraint for now: synthetic and internal-tester data only on this path.**
 
-### The Telegram channel has its own status record — 11 August 2026
+### Claimant conversational intake — audited and remediated, 10–11 August 2026
 
 A four-way audit of the claimant Telegram channel (transport, flow engine,
-security, documentation) found enough that it warranted its own living
-document rather than another §8 entry: **`docs/TELEGRAM_CHANNEL_STATUS.md`**
-(deliberately **temporary** — a work queue, to be deleted along with this
-paragraph once its issues are closed).
-It answers the question this plan does not — *can a claimant actually use this
-yet?* — and today the answer is no: there is no SMS transport, so nobody can
-verify, and three further defects each stop a real intake completing.
+security, documentation) produced a tiered work queue large enough to warrant
+its own temporary file. **That queue is now empty and the file is deleted** —
+all six tiers closed and verified against the original reports, which caught
+three findings that had survived two earlier passes: `edited_message` was never
+in `allowed_updates` so correcting a typo met silence; only the *future* half
+of the date-range check had been fixed, so `1026` for `2026` arrived
+pre-marked out of window; and five gateway routes carried
+`@Throttle({ default: … })` against a config defining only `short`/`medium`/
+`long`, so the tightest limits in the system — five OTP sends an hour, ten
+logins a minute — had never applied to anything. A source-scanning test now
+fails on a `@Throttle` naming a throttler that does not exist, in both
+services.
 
-Two findings there reach beyond the channel and belong here:
+**A claimant can complete an intake end to end on all five flows**, and an
+operator can take over, read the transcript and open the evidence. The channel
+remains on **synthetic and internal-tester data only**, because that is a
+§3.4 constraint rather than a defect backlog: transfer records are written for
+every turn but carry `lawfulBasis: null`, no s.129 basis having been
+established.
+
+Operating notes — the environment flags, and above all that
+`TELEGRAM_POLLING_ENABLED` must be true on exactly one instance per bot token —
+now live in `docs/NON_MOTOR_ARCHITECTURE.md` under "Operating the
+conversational channels". Two pollers each receive half the updates, which
+presents as claimants being intermittently ignored rather than as an outage.
+
+Two findings reach beyond the channel and belong here:
 
 - ~~**The payout bank account is destroyed one turn after it is captured, on
   every channel.**~~ **Fixed 11 Aug.** `patchAnswer` re-derived the encrypted
@@ -1246,16 +1264,190 @@ Two findings there reach beyond the channel and belong here:
   accounts on the demo book held only their own mask, and are unrecoverable —
   the plaintext lives solely in that column.** Verified after: the account
   survives the following turn on the live system.
-- **Nothing writes a Telegram `TransferRecord`.** The registry entry added on
-  10 Aug and its passing test make the control look present; no writer is
-  instantiated in `chat/`, so §3.4's ungated-offshore gap is wider than that
-  row currently states.
+- ~~**Nothing writes a Telegram `TransferRecord`.**~~ **Fixed 11 Aug.** The
+  registry entry added on 10 Aug and its passing test made the control look
+  present while no writer was instantiated in `chat/` — a §3.6 false comfort of
+  exactly the kind this document tracks. Every turn now writes one. They carry
+  `lawfulBasis: null`, which is the honest state: the register records the
+  transfer and records that no s.129 basis exists for it, rather than implying
+  one by omission.
 
 Method note worth keeping: the two defects fixed on 11 August — a transcript
 that recorded no tapped answer, and case evidence with no read path at all —
 were both found by a person using the screen, *after* four auditors had read
 the same code closely. An audit narrows the search; it does not replace using
 the thing.
+
+### One intake engine, and a console to work it — 11 August 2026
+
+Twenty-six commits; the material ones below. Two are defects this document's
+own §3.6 pattern predicts — a control that reads as present and is not.
+
+- **A confirmed claim was not being submitted** (`d697389`). The review step is
+  recognised by an `isReview` flag added to the definitions *in code*, but a
+  Case walks the flow version it pinned, loaded from the database, and all five
+  published rows predate the flag. So the review step was not a review: the
+  answer summary was never attached — the claimant confirming details the
+  message did not contain — and confirming filed nothing, handing the finished
+  claim to an agent as "ran out of steps". CSE-2026-000021 submitted at 02:24;
+  CSE-2026-000022, identical flow, did not at 04:42. **A partial migration:
+  a semantically required field added to persisted data with no backfill.**
+  Repaired on the single load path, rows backfilled, and the publish gate now
+  requires exactly one review step.
+- **Nobody's name was on the claim** (`de124f2`). A messaging claimant is
+  created from a verified phone alone; the policy number is optional and was
+  skipped or unmatched on all eight Telegram cases; no eKYC vendor is
+  integrated. `Claimant.fullName` was null and the only name anywhere was the
+  payout account holder — not necessarily the same person. Nothing for AMLA
+  screening (gate G8) to screen, and no way to recognise a repeat claimant.
+  `claimant-name` is now the first question. **Left in plaintext, deliberately:**
+  `Claimant` stores phone, email and date of birth in the clear and encrypts
+  only NRIC, so encrypting the name alone adds a decrypt path to every screen
+  while the row stays trivially identifiable. Encrypting Claimant PII properly
+  — name, email, DOB, and phone behind a blind index like `nricHash` — is its
+  own change, and **now more pressing, because names accumulate from today.**
+- **Answers were only ever validated alone** (`de124f2`). A trip ending before
+  it began, an incident years outside the travel window, a flight "delayed" to
+  before its scheduled time: each field passed on its own, so all three reached
+  an adjuster as a clean claim. None needs conversational understanding to
+  catch — they are rules. Held in code keyed by step id, *not* as fields on
+  `FlowStep`, precisely because of the `isReview` lesson above: a new step field
+  reaches nothing already published. Incident timing is per claim type, since on
+  a cancellation the incident precedes the trip by definition.
+- **The PWA became a channel rather than a second implementation**
+  (`10aa844`, `68bba69`). See `NON_MOTOR_ARCHITECTURE.md` for the design. 491
+  lines of browser-side flow logic deleted; the claimant app gains transcript,
+  `back`/`edit`, progress counts and a route to a human that web claimants
+  never had.
+- **The console became somewhere a team can work** (`bdd9aa8`, `2e08a4c`) —
+  assignment to colleagues, an explicit queue status distinct from "is the bot
+  talking", internal notes, and first-response timing. The queue's
+  waiting-for-a-human count also never came back down: only `reply` cleared it,
+  so handing a conversation back left a badge on for ever (`7220bf9`).
+- **The review summary printed raw ISO timestamps** (`062cca5`) — the one
+  moment a claimant is asked to check the facts of their own claim, and
+  confirming it is what files the claim.
+
+**AI summarisation and suggested replies are not built, and the reason is
+§3.4, not effort.** They are table stakes in every 2026 support console
+surveyed; every provider available is offshore, and sending claim content to
+one is a materially larger transfer than the message text Telegram already
+sees. This waits on the in-country model.
+
+### The name was collected and then not shown — 11 August 2026 (`2e08a4c`, `a47e9c2`)
+
+Found by looking at CSE-2026-000024, a Telegram luggage claim, on the screen an
+adjuster actually uses. Two things the page got wrong, with different causes.
+
+- **The claimant read "Unknown" while their name sat two inches away.** The
+  entry above made `claimant-name` the first question, and the answer was
+  there — `Leo Boey`, in `Case.answers`. But `convertToClaim()` promotes it to
+  `Claimant.fullName` only at conversion, guarded by `where: { fullName: null }`
+  so free text typed into a chat can never overwrite a better-verified name from
+  eKYC or a staff-entered record. That rule is right and is untouched. The
+  *display* was wrong: the panel read only the identity column, so a case under
+  review showed no name at all. It now falls back to the intake answer, labelled
+  **"Stated at intake · not verified"** — the distinction between what a claimant
+  asserted and what anyone checked is exactly what must not be lost, and showing
+  it plainly would have implied an identity check that has not happened.
+- **"Policy unmatched" was correct and was not a defect.** `PNT000008` matches
+  none of the 423 policies on file, all of which are `MSIG-BGL-2026-#####`. Worth
+  recording because the instinct is to fix the badge; the badge was the only
+  honest thing on the card.
+
+**A payee who is not the claimant is now surfaced** (`payee-name-check.ts`,
+`a47e9c2`). The same case names `Leo Boey` as the claimant and `John Doe` as the
+account holder, and nothing anywhere compared them — the divergence the entry
+above predicted ("not necessarily the same person") had arrived and was passing
+silently. Usually innocent: a parent, a spouse, a company card. Also the exact
+shape of payout diversion and of a claim filed under a borrowed identity. So it
+**warns and never blocks** — rejection stays a human decision (§3.2).
+
+The comparison is deliberately three-valued. `match` silences the warning,
+`mismatch` asserts a discrepancy, and `uncertain` exists so borderline pairs are
+not forced into either: a false `mismatch` wastes an adjuster's time on an
+ordinary family arrangement, and a false `match` waves through the thing the
+check is for. Malaysian naming is why the middle value earns its place — banks
+drop `bin`/`binti`/`a/p`, truncate the account-name field around 20 characters,
+store uppercase, and Chinese name order is arbitrary. `Wong Chee Keong` against
+`Wong Chi Kiong` returns `uncertain`, which is the honest answer. **24 tests.**
+
+Pure, in `@tci/shared-types`, with no Prisma and no I/O, so the same rule can
+gate conversion server-side later without the two copies drifting — the failure
+mode §4.3 A2 is about. **Not yet wired to AMLA screening (gate G8):** this
+surfaces the divergence to a human and screens nobody.
+
+### A third channel, and a door claimants can actually open — 11 August 2026
+
+**WhatsApp is a conversational channel** (`b63d573`), on the same engine as
+Telegram and web chat. Identical flow — same gateway, same flow definitions,
+same questions, same validation, same `back`/`edit`, same handover — because
+the adapter knows only how to *say* things on one platform. Everything built
+for the messaging side over the past week arrived here without being written
+again, which is the whole return on the flow-as-data design.
+
+It matters commercially more than Telegram does: WhatsApp is how Malaysia
+messages, and reach on the intake channel is the constraint on volume, not
+features.
+
+Three platform differences that are not cosmetic:
+
+- **Identity arrives free.** `wa_id` is on every inbound message and Meta
+  vouches for it, so there is no "Share my number" step and no foreign-contact
+  case. The claimant is bound, tenanted and verified on their first message —
+  which is also what puts the thread in the operator queue. Verified against
+  the queue's own query rather than reasoned about.
+- **Choices are a ten-row interactive list.** Telegram holds around a hundred
+  inline buttons, so pagination never fired there; it genuinely fires here.
+- **A 24-hour service window.** Replies inside it are free-form and free of
+  charge; outside it only an approved template may be sent, so a conversation
+  left overnight cannot be reopened by us. Meta's 131047 is named explicitly in
+  the error path, because the generic failure gives no hint and the fix is not
+  a retry.
+
+**Push, not poll**, which removes the Telegram footgun rather than repeating
+it. No offset, no singleton constraint: every instance may receive deliveries
+and the insert-first dedupe makes that safe. The webhook is public because Meta
+is unauthenticated to us, so the `X-Hub-Signature-256` HMAC is the only control
+on an endpoint whose payload names a claimant's phone number — with no app
+secret set, every delivery is discarded rather than trusted.
+
+Offshore, and recorded: a `WHATSAPP` entry joins `OFFSHORE_PROVIDERS`, content
+reaches Meta in the United States and persists in WhatsApp's own history beyond
+our retention sweep, and every turn writes a record with `lawfulBasis: null`.
+The same §3.4 constraint as Telegram — synthetic and internal-tester data only.
+
+**A claimant could not log into the PWA at all** (`b71db55`, `d436944`). The
+web app's login sends an SMS OTP; there was no SMS provider, `sendOtp` printed
+the code to the server console behind a `TODO`, and the universal dev code was
+correctly removed on 10 Aug. So the offshore channel worked and the in-country
+one — the only path crossing no border — was unreachable by any real person.
+That inverts the residency story this plan had been telling, and it went
+unnoticed because nobody had tried to log in.
+
+Framed as the missing provider it is. `OtpTransport` joins the port pattern,
+with a console implementation and a WhatsApp one. Outside production an
+undelivered code is returned in the response so login works; **in production
+the request fails**, because returning a live credential over HTTP to an
+unauthenticated caller is indistinguishable from having no authentication. An
+unset `NODE_ENV` counts as production. Verification itself is untouched — the
+code is still CSPRNG-generated, stored, expiring, rate limited and
+attempt-counted; only delivery was ever stubbed.
+
+Register the WABA **in Malaysia**: authentication messages to Malaysian numbers
+from an account registered elsewhere are billed at ~RM 0.1685 rather than
+~RM 0.0564. One-tap and zero-tap autofill need a native Android package name
+and signature hash, so a PWA gets copy-code — which is also the universally
+supported option.
+
+**Two smaller repairs.** The five payout ciphertexts holding only their own
+display mask are cleared (`35a9ce0`), each with an audit row naming the defect
+and stating the claimant must be asked again; `revealPayoutDetails` now
+distinguishes "captured and lost" from "never captured", which are the same
+blank field and call for opposite actions. And "Would you like to start another
+claim?" now waits for the answer (`ab34282`) — it was asked and answered in the
+same turn, so the claim-type menu arrived one second later and anyone messaging
+to ask after the claim they had just filed was pushed into filing a second one.
 
 ### Deep audit: plan vs codebase — 10 August 2026
 

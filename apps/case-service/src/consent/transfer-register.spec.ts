@@ -24,6 +24,12 @@ describe('Cross-border transfer register (s.129)', () => {
       'N8N_OCR_WEBHOOK',
       'SUPABASE',
       'TELEGRAM',
+      // Two distinct uses, one recipient: login codes from the gateway (a
+      // phone number and six digits) and, when the channel is configured,
+      // whole claimant conversations from case-service. Recorded under one
+      // provider because s.129 asks who received the data, not which of our
+      // services sent it — the purpose field carries that.
+      'WHATSAPP',
     ]);
   });
 

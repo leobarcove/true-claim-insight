@@ -8,6 +8,13 @@ import { formatMalaysianPhone } from '@/lib/utils';
 export interface SendOtpResponse {
   message: string;
   expiresIn: number;
+  /**
+   * The code itself, returned only while no SMS provider is configured and
+   * only outside production — the server throws rather than sending this in
+   * production. Present so a claimant can log in at all before SMS exists;
+   * the app fills it in rather than asking someone to read a server log.
+   */
+  code?: string;
 }
 
 export interface VerifyOtpResponse {

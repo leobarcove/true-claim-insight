@@ -3,6 +3,7 @@ import {
   CASE_FLOWS,
   getFlow,
   resolveFlow,
+  restoreReviewFlag,
   validateFlowDefinition,
   type CaseChannel as SharedCaseChannel,
   type CaseFlow,
@@ -224,13 +225,20 @@ export class FlowsService {
     steps: unknown,
     travelClaimType: TravelClaimType
   ): CaseFlow {
-    const flow: CaseFlow = {
+    const stored: CaseFlow = {
       travelClaimType: travelClaimType as unknown as CaseFlow['travelClaimType'],
       entryStepId,
       steps: steps as FlowStep[],
     };
 
     const reference = CASE_FLOWS[travelClaimType as keyof typeof CASE_FLOWS];
+
+    // Rows published before `isReview` existed are still pinned by live Cases,
+    // and a flow whose review step is not marked as one neither shows the
+    // claimant their summary nor submits when they confirm it. Repaired here,
+    // on the single path every stored flow is loaded through, so no caller has
+    // to know the flag might be missing.
+    const flow = restoreReviewFlag(stored, reference);
     const problems = validateFlowDefinition(flow, reference);
     if (problems.length > 0) {
       this.logger.error(

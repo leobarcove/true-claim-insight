@@ -46,6 +46,7 @@ import {
   CASE_FLOWS,
   TRAVEL_CLAIM_TYPE_LABELS,
   TravelClaimType,
+  checkPayeeName,
   type FlowStep,
 } from '@tci/shared-types';
 import {
@@ -124,6 +125,32 @@ export function CaseDetailPage() {
         value: String(value),
       }));
   }, [flow, caseData]);
+
+  /**
+   * The name the claimant gave during intake.
+   *
+   * `Claimant.fullName` is deliberately not written until the case is converted
+   * to a claim — see the comment in `cases.service.ts` `convertToClaim()`: a
+   * name typed into a chat must never overwrite a better-verified one from eKYC
+   * or a staff-entered record. That rule is right, but it left this panel
+   * showing "Unknown" while the answers column two inches away displayed the
+   * name in full, which reads to an adjuster as data loss rather than as a
+   * deliberate deferral.
+   *
+   * So: show what the claimant stated, and label it as stated rather than
+   * verified. The database rule is untouched.
+   */
+  const statedName = useMemo(() => {
+    const value = caseData?.answers?.['claimant-name'];
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }, [caseData]);
+
+  /**
+   * Whether the person claiming is the person being paid. Never blocks — the
+   * rule surfaces the divergence and the adjuster decides. See
+   * `payee-name-check.ts` for why the comparison is deliberately conservative.
+   */
+  const payeeCheck = useMemo(() => checkPayeeName(caseData?.answers), [caseData]);
 
   if (isLoading || !caseData) {
     return (
@@ -393,7 +420,18 @@ export function CaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-1">
-                <p className="font-medium">{caseData.claimant?.fullName || 'Unknown'}</p>
+                {caseData.claimant?.fullName ? (
+                  <p className="font-medium">{caseData.claimant.fullName}</p>
+                ) : statedName ? (
+                  <>
+                    <p className="font-medium">{statedName}</p>
+                    <Badge variant="outline" className="font-normal">
+                      Stated at intake · not verified
+                    </Badge>
+                  </>
+                ) : (
+                  <p className="font-medium text-muted-foreground">Unknown</p>
+                )}
                 <p className="text-muted-foreground">{caseData.claimant?.phoneNumber}</p>
               </CardContent>
             </Card>
@@ -474,6 +512,29 @@ export function CaseDetailPage() {
                   </>
                 ) : (
                   <p className="text-muted-foreground">Not provided yet</p>
+                )}
+
+                {/*
+                  A payee who is not the claimant is usually innocent — a parent,
+                  a spouse, a company card — and is also what payout diversion
+                  looks like. Surfaced, never blocking: rejection stays a human
+                  decision (MASTER_PLAN §3.2).
+                */}
+                {payeeCheck.shouldWarn && (
+                  <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 mt-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-amber-900 dark:text-amber-200">
+                        {payeeCheck.verdict === 'mismatch'
+                          ? 'Payee differs from the claimant'
+                          : 'Check the payee against the claimant'}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Claim is in the name of {payeeCheck.claimantName}; the account
+                        is held by {payeeCheck.payeeName}.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

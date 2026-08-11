@@ -29,7 +29,8 @@ export type FlowProblemKind =
   | 'dead-end-rule'
   | 'empty-prompt'
   | 'invalid-pattern'
-  | 'step-id-too-long';
+  | 'step-id-too-long'
+  | 'review-step';
 
 export interface FlowProblem {
   kind: FlowProblemKind;
@@ -234,6 +235,29 @@ export const validateFlowDefinition = (
           'carry. Shorten the step id or the choice values.',
       });
     }
+  }
+
+  // Exactly one step must be marked `isReview`. Zero is the failure that
+  // stranded every claim published before the flag existed: nothing submits,
+  // and the claimant is asked to confirm a summary that was never attached.
+  // More than one is worse — whichever is reached first submits the claim,
+  // so a mid-flow acknowledgement would file it early.
+  const reviewSteps = flow.steps.filter(step => step.isReview);
+  if (reviewSteps.length === 0) {
+    problems.push({
+      kind: 'review-step',
+      detail:
+        'No step is marked `isReview`. Confirming would never submit the claim, and the ' +
+        'review would carry no summary of what is being confirmed.',
+    });
+  } else if (reviewSteps.length > 1) {
+    problems.push({
+      kind: 'review-step',
+      detail:
+        `${reviewSteps.length} steps are marked \`isReview\` (${reviewSteps
+          .map(step => `"${step.id}"`)
+          .join(', ')}). Whichever is reached first submits the claim.`,
+    });
   }
 
   if (reference) {
