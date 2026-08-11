@@ -144,6 +144,15 @@ export interface FlowStep {
      * claimant has stopped thinking about it.
      */
     minLength?: number;
+    /**
+     * Replaces the "we need your own description" rejection on steps where
+     * `minLength` is guarding something that is not a description.
+     *
+     * The default wording tells the claimant their answer lacks detail, which
+     * is right for an account of what happened and absurd for a name — nobody
+     * should be asked to describe their own name in more depth.
+     */
+    substanceError?: string;
   };
   /**
    * Load-bearing outside the conversation: something elsewhere reads this
@@ -185,6 +194,31 @@ export const CLAIM_WINDOW_DAYS = 30;
 
 /** Steps every flow starts with, in order. `next` is wired by buildFlow(). */
 const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
+  {
+    id: 'claimant-name',
+    // Asked rather than derived, because there is nothing to derive it from: a
+    // messaging claimant is known only by a phone number the platform vouched
+    // for, the policy number is optional and frequently skipped, and no eKYC
+    // vendor is integrated. Without this the claim reaches an adjuster with no
+    // name on it at all — nothing for AMLA screening to screen, and no way to
+    // recognise the same person claiming twice.
+    //
+    // "as it appears on your IC or passport" earns its length: the name has to
+    // match the documents uploaded later and the account being paid, and a
+    // first name alone does none of that.
+    prompt:
+      'First, what is your full name, as it appears on your IC or passport?',
+    label: 'Full name',
+    answerType: 'text',
+    // Two characters, not the usual description threshold: "Ng" is a complete
+    // Malaysian surname and a real claimant should never be told their own
+    // name is too short.
+    validation: {
+      minLength: 2,
+      substanceError: 'Please give your name as it is written on your IC or passport.',
+    },
+    system: true, // promoted to Claimant.fullName on conversion
+  },
   {
     id: 'policy-number',
     prompt:
@@ -760,6 +794,36 @@ export const pathSteps = (flow: CaseFlow, answers: CaseAnswers): Set<string> => 
   return onPath;
 };
 
+/**
+ * Mandatory steps on the claimant's actual path that have no answer.
+ *
+ * Walks the same route as `pathSteps`, so a branch never taken is never
+ * demanded. The review is excluded: it is answered *by* submitting.
+ *
+ * Shared by the submit guard and the conversation, so the two cannot disagree
+ * about what "complete" means — the failure that produces is a claimant told
+ * at the final step that something is missing, by a bot with no way to ask for
+ * it. That is reachable whenever a published flow gains a required step while
+ * claims are already in flight, which is not hypothetical: it happens on every
+ * structural flow change.
+ */
+export const missingSteps = (flow: CaseFlow, answers: CaseAnswers): FlowStep[] => {
+  const missing: FlowStep[] = [];
+  const seen = new Set<string>();
+  let stepId: string | null = flow.entryStepId;
+
+  while (stepId && !seen.has(stepId)) {
+    seen.add(stepId);
+    const step: FlowStep | undefined = getStep(flow, stepId);
+    if (!step) break;
+    if (!step.isReview && !step.optional && answers[step.id] === undefined) {
+      missing.push(step);
+    }
+    stepId = evaluateNext(step.next, answers);
+  }
+  return missing;
+};
+
 export const resolveNextStep = (
   flow: CaseFlow,
   stepId: string,
@@ -877,7 +941,193 @@ const NON_ANSWERS = new Set([
   'entah',
 ]);
 
-export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValidation => {
+/**
+ * Answers that only make sense relative to another answer.
+ *
+ * Held in code, keyed by step id, rather than declared on the steps themselves
+ * — deliberately. Flow definitions are *stored*, and a Case walks the version
+ * it pinned, so a new field on `FlowStep` reaches nothing already published
+ * until every row is backfilled. That is exactly how `isReview` came to be
+ * missing from all five platform flows. These rules apply to every pinned
+ * version the moment they ship, including ones written years earlier.
+ *
+ * Keying by step id is safe because the ids involved are `system: true`: the
+ * publish gate already refuses a flow that drops or renames them.
+ */
+interface DateOrderRule {
+  /** Step whose date must not fall after `later`. */
+  earlier: string;
+  later: string;
+  /**
+   * How closely to compare.
+   *
+   * `day` for a pair of calendar dates, which arrive at T00:00Z — comparing
+   * those as instants is fine, but comparing a *datetime* against one is not,
+   * so anything mixing the two must be day-granular.
+   *
+   * `instant` where both sides carry a real clock time and the gap between
+   * them is the claim: a flight scheduled at 15:00 that left at 09:00 the same
+   * day is a contradiction that day-granularity cannot see.
+   */
+  granularity: 'day' | 'instant';
+  /** Shown when `earlier` is being answered and lands after `later`. */
+  whenEarlyIsLate: string;
+  /** Shown when `later` is being answered and lands before `earlier`. */
+  whenLateIsEarly: string;
+}
+
+const DATE_ORDER: readonly DateOrderRule[] = [
+  {
+    earlier: 'trip-start',
+    later: 'trip-end',
+    granularity: 'day',
+    whenEarlyIsLate: 'That is after the end of your trip ({other}). Please check the start date.',
+    whenLateIsEarly: 'That is before your trip started ({other}). Please check the end date.',
+  },
+  {
+    // "If it was cancelled, give the departure time of the replacement flight"
+    // — a replacement always departs later, so an actual before the scheduled
+    // time is not a delay at all. Left unchecked it reaches an adjuster as a
+    // delay claim whose own dates show the flight leaving early.
+    earlier: 'scheduled-departure',
+    later: 'actual-departure',
+    granularity: 'instant',
+    whenEarlyIsLate:
+      'That is after the flight actually departed ({other}). Please check the scheduled time.',
+    whenLateIsEarly:
+      'That is before the scheduled departure ({other}), which would mean the flight left early. ' +
+      'Please check the time — and if the flight was cancelled, give the replacement flight’s departure.',
+  },
+];
+
+/**
+ * Where the incident must sit relative to the trip, per claim type.
+ *
+ * Not one universal rule: on a cancellation the incident is the *reason the
+ * trip did not happen*, so it necessarily precedes the departure date. A blanket
+ * "the incident happened during the trip" would reject every cancellation claim.
+ */
+const INCIDENT_WINDOW: Record<string, 'before-trip' | 'during-trip'> = {
+  TRIP_CANCELLATION: 'before-trip',
+  FLIGHT_DELAY: 'during-trip',
+  LUGGAGE_DAMAGE: 'during-trip',
+  LUGGAGE_LOSS: 'during-trip',
+  MEDICAL: 'during-trip',
+};
+
+/**
+ * Midnight-anchored, so a same-day comparison never fails on the clock.
+ *
+ * `trip-end` is a date and arrives as T00:00Z; an incident at 15:00 on the last
+ * day of the trip is inside it, and comparing instants would have called that
+ * "after your trip ended" — rejecting a true answer, which is worse than the
+ * gap this closes.
+ */
+const startOfDay = (value: Date): number =>
+  Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+
+const asDate = (value: AnswerValue | undefined): Date | null => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (text === '' || text.toLowerCase() === SKIP_VALUE) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/** "14 August 2026" — for quoting the other answer back in an error. */
+const dayLabel = (value: Date): string =>
+  `${value.getUTCDate()} ${
+    [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ][value.getUTCMonth()]
+  } ${value.getUTCFullYear()}`;
+
+/**
+ * Check one answer against the others already given.
+ *
+ * Separate from the per-field rules in `validateAnswer` because it needs the
+ * whole answer bag, and because it stays correct in both directions: editing
+ * `trip-start` to after `trip-end` is caught just as editing `trip-end` to
+ * before `trip-start` is. Silent on anything it cannot compare — a missing,
+ * skipped or unparseable counterpart means there is nothing to contradict.
+ */
+export const validateAgainstAnswers = (
+  step: FlowStep,
+  value: AnswerValue,
+  answers: CaseAnswers,
+  travelClaimType?: TravelClaimTypeLike
+): AnswerValidation => {
+  const subject = asDate(value);
+  if (!subject) return { valid: true };
+  const subjectDay = startOfDay(subject);
+
+  for (const rule of DATE_ORDER) {
+    const at = (date: Date): number =>
+      rule.granularity === 'day' ? startOfDay(date) : date.getTime();
+    const self = at(subject);
+
+    if (step.id === rule.earlier) {
+      const other = asDate(answers[rule.later]);
+      if (other && self > at(other)) {
+        return { valid: false, error: rule.whenEarlyIsLate.replace('{other}', dayLabel(other)) };
+      }
+    }
+    if (step.id === rule.later) {
+      const other = asDate(answers[rule.earlier]);
+      if (other && self < at(other)) {
+        return { valid: false, error: rule.whenLateIsEarly.replace('{other}', dayLabel(other)) };
+      }
+    }
+  }
+
+  if (step.id === 'incident-date' && travelClaimType) {
+    const window = INCIDENT_WINDOW[String(travelClaimType)];
+    const tripStart = asDate(answers['trip-start']);
+    const tripEnd = asDate(answers['trip-end']);
+
+    if (window === 'during-trip') {
+      if (tripStart && subjectDay < startOfDay(tripStart)) {
+        return {
+          valid: false,
+          error:
+            `That is before your trip began (${dayLabel(tripStart)}). Please check the date — ` +
+            'if it happened before you travelled, this may be a cancellation claim instead.',
+        };
+      }
+      if (tripEnd && subjectDay > startOfDay(tripEnd)) {
+        return {
+          valid: false,
+          error: `That is after your trip ended (${dayLabel(tripEnd)}). Please check the date.`,
+        };
+      }
+    }
+
+    if (window === 'before-trip' && tripStart && subjectDay > startOfDay(tripStart)) {
+      return {
+        valid: false,
+        error:
+          `That is after your trip was due to begin (${dayLabel(tripStart)}). For a cancellation, ` +
+          'give the date of whatever stopped you travelling.',
+      };
+    }
+  }
+
+  return { valid: true };
+};
+
+/** Everything that can be judged from the answer alone. */
+const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => {
   if (step.optional && typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
     return { valid: true };
   }
@@ -896,14 +1146,17 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
           return {
             valid: false,
             error:
+              step.validation.substanceError ??
               'We need your own description here — it is the part nobody else can fill in ' +
-              'for you. Even a rough one helps, for example what is damaged and how.',
+                'for you. Even a rough one helps, for example what is damaged and how.',
           };
         }
         if (text.length < step.validation.minLength) {
           return {
             valid: false,
-            error: `Please give a little more detail — around ${step.validation.minLength} characters or more.`,
+            error:
+              step.validation.substanceError ??
+              `Please give a little more detail — around ${step.validation.minLength} characters or more.`,
           };
         }
       }
@@ -1007,6 +1260,29 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
     default:
       return { valid: false, error: 'Unsupported answer type.' };
   }
+};
+
+/**
+ * Validate one answer: first on its own, then against the answers around it.
+ *
+ * Order matters. A mistyped "06/07/2026" must be met with the format hint, not
+ * with "that is after the end of your trip" — the relative rules would happily
+ * compare a date the claimant never meant, and send them looking for a mistake
+ * in the wrong answer.
+ */
+export const validateAnswer = (
+  step: FlowStep,
+  value: AnswerValue,
+  /**
+   * The answers already captured, so a value can be checked against them.
+   * Optional: callers without a full bag (the FNOL parser, unit tests) still
+   * get every per-field rule, just not the relative ones.
+   */
+  context?: { answers: CaseAnswers; travelClaimType?: TravelClaimTypeLike }
+): AnswerValidation => {
+  const field = validateField(step, value);
+  if (!field.valid || !context) return field;
+  return validateAgainstAnswers(step, value, context.answers, context.travelClaimType);
 };
 
 export interface DeadlineFlags {

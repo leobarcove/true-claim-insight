@@ -17,6 +17,7 @@ import {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   getStep,
+  missingSteps,
   parseAmount,
   parseTextDate,
   ANSWER_MASK_PREFIX,
@@ -1272,6 +1273,34 @@ export class ConversationGateway {
       // nothing submitted the Case at all. It stayed IN_PROGRESS and never
       // reached the operator vetting queue — a completed intake that no human
       // would ever see.
+      // A required step with no answer means submit() would throw, and the
+      // claimant would be told at the very last moment that something is
+      // missing by a bot that never asks for it. Reachable whenever a
+      // published flow gains a required step while claims are in flight —
+      // adding the claimant's name did exactly that to twelve of them.
+      // Asking is the only useful response.
+      const answers = (result.case?.answers ?? caseRow.answers ?? {}) as CaseAnswers;
+      const [firstMissing] = missingSteps(flow, answers);
+      if (firstMissing) {
+        this.logger.warn(
+          `Case ${caseRow.caseNumber} reached the review without "${firstMissing.id}". ` +
+            'Asking for it rather than failing the submission.'
+        );
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text: 'One more thing before we submit — we are missing an answer.',
+        });
+        await this.ask(
+          adapter,
+          binding.id,
+          payload.platformUserId,
+          firstMissing,
+          0,
+          { steps: flow.steps, answers },
+          this.progressOf(flow, firstMissing.id)
+        );
+        return;
+      }
+
       const submitted = await this.cases.submit(caseRow.id, this.claimantContext(binding));
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
