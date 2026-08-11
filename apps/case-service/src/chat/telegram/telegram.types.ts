@@ -46,9 +46,25 @@ export interface TelegramMessage {
   date: number;
   text?: string;
   contact?: TelegramContact;
+  /** Text sent *with* a photo or file. Dropped until 11 Aug 2026. */
+  caption?: string;
   /** Ascending by size; the last entry is the largest rendition. */
   photo?: TelegramPhotoSize[];
   document?: TelegramDocument;
+
+  // Kinds we cannot turn into an answer. Declared so they can be recognised
+  // and refused out loud — undeclared, they were indistinguishable from an
+  // empty update and vanished without a row, a reply or a trace.
+  voice?: unknown;
+  video?: unknown;
+  video_note?: unknown;
+  audio?: unknown;
+  sticker?: unknown;
+  animation?: unknown;
+  location?: unknown;
+  venue?: unknown;
+  poll?: unknown;
+  dice?: unknown;
 }
 
 export interface TelegramCallbackQuery {

@@ -25,7 +25,20 @@ import { TelegramPoller } from './telegram/telegram.poller';
  * calls its endpoints instead of the tables.
  */
 @Module({
-  imports: [HttpModule, CasesModule, ConsentModule],
+  imports: [
+    // A timeout, because there was none. The poll loop is strictly serial —
+    // one turn is awaited fully before the next update, and before the next
+    // getUpdates — so a single black-holed connection to api.telegram.org
+    // froze the entire channel for every claimant until OS-level TCP
+    // keepalive, on the order of two hours, with nothing detecting it.
+    //
+    // 30s is generous enough for a 20 MB document download and far short of
+    // that. `getUpdates` sets its own longer timeout per request, which
+    // overrides this, so long-polling is unaffected.
+    HttpModule.register({ timeout: 30_000 }),
+    CasesModule,
+    ConsentModule,
+  ],
   controllers: [ConversationsController],
   providers: [
     ConversationGateway,

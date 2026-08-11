@@ -23,6 +23,36 @@ const CALLBACK_SEPARATOR = '|';
 const CALLBACK_DATA_LIMIT = 64;
 
 /**
+ * Message kinds a claim intake cannot read, in the order we would name them.
+ *
+ * Not an oversight list — each is a thing a real claimant plausibly sends. The
+ * point is to say so rather than ignore it.
+ */
+const UNREADABLE_KINDS = [
+  'voice',
+  'video_note',
+  'video',
+  'audio',
+  'sticker',
+  'animation',
+  'location',
+  'venue',
+  'poll',
+  'dice',
+] as const;
+
+/** Telegram refuses `getFile` above this, and says so unhelpfully. */
+const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+/** A file Telegram will not hand over. Distinguished so the claimant hears why. */
+export class MediaTooLargeError extends Error {
+  constructor(readonly sizeBytes: number) {
+    super(`Telegram will not serve files above 20 MB (this one is ${sizeBytes} bytes)`);
+    this.name = 'MediaTooLargeError';
+  }
+}
+
+/**
  * Telegram Bot API adapter.
  *
  * Inert without `TELEGRAM_BOT_TOKEN`: `isConfigured()` returns false and the
@@ -126,7 +156,11 @@ export class TelegramAdapter implements ChannelAdapter {
       }
     }
 
+    // A caption is the claimant answering *with* the photo — "here is the
+    // damage, it happened on Tuesday". Dropped until now, so on a non-document
+    // step they got "that does not look right" about text they had provided.
     if (message.text) payload.text = message.text;
+    else if (message.caption) payload.text = message.caption;
 
     // Largest rendition of a photo, or a document. Stored as a reference only:
     // the bytes are fetched when a document step actually wants them, so a
@@ -138,6 +172,14 @@ export class TelegramAdapter implements ChannelAdapter {
       payload.mediaRef = message.document.file_id;
     }
 
+    // Something we cannot read as an answer. Named rather than dropped: these
+    // produced no payload at all, so the turn left no row, no reply and no
+    // trace, and the claimant simply got silence.
+    if (!payload.text && !payload.mediaRef && !payload.sharedPhone) {
+      const kind = UNREADABLE_KINDS.find(candidate => message[candidate] !== undefined);
+      if (kind) payload.unsupportedMedia = kind;
+    }
+
     // Nothing usable — not even a turn. A refused contact *is* a turn, though:
     // the claimant tapped share and is waiting, so dropping it here would
     // leave them staring at silence with no idea what went wrong.
@@ -145,7 +187,8 @@ export class TelegramAdapter implements ChannelAdapter {
       !payload.text &&
       !payload.mediaRef &&
       !payload.sharedPhone &&
-      !payload.sharedForeignContact
+      !payload.sharedForeignContact &&
+      !payload.unsupportedMedia
     ) {
       return null;
     }
@@ -190,7 +233,38 @@ export class TelegramAdapter implements ChannelAdapter {
     const markup = this.replyMarkup(prompt);
     if (markup) body.reply_markup = markup;
 
-    await firstValueFrom(this.http.post(`${this.api}/sendMessage`, body));
+    await this.postWithRateLimitRetry('sendMessage', body);
+  }
+
+  /**
+   * Send, and honour a rate limit rather than treating it as a failure.
+   *
+   * Telegram allows roughly one message per second to a chat and answers 429
+   * with `retry_after`. Nothing read it, so a burst — and one answer can fire
+   * four messages: the confirmation echo, a deadline warning, the "updated"
+   * line and the next question — surfaced as a thrown send. That took the
+   * whole turn down the failure path, which is a heavy price for the platform
+   * telling us politely to wait a second.
+   *
+   * One retry only. If it is still refusing after the delay it asked for, the
+   * problem is not pacing.
+   */
+  private async postWithRateLimitRetry(method: string, body: unknown): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post(`${this.api}/${method}`, body));
+    } catch (error) {
+      const status = (error as { response?: { status?: number; data?: unknown } })?.response?.status;
+      const retryAfter = (
+        (error as { response?: { data?: { parameters?: { retry_after?: number } } } })?.response
+          ?.data?.parameters?.retry_after
+      );
+      if (status !== 429) throw error;
+
+      const waitMs = Math.min((retryAfter ?? 1) * 1000, 30_000);
+      this.logger.warn(`Telegram rate-limited ${method}; retrying once in ${waitMs}ms.`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      await firstValueFrom(this.http.post(`${this.api}/${method}`, body));
+    }
   }
 
   /**
@@ -208,6 +282,13 @@ export class TelegramAdapter implements ChannelAdapter {
     );
     const filePath = meta?.result?.file_path;
     if (!filePath) throw new Error(`Telegram returned no file_path for ${mediaRef}`);
+
+    // Checked before the download rather than discovered as a generic failure.
+    // A hospital bill or policy PDF over 20 MB is ordinary, and the claimant
+    // was being told "something went wrong on our side" — untrue, and no
+    // reason not to send the same file again forever.
+    const sizeBytes = Number(meta?.result?.file_size ?? 0);
+    if (sizeBytes > MAX_DOWNLOAD_BYTES) throw new MediaTooLargeError(sizeBytes);
 
     const { data, headers } = await firstValueFrom(
       this.http.get(`https://api.telegram.org/file/bot${this.token}/${filePath}`, {
