@@ -695,6 +695,8 @@ export {
   SKIP_VALUE,
   SENSITIVE_ANSWER_STEPS,
   ANSWER_MASK_PREFIX,
+  REVIEW_STEP_ID,
+  restoreReviewFlag,
 } from './case-flows';
 export type {
   AnswerType,
