@@ -1334,6 +1334,49 @@ surveyed; every provider available is offshore, and sending claim content to
 one is a materially larger transfer than the message text Telegram already
 sees. This waits on the in-country model.
 
+### The name was collected and then not shown — 11 August 2026 (`2e08a4c`, `a47e9c2`)
+
+Found by looking at CSE-2026-000024, a Telegram luggage claim, on the screen an
+adjuster actually uses. Two things the page got wrong, with different causes.
+
+- **The claimant read "Unknown" while their name sat two inches away.** The
+  entry above made `claimant-name` the first question, and the answer was
+  there — `Leo Boey`, in `Case.answers`. But `convertToClaim()` promotes it to
+  `Claimant.fullName` only at conversion, guarded by `where: { fullName: null }`
+  so free text typed into a chat can never overwrite a better-verified name from
+  eKYC or a staff-entered record. That rule is right and is untouched. The
+  *display* was wrong: the panel read only the identity column, so a case under
+  review showed no name at all. It now falls back to the intake answer, labelled
+  **"Stated at intake · not verified"** — the distinction between what a claimant
+  asserted and what anyone checked is exactly what must not be lost, and showing
+  it plainly would have implied an identity check that has not happened.
+- **"Policy unmatched" was correct and was not a defect.** `PNT000008` matches
+  none of the 423 policies on file, all of which are `MSIG-BGL-2026-#####`. Worth
+  recording because the instinct is to fix the badge; the badge was the only
+  honest thing on the card.
+
+**A payee who is not the claimant is now surfaced** (`payee-name-check.ts`,
+`a47e9c2`). The same case names `Leo Boey` as the claimant and `John Doe` as the
+account holder, and nothing anywhere compared them — the divergence the entry
+above predicted ("not necessarily the same person") had arrived and was passing
+silently. Usually innocent: a parent, a spouse, a company card. Also the exact
+shape of payout diversion and of a claim filed under a borrowed identity. So it
+**warns and never blocks** — rejection stays a human decision (§3.2).
+
+The comparison is deliberately three-valued. `match` silences the warning,
+`mismatch` asserts a discrepancy, and `uncertain` exists so borderline pairs are
+not forced into either: a false `mismatch` wastes an adjuster's time on an
+ordinary family arrangement, and a false `match` waves through the thing the
+check is for. Malaysian naming is why the middle value earns its place — banks
+drop `bin`/`binti`/`a/p`, truncate the account-name field around 20 characters,
+store uppercase, and Chinese name order is arbitrary. `Wong Chee Keong` against
+`Wong Chi Kiong` returns `uncertain`, which is the honest answer. **24 tests.**
+
+Pure, in `@tci/shared-types`, with no Prisma and no I/O, so the same rule can
+gate conversion server-side later without the two copies drifting — the failure
+mode §4.3 A2 is about. **Not yet wired to AMLA screening (gate G8):** this
+surfaces the divergence to a human and screens nobody.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working

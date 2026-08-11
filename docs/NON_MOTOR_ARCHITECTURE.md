@@ -80,6 +80,36 @@ Signals are append-only. Re-running providers creates new rows; the UI
 shows the most recent grouped by `provider`. A future fusion step combines
 signals across providers into an aggregate fraud score per claim.
 
+### Payee name check — a rule, deliberately not a provider (added 11 Aug 2026)
+
+Intake captures two names for two reasons: `claimant-name` is whose claim it is,
+`bank-account-holder` is where the money goes. Nothing requires them to match,
+and until 11 Aug nothing compared them. `checkPayeeName` in `@tci/shared-types`
+now does, and the adjuster's payout panel warns when they diverge.
+
+It is **not** a `FraudSignalProvider`, and the reason is the rule stated above —
+the interface is drawn where a vendor or regulatory decision could change. This
+is a string comparison over two answers already in hand. It calls nothing, costs
+nothing, needs no orchestrator run, and there is no second implementation anyone
+would ever swap in. Making it a provider would buy indirection and a `FraudSignal`
+row per case view in exchange for nothing.
+
+Consequences worth being explicit about, because they are the trade:
+
+- **It writes no `FraudSignal` row**, so a divergence is not part of any
+  aggregate fraud score and leaves no append-only record. It is a live read of
+  the current answers, recomputed on each view.
+- **It never blocks.** Only `match` silences the warning; `mismatch` and
+  `uncertain` both surface. Rejection stays a human decision.
+- **It is pure — no Prisma, no I/O.** That is what lets the same function gate
+  conversion in case-service later without a second copy drifting from the one
+  the portal uses.
+
+If a payee divergence ever needs to *score* rather than *warn* — feeding claim
+triage, or evidencing a pattern across claims — that is the moment it becomes a
+provider (`category: IDENTITY`), and the pure comparison stays where it is as
+the provider's implementation.
+
 ### Evidence checklist
 
 ```

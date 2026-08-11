@@ -500,6 +500,10 @@ sequenceDiagram
 flowchart TD
     S["Case SUBMITTED"] --> OPEN["`Operator opens it
 → UNDER_REVIEW`"]
+    OPEN -.-> PAYEE["`**Payee name check**
+warns when the account holder
+is not the claimant —
+advisory, never blocks`"]
     OPEN --> Q1{"Policy matched?"}
 
     Q1 -->|no| LINK["`needsPolicyReview = true
@@ -539,10 +543,29 @@ reason recorded`"]
     style EXPERT stroke:#C77A2E,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
+    style PAYEE stroke:#C77A2E,stroke-width:2.5px
         </pre></div>
         <p class="note">
           The loop <code>INFO_REQUESTED → SUBMITTED → UNDER_REVIEW</code> may run any number of
           times. Every pass writes an audit row carrying before and after values.
+        </p>
+        <p class="note">
+          <strong>Two things the panel says about identity.</strong> The claimant's name is
+          shown as <em>"Stated at intake · not verified"</em> until the case converts — the
+          name is what the claimant typed, no eKYC vendor is integrated, and a panel that
+          displayed it plainly would imply a check nobody performed.
+        </p>
+        <p class="note">
+          The <strong>payee name check</strong> compares that name against the account holder.
+          A divergence is usually innocent — a parent, a spouse, a company card — and is also
+          what payout diversion looks like, so it <em>warns and never blocks</em>. The verdict
+          is three-valued: only a match silences the warning, and <code>uncertain</code> exists
+          so borderline Malaysian names are not forced into a false accusation. Banks drop
+          <code>bin</code>, <code>binti</code> and <code>a/p</code>, truncate the account-name
+          field around twenty characters, and Chinese name order is arbitrary — so
+          <code>Wong Chee Keong</code> against <code>Wong Chi Kiong</code> is referred to the
+          operator rather than guessed at. It screens nobody: AMLA/CTF screening remains
+          <span class="chip gate">Gate G8</span>.
         </p>
       </section>
 
