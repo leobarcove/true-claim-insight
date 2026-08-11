@@ -133,6 +133,19 @@ const CONSENT_STEP_ID = '__consent';
 const CLAIM_TYPE_STEP_ID = '__claim-type';
 
 /**
+ * "Would you like to start another claim?" — asked, and then actually waited on.
+ *
+ * It used to be rhetorical: the bot posed the question and started the new
+ * claim in the same breath, so the claim-type menu arrived underneath it and
+ * the claimant's answer was never wanted. Anyone messaging for another reason —
+ * asking after the claim they had just filed, most obviously — was pushed into
+ * filing a second one.
+ */
+const ANOTHER_CLAIM_STEP_ID = '__another-claim';
+const ANOTHER_CLAIM_YES = '__another:yes';
+const ANOTHER_CLAIM_NO = '__another:no';
+
+/**
  * The turn could not be written down at all.
  *
  * Separate from a turn that failed to *process*: that one has a row, an error
@@ -695,6 +708,39 @@ export class ConversationGateway {
     }
   ): Promise<void> {
     if (!binding.activeCaseId) {
+      // The answer to "would you like to start another claim?". Handled before
+      // anything else, because the binding has no active case at this point and
+      // every other path here assumes the claimant wants to open one.
+      if (payload.callbackValue === ANOTHER_CLAIM_NO) {
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: {
+            status: ConversationMessageStatus.PROCESSED,
+            stepId: ANOTHER_CLAIM_STEP_ID,
+            processedAt: new Date(),
+          },
+        });
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            'No problem. Your claim is with our team and we will be in touch.\n\n' +
+            'Message us any time to start another, or type "human" to reach a person.',
+        });
+        return;
+      }
+
+      if (payload.callbackValue === ANOTHER_CLAIM_YES) {
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: {
+            status: ConversationMessageStatus.PROCESSED,
+            stepId: ANOTHER_CLAIM_STEP_ID,
+            processedAt: new Date(),
+          },
+        });
+        await this.requireConsentThenStart(messageId, payload, adapter, binding);
+        return;
+      }
+
       await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
@@ -807,9 +853,11 @@ export class ConversationGateway {
         data: { activeCaseId: null },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: `Your claim request ${caseRow.caseNumber} is with our team. Would you like to start another claim?`,
+        text:
+          `Your claim request ${caseRow.caseNumber} is with our team. ` +
+          'Would you like to start another claim?',
+        step: this.anotherClaimMenu(),
       });
-      await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
 
@@ -1477,6 +1525,25 @@ export class ConversationGateway {
     });
   }
 
+  /**
+   * The "another claim?" question, shaped as a step so adapters render it
+   * normally — buttons on Telegram, a list row on WhatsApp, a choice control
+   * in the PWA.
+   */
+  private anotherClaimMenu(): FlowStep {
+    return {
+      id: ANOTHER_CLAIM_STEP_ID,
+      prompt: 'Would you like to start another claim?',
+      label: 'Another claim',
+      answerType: 'choice',
+      choices: [
+        { value: ANOTHER_CLAIM_YES, label: 'Yes, start another' },
+        { value: ANOTHER_CLAIM_NO, label: 'No, thank you' },
+      ],
+      next: { type: 'end' },
+    };
+  }
+
   /** The consent question, shaped as a step so adapters render it normally. */
   private consentStep(title: string): FlowStep {
     return {
@@ -1508,6 +1575,7 @@ export class ConversationGateway {
    */
   async synthesiseStep(stepId: string, locale: string | null): Promise<FlowStep | null> {
     if (stepId === CLAIM_TYPE_STEP_ID) return this.claimTypeMenu();
+    if (stepId === ANOTHER_CLAIM_STEP_ID) return this.anotherClaimMenu();
     if (stepId === CONSENT_STEP_ID) {
       const notice = await this.consent.currentNotice(
         ConsentPurpose.CLAIM_PROCESSING,

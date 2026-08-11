@@ -1560,4 +1560,103 @@ describe('ConversationGateway', () => {
       expect(adapter.fetchMedia).not.toHaveBeenCalled();
     });
   });
+
+
+  /**
+   * "Would you like to start another claim?"
+   *
+   * It used to be rhetorical — the bot asked, then started the claim in the
+   * same breath, so the claim-type menu landed underneath the question and the
+   * answer was never wanted. A claimant messaging to ask after the claim they
+   * had just filed was pushed into filing a second one.
+   */
+  describe('offering another claim after one is finished', () => {
+    const finished = () =>
+      setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: 'case-1',
+          verifiedAt: new Date(),
+        },
+        caseRow: {
+          id: 'case-1',
+          caseNumber: 'CSE-2026-000024',
+          tenantId: 'tenant-1',
+          currentStepId: null,
+          answers: {},
+          travelClaimType: 'FLIGHT_DELAY',
+          status: 'SUBMITTED',
+        },
+      });
+
+    it('asks, and waits — no claim-type menu underneath it', async () => {
+      const { gateway, sent } = finished();
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      expect(sent.at(-1)?.text).toMatch(/would you like to start another claim/i);
+      // The bug: the menu arrived in the same turn, so the question was fake.
+      expect(sent.map(message => message.text).join(' ')).not.toMatch(/what has happened/i);
+    });
+
+    it('releases the finished case so a second claim is possible at all', async () => {
+      const { gateway, prisma } = finished();
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: null }) })
+      );
+    });
+
+    it('starts one when the claimant says yes', async () => {
+      // The previous turn released the case, so the follow-up tap arrives on a
+      // binding with nothing active — which is the state this answer is for.
+      const { gateway, consent, sent } = setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: null,
+          verifiedAt: new Date(),
+        },
+      });
+
+      await gateway.handleTurn(turn({ callbackValue: '__another:yes' }));
+
+      // Into the consent gate, which is where a new claim begins.
+      expect(consent.hasConsent).toHaveBeenCalled();
+      expect(sent.length).toBeGreaterThan(0);
+    });
+
+    it('stops when the claimant says no, without starting anything', async () => {
+      const { gateway, sent, cases } = setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: null,
+          verifiedAt: new Date(),
+        },
+      });
+
+      await gateway.handleTurn(turn({ callbackValue: '__another:no' }));
+
+      expect(sent.at(-1)?.text).toMatch(/no problem/i);
+      expect(cases.create).not.toHaveBeenCalled();
+    });
+
+    it('can be rebuilt for a pull channel, like the other pre-flow steps', async () => {
+      // The PWA renders from the transcript, which stores text and not choices.
+      // A synthetic step the gateway cannot rebuild arrives there as a question
+      // with no controls — a dead end.
+      const { gateway } = setup();
+      const step = await gateway.synthesiseStep('__another-claim', 'en');
+
+      expect(step?.answerType).toBe('choice');
+      expect(step?.choices?.map(choice => choice.value)).toEqual([
+        '__another:yes',
+        '__another:no',
+      ]);
+    });
+  });
 });
