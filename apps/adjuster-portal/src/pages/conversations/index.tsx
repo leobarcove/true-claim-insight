@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bot, Loader2, MessageSquare, Send, User, UserCheck } from 'lucide-react';
+import { describeCallbackValue } from '@tci/shared-types';
 
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
@@ -443,7 +444,20 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
           <span>{time(message.createdAt)}</span>
         </div>
         <div className={cn('rounded-lg px-3 py-2 text-sm whitespace-pre-wrap', style.bubble)}>
-          {message.text || (message.mediaRef ? '📎 Attachment' : '—')}
+          {/* describeCallbackValue covers a tap the gateway could not resolve
+              to a label. Turns recorded before the value was stored have
+              nothing to show and cannot be reconstructed — they say so rather
+              than rendering a dash, which reads as "the claimant sent an empty
+              message" and is a different, wrong fact. */}
+          {message.text ||
+            describeCallbackValue(message.callbackValue) ||
+            (message.mediaRef ? (
+              '📎 Attachment'
+            ) : (
+              <span className="italic text-muted-foreground">
+                Selection not recorded — this turn predates the fix
+              </span>
+            ))}
         </div>
         {/* A message the bot could not interpret is the raw material of any
             performance review — surfaced, not hidden behind a status column. */}

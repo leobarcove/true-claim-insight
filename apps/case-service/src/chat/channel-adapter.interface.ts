@@ -87,11 +87,12 @@ export interface ChannelAdapter {
 /**
  * Marks a "More options" button on a paginated choice list.
  *
- * Lives here rather than in either the gateway or an adapter because both ends
- * need it: adapters emit it, the gateway intercepts it. The `__` prefix keeps
- * it from ever colliding with a real choice value, which would silently answer
- * a question with a page number.
+ * Adapters emit it, the gateway intercepts it, and the transcript renderer has
+ * to name it — three consumers, so the definition lives in `@tci/shared-types`
+ * and is re-exported here for the two ends that already import from this file.
+ * The `__` prefix keeps it from ever colliding with a real choice value, which
+ * would silently answer a question with a page number.
  */
-export const PAGE_CALLBACK_PREFIX = '__page:';
+export { PAGE_CALLBACK_PREFIX } from '@tci/shared-types';
 
 export const CHANNEL_ADAPTERS = Symbol('CHANNEL_ADAPTERS');

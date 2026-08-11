@@ -13,8 +13,12 @@ import {
 import {
   branchInputSteps,
   CHANNEL_CAPABILITIES,
+  CONSENT_AGREED_VALUE,
+  describeCallbackValue,
+  EDIT_CALLBACK_PREFIX,
   getStep,
   parseTextDate,
+  SHARED_PHONE_DESCRIPTION,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
   validateAnswer,
@@ -42,8 +46,9 @@ import { OTP_VERIFIER, type OtpVerifier } from './otp-verifier.interface';
 /** Rejected after this many wrong codes, so a stranger cannot grind a phone. */
 const MAX_OTP_ATTEMPTS = 5;
 
-/** Callback prefix for picking an earlier answer to correct. */
-const EDIT_CALLBACK_PREFIX = '__edit:';
+// EDIT_CALLBACK_PREFIX, CONSENT_AGREED_VALUE and PAGE_CALLBACK_PREFIX are
+// imported from @tci/shared-types: the transcript renderer has to name these
+// buttons too, and two copies of a magic string drift the day one is reworded.
 
 /**
  * Words a claimant reasonably types to go back or change something.
@@ -68,7 +73,7 @@ const HUMAN_WORDS = new Set(['human', 'agent', 'help', 'support', '/human', 'ban
  * choice value — a claimant selecting a cause of loss must not be able to
  * accidentally grant consent.
  */
-const CONSENT_AGREED = '__consent:agree';
+const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 
 /**
  * Handles one inbound turn from any messaging channel.
@@ -126,7 +131,17 @@ export class ConversationGateway {
           channel: payload.channel,
           direction: MessageDirection.INBOUND,
           platformMessageId: payload.platformMessageId,
-          text: payload.text ?? null,
+          // A turn that carried no text still has to read as something. A tap
+          // gets the best description available without the step (the step is
+          // not known until routing, and routing may never happen); a shared
+          // contact gets a marker rather than the number, because this column
+          // is neither encrypted nor swept by anonymisation and a transcript
+          // must not become a second copy of personal data.
+          text:
+            payload.text ??
+            describeCallbackValue(payload.callbackValue) ??
+            (payload.sharedPhone ? SHARED_PHONE_DESCRIPTION : null),
+          callbackValue: payload.callbackValue ?? null,
           mediaRef: payload.mediaRef ?? null,
         },
       });
@@ -593,7 +608,18 @@ export class ConversationGateway {
 
     await this.prisma.conversationMessage.update({
       where: { id: messageId },
-      data: { status: ConversationMessageStatus.PROCESSED, stepId: step.id, processedAt: new Date() },
+      data: {
+        status: ConversationMessageStatus.PROCESSED,
+        stepId: step.id,
+        processedAt: new Date(),
+        // Now that the step is known, the transcript can carry the wording
+        // that was actually on the button rather than the enum behind it —
+        // "Illness or injury", not ILLNESS. Only for taps: a typed answer is
+        // already the claimant's own words and must not be rewritten.
+        ...(payload.callbackValue
+          ? { text: describeCallbackValue(payload.callbackValue, step.choices) }
+          : {}),
+      },
     });
 
     // Show what we understood, where it is not obviously the same thing they

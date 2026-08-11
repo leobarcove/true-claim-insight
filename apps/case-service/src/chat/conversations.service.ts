@@ -96,6 +96,9 @@ export class ConversationsService {
         id: true,
         direction: true,
         text: true,
+        // What the flow received, beside what the claimant saw. An operator
+        // reconciling a disputed answer needs the value, not only the label.
+        callbackValue: true,
         mediaRef: true,
         stepId: true,
         sentByUserId: true,

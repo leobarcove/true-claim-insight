@@ -22,6 +22,8 @@ export interface ConversationMessage {
   id: string;
   direction: MessageDirection;
   text: string | null;
+  /** The exact value behind a tapped button; null when the claimant typed. */
+  callbackValue: string | null;
   mediaRef: string | null;
   stepId: string | null;
   /** Null on an outbound message means the bot said it; a value means an agent did. */

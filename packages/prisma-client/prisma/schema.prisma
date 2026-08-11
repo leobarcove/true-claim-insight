@@ -2729,8 +2729,18 @@ model ConversationMessage {
   platformMessageId String?
   bindingId         String?
 
-  /// Raw text, if the message carried any.
+  /// Raw text, if the message carried any. For a turn that carried no text —
+  /// a tapped button, a shared contact — this holds the human-readable
+  /// description of what the claimant did, so a transcript reads as a
+  /// conversation rather than a column of blanks.
   text     String?
+  /// The exact value behind a tapped button, when the turn was a tap.
+  ///
+  /// Stored as well as the readable text because the two answer different
+  /// questions: `text` is what the claimant saw themselves choose, this is
+  /// what the flow actually received. A label can be reworded later; the value
+  /// is what drove the decision, and a dispute is about the decision.
+  callbackValue String?
   /// Platform reference for an attachment, resolved lazily — media is fetched
   /// only when a document step is actually expecting one.
   mediaRef String?
