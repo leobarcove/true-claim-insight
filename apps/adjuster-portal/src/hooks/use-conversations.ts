@@ -9,7 +9,15 @@ export const conversationKeys = {
 };
 
 export type ConversationMode = 'BOT' | 'HANDOVER';
-export type MessageDirection = 'INBOUND' | 'OUTBOUND';
+
+/**
+ * What the conversation is waiting on — a different question from who is
+ * talking. An agent who has replied and is waiting on the claimant is still in
+ * HANDOVER, but owes nothing.
+ */
+export type ConversationStatus = 'BOT' | 'OPEN' | 'PENDING' | 'SNOOZED' | 'RESOLVED';
+/** INTERNAL is a note between colleagues. It is never sent to the claimant. */
+export type MessageDirection = 'INBOUND' | 'OUTBOUND' | 'INTERNAL';
 export type ConversationMessageStatus =
   | 'PENDING'
   | 'PROCESSED'
@@ -48,6 +56,10 @@ export interface ConversationSummary {
   id: string;
   channel: string;
   mode: ConversationMode;
+  status: ConversationStatus;
+  snoozedUntil: string | null;
+  /** When a person first replied. Null means nobody has yet. */
+  firstRespondedAt: string | null;
   assignedUserId: string | null;
   handoverAt: string | null;
   handoverReason: string | null;
@@ -64,9 +76,34 @@ export interface ConversationSummary {
   awaitingAgent: number;
 }
 
-export interface ConversationTranscript extends Omit<ConversationSummary, 'lastMessage' | 'awaitingAgent'> {
+export interface ConversationTranscript
+  extends Omit<ConversationSummary, 'lastMessage' | 'awaitingAgent'> {
   resolvedAt: string | null;
   messages: ConversationMessage[];
+}
+
+export interface AssignableAgent {
+  id: string;
+  fullName: string;
+  role: string;
+}
+
+/**
+ * Colleagues this conversation can be handed to.
+ *
+ * Cached for a minute: firm membership changes on the timescale of somebody
+ * joining, not of an agent working a queue, and re-fetching it under every
+ * assign dropdown would be noise.
+ */
+export function useAssignableAgents() {
+  return useQuery({
+    queryKey: [...conversationKeys.all, 'agents'] as const,
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<AssignableAgent[]>>('/conversations/agents');
+      return data.data;
+    },
+    staleTime: 60_000,
+  });
 }
 
 export function useConversations(mode?: ConversationMode) {
@@ -135,6 +172,30 @@ export function useResolveConversation() {
   // helper's (vars & { id }) shape without an unusable Record<string, never>.
   return useConversationMutation<Record<never, never>>(async ({ id }) => {
     const { data } = await apiClient.post(`/conversations/${id}/resolve`, {});
+    return data;
+  });
+}
+
+export function useAssignConversation() {
+  return useConversationMutation<{ assigneeId: string | null }>(async ({ id, assigneeId }) => {
+    const { data } = await apiClient.post(`/conversations/${id}/assign`, { assigneeId });
+    return data;
+  });
+}
+
+export function useSetConversationStatus() {
+  return useConversationMutation<{
+    status: 'OPEN' | 'PENDING' | 'SNOOZED';
+    snoozedUntil?: string;
+  }>(async ({ id, status, snoozedUntil }) => {
+    const { data } = await apiClient.post(`/conversations/${id}/status`, { status, snoozedUntil });
+    return data;
+  });
+}
+
+export function useAddNote() {
+  return useConversationMutation<{ text: string }>(async ({ id, text }) => {
+    const { data } = await apiClient.post(`/conversations/${id}/notes`, { text });
     return data;
   });
 }
