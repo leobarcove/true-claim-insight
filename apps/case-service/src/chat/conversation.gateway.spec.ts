@@ -214,6 +214,73 @@ describe('ConversationGateway', () => {
     });
   });
 
+  describe('messages the flow cannot read', () => {
+    const verifiedMid = {
+      verifiedAt: new Date(),
+      claimantId: 'claimant-1',
+      tenantId: 'tenant-1',
+      activeCaseId: 'case-1',
+    };
+    const midCase = {
+      id: 'case-1',
+      currentStepId: 'airline',
+      answers: {},
+      flowDefinitionId: null,
+      travelClaimType: 'FLIGHT_DELAY',
+    };
+
+    it('answers a voice note instead of ignoring it', async () => {
+      // These produced no payload at all, so the turn left no row, no reply
+      // and no trace. A claimant filming flood damage, or one who finds
+      // typing hard, was met with silence.
+      const { gateway, sent, cases } = setup({ binding: verifiedMid, caseRow: midCase });
+
+      await gateway.handleTurn(turn({ unsupportedMedia: 'voice' }));
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(sent[0].text).toMatch(/voice note/i);
+    });
+
+    it('does not store /start as the answer to the open question', async () => {
+      // The universal Telegram gesture for "restart this bot", and the first
+      // thing every user is taught.
+      const { gateway, cases, adapter } = setup({ binding: verifiedMid, caseRow: midCase });
+
+      await gateway.handleTurn(turn({ text: '/start' }));
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      const prompts = (adapter.send as jest.Mock).mock.calls.map(c => c[1]);
+      expect(prompts.some(p => p.step?.id === 'airline')).toBe(true);
+    });
+
+    it('refuses to lose a turn it could not even record', async () => {
+      // A database outage leaves no row to mark and nothing to show an
+      // operator, so the only safe response is to decline the update and let
+      // the platform redeliver it.
+      const { gateway, prisma } = setup();
+      prisma.conversationMessage.create.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(gateway.handleTurn(turn({ text: 'hello' }))).rejects.toThrow(
+        /Could not record turn/
+      );
+    });
+
+    it('marks turns that were recorded and then abandoned', async () => {
+      const { gateway, prisma } = setup();
+      (prisma.conversationMessage.updateMany as jest.Mock).mockResolvedValueOnce({ count: 3 });
+
+      const count = await gateway.markStalledTurns(CaseChannel.TELEGRAM, new Date());
+
+      expect(count).toBe(3);
+      expect(prisma.conversationMessage.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: ConversationMessageStatus.PENDING }),
+          data: expect.objectContaining({ status: ConversationMessageStatus.FAILED }),
+        })
+      );
+    });
+  });
+
   describe('cross-border transfer register (PDPA s.129)', () => {
     it('records every conversational turn as a transfer', async () => {
       // The turn IS the transfer: the claimant's words reached Telegram's

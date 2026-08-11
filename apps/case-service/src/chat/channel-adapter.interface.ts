@@ -72,6 +72,16 @@ export interface InboundTurnPayload {
    * the honest explanation is short.
    */
   sharedForeignContact?: boolean;
+  /**
+   * The sender sent something we cannot read as an answer — a voice note, a
+   * video, a sticker, a location.
+   *
+   * Carries the kind so the claimant can be told what happened. These used to
+   * produce no payload at all, so the turn left no row, no reply and no trace:
+   * a claimant filming flood damage instead of photographing it, or one who
+   * finds typing hard sending a voice note, was met with silence.
+   */
+  unsupportedMedia?: string;
 }
 
 /** What the gateway wants said next. Rendering is the adapter's problem. */

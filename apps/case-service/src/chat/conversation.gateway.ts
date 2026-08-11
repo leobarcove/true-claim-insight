@@ -92,6 +92,24 @@ const MAX_TURNS_PER_MINUTE = 20;
 const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 
 /**
+ * The turn could not be written down at all.
+ *
+ * Separate from a turn that failed to *process*: that one has a row, an error
+ * on it and a claimant who was told. This one has none of those, so the only
+ * safe response is to leave the update unacknowledged and let the platform
+ * send it again.
+ */
+export class TurnNotRecordedError extends Error {
+  constructor(
+    readonly platformMessageId: string,
+    readonly cause: Error
+  ) {
+    super(`Could not record turn ${platformMessageId}: ${cause.message}`);
+    this.name = 'TurnNotRecordedError';
+  }
+}
+
+/**
  * Which approved notice to show, from a platform language tag.
  *
  * Only the two locales the approval gate guarantees exist. A tag we do not
@@ -110,6 +128,35 @@ const CONSENT_AGREED = CONSENT_AGREED_VALUE;
 function maskForTranscript(typed: string): string {
   const digits = typed.replace(/\D/g, '');
   return `${ANSWER_MASK_PREFIX}${digits.slice(-4)}`;
+}
+
+/**
+ * A slash command we do not handle, rather than an answer.
+ *
+ * Deliberately narrow: a single token of letters after a slash. No answer in
+ * any flow takes that shape — a flight number, a hospital name and a policy
+ * number all fail it — and the known words (`/back`, `/edit`, `/human`) are
+ * matched before this is reached.
+ */
+function isCommand(word: string): boolean {
+  return /^\/[a-z_]+$/.test(word);
+}
+
+/** What to call an unreadable message kind, in words a claimant would use. */
+function describeMediaKind(kind: string): string {
+  const names: Record<string, string> = {
+    voice: 'voice note',
+    video_note: 'video message',
+    video: 'video',
+    audio: 'audio file',
+    sticker: 'sticker',
+    animation: 'GIF',
+    location: 'location',
+    venue: 'place',
+    poll: 'poll',
+    dice: 'dice roll',
+  };
+  return names[kind] ?? 'message of that kind';
 }
 
 function noticeLocale(tag?: string | null): string {
@@ -237,7 +284,15 @@ export class ConversationGateway {
         this.logger.debug(`Turn ${payload.platformMessageId} already seen; skipping.`);
         return;
       }
-      throw error;
+      // We could not even record that this happened — the database is down or
+      // refusing. Distinguished from every other failure because the recovery
+      // differs: there is no row to mark, nothing to show an operator, and the
+      // claimant's message is simply gone once the poller moves past it.
+      //
+      // Raised as its own type so the ingress can decline to acknowledge the
+      // update. Telegram then redelivers it, and the insert-first dedupe makes
+      // that safe. A transient outage costs a delay instead of an answer.
+      throw new TurnNotRecordedError(payload.platformMessageId, error as Error);
     }
 
     // Acknowledged before anything else is attempted, so the button stops
@@ -263,6 +318,32 @@ export class ConversationGateway {
         text: 'Sorry — something went wrong on our side. Please try again in a moment.',
       });
     }
+  }
+
+  /**
+   * Mark inbound turns that were recorded and then abandoned.
+   *
+   * Called by the ingress, which is the singleton. Returns how many, so the
+   * caller can say so loudly — the whole point is that this loss was
+   * previously invisible: the row sits `PENDING`, redelivery is suppressed by
+   * the dedupe index, and nobody goes looking for a claim that was never
+   * created.
+   */
+  async markStalledTurns(channel: CaseChannel, olderThan: Date): Promise<number> {
+    const { count } = await this.prisma.conversationMessage.updateMany({
+      where: {
+        channel,
+        direction: MessageDirection.INBOUND,
+        status: ConversationMessageStatus.PENDING,
+        createdAt: { lt: olderThan },
+      },
+      data: {
+        status: ConversationMessageStatus.FAILED,
+        error: 'Recorded but never processed — the service stopped mid-turn',
+        processedAt: new Date(),
+      },
+    });
+    return count;
   }
 
   /** Decide whether this turn is onboarding or an answer, and act on it. */
@@ -333,6 +414,26 @@ export class ConversationGateway {
         lawfulBasis: null,
         claimantId: binding.claimantId,
       });
+    }
+
+    // Something we cannot read, answered before anything tries to interpret
+    // it. Silence here is what made a voice note look like a broken bot.
+    if (payload.unsupportedMedia) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          error: `Unsupported message kind: ${payload.unsupportedMedia}`,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          `Sorry — we cannot read a ${describeMediaKind(payload.unsupportedMedia)} here. ` +
+          'Please send a photo, a file, or type your answer. Type "human" if you would ' +
+          'rather speak to someone.',
+      });
+      return;
     }
 
     // 3. Nothing about a claim is served to an unverified sender.
@@ -567,6 +668,28 @@ export class ConversationGateway {
     // permanent — the cursor only ever moved forwards.
     const word = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
 
+    // A command, not an answer. `/start` is the universal Telegram gesture for
+    // "restart this bot" and the first thing every user is taught; mid-flow it
+    // was being stored verbatim as the answer to whatever step was open.
+    if (isCommand(word)) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.PROCESSED,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          word === '/start'
+            ? 'You already have a claim in progress — here is where we were.'
+            : 'Sorry, I do not recognise that command. Here is the question again.',
+      });
+      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      return;
+    }
+
     if (BACK_WORDS.has(word)) {
       await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, step.id, true);
       return;
@@ -701,7 +824,32 @@ export class ConversationGateway {
 
       // Fetched only now — a claimant sending unrelated pictures earlier cost
       // nothing, because media is carried as a reference until a step wants it.
-      const media = await adapter.fetchMedia(payload.mediaRef);
+      let media: { buffer: Buffer; filename: string; mimeType: string };
+      try {
+        media = await adapter.fetchMedia(payload.mediaRef);
+      } catch (error) {
+        // A file the platform will not serve is the claimant's problem to
+        // solve and ours to explain. "Something went wrong on our side" was
+        // both untrue and un-actionable: they would send the same file again.
+        if ((error as Error).name === 'MediaTooLargeError') {
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.UNPARSEABLE,
+              stepId: step.id,
+              error: (error as Error).message,
+              processedAt: new Date(),
+            },
+          });
+          await this.say(adapter, binding.id, payload.platformUserId, {
+            text:
+              'That file is too large for us to receive (the limit is 20 MB). Please send a ' +
+              'smaller version — a photo of the document usually works.',
+          });
+          return;
+        }
+        throw error;
+      }
       const document = await this.cases.uploadDocument(
         caseRow.id,
         {

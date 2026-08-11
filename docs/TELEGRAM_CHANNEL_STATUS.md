@@ -153,20 +153,15 @@ level up. A summary of an audit is not the audit.
 
 ### Tier 4 — silent loss and operations
 
-- Voice notes, video, stickers, locations produce **no row, no reply, no
-  trace**; a photo's caption is dropped.
-- **`/start` mid-flow is stored as an answer** — the universal Telegram restart
-  gesture is unhandled.
-- **A crash mid-turn loses the message permanently**: the offset is advanced
-  before handling, the row is stuck `PENDING`, redelivery is suppressed by the
-  dedupe index, and nothing sweeps it.
-- **A brief database outage is silent** — the claimant gets nothing and the
-  message is gone.
-- **No HTTP timeout** on sends or downloads, on a strictly serial loop: one
-  black-holed connection freezes the channel for every claimant.
-- **No 429 handling**, while a single answer can fire four sends back to back.
-- **Files over 20 MB** report "something went wrong on our side".
-- **409/401 are indistinguishable** from a transient blip — infinite 5s retry.
+**Closed 11 August 2026.** All eight: unreadable message kinds, photo
+captions, `/start` mid-flow, turns recorded and abandoned, a database outage
+losing the message, no HTTP timeout, no 429 handling, oversized files, and
+409/401 retrying forever. See §5.
+
+One thing deliberately *not* done: a stalled turn is marked failed, never
+replayed. Re-running a half-finished turn risks repeating whichever part did
+complete, and the honest outcome is to make the loss visible rather than
+guess at recovering it.
 
 ### Tier 5 — privacy and access
 
@@ -220,6 +215,7 @@ level up. A summary of an audit is not the audit.
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 4 closed.** A voice note, video, sticker or location is now named and refused instead of vanishing with no row, no reply and no trace; a photo's caption is read as the answer it is. `/start` mid-flow re-asks rather than being stored as the answer. A turn the database refused is left *unacknowledged* so Telegram redelivers it — losing a claimant's message to a transient outage was the worst of the silent failures — and turns recorded but abandoned are swept into view every five minutes rather than sitting PENDING forever. The chat HTTP client finally has a timeout: the poll loop is strictly serial, so one black-holed connection froze the channel for everyone until TCP keepalive. 429 is honoured with its own `retry_after` instead of failing the turn. A file over 20 MB is explained rather than reported as our fault. 409 names the second poller it proves, and 401 stops rather than retrying a revoked token forever. |
 | 11 Aug 2026 | **Tier 3 re-audit — four more, and a weakness in one of the fixes.** Re-reading the original reports found findings that had never reached any tier. `normalisePhone` prefixed `+` only for Malaysian numbers, so a foreign one was stored as bare digits — two shapes in one column, on the one line whose claimants are by definition abroad, risking a duplicate Claimant whose Telegram and PWA claims never join up. The DTO behind it refused foreign numbers outright, so such a claimant could not bind at all. A stale `resumeStepId` still persisted a cursor pointing at no step. Editing a branch input left documents attached to a path the claim no longer takes. And the earlier `!nextStep` fix had used `answerType === 'confirm'` as a proxy for "this is the review" — the medical flow has *two* confirm steps and proves the two are not the same thing, so `isReview` is now explicit and the answer summary no longer lands under a specialist-review notice. |
 | 11 Aug 2026 | **Tier 3 closed.** `back` walks to a step the claimant actually answered, instead of the previous one in declaration order — on a branched flow that had been reopening a mandatory medical report the branch deliberately skipped. A question whose send failed is re-asked rather than having the next message stored as its answer. Running out of steps anywhere but a review hands to an agent instead of submitting an incomplete case and telling the claimant it is "with our team". `parseAmount` replaces `Number()`, so a blank message no longer records RM 0 and `RM1,200` is finally readable. A future incident date is refused, because it silently suppressed the very CSP flags it should raise. The Case channel comes from the turn rather than being hardcoded TELEGRAM. |
 | 11 Aug 2026 | **Tier 2 closed.** Every conversational turn writes a `TransferRecord` — the registry entry and its passing test had existed for a day while nothing wrote a row, the §3.6 shape inside the control added to close that very gap. `transferRecord` moved from the `assessment` context to a new cross-cutting `compliance` one: a s.129 register is evidence about the platform's own behaviour, and whoever makes the offshore call must be the one who records it. Telegram's `language_code` now drives both the consent notice and the flow's wording, so the approved Malay notice is finally shown to somebody; the overlay resolver has its first runtime caller. The transcript masks the payout account the claimant typed. |

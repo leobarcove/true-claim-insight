@@ -2,7 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { ConversationGateway } from '../conversation.gateway';
+import { ConversationGateway, TurnNotRecordedError } from '../conversation.gateway';
 import { TelegramAdapter } from './telegram.adapter';
 import type { TelegramUpdate } from './telegram.types';
 
@@ -36,6 +36,12 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
   private static readonly LONG_POLL_SECONDS = 25;
   /** Backoff after a failed poll, so an outage does not become a hot loop. */
   private static readonly ERROR_BACKOFF_MS = 5_000;
+  /** How often to look for turns that were recorded and never processed. */
+  private static readonly RECONCILE_INTERVAL_MS = 5 * 60_000;
+  /** A turn still PENDING after this was abandoned, not merely slow. */
+  private static readonly STALLED_AFTER_MS = 10 * 60_000;
+
+  private lastReconcileAt = 0;
 
   constructor(
     private readonly http: HttpService,
@@ -87,15 +93,85 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
           try {
             await this.gateway.handleTurn(payload);
           } catch (error) {
+            if (error instanceof TurnNotRecordedError) {
+              // The turn was never written down, so acknowledging it would
+              // lose the claimant's message outright. Rewind so Telegram sends
+              // it again, and stop this batch: whatever broke the write will
+              // break the next one too, and the backoff is the right response.
+              this.offset = update.update_id;
+              this.logger.error(
+                `Update ${update.update_id} could not be recorded; leaving it unacknowledged ` +
+                  `for redelivery. ${(error as Error).message}`
+              );
+              await this.pause(TelegramPoller.ERROR_BACKOFF_MS);
+              break;
+            }
             // handleTurn records its own failure; this only stops one bad
             // message from ending the poll loop.
             this.logger.error(`Update ${update.update_id}: ${(error as Error).message}`);
           }
         }
+
+        await this.reconcileStalledTurns();
       } catch (error) {
-        this.logger.error(`Poll failed: ${(error as Error).message}`);
+        const status = (error as { response?: { status?: number } })?.response?.status;
+
+        // 409 and 401 are not transient, and logging them as "poll failed"
+        // every five seconds forever tells nobody what is wrong. 409 is the
+        // one status that *proves* the condition this module's own comment
+        // warns about — a second poller, or a webhook still registered.
+        if (status === 409) {
+          this.logger.error(
+            'Telegram returned 409 Conflict: another poller is running on this bot token, or a ' +
+              'webhook is still set. Exactly one instance may poll — see TELEGRAM_POLLING_ENABLED. ' +
+              'Claimants will appear to be intermittently ignored until this is resolved.'
+          );
+        } else if (status === 401) {
+          // Retrying a revoked token forever is noise with no path to recovery.
+          this.logger.error(
+            'Telegram returned 401 Unauthorized: the bot token is invalid or has been revoked. ' +
+              'Stopping the poller — restart the service once TELEGRAM_BOT_TOKEN is corrected.'
+          );
+          this.running = false;
+          return;
+        } else {
+          this.logger.error(`Poll failed: ${(error as Error).message}`);
+        }
         await this.pause(TelegramPoller.ERROR_BACKOFF_MS);
       }
+    }
+  }
+
+  /**
+   * Surface turns that were recorded and then never processed.
+   *
+   * The offset is advanced before handling, so a crash or a restart between
+   * the insert and the reply leaves the row `PENDING` — and redelivery is
+   * suppressed by the very dedupe index that makes retries safe. The
+   * claimant's message then sits in the database, unanswered, with nothing
+   * anywhere indicating it.
+   *
+   * Deliberately does **not** retry. Re-running a half-finished turn risks
+   * repeating whatever part did complete, and the honest outcome is to make
+   * the loss visible: the row is marked failed, an operator sees it in the
+   * transcript, and the warning names how many. Runs here because the poller
+   * is already the fleet-wide singleton, so it cannot double-sweep.
+   */
+  private async reconcileStalledTurns(): Promise<void> {
+    if (Date.now() - this.lastReconcileAt < TelegramPoller.RECONCILE_INTERVAL_MS) return;
+    this.lastReconcileAt = Date.now();
+
+    try {
+      const cutoff = new Date(Date.now() - TelegramPoller.STALLED_AFTER_MS);
+      const stalled = await this.gateway.markStalledTurns(this.adapter.channel, cutoff);
+      if (stalled > 0) {
+        this.logger.error(
+          `${stalled} inbound turn(s) were recorded but never processed — most likely a restart ` +
+            'mid-turn. Marked failed so they are visible in the transcript rather than silent.'
+        );
+      }
+    } catch (error) {
+      this.logger.warn(`Could not reconcile stalled turns: ${(error as Error).message}`);
     }
   }
 
