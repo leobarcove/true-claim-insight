@@ -26,6 +26,7 @@ import {
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
   validateAnswer,
+  whatYouWillNeed,
   type CaseAnswers,
   type CaseFlow,
   type FlowStep,
@@ -348,7 +349,7 @@ export class ConversationGateway {
       });
       await this.safeSend(adapter, payload.platformUserId, {
         text:
-          'I can only help with a claim in a private chat, so that your details stay between ' +
+          'We can only handle a claim in a private chat, so that your details stay between ' +
           'us. Please message me directly.',
       });
       return;
@@ -596,9 +597,9 @@ export class ConversationGateway {
     if (!payload.sharedPhone) {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'Welcome to True Claim Insight. Before we begin, we need to know who you are. ' +
-          'Please tap the button below to share your mobile number — typing it will not work, ' +
-          'because we rely on Telegram confirming the number is yours.',
+          'Hello — we handle travel insurance claims, and we can start yours here.\n\n' +
+          'First, please tap the button below to share your mobile number so we know who ' +
+          'you are.',
         requestPhone: true,
       });
       return;
@@ -619,8 +620,11 @@ export class ConversationGateway {
       },
     });
 
+    // Just an acknowledgement. "Let us begin" used to live here, and again in
+    // the case-opened message, and again in the first question's own wording
+    // — three openings in a row, none of which moved the claimant forward.
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: 'Thank you. Let us begin.',
+      text: 'Thank you.',
       // The share-contact keyboard has done its job; without this it stays
       // pinned beneath every question that follows.
       removeKeyboard: true,
@@ -820,7 +824,7 @@ export class ConversationGateway {
         text:
           word === '/start'
             ? 'You already have a claim in progress — here is where we were.'
-            : 'Sorry, I do not recognise that command. Here is the question again.',
+            : 'Sorry, we do not recognise that command. Here is the question again.',
       });
       await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
@@ -1062,8 +1066,8 @@ export class ConversationGateway {
             await this.say(adapter, binding.id, payload.platformUserId, {
               text:
                 step.answerType === 'date'
-                  ? 'Sorry, I could not read that date. Please write it as DD/MM/YYYY — for example 16/06/2026.'
-                  : 'Sorry, I could not read that. Please write it as DD/MM/YYYY HH:MM — for example 16/06/2026 14:30.',
+                  ? 'Sorry, we could not read that date. Please write it as DD/MM/YYYY — for example 16/06/2026.'
+                  : 'Sorry, we could not read that. Please write it as DD/MM/YYYY HH:MM — for example 16/06/2026 14:30.',
             });
             return;
           }
@@ -1362,18 +1366,25 @@ export class ConversationGateway {
       this.logger.log(`Consent declined on ${payload.channel} for claimant ${binding.claimantId}.`);
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'That is entirely your choice. We cannot open a claim without permission to handle ' +
-          'your details, so nothing further will happen here. If you change your mind, just ' +
-          'send us a message — or contact our support desk to make a claim another way.',
+          'That is your choice — we cannot open a claim without permission to handle your ' +
+          'details, so we will stop here.\n\nMessage us any time if you change your mind, or ' +
+          'contact our support desk to claim another way.',
       });
       return;
     }
 
     const typedAtConsent = Boolean(payload.text?.trim());
     await this.say(adapter, binding.id, payload.platformUserId, {
+      // Framed, not dumped. The approved wording is a legal notice and reads
+      // like one; arriving with no lead-in, it is the point a claimant decides
+      // whether this is a real insurer or a phishing attempt. The framing is
+      // ours; the notice itself is the approved text, unaltered — consent has
+      // to be provably against a version, so not a word of it is rewritten.
       text: typedAtConsent
         ? `Please use one of the buttons below.\n\n${notice.title}\n\n${notice.body}`
-        : `${notice.title}\n\n${notice.body}`,
+        : 'Before we take any details, here is how we handle them. ' +
+          `Please read this and let us know you are happy to continue.\n\n` +
+          `${notice.title}\n\n${notice.body}`,
       step: {
         id: '__consent',
         prompt: notice.title,
@@ -1400,7 +1411,7 @@ export class ConversationGateway {
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; claimantId: string | null; tenantId: string | null }
+    binding: { id: string; claimantId: string | null; tenantId: string | null; locale?: string | null }
   ): Promise<void> {
     const chosen =
       payload.callbackValue && payload.callbackValue in TRAVEL_CLAIM_TYPE_LABELS
@@ -1451,13 +1462,42 @@ export class ConversationGateway {
       data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
     });
 
+    // The most useful message in the conversation, and the one that was
+    // missing. "A few questions and we are done" preceded sixteen of them,
+    // and the very next line said "(1 of 16)" — the bot contradicting itself
+    // while trust is still being established.
+    //
+    // Saying what to gather is what stops someone meeting "upload the
+    // Property Irregularity Report" at question eleven with nothing to hand.
+    // Saying they can stop is what stops a long form being abandoned rather
+    // than paused.
+    const flow = await this.flows.forCase(
+      { flowDefinitionId: created.flowDefinitionId ?? null, travelClaimType: chosen },
+      { channel: payload.channel, locale: noticeLocale(binding.locale) }
+    );
+    const questions = flow.steps.filter(step => !step.isReview).length;
+    const needs = whatYouWillNeed(flow);
+
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: `Your claim request ${created.caseNumber} has been started. A few questions and we are done.`,
+      text:
+        `Your claim request is open — reference ${created.caseNumber}.\n\n` +
+        `There are ${questions} questions. You will need:\n` +
+        needs.map((need: string) => `• ${need}`).join('\n') +
+        '\n\nYou can stop at any point and carry on later — we will pick up where you left off.' +
+        // Said plainly rather than discovered. Serving the consent notice in
+        // Malay and then asking every question in English promises a level of
+        // support that does not exist yet — worse than being consistently
+        // English, because the claimant has been shown otherwise. This line
+        // goes when the flow overlays are authored.
+        (noticeLocale(binding.locale) === 'ms'
+          ? '\n\nSoalan-soalan berikut adalah dalam Bahasa Inggeris buat masa ini. Taip ' +
+            '"human" jika anda mahu bercakap dengan pegawai kami.'
+          : ''),
     });
 
     // create() returns the resolved current step, so no second lookup.
     if (created.currentStep) {
-      await this.ask(adapter, binding.id, payload.platformUserId, created.currentStep);
+      await this.ask(adapter, binding.id, payload.platformUserId, created.currentStep, 0, undefined, undefined, flow);
     }
   }
 
@@ -1503,7 +1543,7 @@ export class ConversationGateway {
     const target = getStep(flow, targetStepId);
     if (!target) {
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'Sorry, I could not find that answer to change.',
+        text: 'Sorry, we could not find that answer to change.',
       });
       return;
     }

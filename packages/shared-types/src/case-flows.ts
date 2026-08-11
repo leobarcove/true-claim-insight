@@ -179,7 +179,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
   {
     id: 'policy-number',
     prompt:
-      'Let us begin with your policy. What is your travel policy number? You can find it on your policy schedule or confirmation email. If you are not sure, type "skip".',
+      'What is your travel policy number? You will find it on your policy schedule or confirmation email. If you do not have it to hand, type "skip" and our team will look it up.',
     label: 'Policy number',
     answerType: 'text',
     optional: true,
@@ -217,8 +217,16 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
 const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   {
     id: 'bank-name',
+    // Reassurance, because of where this is being asked. Three questions for
+    // a payout account, in a chat, is the exact shape of a scam — and a
+    // cautious claimant stopping here is a claim lost at the last step. What
+    // the copy asserts is true: the number is encrypted at rest and staff
+    // screens show only the last four digits.
     prompt:
-      'Nearly done. For your payout, which bank is your account with? (e.g. Maybank, CIMB, Public Bank)',
+      'Nearly done — the last part is where to send your payout.\n\n' +
+      'Your account number is encrypted and our team only ever sees the last four digits. ' +
+      'We will never ask you to pay us anything.\n\n' +
+      'Which bank is your account with? (e.g. Maybank, CIMB, Public Bank)',
     label: 'Bank name',
     answerType: 'text',
   },
@@ -755,6 +763,29 @@ export function parseAmount(raw: string): number {
   if (cleaned === '') return NaN;
   return Number(cleaned);
 }
+
+/**
+ * What a claimant should go and find before starting.
+ *
+ * The single most useful thing a form can tell someone, and this conversation
+ * did not: they met "upload the Property Irregularity Report" at question
+ * eleven with nothing to hand, and their choices were to abandon or to skip
+ * something the claim needs. Derived from the flow rather than written per
+ * line, so a flow edited in the authoring tool cannot promise the wrong list.
+ */
+export const whatYouWillNeed = (flow: CaseFlow): string[] => {
+  const needs: string[] = [];
+  if (flow.steps.some(step => step.id === 'policy-number')) {
+    needs.push('your travel policy number');
+  }
+  for (const step of flow.steps) {
+    if (step.answerType === 'document') needs.push(step.label.toLowerCase());
+  }
+  if (flow.steps.some(step => step.id === 'bank-account-number')) {
+    needs.push('your bank details for the payout');
+  }
+  return needs;
+};
 
 export const SKIP_VALUE = 'skip';
 
