@@ -257,8 +257,13 @@ export class AuthController {
   async sendOtp(@Body() dto: SendOtpDto) {
     const result = await this.otpService.sendOtp(dto.phoneNumber);
     return {
-      message: 'OTP sent successfully',
+      message: result.code ? 'No SMS provider — code returned for testing' : 'OTP sent successfully',
       expiresIn: result.expiresIn,
+      // Present only outside production, and only while no transport can
+      // deliver. The service throws rather than populating this in production,
+      // so there is no environment in which a live code is handed back to an
+      // unauthenticated caller.
+      ...(result.code ? { code: result.code } : {}),
     };
   }
 
