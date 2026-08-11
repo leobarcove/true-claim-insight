@@ -748,14 +748,39 @@ export class CasesService {
     });
     const accountNumber = await this.encryption.decrypt(secret.bankAccountNumberEncrypted);
 
+    /**
+     * A tail with no account behind it means the value was captured and then
+     * lost — not that the claimant never gave one. The two look identical as a
+     * blank field and call for opposite actions: one needs the claimant asked
+     * again, the other needs nothing.
+     *
+     * Derived rather than stored, because the combination *is* the fact: a
+     * `last4` exists only if an account was once promoted, and a null
+     * ciphertext beside it can only mean the account is gone.
+     *
+     * Five cases are in this state on the demo book, from the defect fixed in
+     * `ecd342a` — `patchAnswer` re-encrypted the display mask over the real
+     * ciphertext on the turn after capture. Their plaintext is unrecoverable
+     * by design: it lived solely in the column that was overwritten.
+     */
+    const lost = accountNumber === null && caseRow.bankAccountLast4 !== null;
+
     await this.audit(id, 'PAYOUT_DETAILS_REVEALED', tenantContext, {
-      metadata: { reason: 'operator requested payout details', last4: caseRow.bankAccountLast4 },
+      metadata: {
+        reason: 'operator requested payout details',
+        last4: caseRow.bankAccountLast4,
+        // Recorded so the trail distinguishes a reveal that returned something
+        // from one that could not. An examiner asking "who saw this account"
+        // should not be shown a row where nobody could have.
+        ...(lost ? { outcome: 'unrecoverable' } : {}),
+      },
     });
 
     return {
       bankName: caseRow.bankName,
       bankAccountHolderName: caseRow.bankAccountHolderName,
       bankAccountNumber: accountNumber,
+      unrecoverable: lost,
     };
   }
 
