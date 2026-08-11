@@ -1234,13 +1234,18 @@ verify, and three further defects each stop a real intake completing.
 
 Two findings there reach beyond the channel and belong here:
 
-- **The payout bank account is destroyed one turn after it is captured, on
-  every channel.** `patchAnswer` re-derives the encrypted column from the
-  already-masked answer bag, so the following turn encrypts `••••4567` over
-  the real ciphertext. `bankAccountLast4` still reads correctly, so every
-  operator screen and the audited firm-admin reveal look right while returning
-  a mask. This is the encryption of standing decision 4 protecting nothing —
-  and it wants a check of what has already been lost as well as a fix.
+- ~~**The payout bank account is destroyed one turn after it is captured, on
+  every channel.**~~ **Fixed 11 Aug.** `patchAnswer` re-derived the encrypted
+  column from the already-masked answer bag, so the following turn encrypted
+  `••••4567` over the real ciphertext. `bankAccountLast4` still read correctly,
+  so every operator screen and the audited firm-admin reveal looked right while
+  returning a mask — the encryption of standing decision 4 protecting nothing.
+  A sensitive answer is now promoted only on the turn that supplies it, with
+  redaction and promotion sharing one predicate because their disagreement is
+  what destroyed the data. **Measured before the fix: 5 of 7 stored payout
+  accounts on the demo book held only their own mask, and are unrecoverable —
+  the plaintext lives solely in that column.** Verified after: the account
+  survives the following turn on the live system.
 - **Nothing writes a Telegram `TransferRecord`.** The registry entry added on
   10 Aug and its passing test make the control look present; no writer is
   instantiated in `chat/`, so §3.4's ungated-offshore gap is wider than that

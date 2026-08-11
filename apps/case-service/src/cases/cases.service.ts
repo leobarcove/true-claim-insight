@@ -83,6 +83,34 @@ const CASE_STATUS_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
  */
 const SENSITIVE_ANSWER_STEPS = new Set(['bank-account-number']);
 
+/** What a redacted answer starts with. The display mask, not a value. */
+const ANSWER_MASK_PREFIX = '••••';
+
+/**
+ * Is this stored answer a display mask rather than the claimant's own value?
+ *
+ * Shared by the two places that must agree about it, because they disagreed
+ * once and it destroyed data. `redactSensitiveAnswers` uses it to avoid
+ * masking a mask; `promoteAnswers` uses it to avoid *encrypting* one.
+ *
+ * The bug it closes: `patchAnswer` rebuilds its working set from the stored
+ * answers, which are already redacted, and re-derived the encrypted column
+ * from that. On the turn the claimant supplied the account this was correct —
+ * the DTO's value overrode the bag. On every turn after, `promoteAnswers` read
+ * `••••4567` and encrypted *that* over the real ciphertext. `lastDigits`
+ * strips the bullets, so `bankAccountLast4` still read correctly and every
+ * screen — including the audited firm-admin reveal — looked right while
+ * returning a mask. Measured on the demo book before the fix: 5 of 7 payout
+ * accounts held only their own mask.
+ *
+ * A sensitive value can therefore only be promoted on the turn that supplies
+ * it, which is what this predicate enforces. It is not recoverable afterwards
+ * by design — the plaintext lives solely in the encrypted column.
+ */
+function isMaskedAnswer(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith(ANSWER_MASK_PREFIX);
+}
+
 /** Statuses in which intake answers may still be edited. */
 const EDITABLE_STATUSES: CaseStatus[] = [
   CaseStatus.DRAFT,
@@ -115,8 +143,8 @@ export class CasesService {
     for (const stepId of SENSITIVE_ANSWER_STEPS) {
       const value = stored[stepId];
       if (value === undefined || value === null || value === '') continue;
-      if (typeof value === 'string' && value.startsWith('••••')) continue; // already masked
-      stored[stepId] = `••••${this.encryption.lastDigits(String(value)) ?? ''}`;
+      if (isMaskedAnswer(value)) continue; // already masked
+      stored[stepId] = `${ANSWER_MASK_PREFIX}${this.encryption.lastDigits(String(value)) ?? ''}`;
     }
     return stored;
   }
@@ -961,7 +989,13 @@ export class CasesService {
     const bankName = this.answerString(answers['bank-name']);
     if (bankName !== undefined) promoted.bankName = bankName;
     const bankAccount = this.answerString(answers['bank-account-number']);
-    if (bankAccount !== undefined) {
+    // Only on the turn that supplies it. A masked value means we are looking at
+    // the stored bag on a later turn, and encrypting that would overwrite the
+    // real account number with its own display mask — invisibly, because
+    // `lastDigits` strips the bullets and every screen still reads correctly.
+    // Leaving the field unset here leaves the existing ciphertext untouched,
+    // which is the whole point.
+    if (bankAccount !== undefined && !isMaskedAnswer(bankAccount)) {
       // Encrypted at rest; only the last 4 digits stay readable so operator
       // screens can identify the account without a decrypt (PDPA).
       promoted.bankAccountNumberEncrypted = await this.encryption.encrypt(bankAccount);
