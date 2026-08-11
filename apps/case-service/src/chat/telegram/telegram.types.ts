@@ -76,6 +76,8 @@ export interface TelegramCallbackQuery {
 }
 
 export interface TelegramUpdate {
+  /** A message the sender went back and changed. */
+  edited_message?: TelegramMessage;
   update_id: number;
   message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;

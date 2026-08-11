@@ -44,6 +44,20 @@ import configuration from './config/configuration';
     // Rate limiting
     ThrottlerModule.forRoot([
       {
+        // MUST exist, and must be called 'default'.
+        //
+        // Five routes carry `@Throttle({ default: … })` — registration,
+        // login, claimant OTP send and verify, and NRIC verification — and an
+        // override names the throttler it overrides. With no throttler called
+        // 'default', every one of those was a no-op: the tightest limits in
+        // the system, including 5 OTP sends an hour, silently fell back to
+        // the general tiers below and nobody could tell from reading the
+        // route, which says exactly what was intended.
+        name: 'default',
+        ttl: 60000,
+        limit: 120,
+      },
+      {
         name: 'short',
         ttl: 1000, // 1 second
         limit: 10, // 10 requests per second
