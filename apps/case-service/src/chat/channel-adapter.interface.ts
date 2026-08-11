@@ -90,6 +90,14 @@ export interface InboundTurnPayload {
    * finds typing hard sending a voice note, was met with silence.
    */
   unsupportedMedia?: string;
+  /**
+   * The sender edited an earlier message rather than sending a new one.
+   *
+   * Cannot be applied as an answer — the original may already be stored and
+   * acted on — but it is a deliberate act, and silence in response to it is
+   * the same failure as ignoring a voice note.
+   */
+  editedMessage?: boolean;
 }
 
 /** What the gateway wants said next. Rendering is the adapter's problem. */

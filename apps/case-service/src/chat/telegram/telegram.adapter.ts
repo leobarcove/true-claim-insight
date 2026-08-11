@@ -145,6 +145,20 @@ export class TelegramAdapter implements ChannelAdapter {
       };
     }
 
+    // An edit cannot be applied — the original may already be stored and
+    // acted on, and a flow has no concept of revising a past turn. But the
+    // claimant has done something deliberate and is waiting, so it becomes a
+    // turn that can be answered rather than nothing at all.
+    if (update.edited_message) {
+      return {
+        channel: this.channel,
+        platformUserId: String(update.edited_message.chat.id),
+        platformMessageId: String(update.update_id),
+        chatType: update.edited_message.chat.type,
+        editedMessage: true,
+      };
+    }
+
     const message = update.message;
     if (!message) return null;
 

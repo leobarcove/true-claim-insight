@@ -201,7 +201,13 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
         params: {
           offset: this.offset,
           timeout: TelegramPoller.LONG_POLL_SECONDS,
-          allowed_updates: JSON.stringify(['message', 'callback_query']),
+          // `edited_message` included deliberately. Correcting a typo by
+          // editing is a gesture people use constantly on Telegram, and
+          // leaving it out meant total silence — the same failure as the
+          // vanishing voice note, just triggered by a more considerate
+          // claimant. We cannot apply the edit (the original may already be
+          // stored and acted on), but we can say so.
+          allowed_updates: JSON.stringify(['message', 'edited_message', 'callback_query']),
         },
         timeout: (TelegramPoller.LONG_POLL_SECONDS + 10) * 1000,
       })

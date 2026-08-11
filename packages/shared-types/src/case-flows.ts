@@ -923,6 +923,18 @@ export const validateAnswer = (step: FlowStep, value: AnswerValue): AnswerValida
             error: 'That date is in the future. Please give the date the incident actually happened.',
           };
         }
+        // And not absurdly far back. `1026` for `2026` is one slipped digit,
+        // and it passed: the flags then read the incident as a thousand years
+        // old and the claim arrives pre-marked out of window, rejected for a
+        // typo. Ten years is well beyond any travel policy's reporting window
+        // while still accepting anything a real claimant could mean.
+        const tenYearsAgo = Date.now() - 10 * 365 * 24 * 60 * 60 * 1000;
+        if (date.getTime() < tenYearsAgo) {
+          return {
+            valid: false,
+            error: 'That date looks too far in the past — please check the year.',
+          };
+        }
       }
       return { valid: true };
     }

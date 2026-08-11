@@ -493,6 +493,25 @@ export class ConversationGateway {
       });
     }
 
+    // Editing an earlier message does not change what we already recorded, so
+    // the claimant is pointed at the correction tools that do.
+    if (payload.editedMessage) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          error: 'Edited message — cannot be applied retrospectively',
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          'We saw that you edited an earlier message, but we had already recorded the first ' +
+          'version. Type "back" to change your last answer, or "edit" to change any of them.',
+      });
+      return;
+    }
+
     // Something we cannot read, answered before anything tries to interpret
     // it. Silence here is what made a voice note look like a broken bot.
     if (payload.unsupportedMedia) {
