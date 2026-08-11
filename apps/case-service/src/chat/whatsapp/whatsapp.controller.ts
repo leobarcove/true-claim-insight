@@ -14,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeController } from '@nestjs/swagger';
 
+import { NoEnvelope } from '../../common/decorators/no-envelope.decorator';
 import { ConversationGateway } from '../conversation.gateway';
 import { WhatsAppAdapter, type WhatsAppInboundMessage } from './whatsapp.adapter';
 
@@ -58,6 +59,7 @@ export class WhatsAppWebhookController {
    * the subscription is never created, so no message is ever delivered.
    */
   @Get()
+  @NoEnvelope()
   verify(
     @Query('hub.mode') mode: string,
     @Query('hub.verify_token') token: string,

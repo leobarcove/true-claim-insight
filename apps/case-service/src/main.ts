@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { Reflector } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -86,8 +87,10 @@ async function bootstrap() {
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Global response interceptor
-  app.useGlobalInterceptors(new TransformInterceptor());
+  // Global response interceptor. Constructed with the app's Reflector so it
+  // can see the @NoEnvelope handlers — a `new Reflector()` here would be a
+  // second, empty registry and every bypass would silently stop working.
+  app.useGlobalInterceptors(new TransformInterceptor(app.get(Reflector)));
 
   // Swagger documentation (non-production only)
   if (nodeEnv !== 'production') {
