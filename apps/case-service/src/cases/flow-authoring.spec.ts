@@ -205,7 +205,15 @@ describe('flow authoring', () => {
     it('names the steps nothing else may remove', () => {
       const marked = systemStepIds(getFlow(TravelClaimType.FLIGHT_DELAY)).sort();
       expect(marked).toEqual(
-        ['bank-account-number', 'incident-date', 'review', 'trip-start'].sort()
+        [
+          'bank-account-number',
+          // The claimant's own name: promoted to Claimant.fullName, and the
+          // only thing AMLA screening or duplicate detection has to work with.
+          'claimant-name',
+          'incident-date',
+          'review',
+          'trip-start',
+        ].sort()
       );
     });
 
