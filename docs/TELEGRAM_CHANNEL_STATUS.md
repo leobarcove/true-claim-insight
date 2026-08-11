@@ -172,33 +172,13 @@ where the bot could speak over an agent. See §5.
 
 ### Tier 6 — friction, latent risks, documentation
 
-*(Two entries were struck on 11 Aug after a check found them already closed by
-the Tier 1 work — `answerCallbackQuery` and the callback_data cap. A tracker
-drifts in both directions.)*
-
-- `"skip"` is stored literally, so the review reads *"Policy number: skip"*.
-- `promoteAnswers` re-queries `Policy` on every turn, not only when the policy
-  number changes.
-- Shutdown leaves the poller's `pause()` promise unsettled, so `loop()` never
-  returns; an in-flight 25-second `getUpdates` is not aborted either.
-- The reply keyboard is never removed after the contact share.
-- **No test file for the poller at all** — the offset arithmetic, error
-  isolation and backoff are untested, and they are the parts whose failure is
-  silent.
-
-- Typing instead of tapping loops silently at claim-type and consent.
-- `help` triggers handover — precisely what a stuck claimant types.
-- Progress counter skips positions on branched flows and is absent on re-asks.
-- A long review summary is truncated at 4096 chars rather than split, so a
-  claimant can be asked to confirm details clipped mid-line.
-- Consent offers agreement with no rendered way to decline.
-- The publish gate misses one-armed cycles, non-total switches, empty prompts
-  and uncompilable regex patterns — latent while the seed is the only author.
-  (`callback_data`'s 64-byte cap *is* enforced now, at render time — but the
-  gate is still the right place to refuse a step id that would exceed it,
-  rather than silently dropping the staleness check for that step.)
-- `USER_FLOWS.md` has no Telegram section; the user-flow site draws overlay
-  resolution as live; roughly a dozen shipped behaviours are undocumented.
+**Closed 11 August 2026.** The publish gate's four holes plus a fifth
+(`callback_data` length); `"skip"` reading as a literal in the review; the
+`Policy` re-query on every turn; the poller's dangling shutdown promise and
+its complete absence of tests; the reply keyboard left pinned; typing instead
+of tapping at both entry gates; `help` disappearing into an empty queue; the
+progress counter blinking in and out; a review summary truncated mid-line;
+consent with no way to decline; and the documentation.
 
 ---
 
@@ -211,6 +191,7 @@ drifts in both directions.)*
 | 11 Aug 2026 | Telegram uploads were all stored `application/octet-stream`; the type is now derived from the extension, 13 rows backfilled. |
 | 10 Aug 2026 | Telegram polling made opt-in (`TELEGRAM_POLLING_ENABLED=true`) — it is a fleet-wide singleton and a default-on second instance halves the first. |
 | 10 Aug 2026 | `TELEGRAM` added to `OFFSHORE_PROVIDERS` so its transfers are *recordable* — writing them is still pending (Tier 2). |
+| 11 Aug 2026 | **Tier 6 closed.** The publish gate now refuses the four shapes it used to wave through — a cycle reachable only down a branch's `else` or a non-first switch case (it followed the first arm only, and the first arm is the one an author walks by hand), a switch with no default or a branch arm pointing nowhere, an empty prompt, and a validation pattern that will not compile — plus a step id too long to carry its own value in a tapped button. `help` explains and repeats the question instead of handing over into what, out of hours, is indefinite silence; `human` still reaches a person. Typing at the claim-type and consent gates says what is wrong rather than resending the same menu forever. Consent offers a decline. A long review is split rather than clipped mid-line, so nobody confirms details they were not shown. The reply keyboard is retired once the number is in; the progress counter appears on every ask, not only the forward path; `"skip"` reads as "not provided"; the `Policy` lookup runs when the policy number changes rather than on all eighteen turns; the poller settles its pause on shutdown and — for the first time — has tests, over the offset arithmetic, error isolation, rewind and the 401 stop. `USER_FLOWS.md` gains §9b. |
 | 11 Aug 2026 | **Tier 5 closed.** A group chat is refused before any binding exists — the platform id there identifies the *group*, so one binding would have put a claimant's case number, answers and deadline warnings in front of everyone in it. The Case is access-checked the moment it is loaded, through the same `assertAccess` the browser passes, rather than relying on `activeCaseId` never being wrong. Consent is re-checked every turn, so a withdrawal in the PWA now stops collection here instead of being faithfully recorded and ignored. A binding expires after 90 days — it was an indefinite credential, written once and never read — and `POST /conversations/:id/unbind` can revoke one outright, firm-admin only, with a mandatory reason on the audit row. The two paths where the bot could still speak over an agent are closed: the handover check now precedes onboarding, and the error-path apology asks first. |
 | 11 Aug 2026 | **Tier 4 closed.** A voice note, video, sticker or location is now named and refused instead of vanishing with no row, no reply and no trace; a photo's caption is read as the answer it is. `/start` mid-flow re-asks rather than being stored as the answer. A turn the database refused is left *unacknowledged* so Telegram redelivers it — losing a claimant's message to a transient outage was the worst of the silent failures — and turns recorded but abandoned are swept into view every five minutes rather than sitting PENDING forever. The chat HTTP client finally has a timeout: the poll loop is strictly serial, so one black-holed connection froze the channel for everyone until TCP keepalive. 429 is honoured with its own `retry_after` instead of failing the turn. A file over 20 MB is explained rather than reported as our fault. 409 names the second poller it proves, and 401 stops rather than retrying a revoked token forever. |
 | 11 Aug 2026 | **Tier 3 re-audit — four more, and a weakness in one of the fixes.** Re-reading the original reports found findings that had never reached any tier. `normalisePhone` prefixed `+` only for Malaysian numbers, so a foreign one was stored as bare digits — two shapes in one column, on the one line whose claimants are by definition abroad, risking a duplicate Claimant whose Telegram and PWA claims never join up. The DTO behind it refused foreign numbers outright, so such a claimant could not bind at all. A stale `resumeStepId` still persisted a cursor pointing at no step. Editing a branch input left documents attached to a path the claim no longer takes. And the earlier `!nextStep` fix had used `answerType === 'confirm'` as a proxy for "this is the review" — the medical flow has *two* confirm steps and proves the two are not the same thing, so `isReview` is now explicit and the answer summary no longer lands under a specialist-review notice. |

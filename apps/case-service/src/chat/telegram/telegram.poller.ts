@@ -34,21 +34,34 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
 
   /** Telegram holds the connection open this long when there is nothing new. */
   private static readonly LONG_POLL_SECONDS = 25;
-  /** Backoff after a failed poll, so an outage does not become a hot loop. */
-  private static readonly ERROR_BACKOFF_MS = 5_000;
+  /**
+   * Backoff after a failed poll, so an outage does not become a hot loop.
+   *
+   * Configurable because five seconds is a sensible production pause and an
+   * unaffordable one in a test: proving that a failed poll *backs off* rather
+   * than steaming ahead should not take five seconds per assertion.
+   */
+  private static readonly DEFAULT_ERROR_BACKOFF_MS = 5_000;
+  private readonly errorBackoffMs: number;
   /** How often to look for turns that were recorded and never processed. */
   private static readonly RECONCILE_INTERVAL_MS = 5 * 60_000;
   /** A turn still PENDING after this was abandoned, not merely slow. */
   private static readonly STALLED_AFTER_MS = 10 * 60_000;
 
   private lastReconcileAt = 0;
+  /** Resolves the in-flight pause, so shutdown does not wait out the backoff. */
+  private wake?: () => void;
 
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
     private readonly adapter: TelegramAdapter,
     private readonly gateway: ConversationGateway
-  ) {}
+  ) {
+    this.errorBackoffMs =
+      Number(this.config.get('TELEGRAM_ERROR_BACKOFF_MS')) ||
+      TelegramPoller.DEFAULT_ERROR_BACKOFF_MS;
+  }
 
   onModuleInit(): void {
     if (!this.adapter.isConfigured()) {
@@ -73,7 +86,13 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.running = false;
+    // Settle the pending pause as well as cancelling it. Clearing the timeout
+    // alone left the promise it was going to resolve hanging forever, so
+    // `loop()` never returned and shutdown waited on a task that could not
+    // finish.
     if (this.timer) clearTimeout(this.timer);
+    this.wake?.();
+    this.wake = undefined;
   }
 
   private async loop(): Promise<void> {
@@ -103,7 +122,7 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
                 `Update ${update.update_id} could not be recorded; leaving it unacknowledged ` +
                   `for redelivery. ${(error as Error).message}`
               );
-              await this.pause(TelegramPoller.ERROR_BACKOFF_MS);
+              await this.pause(this.errorBackoffMs);
               break;
             }
             // handleTurn records its own failure; this only stops one bad
@@ -137,7 +156,7 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
         } else {
           this.logger.error(`Poll failed: ${(error as Error).message}`);
         }
-        await this.pause(TelegramPoller.ERROR_BACKOFF_MS);
+        await this.pause(this.errorBackoffMs);
       }
     }
   }
@@ -192,7 +211,11 @@ export class TelegramPoller implements OnModuleInit, OnModuleDestroy {
 
   private pause(ms: number): Promise<void> {
     return new Promise(resolve => {
-      this.timer = setTimeout(resolve, ms);
+      this.wake = resolve;
+      this.timer = setTimeout(() => {
+        this.wake = undefined;
+        resolve();
+      }, ms);
     });
   }
 }
