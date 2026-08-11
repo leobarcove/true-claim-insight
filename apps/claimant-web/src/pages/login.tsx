@@ -88,6 +88,10 @@ export function LoginPage() {
         state: {
           phoneNumber: result.phoneNumber,
           expiresIn: result.expiresIn,
+          // Only ever set outside production, and only while no SMS provider
+          // exists. Carried through so the next screen can prefill it instead
+          // of asking a tester to go and read the server console.
+          prefillCode: result.code,
           from,
         },
       });

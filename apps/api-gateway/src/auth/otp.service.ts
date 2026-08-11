@@ -1,6 +1,15 @@
-import { Injectable, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../config/prisma.service';
+import { OTP_TRANSPORT, type OtpTransport } from './otp-transport.interface';
 
 @Injectable()
 export class OtpService {
@@ -9,7 +18,23 @@ export class OtpService {
   private readonly MAX_ATTEMPTS = 3;
   private readonly RATE_LIMIT_PER_HOUR = 5;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(OTP_TRANSPORT) private readonly transport: OtpTransport
+  ) {}
+
+  /**
+   * Production is the one environment where an undelivered code is a failure
+   * rather than a workaround.
+   *
+   * Read once, from NODE_ENV, and used only to decide whether a code may be
+   * returned to the caller. Defaulting to *treating unknown as production* is
+   * deliberate: the failure mode of guessing wrong in that direction is a
+   * login that does not work, and in the other it is handing out credentials.
+   */
+  private get isProduction(): boolean {
+    return (process.env.NODE_ENV ?? 'production') === 'production';
+  }
 
   /**
    * Generate a 6-digit OTP code.
@@ -47,7 +72,11 @@ export class OtpService {
   /**
    * Send OTP to phone number
    */
-  async sendOtp(phoneNumber: string, tenantId?: string, userId?: string): Promise<{ expiresIn: number }> {
+  async sendOtp(
+    phoneNumber: string,
+    tenantId?: string,
+    userId?: string
+  ): Promise<{ expiresIn: number; code?: string }> {
     // Check rate limit
     await this.checkRateLimit(phoneNumber, tenantId);
 
@@ -79,14 +108,36 @@ export class OtpService {
       },
     });
 
-    // TODO: Send SMS via provider
-    console.log(`\n${'='.repeat(50)}`);
-    console.log(`📱 OTP Code for ${phoneNumber}: ${code}`);
-    if (tenantId) console.log(`   Tenant: ${tenantId}`);
-    console.log(`   Expires in ${this.OTP_EXPIRY_MINUTES} minutes`);
-    console.log(`${'='.repeat(50)}\n`);
+    const delivery = await this.transport.send(phoneNumber, code);
 
-    return { expiresIn: this.OTP_EXPIRY_MINUTES * 60 };
+    if (delivery.delivered) {
+      this.logger.log(`OTP sent to ${phoneNumber} via ${this.transport.name}`);
+      return { expiresIn: this.OTP_EXPIRY_MINUTES * 60 };
+    }
+
+    // Nothing carried the code. In production that is an outage, and failing
+    // loudly is the only safe answer: the alternative is returning a live
+    // credential over HTTP to whoever asked for it, which is indistinguishable
+    // from having no authentication at all.
+    if (this.isProduction) {
+      this.logger.error(
+        `No OTP transport could deliver to ${phoneNumber}. Refusing to return the code.`
+      );
+      throw new ServiceUnavailableException(
+        'We cannot send a verification code right now. Please try again shortly.'
+      );
+    }
+
+    // Outside production there is no SMS provider yet, so the code comes back
+    // in the response and the app fills it in. Verification itself is
+    // untouched — the code is still random, still stored, still expires in
+    // five minutes, still rate limited, and still burns an attempt when wrong.
+    // What is stubbed is delivery, not the check.
+    this.logger.warn(
+      `Returning the OTP for ${phoneNumber} in the response (NODE_ENV=${process.env.NODE_ENV}). ` +
+        'This never happens in production.'
+    );
+    return { expiresIn: this.OTP_EXPIRY_MINUTES * 60, code };
   }
 
   /**
