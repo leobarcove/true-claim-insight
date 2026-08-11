@@ -154,13 +154,55 @@ specifically for the property lines: a cause-of-loss list fanning out to
 per-peril steps reads as a table in an editor and as an unreadable ladder if
 expressed as nested `branch`es.
 
-Channels sit behind `ChannelAdapter` (Telegram first; web chat needs no adapter
-because the PWA renders the flow directly). An adapter knows how to *say* things
-on one platform and nothing about what to say — deciding the next question,
-validating and advancing the Case all happen once, above that line, against the
-pinned flow. `ChannelCapabilities` records what each platform can physically
-render, including `retainsPlaintext`, which is how the payout-details exposure on
-messaging channels is tracked rather than assumed away (MASTER_PLAN §3.4).
+Channels sit behind `ChannelAdapter`. An adapter knows how to *say* things on one
+platform and nothing about what to say — deciding the next question, validating
+and advancing the Case all happen once, above that line, against the pinned flow.
+`ChannelCapabilities` records what each platform can physically render, including
+`retainsPlaintext`, which is how the payout-details exposure on messaging
+channels is tracked rather than assumed away (MASTER_PLAN §3.4).
+
+**The PWA is a channel too (11 Aug 2026).** It was not, and the exception cost
+more than it saved: the React page drove the flow itself, so it shared the rules
+with Telegram and nothing else — no transcript, no `back`/`edit`, no route to a
+human, and none of the fixes made on the messaging side. A web claimant who got
+stuck could not be helped because there was nothing for an operator to open.
+
+`WebChatAdapter` closes it, and needed almost no machinery. Every other adapter
+*pushes*; web chat *pulls* — but `ConversationGateway.say()` already persists
+each outbound message before sending it, so for a pull channel the stored row
+**is** the delivery and `send` has nothing to do. Two things had to move
+server-side, and both generalise to any future pull channel:
+
+- **The open question rides on the transcript.** A push adapter is handed the
+  step and draws its keyboard on the spot; a pull client has only what was
+  persisted, and the transcript stores text, not choices. Resolving it in the
+  browser would need the flow, the answers and the branching rules — the
+  duplication being removed.
+- **`synthesiseStep` rebuilds the questions that belong to no flow.** Consent and
+  claim-type are asked before a Case exists, so nothing can render their options
+  from the transcript. Consent is the one question with no alternative route: a
+  claimant who cannot render "I agree" cannot claim at all.
+
+Documents are the single genuine difference, and it is expressed rather than
+papered over. A messaging platform holds the claimant's file and hands us a
+reference to fetch; a browser posts the bytes to the upload endpoint, which
+validates and stores them first. So a web turn carries `storedDocumentId`
+instead of `mediaRef` — and the gateway resolves it **scoped to the Case**,
+because that id is claimant-supplied input on a route that attaches evidence to
+a claim. Unscoped, a guessed id could offer another claimant's document as proof.
+
+### Operating the conversational channels
+
+| Setting | Effect |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Unset ⇒ the Telegram channel is off entirely. Web chat needs no token; its transport is the claimant's own session. |
+| `TELEGRAM_POLLING_ENABLED` | Must be `true` on **exactly one** instance per bot token. Two pollers each receive half the updates, which presents as claimants being *intermittently ignored* rather than as an outage — the hardest class of fault to diagnose from a bug report. Staging needs its own bot, not a second poller on the same one. |
+| `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis (MASTER_PLAN §6.3, §6.18–6.19). |
+
+**Binding in development.** On Telegram, tap *Share my number*: no code is sent
+and a typed number is refused, because the platform's own verified contact is
+the identity control. The PWA binds from the session instead — the claimant
+logged in, so the proof already happened and repeating it would be theatre.
 
 The load-bearing detail: a channel answer goes through
 `CasesService.patchAnswer`, not a fast path around it. Every compliance control
