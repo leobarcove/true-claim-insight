@@ -243,6 +243,48 @@ export const parseTextDate = (
 };
 
 /**
+ * A stored date rendered the way a claimant wrote it.
+ *
+ * Dates are stored as ISO, and the review summary printed them raw: a claimant
+ * was asked to confirm "2026-08-11T00:00:00.000Z" as their trip start. That is
+ * not a formatting blemish on a confirmation screen — it is the one moment the
+ * claimant is asked to check the facts of their own claim, and it was
+ * unreadable, so nobody checked anything.
+ *
+ * Month spelled out, because "11/08" and "08/11" look alike and that ambiguity
+ * is precisely what is being confirmed. Rendered in UTC, which is not a
+ * timezone claim: intake stores what the claimant typed without applying an
+ * offset, so reading it back with UTC getters returns their own words. Shifting
+ * to a local zone here would move a 10:00 incident to 18:00.
+ *
+ * Returns null when the value will not parse, so the caller can fall back to
+ * showing the raw string rather than "Invalid Date".
+ */
+export const formatDateAnswer = (
+  value: string,
+  answerType: 'date' | 'datetime'
+): string | null => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const day = parsed.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  if (answerType === 'date') return day;
+
+  const time = parsed.toLocaleString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  });
+  return `${day} at ${time}`;
+};
+
+/**
  * Render the answers so far as a plain-text review summary.
  *
  * For channels with no summary panel: a confirm step that says "review your
@@ -284,6 +326,8 @@ export const summariseAnswers = (
       display = 'provided';
     } else if (step.answerType === 'choice') {
       display = step.choices?.find(choice => choice.value === value)?.label ?? String(value);
+    } else if (step.answerType === 'date' || step.answerType === 'datetime') {
+      display = formatDateAnswer(String(value), step.answerType) ?? String(value);
     } else {
       display = String(value);
     }
