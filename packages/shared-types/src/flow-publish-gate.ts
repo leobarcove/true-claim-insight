@@ -25,7 +25,11 @@ export type FlowProblemKind =
   | 'missing-system-step'
   | 'empty-choices'
   | 'document-without-type'
-  | 'duplicate-step-id';
+  | 'duplicate-step-id'
+  | 'dead-end-rule'
+  | 'empty-prompt'
+  | 'invalid-pattern'
+  | 'step-id-too-long';
 
 export interface FlowProblem {
   kind: FlowProblemKind;
@@ -135,24 +139,101 @@ export const validateFlowDefinition = (
     }
   }
 
-  // Termination: from the entry, following the longest possible path, the walk
-  // must run out of steps rather than run forever. Bounded by step count
-  // because a flow that revisits a step has by definition looped.
-  let cursor: string | null = flow.entryStepId;
-  const walked = new Set<string>();
-  while (cursor && byId.has(cursor)) {
-    if (walked.has(cursor)) {
-      problems.push({
-        kind: 'cycle',
-        stepId: cursor,
-        detail: `"${cursor}" is reachable from itself. A claimant would be asked the same question forever.`,
-      });
-      break;
+  // Termination, down EVERY arm rather than the first.
+  //
+  // This followed `targets[0]` only, so a cycle reachable through a branch's
+  // `else` or a non-first switch case was invisible — and those are precisely
+  // the arms an author gets wrong, because the happy path is the one they
+  // walk through by hand. Depth-first over all targets, tracking the path
+  // rather than a flat visited set, so a diamond (two arms rejoining) is not
+  // mistaken for a loop.
+  const cycleFound = new Set<string>();
+  const walk = (stepId: string, path: string[]): void => {
+    if (path.includes(stepId)) {
+      if (!cycleFound.has(stepId)) {
+        cycleFound.add(stepId);
+        problems.push({
+          kind: 'cycle',
+          stepId,
+          detail:
+            `"${stepId}" is reachable from itself via ${[...path.slice(path.indexOf(stepId)), stepId].join(' → ')}. ` +
+            'A claimant would be asked the same question forever.',
+        });
+      }
+      return;
     }
-    walked.add(cursor);
-    const step = byId.get(cursor) as FlowStep;
-    const targets = ruleTargets(step.next);
-    cursor = targets.length > 0 ? targets[0] : null;
+    const step = byId.get(stepId);
+    if (!step) return;
+    for (const target of ruleTargets(step.next)) walk(target, [...path, stepId]);
+  };
+  if (byId.has(flow.entryStepId)) walk(flow.entryStepId, []);
+
+  for (const step of flow.steps) {
+    // A rule that can resolve to nothing. `resolveNextStep` returns null for
+    // it, which the conversation reads as "the flow is over" — so a claimant
+    // taking the unhandled arm was treated as having reached the review. A
+    // switch needs a default; a branch needs both arms.
+    if (step.next.type === 'branch' && (step.next.then === null || step.next.else === null)) {
+      problems.push({
+        kind: 'dead-end-rule',
+        stepId: step.id,
+        detail: `"${step.id}" has a branch arm pointing nowhere. Every arm must name a step or end the flow explicitly.`,
+      });
+    }
+    if (step.next.type === 'switch' && !step.next.default) {
+      problems.push({
+        kind: 'dead-end-rule',
+        stepId: step.id,
+        detail: `"${step.id}" is a switch with no default. An answer matching no case would silently end the conversation.`,
+      });
+    }
+
+    // Telegram rejects an empty message body outright, so the send throws and
+    // the claimant gets an apology in place of a question they can answer.
+    if (!step.prompt?.trim()) {
+      problems.push({
+        kind: 'empty-prompt',
+        stepId: step.id,
+        detail: `"${step.id}" has no prompt. There would be nothing to ask.`,
+      });
+    }
+    if (!step.label?.trim()) {
+      problems.push({
+        kind: 'empty-prompt',
+        stepId: step.id,
+        detail: `"${step.id}" has no label. It would appear unnamed in the review and the edit menu.`,
+      });
+    }
+
+    // Compiled here rather than per answer. An invalid pattern throws inside
+    // `validateAnswer`, which makes the step permanently unanswerable behind a
+    // generic apology — a flow nobody can complete and nothing explaining why.
+    if (step.validation?.pattern) {
+      try {
+        new RegExp(step.validation.pattern);
+      } catch (error) {
+        problems.push({
+          kind: 'invalid-pattern',
+          stepId: step.id,
+          detail: `"${step.id}" has a validation pattern that will not compile: ${(error as Error).message}`,
+        });
+      }
+    }
+
+    // A tapped button carries "<stepId>|<value>" and Telegram caps that at 64
+    // bytes. Over it the step id is dropped at render time, which silently
+    // loses the protection against a stale tap being applied to the wrong
+    // question — so it is refused here instead.
+    const longestChoice = Math.max(0, ...(step.choices ?? []).map(c => c.value.length));
+    if (step.choices?.length && step.id.length + 1 + longestChoice > 64) {
+      problems.push({
+        kind: 'step-id-too-long',
+        stepId: step.id,
+        detail:
+          `"${step.id}" plus its longest choice value exceeds the 64 bytes a tapped button can ` +
+          'carry. Shorten the step id or the choice values.',
+      });
+    }
   }
 
   if (reference) {

@@ -433,7 +433,7 @@ export class CasesService {
     }
 
     const answers = { ...(caseRow.answers as CaseAnswers), [dto.stepId]: dto.value };
-    const promoted = await this.promoteAnswers(answers);
+    const promoted = await this.promoteAnswers(answers, dto.stepId);
     const nextStepId = resolveNextStep(flow, dto.stepId, answers);
 
     const warnings: string[] = [];
@@ -997,11 +997,20 @@ export class CasesService {
    * Map well-known step answers onto promoted Case columns (queue filtering,
    * deadline flags, payout details) and attempt policy auto-match.
    */
-  private async promoteAnswers(answers: CaseAnswers): Promise<Partial<Prisma.CaseUncheckedCreateInput>> {
+  private async promoteAnswers(
+    answers: CaseAnswers,
+    /** The step this turn answered, where there is one. Omitted on create. */
+    changedStepId?: string
+  ): Promise<Partial<Prisma.CaseUncheckedCreateInput>> {
     const promoted: Partial<Prisma.CaseUncheckedCreateInput> = {};
 
+    // Only when the policy number is the answer that just changed, or when it
+    // has never been resolved. This ran a cross-tenant Policy lookup on every
+    // single turn of every conversation — eighteen queries to answer a
+    // question asked once, and the same answer each time.
     const policyNumber = this.answerString(answers['policy-number']);
-    if (policyNumber !== undefined) {
+    const policySettled = changedStepId !== undefined && changedStepId !== 'policy-number';
+    if (policyNumber !== undefined && !policySettled) {
       if (policyNumber.trim().toLowerCase() === 'skip') {
         promoted.policyNumberRaw = null;
         promoted.needsPolicyReview = true;

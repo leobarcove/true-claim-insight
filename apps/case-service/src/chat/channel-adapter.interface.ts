@@ -108,6 +108,14 @@ export interface OutboundPrompt {
    * it supports it. Telegram renders a request_contact button.
    */
   requestPhone?: boolean;
+  /**
+   * Retire the platform keyboard, where it has one.
+   *
+   * Telegram's reply keyboard stays pinned until told otherwise, so the
+   * "Share my number" button sat under every subsequent question long after
+   * the number had been shared.
+   */
+  removeKeyboard?: boolean;
 }
 
 export interface ChannelAdapter {

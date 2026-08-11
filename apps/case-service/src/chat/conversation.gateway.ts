@@ -65,8 +65,19 @@ import { CLAIMANT_RESOLVER, type ClaimantResolver } from './claimant-resolver.in
 const BACK_WORDS = new Set(['back', 'undo', 'previous', '/back', 'kembali']);
 const EDIT_WORDS = new Set(['edit', 'change', 'correct', '/edit', 'ubah']);
 
-/** Asking for a person. Nothing in intake should trap someone who wants one. */
-const HUMAN_WORDS = new Set(['human', 'agent', 'help', 'support', '/human', 'bantuan']);
+/**
+ * Asking for a person. Nothing in intake should trap someone who wants one.
+ *
+ * `help` and `support` are deliberately NOT here. They are what a confused
+ * claimant types first, and routing them straight to handover put the
+ * conversation in a queue that, for an unstaffed TPA out of hours, is
+ * indefinite silence — the bot stops answering and nobody replaces it. Asking
+ * for guidance and asking for a person are different requests.
+ */
+const HUMAN_WORDS = new Set(['human', 'agent', '/human', 'ejen']);
+
+/** Asking what to do — answered here, with a person offered rather than forced. */
+const HELP_WORDS = new Set(['help', 'support', '/help', 'bantuan', 'tolong']);
 
 /**
  * Inbound turns one chat may send per minute before we stop answering.
@@ -104,6 +115,9 @@ const BINDING_MAX_AGE_DAYS = 90;
  * accidentally grant consent.
  */
 const CONSENT_AGREED = CONSENT_AGREED_VALUE;
+
+/** Declining. Prefixed like the others so it cannot collide with a real value. */
+const CONSENT_DECLINED = '__consent:decline';
 
 /**
  * The turn could not be written down at all.
@@ -607,6 +621,9 @@ export class ConversationGateway {
 
     await this.say(adapter, binding.id, payload.platformUserId, {
       text: 'Thank you. Let us begin.',
+      // The share-contact keyboard has done its job; without this it stays
+      // pinned beneath every question that follows.
+      removeKeyboard: true,
     });
     this.logger.log(
       `Binding ${binding.id} bound on ${payload.channel} via a platform-verified contact.`
@@ -738,7 +755,7 @@ export class ConversationGateway {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: 'Sorry — our last message may not have reached you. Here it is again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
     }
 
@@ -805,7 +822,7 @@ export class ConversationGateway {
             ? 'You already have a claim in progress — here is where we were.'
             : 'Sorry, I do not recognise that command. Here is the question again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
     }
 
@@ -836,7 +853,29 @@ export class ConversationGateway {
           'That looks like a question rather than an answer. If you are unsure, type "human" ' +
           'and one of our team will help — otherwise here is the question again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      return;
+    }
+
+    // Asking what to do. Answered immediately, with the question repeated and
+    // a person offered — rather than handing over and going quiet, which is
+    // what "help" used to do.
+    if (HELP_WORDS.has(word)) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.PROCESSED,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          `We are on "${step.label}". You can type "back" to change your last answer, ` +
+          '"edit" to change any of them, or "human" to speak to one of our team. ' +
+          'Here is the question again.',
+      });
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
     }
 
@@ -914,7 +953,7 @@ export class ConversationGateway {
       });
       // Re-ask rather than apologise: from the claimant's side they tapped a
       // button twice and the conversation simply moved on, which is correct.
-      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
     }
 
@@ -999,7 +1038,7 @@ export class ConversationGateway {
           where: { id: messageId },
           data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
         });
-        await this.ask(adapter, binding.id, payload.platformUserId, step);
+        await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
         return;
       }
       if (step.answerType === 'date' || step.answerType === 'datetime') {
@@ -1092,7 +1131,7 @@ export class ConversationGateway {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: result.error ?? 'Sorry, that does not look right.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step);
+      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
     }
 
@@ -1316,14 +1355,34 @@ export class ConversationGateway {
     // Sent as a choice step so the adapter renders it through its normal
     // keyboard path — and so both the wording and the reply agreeing to it
     // land in the conversation transcript, which is the evidence.
+    // Declining is offered explicitly. Consent with no rendered way to refuse
+    // is weak evidence that it was freely given, and a claimant who does not
+    // want to agree was otherwise left with no move at all.
+    if (payload.callbackValue === CONSENT_DECLINED) {
+      this.logger.log(`Consent declined on ${payload.channel} for claimant ${binding.claimantId}.`);
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          'That is entirely your choice. We cannot open a claim without permission to handle ' +
+          'your details, so nothing further will happen here. If you change your mind, just ' +
+          'send us a message — or contact our support desk to make a claim another way.',
+      });
+      return;
+    }
+
+    const typedAtConsent = Boolean(payload.text?.trim());
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: `${notice.title}\n\n${notice.body}`,
+      text: typedAtConsent
+        ? `Please use one of the buttons below.\n\n${notice.title}\n\n${notice.body}`
+        : `${notice.title}\n\n${notice.body}`,
       step: {
         id: '__consent',
         prompt: notice.title,
         label: 'Consent',
         answerType: 'choice',
-        choices: [{ value: CONSENT_AGREED, label: 'I agree' }],
+        choices: [
+          { value: CONSENT_AGREED, label: 'I agree' },
+          { value: CONSENT_DECLINED, label: 'I do not agree' },
+        ],
         next: { type: 'end' },
       },
     });
@@ -1350,14 +1409,20 @@ export class ConversationGateway {
 
     if (!chosen) {
       // updateMany with a PENDING guard, not update: this runs both as its own
-      // turn and as the tail of onboarding, and the OTP message it would
-      // otherwise relabel is genuinely ONBOARDING, not a flow answer.
+      // turn and as the tail of onboarding, and the onboarding message it
+      // would otherwise relabel is genuinely ONBOARDING, not a flow answer.
       await this.prisma.conversationMessage.updateMany({
         where: { id: messageId, status: ConversationMessageStatus.PENDING },
         data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
       });
+      // Typing "flight delay" instead of tapping used to resend the identical
+      // menu with no explanation, indefinitely — the claimant repeats
+      // themselves louder and the bot repeats itself back. Say what is wrong.
+      const typedSomething = Boolean(payload.text?.trim());
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'What has happened? Choose the option that fits best.',
+        text: typedSomething
+          ? 'Please tap one of the buttons below so I record the right kind of claim.'
+          : 'What has happened? Choose the option that fits best.',
         step: this.claimTypeMenu(),
       });
       return;
@@ -1448,7 +1513,7 @@ export class ConversationGateway {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: 'This is the first question, so there is nothing before it to change.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, target);
+      await this.ask(adapter, binding.id, payload.platformUserId, target, 0, undefined, undefined, flow);
       return;
     }
 
@@ -1497,7 +1562,7 @@ export class ConversationGateway {
     await this.say(adapter, binding.id, payload.platformUserId, {
       text: `Let us redo "${stepToRedo.label}".`,
     });
-    await this.ask(adapter, binding.id, payload.platformUserId, stepToRedo);
+    await this.ask(adapter, binding.id, payload.platformUserId, stepToRedo, 0, undefined, undefined, flow);
   }
 
   /**
@@ -1689,12 +1754,21 @@ export class ConversationGateway {
     step: FlowStep,
     page = 0,
     review?: { steps: FlowStep[]; answers: CaseAnswers },
-    progress?: { position: number; total: number }
+    progress?: { position: number; total: number },
+    /**
+     * The flow being walked, so the position can be derived when the caller
+     * did not compute one. The counter used to appear only on the forward
+     * path — every re-ask after a rejected answer, every correction and the
+     * first question of a case dropped it, so "(3 of 12)" blinked in and out
+     * and read as a glitch rather than a progress indicator.
+     */
+    flow?: CaseFlow
   ): Promise<void> {
     // Position first, so a claimant knows how much is left before reading the
     // question. Eighteen questions with no end in sight is how intake gets
     // abandoned halfway.
-    let text = progress ? `(${progress.position} of ${progress.total}) ${step.prompt}` : step.prompt;
+    const shown = progress ?? (flow ? this.progressOf(flow, step.id) : undefined);
+    let text = shown ? `(${shown.position} of ${shown.total}) ${step.prompt}` : step.prompt;
 
     // A channel with no date control gets an explicit format hint, because the
     // claimant is about to type free text that has to parse.

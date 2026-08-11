@@ -560,6 +560,79 @@ leaves a trace. A claimant who emailed you believes they have notified you.
 
 ---
 
+## 9b. Telegram intake — the conversational channel
+
+The same flow definitions, the same write path, a different surface. Nothing
+here decides anything a browser intake would not; the differences are all in
+what the platform can render and what it can be trusted to assert.
+
+```mermaid
+flowchart TD
+    MSG["Inbound turn"] --> REC["`Record it **before** interpreting it
+insert-first on (channel, platformMessageId);
+a unique violation IS the 'already seen' branch`"]
+    REC --> GROUP{"Private chat?"}
+    GROUP -->|"group / channel"| REFUSE["`Refuse and say why.
+The platform id there names the *group*`"]
+    GROUP -->|private| RATE{"`≤ 20 turns
+per minute?`"}
+    RATE -->|no| SLOW["Ask them to slow down"]
+    RATE -->|yes| HAND{"Agent has it?"}
+    HAND -->|yes| WAIT["`Record as AWAITING_AGENT.
+The bot says nothing at all`"]
+    HAND -->|no| BOUND{"`Bound, and
+confirmed < 90 days ago?`"}
+    BOUND -->|no| SHARE["`Share your number.
+Accepted only when Telegram says the
+contact is the **sender's own**`"]
+    SHARE --> RESOLVE["`Resolve the Claimant
+(gateway owns identity)`"]
+    RESOLVE --> CONSENT
+    BOUND -->|yes| CONSENT{"`Live CLAIM_PROCESSING
+consent?`"}
+    CONSENT -->|no| NOTICE["`Approved notice, in the
+claimant's own language.
+Agree / Do not agree`"]
+    CONSENT -->|yes| STEP["`Ask the next step of the
+flow pinned on the Case`"]
+    STEP --> ANSWER["`patchAnswer — the same method
+the PWA calls: validation, redaction,
+policy match, deadline flags, audit`"]
+
+    style REC fill:#e8f4ea,stroke:#2d6a4f
+    style REFUSE fill:#fdecea,stroke:#b23c2e
+    style SHARE fill:#e8f4ea,stroke:#2d6a4f
+    style ANSWER fill:#e8f4ea,stroke:#2d6a4f
+```
+
+**Identity is the platform's assertion, not a code we send.** Tapping *Share
+my number* is accepted only when Telegram reports the contact as the sender's
+own; a number that is typed, or a card shared from an address book, is
+refused. There is no OTP on this channel — see `MASTER_PLAN.md` §6 item 20 for
+why, and for the condition that reverses it.
+
+**What a claimant can do besides answer:**
+
+| They type | What happens |
+|---|---|
+| `back`, `undo`, `kembali` | Undoes the last answer and re-asks it |
+| `edit`, `ubah` | Lists answered steps as buttons carrying their current value |
+| `help`, `tolong`, `bantuan` | Explains the options and repeats the question — does **not** hand over |
+| `human`, `agent`, `ejen` | Hands to a person, from anywhere |
+| `skip` | Passes an optional step |
+| `/start` mid-flow | Re-asks where they were, rather than being stored as an answer |
+
+**What the bot refuses, out loud rather than silently:** a voice note, video,
+sticker or location; a file over 20 MB; a contact belonging to somebody else;
+a tap meant for a question the conversation has already moved past.
+
+**Every turn writes a `TransferRecord`** — the claimant's words reach
+Telegram's servers abroad before we see them. Those records carry no lawful
+basis, because none is established; that is why this channel is restricted to
+synthetic and internal-tester data (`MASTER_PLAN.md` §3.4).
+
+---
+
 ## 10. Small-claims fast-track
 
 ```mermaid
@@ -663,6 +736,8 @@ not merely an access check.
 | Local-LLM document validation | `validationStatus` is a labelled stub |
 | AMLA/CTF screening at payee registration | Phase 5, the one **FAIL** in §3 |
 | Automated eKYC | Identity now *gates* decisions (see §6), but verification is a recorded manual act — no vendor integrated |
+| A lawful basis for the messaging channel | Every Telegram turn is recorded as a cross-border transfer with **no basis established** (§9b). Synthetic and internal-tester data only until the in-country path or a consent basis exists |
+| WhatsApp and Messenger | `ChannelCapabilities` describes them and the flow engine is channel-agnostic, but only the Telegram adapter is registered |
 
 *(Removed 10 Aug 2026: the site-visit scheduling row — `PATCH
 /claims/:id/appointment` now books the visit, audits it and notifies the

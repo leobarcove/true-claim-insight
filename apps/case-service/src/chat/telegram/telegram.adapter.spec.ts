@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { CaseChannel } from '@prisma/client';
 import type { HttpService } from '@nestjs/axios';
-import { TelegramAdapter } from './telegram.adapter';
+import { TelegramAdapter, splitForTelegram } from './telegram.adapter';
 import type { TelegramUpdate } from './telegram.types';
 
 /**
@@ -157,6 +157,31 @@ describe('TelegramAdapter', () => {
     });
   });
 
+  describe('long messages', () => {
+    it('splits rather than truncating', () => {
+      // The review embeds the whole answer summary in its body on a channel
+      // with no summary panel. Clipping it means asking a claimant to confirm
+      // a claim whose details were cut off — agreeing to what they cannot see.
+      const body = `${'a'.repeat(3000)}\n\n${'b'.repeat(3000)}`;
+      const parts = splitForTelegram(body);
+
+      expect(parts.length).toBeGreaterThan(1);
+      expect(Math.max(...parts.map(p => p.length))).toBeLessThanOrEqual(4096);
+      // Nothing lost: every character survives somewhere.
+      expect(parts.join('').replace(/\s/g, '').length).toBe(body.replace(/\s/g, '').length);
+    });
+
+    it('prefers a paragraph boundary to a hard cut', () => {
+      const body = `${'a'.repeat(4000)}\n\n${'b'.repeat(200)}`;
+      const [first] = splitForTelegram(body);
+      expect(first).toBe('a'.repeat(4000));
+    });
+
+    it('leaves a short message alone', () => {
+      expect(splitForTelegram('short')).toEqual(['short']);
+    });
+  });
+
   describe('rendering', () => {
     const sentBody = (http: { post: jest.Mock }) => http.post.mock.calls[0][1];
 
@@ -226,15 +251,52 @@ describe('TelegramAdapter', () => {
       });
     });
 
-    it('truncates a body Telegram would reject outright', async () => {
+    it('sends a body Telegram would reject as several messages, not a clipped one', async () => {
+      // Previously truncated with an ellipsis. That is the wrong trade for the
+      // review step, whose body carries the answer summary on a channel with
+      // no summary panel — the claimant would be confirming details that had
+      // been cut off.
       const { adapter, http } = makeAdapter('token');
       http.post.mockReturnValue({ subscribe: (o: any) => o.next({ data: {} }) });
 
       await adapter.send('55501', { text: 'x'.repeat(5000) });
 
-      const body = sentBody(http);
-      expect(body.text.length).toBe(adapter.capabilities.maxMessageChars);
-      expect(body.text.endsWith('…')).toBe(true);
+      expect(http.post).toHaveBeenCalledTimes(2);
+      const sent = http.post.mock.calls.map((c: any[]) => c[1].text);
+      expect(sent.join('').length).toBe(5000);
+      expect(sent.every((t: string) => t.length <= 4096)).toBe(true);
+    });
+
+    it('puts the keyboard on the last part, beside the question it answers', async () => {
+      const { adapter, http } = makeAdapter('token');
+      http.post.mockReturnValue({ subscribe: (o: any) => o.next({ data: {} }) });
+
+      await adapter.send('55501', {
+        text: 'y'.repeat(5000),
+        step: {
+          id: 'reason',
+          prompt: 'Why?',
+          label: 'Reason',
+          answerType: 'choice',
+          choices: [{ value: 'A', label: 'A' }],
+          next: { type: 'end' },
+        },
+      });
+
+      const calls = http.post.mock.calls.map((c: any[]) => c[1]);
+      expect(calls[0].reply_markup).toBeUndefined();
+      expect(calls[calls.length - 1].reply_markup).toBeDefined();
+    });
+
+    it('retires the reply keyboard when asked', async () => {
+      // Telegram pins it until told otherwise, so "Share my number" sat under
+      // every question that followed the contact share.
+      const { adapter, http } = makeAdapter('token');
+      http.post.mockReturnValue({ subscribe: (o: any) => o.next({ data: {} }) });
+
+      await adapter.send('55501', { text: 'Thank you.', removeKeyboard: true });
+
+      expect(sentBody(http).reply_markup).toEqual({ remove_keyboard: true });
     });
 
     it('sends no keyboard for a free-text step', async () => {

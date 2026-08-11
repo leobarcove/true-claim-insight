@@ -16,6 +16,7 @@
  * circular evaluation — harmless under CJS, fatal under native ESM (Vite dev).
  * Same reason, same shape as the mirror in `case-flows.ts`.
  */
+import { SKIP_VALUE } from './case-flows';
 import type { AnswerType } from './case-flows';
 import type { CaseChannel } from './index';
 
@@ -272,7 +273,12 @@ export const summariseAnswers = (
     if (value === undefined || value === null || value === '') continue;
 
     let display: string;
-    if (step.answerType === 'document') {
+    // A skipped optional step read back as the literal word: "Policy number:
+    // skip". The claimant is being asked to confirm a claim, and that line
+    // says nothing true about it.
+    if (typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
+      display = 'not provided';
+    } else if (step.answerType === 'document') {
       // The stored answer is a CaseDocument id, which means nothing to a
       // claimant reading it back.
       display = 'provided';

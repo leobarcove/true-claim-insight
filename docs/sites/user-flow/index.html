@@ -1080,6 +1080,7 @@ legal holds`"]
             </thead>
             <tbody>
               <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
+              <tr><td>Per-channel and per-locale wording</td><td><span class="chip plan">Partial</span></td><td>The overlay resolver is wired as of 11 Aug and the consent notice follows the claimant's Telegram language. No overlays are authored yet, so every flow still reads in its base wording — the mechanism runs, the content does not exist</td></tr>
               <tr><td>Automated eKYC</td><td><span class="chip plan">Partial</span></td><td>The gate is built: <code>REPORT_PENDING</code>, <code>APPROVED</code> and <code>REJECTED</code> refuse on an unverified claimant in registered mode and record the advisory as a TPA. Verification is an audited manual act with a mandatory basis — no verification vendor integrated</td></tr>
               <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>

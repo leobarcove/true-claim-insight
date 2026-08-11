@@ -41,6 +41,32 @@ const UNREADABLE_KINDS = [
   'dice',
 ] as const;
 
+/**
+ * Break a long body on paragraph, then line, then hard boundaries.
+ *
+ * Telegram rejects anything over 4096 characters. Truncating was the previous
+ * answer and is the wrong one for the review step, which carries the answer
+ * summary in its body: a claimant would be asked to confirm a claim whose
+ * details had been cut off. Splitting on a blank line keeps the summary
+ * readable across parts.
+ */
+export function splitForTelegram(text: string, limit = 4096): string[] {
+  if (text.length <= limit) return [text];
+
+  const parts: string[] = [];
+  let rest = text;
+  while (rest.length > limit) {
+    const window = rest.slice(0, limit);
+    // Prefer a paragraph break, then a line break, then wherever we must.
+    const cut = Math.max(window.lastIndexOf('\n\n'), window.lastIndexOf('\n'));
+    const at = cut > limit * 0.5 ? cut : limit;
+    parts.push(rest.slice(0, at).trimEnd());
+    rest = rest.slice(at).trimStart();
+  }
+  if (rest) parts.push(rest);
+  return parts;
+}
+
 /** Telegram refuses `getFile` above this, and says so unhelpfully. */
 const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
@@ -229,15 +255,24 @@ export class TelegramAdapter implements ChannelAdapter {
       return;
     }
 
-    const body: Record<string, unknown> = {
-      chat_id: platformUserId,
-      text: this.truncate(prompt.text),
-    };
-
     const markup = this.replyMarkup(prompt);
-    if (markup) body.reply_markup = markup;
 
-    await this.postWithRateLimitRetry('sendMessage', body);
+    // Split rather than truncate. The review embeds the whole answer summary
+    // in the body on a channel with no summary panel, so clipping it means
+    // asking a claimant to confirm a claim whose details were cut off
+    // mid-line — agreeing to something they were not shown.
+    const parts = splitForTelegram(prompt.text);
+    for (const [index, part] of parts.entries()) {
+      const isLast = index === parts.length - 1;
+      const body: Record<string, unknown> = { chat_id: platformUserId, text: part };
+      // The keyboard belongs on the last part, next to the question it answers.
+      if (isLast && markup) body.reply_markup = markup;
+      // Once the contact is in, the reply keyboard has done its job. Leaving
+      // it pinned means a "Share my number" button sitting under every
+      // subsequent question.
+      else if (isLast && prompt.removeKeyboard) body.reply_markup = { remove_keyboard: true };
+      await this.postWithRateLimitRetry('sendMessage', body);
+    }
   }
 
   /**
