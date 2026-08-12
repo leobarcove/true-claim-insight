@@ -78,3 +78,6 @@ claim-detail-*.png
 docker-compose.override.yml
 .gstack/
 deploy/staging/.env.staging
+
+# Founder / corporate papers — commercially confidential, kept out of the repo
+docs/founders/
