@@ -19,6 +19,11 @@ describe('WhatsApp channel', () => {
         WHATSAPP_ACCESS_TOKEN: 'token',
         WHATSAPP_APP_SECRET: 'secret',
         WHATSAPP_WEBHOOK_VERIFY_TOKEN: 'verify-me',
+        // The senders the deliveries below come from. Jest runs with
+        // NODE_ENV=test, so the allowlist guard is live in here — leaving this
+        // unset would deny every message and the seam would go untested. The
+        // second number belongs to the two-claimants-in-one-delivery case.
+        WHATSAPP_ALLOWED_SENDERS: '60123456789,60129999999',
         ...over,
       })[key],
   });
@@ -160,6 +165,78 @@ describe('WhatsApp channel', () => {
       await controller.receive(sign(body), body as never);
 
       expect(handleTurn).not.toHaveBeenCalled();
+    });
+
+    it('drops a signed message from a sender outside the allowlist', async () => {
+      // The signature proves Meta sent the delivery, not who typed it. A live
+      // WhatsApp number is dialable by anyone who has it.
+      const { controller, handleTurn } = build();
+      const body = {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ wa_id: '60999999999' }],
+                  messages: [
+                    { id: 'wamid.1', from: '60999999999', type: 'text', text: { body: 'hi' } },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      await controller.receive(sign(body), body as never);
+
+      expect(handleTurn).not.toHaveBeenCalled();
+    });
+
+    it('accepts a number written in a readable form', async () => {
+      // The value is typed by a human into a .env, so it is normalised to
+      // digits on both sides before comparison.
+      const { controller, handleTurn } = build({ WHATSAPP_ALLOWED_SENDERS: '+60 12-345 6789' });
+      const body = delivery([
+        { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } },
+      ]);
+
+      await controller.receive(sign(body), body as never);
+
+      expect(handleTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops everything when the allowlist is empty, rather than waving it through', async () => {
+      // Failing closed, as the app secret does. A guard that defaults to open
+      // does nothing until somebody remembers to configure it, and they will
+      // not, because the channel works perfectly without it.
+      const { controller, handleTurn } = build({ WHATSAPP_ALLOWED_SENDERS: undefined });
+      const body = delivery([
+        { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } },
+      ]);
+
+      await controller.receive(sign(body), body as never);
+
+      expect(handleTurn).not.toHaveBeenCalled();
+    });
+
+    it('does not apply in production, where every claimant is a stranger', async () => {
+      // An allowlist in front of a public intake channel would exclude exactly
+      // the people it exists for, so it cannot survive launch by accident.
+      const previous = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const { controller, handleTurn } = build({ WHATSAPP_ALLOWED_SENDERS: undefined });
+        const body = delivery([
+          { id: 'wamid.1', from: '60999999999', type: 'text', text: { body: 'hi' } },
+        ]);
+
+        await controller.receive(sign(body), body as never);
+
+        expect(handleTurn).toHaveBeenCalledTimes(1);
+      } finally {
+        process.env.NODE_ENV = previous;
+      }
     });
 
     it('ignores delivery and read receipts', async () => {

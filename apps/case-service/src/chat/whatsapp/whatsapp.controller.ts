@@ -109,12 +109,40 @@ export class WhatsAppWebhookController {
         const value = change.value;
         // Status callbacks — sent, delivered, read — arrive on the same
         // webhook and outnumber real messages several times over.
-        if (!value?.messages?.length) continue;
+        if (!value?.messages?.length) {
+          // Named rather than dropped in silence. From outside, a
+          // subscription delivering only `statuses` is indistinguishable
+          // from one delivering nothing at all, and telling those apart is
+          // most of the work of getting a WhatsApp channel live.
+          //
+          // Field names and payload keys carry no personal data; the values
+          // under them would, so they stay out.
+          // Status values — sent, delivered, read, failed — distinguish a
+          // receipt for something we sent from an inbound message that
+          // failed to parse. They name no one.
+          const statuses = value?.statuses?.map(s => s.status ?? '?').join(',');
+          this.logger.debug(
+            `Delivery carried no messages (field=${change.field ?? 'unknown'}, ` +
+              `keys=${Object.keys(value ?? {}).join('|') || 'none'}` +
+              `${statuses ? `, statuses=${statuses}` : ''}).`
+          );
+          continue;
+        }
 
         const contactWaId = value.contacts?.[0]?.wa_id;
         for (const message of value.messages) {
           const payload = this.adapter.parseMessage(message, contactWaId);
           if (!payload) continue;
+
+          // The signature proves Meta sent this delivery. It says nothing
+          // about who typed the message, and a live WhatsApp number is
+          // reachable by anyone who has it.
+          if (!this.isAllowedSender(payload.platformUserId)) {
+            // Deliberately without the number: a phone number is personal
+            // data, and NRIC was removed from these logs for the same reason.
+            this.logger.warn('Ignored a WhatsApp message from a sender outside the allowlist.');
+            continue;
+          }
 
           try {
             await this.gateway.handleTurn(payload);
@@ -133,6 +161,63 @@ export class WhatsAppWebhookController {
     }
 
     return { received: true };
+  }
+
+  /**
+   * May this sender drive a conversation?
+   *
+   * `waId` is Meta's form of the sender's number — digits only, full country
+   * code, no `+` (a Malaysian mobile arrives as `60123456789`).
+   *
+   * The channel goes live on a real number long before the platform is ready
+   * for the public, and during the tunnel phase that number reaches a
+   * developer's machine. §3.4 also restricts this channel to synthetic and
+   * internal-tester data, which is a claim about *who messages it*, not only
+   * about what we store.
+   *
+   * `WHATSAPP_ALLOWED_SENDERS` is a comma-separated list of numbers in any
+   * readable form — `+60 12-345 6789`, `60123456789` — normalised to digits
+   * before comparison, because the value is typed by a human into a `.env`.
+   *
+   * Two decisions, and they pull against each other.
+   *
+   * **The guard does not apply in production.** An allowlist in front of a
+   * public intake channel excludes the very people it exists for — every real
+   * claimant is a stranger. So it is a development control, and unset
+   * `NODE_ENV` counts as production, the shape `OtpService.isProduction` uses:
+   * guessing wrong that way blocks nobody, and guessing the other way would
+   * silently gate real claimants on the day this launches.
+   *
+   * **An empty list denies everyone**, rather than waving everyone through.
+   * The opposite reading gives a guard that does nothing until somebody
+   * remembers to configure it, and they will not, because the channel works
+   * perfectly without it. Failing closed is what `WHATSAPP_APP_SECRET` above
+   * already chose for the same endpoint; the cost is an afternoon of "why is
+   * the bot silent", paid once, and the error log below is aimed at exactly
+   * that afternoon.
+   */
+  private isAllowedSender(waId: string): boolean {
+    if ((process.env.NODE_ENV ?? 'production') === 'production') return true;
+
+    const configured = this.config.get<string>('WHATSAPP_ALLOWED_SENDERS') ?? '';
+    const allowlist = configured
+      .split(',')
+      .map(entry => entry.replace(/\D/g, ''))
+      .filter(Boolean);
+    const sender = waId.replace(/\D/g, '');
+
+    if (!allowlist.length) {
+      // Named loudly, because the symptom — a bot that receives nothing — is
+      // indistinguishable from a webhook that was never subscribed.
+      this.logger.error(
+        `WHATSAPP_ALLOWED_SENDERS is empty and NODE_ENV is ${process.env.NODE_ENV}, ` +
+          'so every inbound message is being dropped. Add the tester numbers to ' +
+          'let the channel through.'
+      );
+      return false;
+    }
+
+    return allowlist.includes(sender);
   }
 
   /**
@@ -168,9 +253,13 @@ export class WhatsAppWebhookController {
 interface WhatsAppWebhookBody {
   entry?: Array<{
     changes?: Array<{
+      /** `messages`, `statuses`, … — which subscription produced this. */
+      field?: string;
       value?: {
         contacts?: Array<{ wa_id?: string }>;
         messages?: WhatsAppInboundMessage[];
+        /** Receipts for messages we sent — sent, delivered, read, failed. */
+        statuses?: Array<{ status?: string }>;
       };
     }>;
   }>;
