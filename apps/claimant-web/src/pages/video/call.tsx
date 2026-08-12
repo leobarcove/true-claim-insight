@@ -71,7 +71,12 @@ export function ClaimantVideoCallPage() {
       const formData = new FormData();
       formData.append('file', blob, 'claimant-audio.webm');
       formData.append('sessionId', sessionId);
-      const response = await fetch('http://localhost:3000/api/v1/risk/upload-audio', {
+      // Hardcoding the gateway origin here sent this upload to whatever else
+      // held :3000 — on a machine running more than one stack, another
+      // project's dev server. The base URL is configuration, exactly as it is
+      // for every other call in this file.
+      const baseUrl = import.meta.env.VITE_API_URL || '/api/v1';
+      const response = await fetch(`${baseUrl}/risk/upload-audio`, {
         method: 'POST',
         body: formData,
       });
