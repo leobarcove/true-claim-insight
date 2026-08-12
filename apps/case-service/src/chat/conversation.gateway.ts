@@ -278,6 +278,12 @@ export class ConversationGateway {
 
     const byChannel: Partial<Record<CaseChannel, OffshoreProviderKey>> = {
       [CaseChannel.TELEGRAM]: 'TELEGRAM',
+      // Added when the adapter went live, not when the registry entry was
+      // written: OFFSHORE_PROVIDERS has carried a WHATSAPP entry since the
+      // channel shipped, but nothing mapped a CaseChannel onto it, so every
+      // WhatsApp turn transferred claimant data to Meta and recorded no
+      // TransferRecord. Found by running one through, not by reading this.
+      [CaseChannel.WHATSAPP]: 'WHATSAPP',
     };
     const provider = byChannel[channel];
     if (!provider) {
