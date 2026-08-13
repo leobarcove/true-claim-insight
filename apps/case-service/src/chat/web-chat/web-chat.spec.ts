@@ -22,6 +22,7 @@ describe('web chat', () => {
 
     it('declares the capabilities the flow engine reads', () => {
       // Written long before this adapter and consumed by nothing until now.
+
       expect(adapter.capabilities.summaryPanel).toBe(true);
       expect(adapter.capabilities.dateEntry).toBe('picker');
       expect(adapter.capabilities.choiceStyle).toBe('native');
@@ -75,7 +76,9 @@ describe('web chat', () => {
           synthesiseStep: async (stepId: string) =>
             stepId === '__claim-type' ? { id: '__claim-type', answerType: 'choice' } : null,
         } as never,
-        { forCase } as never
+        { forCase } as never,
+        // CasesService — only the public upload path uses it.
+        {} as never
       );
     });
 
@@ -181,7 +184,9 @@ describe('web chat', () => {
             },
           } as never,
           { handleTurn } as never,
-          { forCase } as never
+          { forCase } as never,
+          // CasesService — only the public upload path uses it.
+          {} as never
         );
 
         const result = await service.transcript(context);
@@ -220,7 +225,9 @@ describe('web chat', () => {
             case: { findUnique: jest.fn() },
           } as never,
           { handleTurn, synthesiseStep } as never,
-          { forCase } as never
+          { forCase } as never,
+          // CasesService — only the public upload path uses it.
+          {} as never
         );
 
         const result = await service.transcript(context);
