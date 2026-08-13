@@ -116,10 +116,7 @@ export function PublicChatPage() {
     // content, the transcript stops scrolling and the composer is pushed off
     // the bottom of the frame.
     <div className="flex min-h-0 flex-1 flex-col bg-background">
-      <PageHeader
-        title="Make a claim"
-        subtitle={conversation?.withAgent ? 'A colleague is helping you' : undefined}
-      />
+      <PageHeader title="Make a claim" withAgent={conversation?.withAgent} />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {conversation?.messages.map((message: ConversationMessage) => (
