@@ -199,6 +199,20 @@ export class ClaimantConversationService {
         // INTERNAL by name would start leaking the day a third internal kind
         // is added, and it would leak silently.
         direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+        // The synthetic opener, hidden. `start()` sends the literal text
+        // "start" to make the gateway say the first thing — it is a trigger,
+        // not something the claimant typed, and it rendered as their own first
+        // message: a conversation that opens with the visitor apparently
+        // saying "start" to nobody.
+        //
+        // Written as an OR rather than a bare NOT because outbound rows carry
+        // no platformMessageId until the platform returns one, and in SQL
+        // `NOT (NULL LIKE '%:start')` is NULL, not true — a plain NOT silently
+        // filtered out every message the bot had sent.
+        OR: [
+          { platformMessageId: null },
+          { platformMessageId: { not: { endsWith: ':start' } } },
+        ],
         // A turn we could not read is not part of the conversation the
         // claimant had — they saw our "please send that as a file" reply, and
         // showing the unreadable original back to them explains nothing.
@@ -211,6 +225,11 @@ export class ClaimantConversationService {
         text: true,
         stepId: true,
         sentByUserId: true,
+        // A document turn carries no text — the claimant sent a file, not
+        // words. Without this the PWA had nothing to render and drew an empty
+        // bubble, so an upload that had in fact succeeded looked like a
+        // message that had failed to send.
+        caseDocumentId: true,
         createdAt: true,
       },
     });
@@ -229,6 +248,12 @@ export class ClaimantConversationService {
         stepId: message.stepId,
         /** True when a person wrote it, so the PWA can label it as such. */
         fromAgent: message.direction === MessageDirection.OUTBOUND && message.sentByUserId !== null,
+        /**
+         * This turn was a file. The id is not handed out — a claimant does not
+         * need it and every document read is staff-only — but the fact that
+         * one exists is what lets the bubble say so.
+         */
+        hasAttachment: message.caseDocumentId !== null,
         createdAt: message.createdAt,
       })),
     };

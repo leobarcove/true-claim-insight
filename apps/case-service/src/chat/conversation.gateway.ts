@@ -882,7 +882,7 @@ export class ConversationGateway {
     if (!payload.sharedPhone) {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'Hello — we handle travel insurance claims, and we can start yours here.\n\n' +
+          'Hello — we handle insurance claims, and we can start yours here.\n\n' +
           'First, please tap the button below to share your mobile number so we know who ' +
           'you are.',
         requestPhone: true,
@@ -1344,6 +1344,15 @@ export class ConversationGateway {
         }
         value = stored.id;
 
+        // Tie the turn to the file, as the fetch-from-platform branch below
+        // already does. Without it the transcript held a message with no text
+        // and no document, so the claimant's own upload rendered as an empty
+        // bubble — a successful attachment that looked like a failed send —
+        // and an operator opening the thread saw nothing at all.
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: { caseDocumentId: stored.id },
+        });
       } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;
       } else if (!payload.mediaRef) {
