@@ -165,7 +165,9 @@ describe('conversation workflow', () => {
           case: { findUnique: jest.fn() },
         } as never,
         { synthesiseStep: jest.fn().mockResolvedValue(null) } as never,
-        { forCase: jest.fn() } as never
+        { forCase: jest.fn() } as never,
+        // CasesService — only the public upload path uses it.
+        {} as never
       );
 
       await claimantService.transcript({ userId: 'c1', tenantId: 't1' } as never);

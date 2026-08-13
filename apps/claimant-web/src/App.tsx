@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
+import { PublicChatPage } from '@/pages/chat';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
 import { SubmitClaimPage } from '@/pages/claims/submit';
@@ -50,6 +51,9 @@ function App() {
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<WelcomePage />} />
+              {/* Public intake — no login. The web equivalent of messaging the
+                  WhatsApp number: open the link and start talking. */}
+              <Route path="/chat" element={<PublicChatPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/otp" element={<VerifyOtpPage />} />
 

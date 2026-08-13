@@ -50,6 +50,7 @@ import {
   type OutboundPrompt,
 } from './channel-adapter.interface';
 import { ANSWER_NORMALISER, type AnswerNormaliser } from './answer-normaliser.interface';
+import { PHONE_VERIFIER, type PhoneVerifier } from './phone-verifier.interface';
 import { CLAIMANT_RESOLVER, type ClaimantResolver } from './claimant-resolver.interface';
 
 // EDIT_CALLBACK_PREFIX, CONSENT_AGREED_VALUE and PAGE_CALLBACK_PREFIX are
@@ -82,6 +83,38 @@ const HUMAN_WORDS = new Set(['human', 'agent', '/human', 'ejen']);
 
 /** Asking what to do — answered here, with a person offered rather than forced. */
 const HELP_WORDS = new Set(['help', 'support', '/help', 'bantuan', 'tolong']);
+
+/**
+ * Wrong codes a binding may offer before its pending number is discarded.
+ *
+ * Six digits is one-in-a-million per guess — ample against a person, nothing
+ * against a script. The cap is what makes the difference, not the entropy.
+ */
+const MAX_CODE_ATTEMPTS = 5;
+
+/**
+ * A phone number as a claimant types it, reduced to E.164-ish digits.
+ *
+ * Deliberately strict about length rather than clever about formatting: this
+ * decides whether a message is a phone number or something else entirely, and
+ * reading "123456" as a number would swallow the verification code typed on
+ * the very next turn. Returns null when it is not confidently a number.
+ */
+function normalisePhone(text: string): string | null {
+  const trimmed = text.trim();
+  // Letters mean prose, not a number — "my number is 012..." is handled by the
+  // digits below, but "yes" or a date must never look like a phone number.
+  const digits = trimmed.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
+  const bare = digits.replace(/^\+/, '');
+  // Malaysian mobiles are 9–11 digits after the country code; allow 8–15 to
+  // cover the region without accepting a six-digit code.
+  if (bare.length < 8 || bare.length > 15) return null;
+  if (digits.startsWith('+')) return `+${bare}`;
+  // Local form: 012… → +6012…
+  if (bare.startsWith('0')) return `+60${bare.slice(1)}`;
+  if (bare.startsWith('60')) return `+${bare}`;
+  return `+${bare}`;
+}
 
 /**
  * Agreement and refusal at a confirm step, typed rather than tapped.
@@ -288,6 +321,7 @@ export class ConversationGateway {
     @Inject(CLAIMANT_RESOLVER) private readonly claimants: ClaimantResolver,
     @Inject(CHANNEL_ADAPTERS) private readonly adapters: ChannelAdapter[],
     @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
+    @Inject(PHONE_VERIFIER) private readonly phones: PhoneVerifier,
     private readonly consent: ConsentService,
     private readonly config: ConfigService
   ) {
@@ -662,6 +696,153 @@ export class ConversationGateway {
    * platform says so; a number the claimant types is not accepted at all,
    * because typing is exactly how you would claim to be somebody else.
    */
+  /**
+   * Ask for a phone number, then prove it, inside the conversation.
+   *
+   * The whole point of this channel: no login page in front of the chat. A
+   * claimant opens a link and starts talking, exactly as they would on
+   * WhatsApp — the difference being that WhatsApp's platform vouches for the
+   * number and a browser cannot, so the code does that job instead.
+   *
+   * Two states, both readable off the binding, so a reload resumes correctly:
+   *   pendingPhone null  → we are asking for the number
+   *   pendingPhone set   → we are waiting for the code
+   *
+   * `otpAttempts` caps the guessing. Six digits is 1-in-a-million per guess,
+   * which is ample against a person and nothing at all against a script, so
+   * the binding burns its pending number after MAX_CODE_ATTEMPTS and the
+   * claimant starts that step again rather than being allowed to grind.
+   */
+  private async runPhoneVerification(
+    messageId: string,
+    payload: InboundTurnPayload,
+    adapter: ChannelAdapter,
+    binding: { id: string; pendingPhone?: string | null; otpAttempts?: number }
+  ): Promise<void> {
+    const typed = (payload.text ?? '').trim();
+
+    if (!binding.pendingPhone) {
+      const phone = normalisePhone(typed);
+      if (!phone) {
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            'Hello — we handle insurance claims, and we can start yours here.\n\n' +
+            'What is your mobile number? Please include the country code, for example ' +
+            '+60 12 345 6789.',
+        });
+        return;
+      }
+
+      // Stored before the send: if the send fails we still know which number
+      // is outstanding, and the claimant can ask for the code again rather
+      // than the conversation forgetting what it was doing.
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: { pendingPhone: phone, otpAttempts: 0 },
+      });
+
+      try {
+        await this.phones.send(phone);
+      } catch (error) {
+        this.logger.error(
+          `Binding ${binding.id}: could not send a code: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        await this.prisma.conversationBinding.update({
+          where: { id: binding.id },
+          data: { pendingPhone: null },
+        });
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            'Sorry — we could not send the code just now. Please check the number and ' +
+            'send it again.',
+        });
+        return;
+      }
+
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          `We have sent a six-digit code to ${phone} on WhatsApp. Please type it here.\n\n` +
+          'Send a different number instead if that one was wrong.',
+      });
+      return;
+    }
+
+    // Waiting for the code. A number typed again means they corrected it, so
+    // start that step over rather than reading a phone number as a code.
+    const corrected = normalisePhone(typed);
+    if (corrected && corrected !== binding.pendingPhone) {
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: { pendingPhone: null, otpAttempts: 0 },
+      });
+      await this.runPhoneVerification(
+        messageId,
+        payload,
+        adapter,
+        { id: binding.id, pendingPhone: null, otpAttempts: 0 }
+      );
+      return;
+    }
+
+    const code = typed.replace(/\D/g, '');
+    const verified = code.length >= 4 && (await this.phones.verify(binding.pendingPhone, code));
+
+    if (!verified) {
+      const attempts = (binding.otpAttempts ?? 0) + 1;
+      if (attempts >= MAX_CODE_ATTEMPTS) {
+        await this.prisma.conversationBinding.update({
+          where: { id: binding.id },
+          data: { pendingPhone: null, otpAttempts: 0 },
+        });
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            'That is too many incorrect codes. Please send your mobile number again and ' +
+            'we will send a fresh one.',
+        });
+        return;
+      }
+
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: { otpAttempts: attempts },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'That code did not match. Please check it and type it again.',
+      });
+      return;
+    }
+
+    const resolved = await this.claimants.resolveByVerifiedPhone(
+      binding.pendingPhone,
+      payload.channel
+    );
+
+    await this.prisma.conversationBinding.update({
+      where: { id: binding.id },
+      data: {
+        claimantId: resolved.claimantId,
+        tenantId: resolved.tenantId ?? this.handlingFirmTenantId(),
+        verifiedAt: new Date(),
+        pendingPhone: null,
+        otpAttempts: 0,
+      },
+    });
+
+    this.logger.log(`Binding ${binding.id} bound on ${payload.channel} via a verified code.`);
+
+    await this.say(adapter, binding.id, payload.platformUserId, { text: 'Thank you.' });
+
+    // Straight on into consent and the claim-type menu, the same continuation
+    // the platform-verified path takes. Returning here would leave the
+    // claimant thanked and asked nothing until they spoke again.
+    const bound = await this.prisma.conversationBinding.findUniqueOrThrow({
+      where: { id: binding.id },
+    });
+    await this.requireConsentThenStart(messageId, payload, adapter, bound);
+  }
+
   private async runOnboarding(
     messageId: string,
     payload: InboundTurnPayload,
@@ -684,6 +865,17 @@ export class ConversationGateway {
           '"Share my number" button below to send your own.',
         requestPhone: true,
       });
+      return;
+    }
+
+    // Channels that cannot attest a number verify it in the conversation.
+    //
+    // WhatsApp and Telegram never take this path: the platform already proved
+    // the number, so `sharedPhone` arrives with the turn. A browser proves
+    // nothing — it can claim any number — so web chat asks for it and then for
+    // a code. Same destination, reached by typing instead of by Meta vouching.
+    if (!payload.sharedPhone && !adapter.capabilities?.platformVerifiedPhone) {
+      await this.runPhoneVerification(messageId, payload, adapter, binding);
       return;
     }
 
@@ -1151,6 +1343,7 @@ export class ConversationGateway {
           return;
         }
         value = stored.id;
+
       } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;
       } else if (!payload.mediaRef) {

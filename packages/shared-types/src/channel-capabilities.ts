@@ -61,6 +61,20 @@ export interface ChannelCapabilities {
    */
   readonly summaryPanel: boolean;
   /**
+   * Whether the platform itself proves who the sender is.
+   *
+   * True for the messaging channels, and it is the reason they have no login:
+   * a WhatsApp message can only come from the account that sent it, and
+   * Telegram's `request_contact` returns a number that platform verified. The
+   * gateway takes that as attestation and resolves the claimant from it.
+   *
+   * False for web chat. A browser can claim any number, so the conversation
+   * asks for one and proves possession with a code before anything is bound.
+   * That code is not a formality standing in for a login — it is the only
+   * thing preventing someone filing a claim as another person.
+   */
+  readonly platformVerifiedPhone: boolean;
+  /**
    * Whether a value typed here stays under our control. False for every
    * third-party messaging platform: the plaintext persists in the platform's
    * own message history, outside our retention and anonymisation jobs.
@@ -97,6 +111,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     dateEntry: 'picker',
     maxMessageChars: Number.POSITIVE_INFINITY,
     summaryPanel: true,
+    platformVerifiedPhone: false,
     retainsPlaintext: false,
   },
   [Channel.TELEGRAM]: {
@@ -107,6 +122,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     dateEntry: 'text',
     maxMessageChars: 4096,
     summaryPanel: false,
+    platformVerifiedPhone: true,
     retainsPlaintext: true,
   },
   [Channel.WHATSAPP]: {
@@ -118,6 +134,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     dateEntry: 'text',
     maxMessageChars: 1024, // interactive message body limit, not the 4096 text limit
     summaryPanel: false,
+    platformVerifiedPhone: true,
     retainsPlaintext: true,
   },
   [Channel.MESSENGER]: {
@@ -128,6 +145,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     dateEntry: 'text',
     maxMessageChars: 2000,
     summaryPanel: false,
+    platformVerifiedPhone: true,
     retainsPlaintext: true,
   },
 };

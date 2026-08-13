@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import {
   CaseChannel,
   ConversationMode,
@@ -11,6 +11,8 @@ import { PrismaService } from '../config/prisma.service';
 import { ConversationGateway } from './conversation.gateway';
 import { FlowsService } from '../cases/flows.service';
 import type { TenantContext } from '../common/guards/tenant.guard';
+import { TenantScope } from '../common/decorators/tenant.decorator';
+import { CasesService } from '../cases/cases.service';
 
 /**
  * The claimant's own side of a web-chat conversation.
@@ -29,26 +31,54 @@ export class ClaimantConversationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: ConversationGateway,
-    private readonly flows: FlowsService
+    private readonly flows: FlowsService,
+    private readonly cases: CasesService
   ) {}
 
   /**
-   * The binding for this logged-in claimant, created on first use.
+   * The binding for whoever is talking — a logged-in claimant, or a visitor.
    *
-   * `platformUserId` is the claimant's own id. On Telegram it is a chat id
-   * belonging to an account we have to prove they control, which is what the
-   * request_contact and OTP dance is for. Here they arrived with a session
-   * token this platform issued, so the proof already happened at login and
-   * repeating it would be theatre — `verifiedAt` is set from the outset and
-   * the flow starts at the first real question rather than at "share your
-   * number".
-   *
-   * One binding per claimant, guaranteed by the (channel, platformUserId)
+   * One binding per identity, guaranteed by the (channel, platformUserId)
    * unique constraint rather than by checking first: two tabs opened together
    * would otherwise both find nothing and both create one.
+   *
+   * Two identities reach this channel and they are not the same thing:
+   *
+   *  - A **signed-in claimant** is already known. The binding is keyed on their
+   *    id and marked verified on creation, because the login did that work.
+   *  - A **visitor** on the public link is nobody yet. The binding is keyed on
+   *    an opaque session id with `claimantId` null and `verifiedAt` unset, and
+   *    the conversation itself asks for a number and proves it — the same shape
+   *    as a WhatsApp binding before its first message resolves.
+   *
+   * Keying on the session rather than the claimant is what allows a
+   * conversation to exist *before* an identity does, which is the whole point
+   * of the public flow: no login page in front of the chat.
    */
-  async bindingFor(tenantContext: TenantContext) {
-    const claimantId = tenantContext.userId;
+  async bindingFor(identity: TenantContext | { sessionId: string }) {
+    if ('sessionId' in identity) {
+      return this.prisma.conversationBinding.upsert({
+        where: {
+          channel_platformUserId: {
+            channel: CaseChannel.WEB_CHAT,
+            platformUserId: identity.sessionId,
+          },
+        },
+        update: { lastSeenAt: new Date() },
+        create: {
+          channel: CaseChannel.WEB_CHAT,
+          platformUserId: identity.sessionId,
+          // Deliberately unbound and unverified. The onboarding steps in
+          // ConversationGateway fill both in once a code has been proved, and
+          // until then nothing about any claim is said.
+          claimantId: null,
+          mode: ConversationMode.BOT,
+          lastSeenAt: new Date(),
+        },
+      });
+    }
+
+    const claimantId = identity.userId;
 
     return this.prisma.conversationBinding.upsert({
       where: {
@@ -62,7 +92,7 @@ export class ClaimantConversationService {
         channel: CaseChannel.WEB_CHAT,
         platformUserId: claimantId,
         claimantId,
-        tenantId: tenantContext.tenantId,
+        tenantId: identity.tenantId,
         verifiedAt: new Date(),
         mode: ConversationMode.BOT,
         lastSeenAt: new Date(),
@@ -80,7 +110,7 @@ export class ClaimantConversationService {
    * at all when a human has taken over.
    */
   async handleTurn(
-    tenantContext: TenantContext,
+    identity: TenantContext | { sessionId: string },
     turn: {
       clientMessageId: string;
       text?: string;
@@ -90,7 +120,7 @@ export class ClaimantConversationService {
       locale?: string;
     }
   ) {
-    const binding = await this.bindingFor(tenantContext);
+    const binding = await this.bindingFor(identity);
 
     await this.gateway.handleTurn({
       channel: CaseChannel.WEB_CHAT,
@@ -113,6 +143,43 @@ export class ClaimantConversationService {
   }
 
   /**
+   * Attach evidence from a conversation that has no login behind it.
+   *
+   * The authenticated PWA uploads through `/cases/:id/documents/upload`, which
+   * derives the case and the tenant from the claimant's token. A visitor on the
+   * public link has no token, so the binding stands in for it — but only once
+   * it has earned the right to:
+   *
+   *  - `claimantId` set means a code was verified. Without it the upload is
+   *    refused outright: an unauthenticated endpoint that accepts files and
+   *    attaches them to a claim is a way to put anything into someone's case
+   *    file.
+   *  - `activeCaseId` set means there is a claim to attach to. A document with
+   *    no case would be stored and orphaned.
+   *
+   * The context handed to CasesService is the claimant's own, so every
+   * ownership check downstream runs exactly as it does for a logged-in one.
+   */
+  async uploadDocument(identity: { sessionId: string }, file: unknown) {
+    const binding = await this.bindingFor(identity);
+
+    if (!binding.claimantId) {
+      throw new ForbiddenException('Verify your mobile number before attaching a document.');
+    }
+    if (!binding.activeCaseId) {
+      throw new BadRequestException('There is no claim open to attach this to yet.');
+    }
+
+    return this.cases.uploadDocument(binding.activeCaseId, file as never, {
+      tenantId: binding.tenantId ?? '',
+      userId: binding.claimantId,
+      userRole: 'CLAIMANT',
+      scope: TenantScope.STRICT,
+      allowCrossTenant: false,
+    });
+  }
+
+  /**
    * The conversation as the claimant should see it.
    *
    * Outbound messages an operator sent are included — from the claimant's side
@@ -120,8 +187,8 @@ export class ClaimantConversationService {
    * them staring at an unanswered question a human had in fact answered. The
    * handover *reason* is not: that is an internal note about their claim.
    */
-  async transcript(tenantContext: TenantContext) {
-    const binding = await this.bindingFor(tenantContext);
+  async transcript(identity: TenantContext | { sessionId: string }) {
+    const binding = await this.bindingFor(identity);
 
     const messages = await this.prisma.conversationMessage.findMany({
       where: {
@@ -231,19 +298,19 @@ export class ClaimantConversationService {
    * "Start a claim" has already said it by arriving. Without this the PWA
    * would render an empty thread and wait for someone who is waiting for it.
    */
-  async start(tenantContext: TenantContext, locale?: string) {
-    const binding = await this.bindingFor(tenantContext);
+  async start(identity: TenantContext | { sessionId: string }, locale?: string) {
+    const binding = await this.bindingFor(identity);
 
     const alreadyTalking = await this.prisma.conversationMessage.count({
       where: { bindingId: binding.id, direction: MessageDirection.OUTBOUND },
     });
-    if (alreadyTalking > 0) return this.transcript(tenantContext);
+    if (alreadyTalking > 0) return this.transcript(identity);
 
-    await this.handleTurn(tenantContext, {
+    await this.handleTurn(identity, {
       clientMessageId: 'start',
       text: 'start',
       locale,
     });
-    return this.transcript(tenantContext);
+    return this.transcript(identity);
   }
 }

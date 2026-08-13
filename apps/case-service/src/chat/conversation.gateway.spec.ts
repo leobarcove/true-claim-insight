@@ -164,6 +164,11 @@ describe('ConversationGateway', () => {
       })),
     };
 
+    const phones = {
+      send: jest.fn(async () => ({ expiresIn: 300 })),
+      verify: jest.fn(async () => true),
+    };
+
     const gateway = new ConversationGateway(
       prisma as unknown as PrismaService,
       cases as unknown as CasesService,
@@ -171,13 +176,29 @@ describe('ConversationGateway', () => {
       claimants,
       [adapter],
       normaliser,
+      // Web chat is the only channel that verifies a number in-conversation;
+      // this adapter declares a platform-verified phone, so nothing here calls
+      // it. The web-chat onboarding tests supply their own.
+      phones,
       consent as never,
       // A handling firm is configured, as it is in every real deployment. The
       // null case has its own test.
       { get: (key: string) => (key === 'HANDLING_FIRM_TENANT_ID' ? 'tenant-handling' : undefined) } as never
     );
 
-    return { gateway, prisma, adapter, claimants, cases, flows, sent, binding, normaliser, consent };
+    return {
+      gateway,
+      prisma,
+      adapter,
+      claimants,
+      cases,
+      flows,
+      sent,
+      binding,
+      normaliser,
+      consent,
+      phones,
+    };
   };
 
   const turn = (over: Partial<InboundTurnPayload> = {}): InboundTurnPayload => ({

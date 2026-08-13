@@ -235,6 +235,58 @@ export class AuthController {
     return { claimantId: claimant.id, tenantId };
   }
 
+  /**
+   * Send a login code for a channel that cannot vouch for a phone number.
+   *
+   * WhatsApp and Telegram never reach here: the platform attests the number
+   * (a WhatsApp message can only come from the account that sent it), so
+   * `resolve-claimant` above is enough. A browser attests nothing, so web chat
+   * asks for the number in the conversation and proves possession with a code.
+   *
+   * Internal-only, exactly like resolve-claimant and for the same reason: an
+   * open send-a-code-to-any-number endpoint is both a claimant-enumeration
+   * oracle and somebody else's phone ringing. The public surface is the
+   * conversation, which is rate limited at the edge.
+   */
+  @Post('channel/send-code')
+  @Public()
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a verification code for a channel binding (internal)' })
+  async sendChannelCode(@Body() dto: { phoneNumber: string }) {
+    // Delivered over the same WhatsApp business account the intake channel
+    // uses — one number, one sender identity, no extra vendor.
+    const result = await this.otpService.sendOtp(dto.phoneNumber);
+    this.logger.log('Channel binding: verification code dispatched.');
+    // The code itself is returned only where OtpService already allows it
+    // (non-production); production returns the expiry alone.
+    return { expiresIn: result.expiresIn, code: result.code };
+  }
+
+  /**
+   * Check a code a claimant typed into the conversation.
+   *
+   * Returns a boolean rather than throwing onward: a wrong code is an ordinary
+   * conversational turn, and the bot answers it with "that code did not match"
+   * and the question again — not an HTTP error the channel would have to
+   * translate back into speech.
+   */
+  @Post('channel/verify-code')
+  @Public()
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify a channel binding code (internal)' })
+  async verifyChannelCode(@Body() dto: { phoneNumber: string; code: string }) {
+    try {
+      const verified = await this.otpService.verifyOtp(dto.phoneNumber, dto.code);
+      return { verified };
+    } catch {
+      // OtpService throws for "no code outstanding" and "wrong code" alike.
+      // Both mean the same thing to the claimant: try again.
+      return { verified: false };
+    }
+  }
+
   // ============ CLAIMANT OTP AUTHENTICATION ============
 
   @Post('claimant/send-otp')

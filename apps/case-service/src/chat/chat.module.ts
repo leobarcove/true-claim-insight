@@ -10,6 +10,9 @@ import { ANSWER_NORMALISER } from './answer-normaliser.interface';
 import { HttpAnswerNormaliser } from './http-answer-normaliser';
 import { HttpClaimantResolver } from './http-claimant-resolver';
 import { CLAIMANT_RESOLVER } from './claimant-resolver.interface';
+import { HttpPhoneVerifier } from './http-phone-verifier';
+import { PublicConversationController } from './public-conversation.controller';
+import { PHONE_VERIFIER } from './phone-verifier.interface';
 import { TelegramAdapter } from './telegram/telegram.adapter';
 import { WebChatAdapter } from './web-chat/web-chat.adapter';
 import { WhatsAppAdapter } from './whatsapp/whatsapp.adapter';
@@ -44,7 +47,9 @@ import { TelegramPoller } from './telegram/telegram.poller';
     CasesModule,
     ConsentModule,
   ],
-  controllers: [ConversationsController, ClaimantConversationController, WhatsAppWebhookController],
+  controllers: [ConversationsController, ClaimantConversationController, WhatsAppWebhookController,
+    PublicConversationController,
+  ],
   providers: [
     ConversationGateway,
     ConversationsService,
@@ -55,6 +60,9 @@ import { TelegramPoller } from './telegram/telegram.poller';
     ClaimantConversationService,
     { provide: CLAIMANT_RESOLVER, useClass: HttpClaimantResolver },
     { provide: ANSWER_NORMALISER, useClass: HttpAnswerNormaliser },
+    // Only web chat consumes this; the messaging channels arrive with a
+    // platform-verified number and never call it.
+    { provide: PHONE_VERIFIER, useClass: HttpPhoneVerifier },
     {
       provide: CHANNEL_ADAPTERS,
       useFactory: (

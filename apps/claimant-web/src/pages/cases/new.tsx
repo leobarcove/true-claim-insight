@@ -151,16 +151,44 @@ export function CaseIntakePage() {
             placeholder="Reply to our team…"
           />
         ) : (
-          <AnswerControl
-            step={step}
-            busy={busy}
-            value={inputValue}
-            onChange={setInputValue}
-            onSend={sendTyped}
-            onChoose={value => send({ callbackValue: value })}
-            onSkip={() => send({ text: 'skip' })}
-            onAttach={() => fileInputRef.current?.click()}
-          />
+          <>
+            <AnswerControl
+              step={step}
+              busy={busy}
+              value={inputValue}
+              onChange={setInputValue}
+              onSend={sendTyped}
+              onChoose={value => send({ callbackValue: value })}
+              onSkip={() => send({ text: 'skip' })}
+              onAttach={() => fileInputRef.current?.click()}
+            />
+
+            {/*
+              The way out, on every step.
+              On Telegram and WhatsApp a claimant can type "human" at any point,
+              and the gateway hands the conversation to an operator. Here they
+              could not: choice, confirm and document steps render buttons and
+              no text box, so the one moment someone most needs a person — the
+              options do not cover their situation, or they disagree with
+              something on the review — was exactly the moment they had no way
+              to ask. The gateway already handles this turn for every channel;
+              only the means of sending it was missing.
+
+              Deliberately quiet: a prominent button invites a tap from anyone
+              who finds a question mildly annoying, and an unstaffed queue is
+              worse than a bot. It sends the same "human" turn a typed message
+              would, so there is one code path and one handover reason.
+            */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => send({ text: 'human' })}
+              className="flex w-full items-center justify-center gap-1.5 py-1 text-xs text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
+            >
+              <UserRound className="h-3.5 w-3.5" />
+              Talk to a person
+            </button>
+          </>
         )}
 
         <input
@@ -186,7 +214,7 @@ export function CaseIntakePage() {
  * gets a real picker here and typed text on Telegram — the same step, rendered
  * to the channel's strengths, with neither definition duplicated.
  */
-function AnswerControl({
+export function AnswerControl({
   step,
   busy,
   value,
@@ -291,7 +319,7 @@ function AnswerControl({
   );
 }
 
-function TypedInput({
+export function TypedInput({
   value,
   onChange,
   onSend,
@@ -328,7 +356,7 @@ function TypedInput({
   );
 }
 
-function Bubble({ message }: { message: ConversationMessage }) {
+export function Bubble({ message }: { message: ConversationMessage }) {
   const fromClaimant = message.direction === 'INBOUND';
 
   return (
@@ -356,24 +384,31 @@ function Bubble({ message }: { message: ConversationMessage }) {
   );
 }
 
-function PageHeader({
+export function PageHeader({
   onBack,
   title,
   subtitle,
 }: {
-  onBack: () => void;
+  /**
+   * Omitted where there is nowhere to go back to. The public intake link is
+   * the first screen a visitor sees, and an arrow that navigates nowhere is
+   * worse than no arrow — it reads as a broken page.
+   */
+  onBack?: () => void;
   title: string;
   subtitle?: string;
 }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-3">
-      <button
-        onClick={onBack}
-        className="rounded-full p-2 text-muted-foreground hover:bg-muted"
-        aria-label="Back"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </button>
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="rounded-full p-2 text-muted-foreground hover:bg-muted"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+      )}
       <div>
         <h1 className="text-sm font-semibold">{title}</h1>
         {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
