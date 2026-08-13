@@ -120,8 +120,30 @@ describe('WhatsApp channel', () => {
       return { controller, handleTurn };
     };
 
-    const sign = (body: unknown, secret = 'secret') =>
-      `sha256=${createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex')}`;
+    const signRaw = (raw: string, secret = 'secret') =>
+      `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`;
+
+    /**
+     * Deliver the way Meta does: a signature over the exact bytes sent, with
+     * the parsed body alongside them.
+     *
+     * `raw` may be supplied to reproduce a serialisation that differs from
+     * JSON.stringify — which is the whole point, because Meta's does.
+     */
+    const post = (
+      controller: WhatsAppWebhookController,
+      body: unknown,
+      opts: { raw?: string; secret?: string; signature?: string | null } = {}
+    ) => {
+      const raw = opts.raw ?? JSON.stringify(body);
+      const signature =
+        opts.signature === null ? undefined : (opts.signature ?? signRaw(raw, opts.secret));
+      return controller.receive(
+        signature,
+        JSON.parse(raw) as never,
+        { rawBody: Buffer.from(raw) } as never
+      );
+    };
 
     const delivery = (messages: unknown[]) => ({
       entry: [{ changes: [{ value: { contacts: [{ wa_id: '60123456789' }], messages } }] }],
@@ -141,9 +163,47 @@ describe('WhatsApp channel', () => {
       const { controller, handleTurn } = build();
       const body = delivery([{ id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } }]);
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it('verifies a delivery Meta serialised with escaped slashes', async () => {
+      // THE BUG, pinned. Meta's backend is PHP, whose json_encode escapes
+      // forward slashes: it sends 16\/06\/2026 where JSON.stringify writes
+      // 16/06/2026. Verification used to hash a re-serialised copy of the
+      // parsed body, so the bytes differed and the HMAC never matched.
+      //
+      // What made it survive a day in production is the shape of the damage:
+      // "Hi", a policy number and a name carry no slash and verified fine, so
+      // the channel looked healthy — while every date failed, on a flow that
+      // asks for DD/MM/YYYY. Intake could not get past the trip-date question,
+      // and a discarded delivery still answers 200, so nothing alarmed.
+      const { controller, handleTurn } = build();
+      const body = delivery([
+        { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: '16/06/2026' } },
+      ]);
+      const metaStyle = JSON.stringify(body).replace(/\//g, '\\/');
+      expect(metaStyle).toContain('16\\/06\\/2026'); // the bytes Meta actually sends
+
+      await post(controller, body, { raw: metaStyle });
+
+      expect(handleTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it('discards a delivery when the raw body is unavailable, rather than falling back', async () => {
+      // Fail closed. The only available fallback is hashing the re-serialised
+      // body, which is the bug above: it works for most messages and silently
+      // drops every one containing a slash. A channel that dies loudly gets
+      // fixed; one that drops a third of its messages does not.
+      const { controller, handleTurn } = build();
+      const body = delivery([
+        { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } },
+      ]);
+
+      await controller.receive(signRaw(JSON.stringify(body)), body as never, {} as never);
+
+      expect(handleTurn).not.toHaveBeenCalled();
     });
 
     it('discards an unsigned delivery', async () => {
@@ -152,8 +212,8 @@ describe('WhatsApp channel', () => {
       const { controller, handleTurn } = build();
       const body = delivery([{ id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } }]);
 
-      await controller.receive(undefined, body as never);
-      await controller.receive('sha256=deadbeef', body as never);
+      await post(controller, body, { signature: null });
+      await post(controller, body, { signature: 'sha256=deadbeef' });
 
       expect(handleTurn).not.toHaveBeenCalled();
     });
@@ -162,7 +222,7 @@ describe('WhatsApp channel', () => {
       const { controller, handleTurn } = build({ WHATSAPP_APP_SECRET: undefined });
       const body = delivery([{ id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } }]);
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).not.toHaveBeenCalled();
     });
@@ -188,7 +248,7 @@ describe('WhatsApp channel', () => {
         ],
       };
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).not.toHaveBeenCalled();
     });
@@ -201,7 +261,7 @@ describe('WhatsApp channel', () => {
         { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } },
       ]);
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).toHaveBeenCalledTimes(1);
     });
@@ -215,7 +275,7 @@ describe('WhatsApp channel', () => {
         { id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } },
       ]);
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).not.toHaveBeenCalled();
     });
@@ -231,7 +291,7 @@ describe('WhatsApp channel', () => {
           { id: 'wamid.1', from: '60999999999', type: 'text', text: { body: 'hi' } },
         ]);
 
-        await controller.receive(sign(body), body as never);
+        await post(controller, body);
 
         expect(handleTurn).toHaveBeenCalledTimes(1);
       } finally {
@@ -244,7 +304,7 @@ describe('WhatsApp channel', () => {
       const { controller, handleTurn } = build();
       const body = { entry: [{ changes: [{ value: { statuses: [{ status: 'read' }] } }] }] };
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       expect(handleTurn).not.toHaveBeenCalled();
     });
@@ -257,7 +317,7 @@ describe('WhatsApp channel', () => {
       handleTurn.mockRejectedValue(new Error('database down'));
       const body = delivery([{ id: 'wamid.1', from: '60123456789', type: 'text', text: { body: 'hi' } }]);
 
-      await expect(controller.receive(sign(body), body as never)).resolves.toEqual({
+      await expect(post(controller, body)).resolves.toEqual({
         received: true,
       });
     });
@@ -270,7 +330,7 @@ describe('WhatsApp channel', () => {
         { id: 'wamid.2', from: '60129999999', type: 'text', text: { body: 'two' } },
       ]);
 
-      await controller.receive(sign(body), body as never);
+      await post(controller, body);
 
       // They are unrelated claimants.
       expect(handleTurn).toHaveBeenCalledTimes(2);

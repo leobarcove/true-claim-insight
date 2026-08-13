@@ -10,7 +10,9 @@ import {
   Logger,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeController } from '@nestjs/swagger';
 
@@ -95,9 +97,9 @@ export class WhatsAppWebhookController {
   async receive(
     @Headers('x-hub-signature-256') signature: string | undefined,
     @Body() body: WhatsAppWebhookBody,
-    @Headers('x-tci-raw-body') _raw?: string
+    @Req() request: FastifyRequest & { rawBody?: Buffer }
   ): Promise<{ received: true }> {
-    if (!this.verifySignature(signature, body)) {
+    if (!this.verifySignature(signature, request.rawBody)) {
       // Not a 403: an attacker learns nothing from a 200, and Meta never sees
       // this branch because Meta always signs.
       this.logger.warn('Discarded a webhook delivery with a bad or missing signature.');
@@ -234,15 +236,42 @@ export class WhatsAppWebhookController {
    * this returns false rather than throwing when the secret is absent —
    * failing closed keeps an unverifiable deployment inert instead of open.
    */
-  private verifySignature(signature: string | undefined, body: unknown): boolean {
+  /**
+   * HMAC-SHA256 over the bytes Meta sent — never over a re-serialised copy.
+   *
+   * This took a day of a claimant's intake to find, so it is worth stating
+   * plainly. The check used to hash `JSON.stringify(body)`, the *parsed* body
+   * put back into JSON by Node. Meta's backend is PHP, whose `json_encode`
+   * escapes forward slashes: it sends `16\/06\/2026` where JSON.stringify
+   * produces `16/06/2026`. Different bytes, different HMAC, delivery discarded.
+   *
+   * The damage was shaped by the data: messages with no slash ("Hi", a policy
+   * number, a name) verified fine, so the channel looked alive. Every date did
+   * not — and the flow asks for DD/MM/YYYY, so intake could never pass the
+   * trip-date question. Nothing alarmed, because a rejected delivery still
+   * answers 200 by design.
+   *
+   * Fails closed when `rawBody` is absent. If a future body-parser change stops
+   * populating it, WhatsApp goes conspicuously dead rather than quietly
+   * reverting to the bug above — a channel that dies loudly gets fixed, one
+   * that drops one message in three does not.
+   */
+  private verifySignature(signature: string | undefined, rawBody: Buffer | undefined): boolean {
     const secret = this.config.get<string>('WHATSAPP_APP_SECRET');
     if (!secret) {
       this.logger.error('WHATSAPP_APP_SECRET is not set; every delivery is being discarded.');
       return false;
     }
+    if (!rawBody?.length) {
+      this.logger.error(
+        'Raw request body is unavailable, so no delivery can be verified. ' +
+          'NestFactory.create needs `rawBody: true` (apps/case-service/src/main.ts).'
+      );
+      return false;
+    }
     if (!signature?.startsWith('sha256=')) return false;
 
-    const expected = createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+    const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
     const provided = signature.slice('sha256='.length);
     if (provided.length !== expected.length) return false;
 

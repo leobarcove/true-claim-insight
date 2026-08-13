@@ -22,7 +22,18 @@ async function bootstrap() {
     new FastifyAdapter({
       logger: process.env.NODE_ENV !== 'production',
       trustProxy: true,
-    })
+    }),
+    {
+      // Keeps the untouched request bytes on `request.rawBody`.
+      //
+      // Required by the WhatsApp webhook: Meta signs the exact bytes it sent,
+      // and re-serialising the parsed JSON to check that signature does not
+      // reproduce them. Meta's backend escapes forward slashes (`16\/06\/2026`)
+      // where JSON.stringify does not, so every message containing a slash —
+      // which is every date, on a flow that asks for DD/MM/YYYY — failed
+      // verification and was silently discarded.
+      rawBody: true,
+    }
   );
 
   const configService = app.get(ConfigService);
