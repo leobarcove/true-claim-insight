@@ -227,12 +227,47 @@ a claim. Unscoped, a guessed id could offer another claimant's document as proof
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Unset ⇒ the Telegram channel is off entirely. Web chat needs no token; its transport is the claimant's own session. |
 | `TELEGRAM_POLLING_ENABLED` | Must be `true` on **exactly one** instance per bot token. Two pollers each receive half the updates, which presents as claimants being *intermittently ignored* rather than as an outage — the hardest class of fault to diagnose from a bug report. Staging needs its own bot, not a second poller on the same one. |
-| `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis (MASTER_PLAN §6.3, §6.18–6.19). |
+| `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis (MASTER_PLAN §6.3, §6.18–6.19). **Date steps now reach it too** — they used to return before the fallback could run, so the one place a human is most likely to write something no grammar covers was the one place the model could not help. That widens what reaches Gemini to include free text typed at a date step. |
 
 **Binding in development.** On Telegram, tap *Share my number*: no code is sent
 and a typed number is refused, because the platform's own verified contact is
 the identity control. The PWA binds from the session instead — the claimant
 logged in, so the proof already happened and repeating it would be theatre.
+
+### Web chat has two doors, and they identify differently
+
+`/cases/new` is the signed-in one described above. **`/chat` is public** — the
+web equivalent of messaging the WhatsApp number: open a link, start talking, no
+account and no login page in front of the conversation.
+
+The difference is attestation, and it is the only difference. `platformVerifiedPhone`
+in `CHANNEL_CAPABILITIES` records which channels get identity from their
+platform: a WhatsApp message can only come from the account that sent it, and
+Telegram's `request_contact` returns a number that platform verified. A browser
+attests nothing, so the public door asks for a number and proves it with a code
+delivered over the **same WhatsApp business account** the intake channel uses —
+one sender identity, no second vendor. That happens at exactly the point a
+messaging binding resolves its platform-verified number, and `pendingPhone` /
+`otpAttempts` on `ConversationBinding` hold the two states so a reload resumes
+mid-verification.
+
+**The binding is keyed on a signed session id, not a claimant**, with
+`claimantId` null until the code is proved. That is what lets a conversation
+exist before an identity does. The session token is not authentication: it names
+a conversation and grants no claim access, because every claim read is scoped by
+the claimant the binding does not yet have.
+
+`InternalKeyGuard` exists for this one route — key only, no identity headers,
+because a visitor has none to send. Access control has not been skipped; it has
+moved into the conversation. Any route that *can* name its user should use
+`InternalAuthGuard`.
+
+Three controls sit on it, because the early turns spend money per WhatsApp
+template message: edge rate limits, the per-phone limit in `OtpService`, and
+`MAX_CODE_ATTEMPTS` burning the pending number rather than letting it be ground
+against. The first cut of the edge limit was 20 turns a minute, which throttled
+a *claimant* — sixteen questions plus a couple of validation retries passes
+twenty. The money is defended where it is spent, not at the door.
 
 The load-bearing detail: a channel answer goes through
 `CasesService.patchAnswer`, not a fast path around it. Every compliance control

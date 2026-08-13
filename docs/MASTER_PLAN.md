@@ -1510,6 +1510,48 @@ way a keyboard allows, or whose client renders no buttons.
 These are channel and intake-quality repairs, not compliance movement; §3
 verdicts are unchanged.
 
+### A public web door into intake — 13 August 2026
+
+**`/chat` opens straight into the conversation: no account, no login page.** The
+web equivalent of messaging the WhatsApp number. Same `ConversationGateway`,
+same flow, same transcript — the claimant PWA was not rewritten and its existing
+pages were not touched.
+
+The only real difference between the channels is who attests the phone number.
+WhatsApp and Telegram have no login because the platform vouches for it; a
+browser vouches for nothing, so the conversation asks for a number and proves it
+with a code, delivered over the **same WhatsApp business account** the intake
+channel already uses. `pendingPhone` and `otpAttempts` had been sitting on
+`ConversationBinding` since it was written, set by nothing — the schema comment
+described this exact flow. The binding is keyed on a signed session id with
+`claimantId` null until the code is proved, which is what allows a conversation
+to exist before an identity does.
+
+**Six faults were found by walking the flow as a claimant**, several of which had
+been live on the authenticated page too:
+
+- The review asked for confirmation and showed **nothing**. `WEB_CHAT` declared
+  `summaryPanel: true` for a panel that was never built, so the gateway withheld
+  the answers — a claimant was asked to agree to a claim submission sight
+  unseen. A test had asserted `true` since the adapter was written, so the
+  missing summary had a passing test beside it.
+- An uploaded document rendered as an **empty bubble**: the `storedDocumentId`
+  branch never wrote `caseDocumentId`, so the transcript held a message with no
+  text and no document — and an operator opening the thread saw nothing either.
+- Onboarding had **no text input at all**: `AnswerControl` renders from
+  `currentStep`, and the number-and-code exchange happens before the flow
+  starts, so the bot asked for a mobile number with no box to put it in.
+- Dates echoed as `2026-08-13T09:00`; the greeting presumed *travel* when the
+  flow asks claim type as its own step; and a tapped button rendered as
+  `__another:yes` because that callback value was declared in the gateway alone,
+  where the function that turns taps into words could not see it.
+
+**COGS note for §2.5:** this door adds no per-claim cost beyond the verification
+message. It is desk-review intake — no video, no prosody analysis, no eKYC.
+
+Not yet done: `runPhoneVerification` has no tests, and the route has run
+nowhere but a developer machine.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working
