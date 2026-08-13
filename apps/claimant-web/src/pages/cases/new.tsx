@@ -115,7 +115,7 @@ export function CaseIntakePage() {
       <PageHeader
         onBack={() => navigate('/')}
         title="Make a claim"
-        subtitle={conversation?.withAgent ? 'A colleague is helping you' : undefined}
+        withAgent={conversation?.withAgent}
       />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -426,6 +426,7 @@ export function PageHeader({
   onBack,
   title,
   subtitle,
+  withAgent,
 }: {
   /**
    * Omitted where there is nowhere to go back to. The public intake link is
@@ -435,21 +436,52 @@ export function PageHeader({
   onBack?: () => void;
   title: string;
   subtitle?: string;
+  /**
+   * Whether a person is on the other end. Drives the status line, because it
+   * is the single most useful thing a claimant can know before they type: what
+   * to expect back, and how quickly.
+   */
+  withAgent?: boolean;
 }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-3">
+    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-2.5">
       {onBack && (
         <button
           onClick={onBack}
-          className="rounded-full p-2 text-muted-foreground hover:bg-muted"
+          className="-ml-1 rounded-full p-2 text-muted-foreground hover:bg-muted"
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      <div>
-        <h1 className="text-sm font-semibold">{title}</h1>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+
+      {/*
+        The mark, and the reason it belongs here rather than only on the
+        welcome screen: the public intake link opens straight into this page.
+        A claimant arriving from a QR code or a forwarded URL has met no
+        branding at all, and is about to be asked for a phone number, a policy
+        number and a bank account. Whose form this is should not be a guess.
+      */}
+      <img
+        src="/logo.png"
+        alt="True Claim Insight"
+        className="h-9 w-9 shrink-0 rounded-xl bg-background object-contain p-1 ring-1 ring-border"
+      />
+
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-sm font-semibold leading-tight">{title}</h1>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-full',
+              withAgent ? 'bg-primary' : 'bg-emerald-500'
+            )}
+            aria-hidden
+          />
+          <span className="truncate">
+            {subtitle ?? (withAgent ? 'A colleague is helping you' : 'True Claim assistant')}
+          </span>
+        </p>
       </div>
     </header>
   );

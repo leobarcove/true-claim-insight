@@ -56,9 +56,20 @@ function App() {
         `min-h-0` on the content wrapper is the part that is easy to miss — a
         flex child will not shrink below its content without it, so the
         transcript would refuse to scroll and push the composer out of view.
+
+        THE FRAME HAS TO BE VISIBLE. The first attempt drew it with
+        `border-border/10` on a `bg-background/20` backdrop — a ten-per-cent
+        border between two near-identical dark surfaces, which is to say no
+        frame at all. What makes a device read as a device is contrast with
+        what surrounds it, so: a black surround, a solid 4px bezel, and a drop
+        shadow. Tokens are avoided here on purpose — `border-border` follows
+        the app's own theme and would keep disappearing into it.
+
+        Only from `sm:` up. On a real phone the app IS the device; a bezel
+        drawn around a screen that is already a screen just eats it.
       */}
-      <div className="flex h-dvh justify-center bg-muted/20 dark:bg-background/20 sm:py-4">
-        <div className="relative flex h-full w-full max-w-[480px] flex-col overflow-hidden border-border/10 bg-background shadow-2xl border-x sm:rounded-3xl sm:border">
+      <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:py-8">
+        <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
           <div className="flex min-h-0 flex-1 flex-col safe-area-top safe-area-bottom">
             <Routes>
               {/* Public routes */}
