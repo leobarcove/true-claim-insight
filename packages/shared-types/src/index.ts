@@ -738,6 +738,8 @@ export type {
 // carries a value, not a sentence, and a transcript of blanks is unreviewable.
 export {
   CONSENT_AGREED_VALUE,
+  ANOTHER_CLAIM_YES,
+  ANOTHER_CLAIM_NO,
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
