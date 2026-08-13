@@ -68,6 +68,60 @@ describe('text date entry', () => {
     expect(parseTextDate('')).toBeNull();
   });
 
+  /**
+   * People do not type the format the prompt asks for, and a claim should not
+   * stall because of it. Every form below was rejected outright before.
+   */
+  describe('the way people actually write dates', () => {
+    it('reads a month written in words, either order', () => {
+      for (const text of ['16 June 2026', '16 Jun 2026', '16th June 2026', 'June 16, 2026']) {
+        const iso = parseTextDate(text);
+        expect(new Date(iso!).getUTCDate()).toBe(16);
+        expect(new Date(iso!).getUTCMonth()).toBe(5);
+      }
+    });
+
+    it('reads Malay month names', () => {
+      // Half the country writes these, and the prompt is not going to stop them.
+      expect(new Date(parseTextDate('16 Ogos 2026')!).getUTCMonth()).toBe(7); // August
+      expect(new Date(parseTextDate('3 Mac 2026')!).getUTCMonth()).toBe(2); // March
+    });
+
+    it('reads a two-digit year as this century', () => {
+      expect(new Date(parseTextDate('16/06/26')!).getUTCFullYear()).toBe(2026);
+    });
+
+    it('accepts spaces as separators', () => {
+      // What a phone keyboard makes easiest.
+      expect(new Date(parseTextDate('16 06 2026')!).getUTCDate()).toBe(16);
+    });
+
+    it('understands today and yesterday, in either language', () => {
+      const now = new Date(Date.UTC(2026, 5, 16, 9, 30));
+      expect(parseTextDate('today', 'date', now)).toBe('2026-06-16T00:00:00.000Z');
+      expect(parseTextDate('yesterday', 'date', now)).toBe('2026-06-15T00:00:00.000Z');
+      expect(parseTextDate('semalam', 'date', now)).toBe('2026-06-15T00:00:00.000Z');
+    });
+
+    it('refuses a relative day on a datetime step', () => {
+      // "today" carries no clock reading, and inventing one would stamp a
+      // made-up time on an incident record.
+      expect(parseTextDate('today', 'datetime', new Date())).toBeNull();
+    });
+
+    it('still refuses a day that does not exist, however it is written', () => {
+      expect(parseTextDate('31 February 2026')).toBeNull();
+      expect(parseTextDate('31/02/26')).toBeNull();
+    });
+
+    it('keeps reading bare numeric dates day-first', () => {
+      // The safety property the looser parsing must not cost: 06/07 is 6 July.
+      const iso = parseTextDate('06/07/26');
+      expect(new Date(iso!).getUTCDate()).toBe(6);
+      expect(new Date(iso!).getUTCMonth()).toBe(6);
+    });
+  });
+
   describe('shared validator', () => {
     it('accepts the ISO the parser produces', () => {
       const iso = parseTextDate('16/06/2026')!;

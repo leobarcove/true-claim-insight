@@ -84,6 +84,47 @@ const HUMAN_WORDS = new Set(['human', 'agent', '/human', 'ejen']);
 const HELP_WORDS = new Set(['help', 'support', '/help', 'bantuan', 'tolong']);
 
 /**
+ * Agreement and refusal at a confirm step, typed rather than tapped.
+ *
+ * Whole messages only, as with BACK_WORDS. Malay included, and "betul"/"setuju"
+ * because that is what a Malaysian claimant types to agree.
+ *
+ * Deliberately narrow: these convert to the button values, and the review
+ * button submits a claim. A loose match here would submit somebody's claim
+ * because they typed a word containing "ok".
+ */
+const CONFIRM_WORDS = new Set([
+  'yes', 'y', 'confirm', 'confirmed', 'submit', 'ok', 'okay', 'okey',
+  'correct', 'agree', 'yep', 'yeah', 'sure', 'proceed', 'done',
+  'ya', 'yer', 'betul', 'setuju', 'sah', 'hantar', 'ok ok',
+]);
+
+/** Refusal at a confirm step — routes to the "change something" branch. */
+const DECLINE_WORDS = new Set([
+  'no', 'n', 'nope', 'wrong', 'incorrect', 'change', 'not correct',
+  'tidak', 'tak', 'salah', 'bukan',
+]);
+
+/**
+ * Opening pleasantries, which are not an answer to anything.
+ *
+ * People returning to a conversation after a day say hello before they say
+ * anything else — and a claimant mid-intake who typed "Hi" got back "Sorry, we
+ * could not read that date", because the greeting was fed straight to the date
+ * parser. That reply is confusing on its own terms and it reads as a broken
+ * bot, which is exactly when someone abandons a claim.
+ *
+ * Whole messages only, like BACK_WORDS: "hi" alone is a greeting, "hi there I
+ * fell on 16 June" is an answer and must reach the parser intact.
+ */
+const GREETING_WORDS = new Set([
+  'hi', 'hello', 'hey', 'helo', 'yo', 'hai', 'halo',
+  'good morning', 'good afternoon', 'good evening', 'morning',
+  'salam', 'assalamualaikum', 'selamat pagi', 'selamat petang', 'apa khabar',
+  'ok', 'okay', 'okey', 'baik', 'thanks', 'thank you', 'terima kasih', 'tq',
+]);
+
+/**
  * Inbound turns one chat may send per minute before we stop answering.
  *
  * The realistic attack on an open bot is not impersonation — the platform
@@ -895,7 +936,9 @@ export class ConversationGateway {
     // the evidence checklist and the flow agree about what has been supplied.
     // A tapped button beats typed text: it carries the stored value directly
     // and needs no interpretation.
-    const raw = payload.callbackValue ?? payload.text;
+    // `let`, because a confirm step typed rather than tapped is rewritten to
+    // the value the button would have carried — see CONFIRM_WORDS below.
+    let raw = payload.callbackValue ?? payload.text;
     const answers = caseRow.answers as CaseAnswers;
 
     // Corrections come before anything else interprets the message.
@@ -998,6 +1041,19 @@ export class ConversationGateway {
       const target = raw.slice(EDIT_CALLBACK_PREFIX.length);
       await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, target, false);
       return;
+    }
+
+    // A confirm step typed rather than tapped.
+    //
+    // The buttons carry the value 'true'; the validator accepts nothing else.
+    // So a claimant who replied "yes" to "confirm to submit your claim request"
+    // — which is what the sentence asks for, in the only way a keyboard allows
+    // — failed validation at the last step of a completed claim. Taps are still
+    // the happy path; this is for the person who typed instead, or whose client
+    // did not render the buttons at all.
+    if (step.answerType === 'confirm' && typeof raw === 'string' && !payload.callbackValue) {
+      if (CONFIRM_WORDS.has(word)) raw = 'true';
+      else if (DECLINE_WORDS.has(word)) raw = 'false';
     }
 
     // "Change something" at the review. There is no edit-a-single-answer flow,
@@ -1179,7 +1235,38 @@ export class ConversationGateway {
         // exactly that, and the shared validator rejected it.
         const capabilities = adapter.capabilities ?? CHANNEL_CAPABILITIES[adapter.channel];
         if (capabilities?.dateEntry === 'text') {
-          const iso = parseTextDate(String(raw), step.answerType);
+          let iso = parseTextDate(String(raw), step.answerType);
+
+          // The normaliser's own fallback, reached explicitly.
+          //
+          // It is invoked further down for every other answer type, but a date
+          // step returned before ever getting there — so the one place a human
+          // is most likely to write something no grammar covers ("last
+          // Tuesday", "the day we landed") was the one place the fallback could
+          // not run. Enabling the model changed nothing for dates.
+          //
+          // Still a fallback, never the norm: the deterministic parser above
+          // handles every ordinary form, so this costs an offshore call only
+          // for a genuine outlier — which is what keeps the §2.5 per-claim
+          // ceiling intact. What comes back is re-validated exactly like a
+          // typed answer; the model never decides what happens next.
+          if (!iso && this.normaliser.isEnabled()) {
+            const interpreted = await this.normaliser.normalise(String(raw), step, {
+              claimId: caseRow.id,
+              claimantId: binding.claimantId,
+              tenantId: caseRow.tenantId,
+            });
+            if (typeof interpreted === 'string') {
+              // Accept either an ISO value the validator already likes, or a
+              // human form the deterministic parser can now read — the model
+              // is not trusted to have produced a canonical shape.
+              iso = validateAnswer(step, interpreted).valid
+                ? interpreted
+                : parseTextDate(interpreted, step.answerType);
+              if (iso) this.logger.log(`Step ${step.id}: model read "${raw}" as a date.`);
+            }
+          }
+
           if (!iso) {
             await this.prisma.conversationMessage.update({
               where: { id: messageId },
@@ -1189,12 +1276,14 @@ export class ConversationGateway {
                 processedAt: new Date(),
               },
             });
-            await this.say(adapter, binding.id, payload.platformUserId, {
-              text:
-                step.answerType === 'date'
-                  ? 'Sorry, we could not read that date. Please write it as DD/MM/YYYY — for example 16/06/2026.'
-                  : 'Sorry, we could not read that. Please write it as DD/MM/YYYY HH:MM — for example 16/06/2026 14:30.',
-            });
+            await this.recoverFromUnreadableAnswer(
+              adapter,
+              binding,
+              payload.platformUserId,
+              step,
+              String(raw),
+              flow
+            );
             return;
           }
           value = iso;
@@ -2011,6 +2100,73 @@ export class ConversationGateway {
   }
 
   /** Put one step to the claimant, degraded to what this channel can render. */
+  /**
+   * An answer we could not read must not end the conversation.
+   *
+   * The old behaviour sent one error bubble and returned. The claimant was
+   * left with an apology, no question in front of them, and — if they had
+   * scrolled at all — nothing on screen saying what to do next. From their
+   * side an intake that stops responding is indistinguishable from one that
+   * has crashed, and the claim is abandoned rather than retried.
+   *
+   * So every unreadable answer ends the same way: guidance, then the question
+   * again. Re-asking is cheap and it is what a person would do.
+   *
+   * The guidance escalates with repeated failure rather than repeating itself,
+   * because a claimant who has now missed three times is not going to succeed
+   * by being told the format a fourth time — they need a way out. The escape
+   * is offered, never forced: `skip` only where the step allows it, and a
+   * person only on request, since an unstaffed queue out of hours is its own
+   * kind of silence.
+   */
+  private async recoverFromUnreadableAnswer(
+    adapter: ChannelAdapter,
+    binding: { id: string },
+    platformUserId: string,
+    step: FlowStep,
+    raw: string,
+    flow?: CaseFlow
+  ): Promise<void> {
+    // Counted from the transcript rather than a counter column: the rows are
+    // already written, and a schema field would be one more thing to reset
+    // correctly when a claimant goes "back" to an earlier step.
+    const attempts = await this.prisma.conversationMessage.count({
+      where: {
+        bindingId: binding.id,
+        stepId: step.id,
+        direction: MessageDirection.INBOUND,
+        status: ConversationMessageStatus.UNPARSEABLE,
+      },
+    });
+
+    const greeted = GREETING_WORDS.has(raw.trim().toLowerCase());
+    const lines: string[] = [];
+
+    if (greeted) {
+      // Not an error. They said hello; the honest reply is hello back and the
+      // question they were on, not an apology for something they did not do.
+      lines.push('Hello! We are partway through your claim — here is where we left off.');
+    } else if (step.answerType === 'date') {
+      lines.push('Sorry, we could not read that as a date.');
+      lines.push(
+        'You can write it as 16/06/2026, or as 16 June 2026 — or just "today" or "yesterday".'
+      );
+    } else {
+      lines.push('Sorry, we could not read that as a date and time.');
+      lines.push('You can write it as 16/06/2026 14:30, or as 16 June 2026 2:30pm.');
+    }
+
+    if (!greeted && attempts >= 3) {
+      const escapes: string[] = [];
+      if (step.optional) escapes.push(`type "${SKIP_VALUE}" to leave this one blank`);
+      escapes.push('type "human" and a person will take over');
+      lines.push(`If this is not working, ${escapes.join(', or ')}.`);
+    }
+
+    await this.say(adapter, binding.id, platformUserId, { text: lines.join('\n\n') });
+    await this.ask(adapter, binding.id, platformUserId, step, 0, undefined, undefined, flow);
+  }
+
   private async ask(
     adapter: ChannelAdapter,
     bindingId: string | null,

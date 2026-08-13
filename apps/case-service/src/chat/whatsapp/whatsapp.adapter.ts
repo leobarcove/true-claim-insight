@@ -194,6 +194,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     }
 
     const choices = this.choicesFor(prompt);
+    const confirm = this.confirmFor(prompt);
     const parts = splitForWhatsApp(prompt.text, this.capabilities.maxMessageChars);
 
     for (const [index, part] of parts.entries()) {
@@ -206,6 +207,16 @@ export class WhatsAppAdapter implements ChannelAdapter {
         await this.post(
           'messages',
           this.interactivePayload(platformUserId, part, choices, prompt.step!.id)
+        );
+        continue;
+      }
+
+      // Same reasoning for the confirm buttons: they carry the last part as
+      // their body, so the summary and the buttons arrive as one bubble.
+      if (isLast && confirm) {
+        await this.post(
+          'messages',
+          this.confirmPayload(platformUserId, part, confirm, prompt.step!.id)
         );
         continue;
       }
@@ -291,6 +302,28 @@ export class WhatsAppAdapter implements ChannelAdapter {
     return renderChoices(this.capabilities, prompt.step.choices, prompt.choicePage ?? 0);
   }
 
+  /**
+   * Reply buttons for a confirm step — the review among them.
+   *
+   * A confirm step carries no `choices`, so it fell through `choicesFor` and
+   * was sent as plain text. The claimant reached the end of intake, read
+   * "please review your details, then confirm to submit", and had nothing to
+   * confirm *with*: no button, and no keyword offered. Telegram had rendered a
+   * keyboard for this since the beginning; WhatsApp never did, so a claim could
+   * be filled in completely on WhatsApp and never submitted.
+   *
+   * Reply buttons rather than a list: there are two options, and a list would
+   * hide them behind a "Choose" tap for no gain. Meta caps a button title at 20
+   * characters and truncates silently past it.
+   */
+  private confirmFor(prompt: OutboundPrompt) {
+    if (prompt.step?.answerType !== 'confirm') return null;
+    return [
+      { value: 'true', title: 'Confirm & submit' },
+      { value: 'false', title: 'Change something' },
+    ];
+  }
+
   private interactivePayload(
     to: string,
     body: string,
@@ -322,6 +355,36 @@ export class WhatsAppAdapter implements ChannelAdapter {
         // The body has its own 1024 cap; the caller has already split to it.
         body: { text: body },
         action: { button: 'Choose', sections: [{ rows }] },
+      },
+    };
+  }
+
+  private confirmPayload(
+    to: string,
+    body: string,
+    buttons: Array<{ value: string; title: string }>,
+    stepId: string
+  ) {
+    return {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        // Same 1024 cap as the list body; the caller has already split to it.
+        body: { text: body },
+        action: {
+          buttons: buttons.map(button => ({
+            type: 'reply',
+            reply: {
+              id: this.replyId(stepId, button.value),
+              // Cut here rather than letting Meta truncate server-side, so an
+              // oddly-worded button is visible in our own payload.
+              title: button.title.slice(0, 20),
+            },
+          })),
+        },
       },
     };
   }

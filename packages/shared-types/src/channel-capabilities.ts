@@ -209,9 +209,94 @@ export const renderChoices = (
  *
  * @returns an ISO string the shared validator accepts, or null if unparseable.
  */
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1, january: 1, januari: 1,
+  feb: 2, february: 2, februari: 2,
+  mar: 3, march: 3, mac: 3,
+  apr: 4, april: 4,
+  may: 5, mei: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7, julai: 7,
+  aug: 8, august: 8, ogos: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10, oktober: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12, disember: 12,
+};
+
+/** Whole-message words meaning a day relative to now. Malay included. */
+const RELATIVE_DAYS: Record<string, number> = {
+  today: 0, tod: 0, 'hari ini': 0,
+  yesterday: -1, yest: -1, semalam: -1, kelmarin: -1,
+  tomorrow: 1, esok: 1,
+};
+
+/**
+ * Turn the many shapes of a typed date into a canonical DD/MM/YYYY-ish triple.
+ *
+ * Kept separate from the numeric path because month NAMES are unambiguous:
+ * "16 June 2026" and "June 16, 2026" both mean the same day, so word order can
+ * be relaxed here without reintroducing the day/month guessing that the numeric
+ * path exists to prevent.
+ */
+const matchNamedMonth = (
+  text: string
+): { day: number; month: number; year: number; rest: string } | null => {
+  const names = Object.keys(MONTH_NAMES).join('|');
+  // "16 June 2026", "16 Jun 26", "16th June 2026"
+  const dayFirst = new RegExp(
+    `^(\\d{1,2})(?:st|nd|rd|th)?[\\s,.-]+(${names})[\\s,.-]+(\\d{2,4})(.*)$`,
+    'i'
+  );
+  // "June 16 2026", "June 16th, 2026"
+  const monthFirst = new RegExp(
+    `^(${names})[\\s,.-]+(\\d{1,2})(?:st|nd|rd|th)?[\\s,.-]+(\\d{2,4})(.*)$`,
+    'i'
+  );
+
+  const dm = text.match(dayFirst);
+  if (dm) {
+    return {
+      day: Number(dm[1]),
+      month: MONTH_NAMES[dm[2].toLowerCase()],
+      year: Number(dm[3]),
+      rest: dm[4] ?? '',
+    };
+  }
+  const md = text.match(monthFirst);
+  if (md) {
+    return {
+      day: Number(md[2]),
+      month: MONTH_NAMES[md[1].toLowerCase()],
+      year: Number(md[3]),
+      rest: md[4] ?? '',
+    };
+  }
+  return null;
+};
+
+/**
+ * Two digits meant as a year. "26" is 2026, not 1926.
+ *
+ * Claims are filed about the recent past and near future, so the whole
+ * plausible range sits in this century. Anchoring on the current century keeps
+ * that true without a sliding window nobody would remember to revisit.
+ */
+const expandYear = (year: number, now: Date): number => {
+  if (year >= 1000) return year;
+  if (year >= 100) return NaN; // three digits is a typo, not a year
+  return Math.floor(now.getUTCFullYear() / 100) * 100 + year;
+};
+
 export const parseTextDate = (
   raw: string,
-  kind: 'date' | 'datetime' = 'date'
+  kind: 'date' | 'datetime' = 'date',
+  /**
+   * Reference point for relative words like "today". Injected rather than read
+   * from the clock so the behaviour is testable and so a caller can anchor to
+   * the claimant's own day if it ever differs from the server's.
+   */
+  now: Date = new Date()
 ): string | null => {
   const text = raw.trim();
   if (!text) return null;
@@ -222,15 +307,50 @@ export const parseTextDate = (
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
-  const match = text.match(
-    /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})(?:[\s,]+(\d{1,2})[:.](\d{2})\s*(am|pm)?)?$/i
-  );
-  if (!match) return null;
+  // "today", "semalam" — on a date step only. A datetime step needs a clock
+  // reading the claimant has not given, and inventing one would put a made-up
+  // time on an incident record.
+  const relative = RELATIVE_DAYS[text.toLowerCase()];
+  if (relative !== undefined) {
+    if (kind === 'datetime') return null;
+    const day = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + relative)
+    );
+    return day.toISOString();
+  }
 
-  const [, dayText, monthText, yearText, hourText, minuteText, meridiem] = match;
-  const day = Number(dayText);
-  const month = Number(monthText);
-  const year = Number(yearText);
+  let day: number;
+  let month: number;
+  let year: number;
+  let hourText: string | undefined;
+  let minuteText: string | undefined;
+  let meridiem: string | undefined;
+
+  const named = matchNamedMonth(text);
+  if (named) {
+    ({ day, month, year } = named);
+    const time = named.rest.trim().match(/^(\d{1,2})[:.](\d{2})\s*(am|pm)?$/i);
+    if (named.rest.trim() && !time) return null;
+    if (time) [, hourText, minuteText, meridiem] = time;
+  } else {
+    // Numeric, day-first. A space is allowed as a separator ("16 06 2026")
+    // because phone keyboards make it the path of least resistance.
+    const match = text.match(
+      /^(\d{1,2})[/\-.\s](\d{1,2})[/\-.\s](\d{2,4})(?:[\s,]+(\d{1,2})[:.](\d{2})\s*(am|pm)?)?$/i
+    );
+    if (!match) return null;
+
+    const [, dayText, monthText, yearText, h, m, mer] = match;
+    day = Number(dayText);
+    month = Number(monthText);
+    year = Number(yearText);
+    hourText = h;
+    minuteText = m;
+    meridiem = mer;
+  }
+
+  year = expandYear(year, now);
+  if (Number.isNaN(year)) return null;
 
   let hour = hourText ? Number(hourText) : 0;
   const minute = minuteText ? Number(minuteText) : 0;
