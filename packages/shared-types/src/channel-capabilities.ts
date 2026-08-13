@@ -110,7 +110,15 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     document: 'native',
     dateEntry: 'picker',
     maxMessageChars: Number.POSITIVE_INFINITY,
-    summaryPanel: true,
+    // Declared `true` for a panel that was never built. The claimant reached
+    // the review, read "please review your details, then confirm to submit",
+    // and was shown no details at all — because this flag told the gateway not
+    // to append them and the surface they were meant to appear on did not
+    // exist. They were asked to agree to a claim submission sight unseen.
+    //
+    // False is the honest value while the conversation is the only surface.
+    // Flip it back the day a panel actually renders beside the thread.
+    summaryPanel: false,
     platformVerifiedPhone: false,
     retainsPlaintext: false,
   },

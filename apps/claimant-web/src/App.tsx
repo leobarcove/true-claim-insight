@@ -45,9 +45,21 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-muted/20 dark:bg-background/20 flex justify-center">
-        <div className="w-full max-w-[480px] min-h-screen bg-background shadow-2xl relative flex flex-col border-x border-border/10">
-          <div className="flex-1 safe-area-top safe-area-bottom">
+      {/*
+        The phone-shaped column every page renders inside.
+
+        `h-dvh` rather than `min-h-screen`: a conversation page fills the
+        viewport exactly and scrolls its own transcript, and a *minimum* height
+        let the column grow past the screen so the composer sat below the fold.
+        dvh over vh because mobile browser chrome moves.
+
+        `min-h-0` on the content wrapper is the part that is easy to miss — a
+        flex child will not shrink below its content without it, so the
+        transcript would refuse to scroll and push the composer out of view.
+      */}
+      <div className="flex h-dvh justify-center bg-muted/20 dark:bg-background/20 sm:py-4">
+        <div className="relative flex h-full w-full max-w-[480px] flex-col overflow-hidden border-border/10 bg-background shadow-2xl border-x sm:rounded-3xl sm:border">
+          <div className="flex min-h-0 flex-1 flex-col safe-area-top safe-area-bottom">
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<WelcomePage />} />

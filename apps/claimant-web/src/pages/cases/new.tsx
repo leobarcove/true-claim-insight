@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Paperclip, Send, UserRound } from 'lucide-react';
-import type { FlowStep } from '@tci/shared-types';
+import { formatDateAnswer, type FlowStep } from '@tci/shared-types';
 
 import { uploadCaseDocument } from '@/hooks/use-cases';
 import {
@@ -104,14 +104,14 @@ export function CaseIntakePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-dvh items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <PageHeader
         onBack={() => navigate('/')}
         title="Make a claim"
@@ -356,6 +356,28 @@ export function TypedInput({
   );
 }
 
+/**
+ * An ISO date or datetime, as a person would read it.
+ *
+ * The date and datetime controls post `2026-08-13T09:00`, and that raw value
+ * was echoed straight back into the claimant's own bubble — a machine
+ * timestamp shown to someone checking their own answer. On WhatsApp and
+ * Telegram the same answer is typed and appears as they wrote it, so the two
+ * channels disagreed about the same claim.
+ *
+ * `formatDateAnswer` is the function the review summary already uses, so the
+ * bubble now matches the summary the claimant confirms at the end. Month
+ * spelled out, deliberately: "13/08" and "08/13" look alike, and this is the
+ * moment somebody is meant to spot a wrong date.
+ *
+ * Returns the original text unless it is unambiguously an ISO value.
+ */
+function readableAnswer(text: string): string {
+  const iso = text.trim();
+  if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/.test(iso)) return text;
+  return formatDateAnswer(iso, iso.includes('T') ? 'datetime' : 'date') ?? text;
+}
+
 export function Bubble({ message }: { message: ConversationMessage }) {
   const fromClaimant = message.direction === 'INBOUND';
 
@@ -377,7 +399,23 @@ export function Bubble({ message }: { message: ConversationMessage }) {
               : 'border border-border bg-card text-foreground'
           )}
         >
-          {message.text}
+          {message.hasAttachment && !message.text ? (
+            /*
+              A file, not words. The bubble was rendering `text: null` as
+              nothing at all, so a successful upload showed as an empty green
+              blob — indistinguishable from a message that had failed to send,
+              at the one moment a claimant wants to know their evidence
+              arrived.
+            */
+            <span className="flex items-center gap-2">
+              <Paperclip className="h-4 w-4 shrink-0" />
+              Document sent
+            </span>
+          ) : fromClaimant ? (
+            readableAnswer(message.text ?? '')
+          ) : (
+            message.text
+          )}
         </div>
       </div>
     </div>

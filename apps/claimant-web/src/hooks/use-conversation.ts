@@ -19,6 +19,8 @@ export interface ConversationMessage {
   stepId: string | null;
   /** A person wrote this, not the bot. Worth showing — it changes what to expect. */
   fromAgent: boolean;
+  /** The turn was a file rather than words, so the bubble has no text to show. */
+  hasAttachment?: boolean;
   createdAt: string;
 }
 

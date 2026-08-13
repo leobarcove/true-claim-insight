@@ -23,7 +23,13 @@ describe('web chat', () => {
     it('declares the capabilities the flow engine reads', () => {
       // Written long before this adapter and consumed by nothing until now.
 
-      expect(adapter.capabilities.summaryPanel).toBe(true);
+      // False, and this assertion is the point rather than a detail. It was
+      // true, describing a summary panel beside the chat that was never built
+      // — so the gateway withheld the answer summary from the review message
+      // and the claimant was asked to confirm a claim submission with no
+      // details on screen at all. A capability may only claim what the channel
+      // actually renders; flip this the day a panel exists.
+      expect(adapter.capabilities.summaryPanel).toBe(false);
       expect(adapter.capabilities.dateEntry).toBe('picker');
       expect(adapter.capabilities.choiceStyle).toBe('native');
       // The one real advantage over messaging: nothing is left sitting in a
