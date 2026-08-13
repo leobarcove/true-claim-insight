@@ -1449,6 +1449,67 @@ claim?" now waits for the answer (`ab34282`) — it was asked and answered in th
 same turn, so the claim-type menu arrived one second later and anyone messaging
 to ask after the claim they had just filed was pushed into filing a second one.
 
+### Every WhatsApp date was silently discarded — 13 August 2026
+
+**The webhook verified a re-serialised copy of the body, not the bytes Meta
+sent.** `verifySignature` hashed `JSON.stringify(body)`. Meta's backend is PHP,
+whose `json_encode` escapes forward slashes: it sends `16\/06\/2026` where
+`JSON.stringify` writes `16/06/2026`. Different bytes, different HMAC, delivery
+discarded — and the endpoint answers `200` on a bad signature by design, so
+nothing retried and nothing alarmed.
+
+The shape of the damage is why it survived a day in front of a live tester.
+Messages with no slash — a greeting, a name, a policy number — verified
+normally, so the channel looked healthy. Every **date** failed, on a flow that
+asks for `DD/MM/YYYY`. Intake could not pass the trip-start question at all: a
+claimant answered it three times across two days and received nothing back.
+Fixed by capturing `rawBody` at bootstrap and hashing those bytes, **failing
+closed** when the raw body is absent rather than falling back to the old
+comparison. Pinned by a test that signs a PHP-escaped payload. WhatsApp-only —
+Telegram long-polls and carries no signature.
+
+**A parse failure ended the conversation.** An unreadable date sent one error
+bubble and returned, leaving the claimant with an apology, no question on
+screen and nothing to do next. Every unreadable answer now ends with guidance
+*and the question restated*; after three failures at one step it also offers a
+way out (`skip` where the step allows, a person on request). Greetings are
+recognised rather than parsed — "Hi" was being fed to the date parser and
+answered with *"Sorry, we could not read that date"*.
+
+**The deterministic parser now reads what people actually type**: months in
+words including Malay (`16 Ogos 2026`), either word order, two-digit years,
+spaces as separators, and `today`/`yesterday`/`semalam`. Day-first reading of
+bare numeric dates is unchanged and still pinned — `06/07` is 6 July, and that
+property is what the looser parsing must not cost.
+
+**The LLM normaliser was unreachable from a date step.** It is invoked for
+every other answer type, but the date branch returned before reaching it, so
+the one place a human is most likely to write something no grammar covers was
+the one place the fallback could not run — enabling the model changed nothing
+for dates. Dates now fall through to it after deterministic parsing fails, and
+its output is re-validated like any typed answer. **Note for §6.18:** this
+widens what reaches Gemini to include free text typed at date steps. Same
+ungated offshore path already recorded there, one more source feeding it.
+
+**A completed WhatsApp claim could not be submitted.** With the dates flowing,
+the tester reached the review — and stopped. The bot printed the full summary
+and *"then confirm to submit your claim request"*, and offered nothing to
+confirm with. `choicesFor` in the WhatsApp adapter renders buttons only for
+`answerType === 'choice'`; the review is `'confirm'` and carries no `choices`,
+so it fell through to plain text. The validator accepts only `true`, which
+nothing could produce. Telegram had rendered a confirm keyboard since it was
+built, so this was WhatsApp-only and invisible to anyone testing on Telegram.
+
+Fixed both ways round: WhatsApp now sends reply buttons ("Confirm & submit" /
+"Change something") attached to the **last** part of a split summary, and a
+confirm step typed rather than tapped is accepted — "yes", "betul", "setuju"
+and their refusals map to the same values the buttons carry. Taps stay the
+happy path; the typed route is for the claimant who answers the sentence the
+way a keyboard allows, or whose client renders no buttons.
+
+These are channel and intake-quality repairs, not compliance movement; §3
+verdicts are unchanged.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working

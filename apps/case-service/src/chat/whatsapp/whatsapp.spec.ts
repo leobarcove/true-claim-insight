@@ -1,5 +1,6 @@
 import { createHmac } from 'crypto';
 import { CaseChannel } from '@prisma/client';
+import { of } from 'rxjs';
 
 import { splitForWhatsApp, WhatsAppAdapter } from './whatsapp.adapter';
 import { WhatsAppWebhookController } from './whatsapp.controller';
@@ -89,6 +90,71 @@ describe('WhatsApp channel', () => {
 
     it('ignores a message with no sender', () => {
       expect(adapter().parseMessage({ id: 'wamid.6', type: 'text' })).toBeNull();
+    });
+  });
+
+  describe('a confirm step', () => {
+    const reviewStep = {
+      id: 'review',
+      prompt: 'Thank you. Please review your details, then confirm to submit your claim request.',
+      label: 'Review and confirm',
+      answerType: 'confirm' as const,
+      isReview: true,
+      next: { type: 'end' as const },
+    };
+
+    const sent = async (text: string) => {
+      // The adapter unwraps the send with firstValueFrom, so the transport has
+      // to hand back an observable rather than a promise.
+      const post = jest.fn().mockReturnValue(of({ data: {} }));
+      const wa = new WhatsAppAdapter({ post, get: jest.fn() } as never, config() as never);
+      await wa.send('60123456789', { text, step: reviewStep } as never);
+      return post.mock.calls.map(call => call[1]);
+    };
+
+    it('offers buttons to confirm with', async () => {
+      // Without these the claimant reached the end of intake, was told to
+      // "confirm to submit", and had nothing to confirm with: a confirm step
+      // carries no `choices`, so it fell through to plain text. Telegram had
+      // rendered a keyboard from the start — a claim could be completed on
+      // WhatsApp and never submitted.
+      const [payload] = await sent('Please review your details, then confirm.');
+
+      expect(payload.type).toBe('interactive');
+      expect(payload.interactive.type).toBe('button');
+      const titles = payload.interactive.action.buttons.map(
+        (b: { reply: { title: string } }) => b.reply.title
+      );
+      expect(titles).toEqual(['Confirm & submit', 'Change something']);
+    });
+
+    it('carries the values the gateway acts on', async () => {
+      const [payload] = await sent('Review.');
+      const ids = payload.interactive.action.buttons.map(
+        (b: { reply: { id: string } }) => b.reply.id
+      );
+      expect(ids[0]).toContain('true');
+      expect(ids[1]).toContain('false');
+    });
+
+    it('keeps every button title inside Meta’s 20-character cap', async () => {
+      // Past 20 Meta truncates server-side and silently, so the claimant would
+      // read a button worded differently from the one we authored.
+      const [payload] = await sent('Review.');
+      for (const button of payload.interactive.action.buttons) {
+        expect(button.reply.title.length).toBeLessThanOrEqual(20);
+      }
+    });
+
+    it('puts the buttons on the last part of a long summary', async () => {
+      // The review embeds the whole answer summary, which passes 1024 easily
+      // once a claim has sixteen answers. Buttons on an earlier part would ask
+      // for confirmation before the details being confirmed had been shown.
+      const payloads = await sent(`${'x'.repeat(1500)}\nend of summary`);
+
+      expect(payloads.length).toBeGreaterThan(1);
+      expect(payloads.slice(0, -1).every(p => p.type === 'text')).toBe(true);
+      expect(payloads[payloads.length - 1].type).toBe('interactive');
     });
   });
 
