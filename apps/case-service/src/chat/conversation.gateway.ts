@@ -16,6 +16,8 @@ import {
   CHANNEL_CAPABILITIES,
   CONSENT_AGREED_VALUE,
   describeCallbackValue,
+  ANOTHER_CLAIM_YES,
+  ANOTHER_CLAIM_NO,
   EDIT_CALLBACK_PREFIX,
   getStep,
   formatDateAnswer,
@@ -217,8 +219,8 @@ const CLAIM_TYPE_STEP_ID = '__claim-type';
  * filing a second one.
  */
 const ANOTHER_CLAIM_STEP_ID = '__another-claim';
-const ANOTHER_CLAIM_YES = '__another:yes';
-const ANOTHER_CLAIM_NO = '__another:no';
+// ANOTHER_CLAIM_YES/NO now live in conversation-display, beside the function
+// that turns them into words — defined only here, they rendered raw.
 
 /**
  * The turn could not be written down at all.

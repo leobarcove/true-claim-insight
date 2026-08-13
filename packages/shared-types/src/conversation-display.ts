@@ -25,6 +25,17 @@ export const PAGE_CALLBACK_PREFIX = '__page:';
 export const EDIT_CALLBACK_PREFIX = '__edit:';
 export const CONSENT_AGREED_VALUE = '__consent:agree';
 
+/**
+ * "Would you like to start another claim?" — offered after a submission.
+ *
+ * Declared here rather than only in the gateway because this file is what
+ * turns a tapped value into words, and a value it does not recognise is
+ * returned verbatim. These two were defined in the gateway alone, so the
+ * claimant's own bubble read `__another:yes`.
+ */
+export const ANOTHER_CLAIM_YES = '__another:yes';
+export const ANOTHER_CLAIM_NO = '__another:no';
+
 /** What a shared contact looks like in a transcript. */
 export const SHARED_PHONE_DESCRIPTION = 'Shared their phone number';
 
@@ -50,6 +61,9 @@ export function describeCallbackValue(
   if (value.startsWith(EDIT_CALLBACK_PREFIX)) {
     return `Chose to change "${value.slice(EDIT_CALLBACK_PREFIX.length)}"`;
   }
+
+  if (value === ANOTHER_CLAIM_YES) return 'Chose to start another claim';
+  if (value === ANOTHER_CLAIM_NO) return 'Chose not to start another claim';
 
   // The review step's confirm/decline pair.
   if (value === 'true') return 'Confirmed';
