@@ -26,7 +26,11 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3001);
+  // See apps/api-gateway/src/main.ts for the precedence rationale. 3001 is the
+  // compose-network port staging binds, not a local one.
+  const port = Number(
+    configService.get('PORT') ?? configService.get('CASE_SERVICE_PORT') ?? 3001,
+  );
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   // Security middleware

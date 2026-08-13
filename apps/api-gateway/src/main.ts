@@ -22,7 +22,14 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
+  // Precedence: PORT (explicit one-off or container override) > the named
+  // variable from the root .env allocation block > 3000, which is the
+  // compose-network port staging binds. Each service reads a DIFFERENT named
+  // variable so one shared .env can allocate the whole stack — a bare PORT
+  // there would make every service fight for the same number.
+  const port = Number(
+    configService.get('PORT') ?? configService.get('API_GATEWAY_PORT') ?? 3000,
+  );
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   // Security headers

@@ -43,12 +43,24 @@ async function bootstrap() {
     },
   });
 
-  // CORS - allow frontend apps
+  // CORS — which browser origins may call this service with credentials.
+  //
+  // The literal 4000/4001 pair that used to be here is the container-network
+  // default, not a local one: with the portals on 4300/4301 it silently
+  // rejects every browser call, and it has no env override at all, unlike the
+  // gateway which reads CORS_ORIGINS.
+  //
+  // TODO(policy): decide the origin policy — see the note in the chat.
+  // CORS_ORIGINS is a comma-separated list, already set in the root .env.
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean) ?? [
+    'http://localhost:4000', // adjuster-portal (container-network default)
+    'http://localhost:4001', // claimant-web (container-network default)
+  ];
+
   app.enableCors({
-    origin: [
-      'http://localhost:4000', // adjuster-portal
-      'http://localhost:4001', // claimant-web
-    ],
+    origin: allowedOrigins,
     credentials: true,
   });
 
@@ -91,7 +103,11 @@ async function bootstrap() {
     },
   });
 
-  const port = configService.get<number>('PORT', 3002);
+  // See apps/api-gateway/src/main.ts for the precedence rationale. 3002 is the
+  // compose-network port staging binds, not a local one.
+  const port = Number(
+    configService.get('PORT') ?? configService.get('VIDEO_SERVICE_PORT') ?? 3002,
+  );
   await app.listen(port, '0.0.0.0');
 
   logger.log(`Swagger docs available at http://localhost:${port}/docs`);

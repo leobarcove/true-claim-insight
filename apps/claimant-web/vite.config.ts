@@ -1,9 +1,18 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
-export default defineConfig({
+// Local host ports come from the root .env allocation block — the single
+// source of truth (see .env "SERVICE PORTS"). loadEnv with an empty prefix is
+// what lets non-VITE_ variables through; the fallbacks are the historical
+// defaults, kept so a fresh clone without a root .env still starts.
+export default defineConfig(({ mode }) => {
+  const rootEnv = loadEnv(mode, path.resolve(__dirname, '../..'), '');
+  const devPort = Number(rootEnv.CLAIMANT_WEB_PORT || 4001);
+  const gatewayPort = Number(rootEnv.API_GATEWAY_PORT || 3000);
+
+  return {
   plugins: [
     react(),
     VitePWA({
@@ -63,13 +72,19 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4001,
+    port: devPort,
+    // Fail loudly rather than silently taking the next free port: a portal
+    // that quietly moves is how a stale tunnel or CORS entry starts pointing
+    // at the wrong app.
+    strictPort: true,
     fs: {
       allow: ['..', '../../packages'],
     },
     proxy: {
+      // Keeps API calls same-origin, matching the staging Caddy edge, so the
+      // refreshToken cookie behaves here exactly as it does there.
       '/api': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${gatewayPort}`,
         changeOrigin: true,
       },
     },
@@ -78,4 +93,5 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  };
 });

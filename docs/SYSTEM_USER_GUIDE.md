@@ -40,8 +40,8 @@ Use these credentials to explore the system in the development environment.
 
 ### Access Points
 
-- **Adjuster Portal**: [http://localhost:4000](http://localhost:4000) (For all staff roles)
-- **Claimant PWA**: [http://localhost:4001](http://localhost:4001) (For insurance claimants)
+- **Adjuster Portal**: [http://localhost:4300](http://localhost:4300) (For all staff roles)
+- **Claimant PWA**: [http://localhost:4301](http://localhost:4301) (For insurance claimants)
 
 ---
 
