@@ -174,7 +174,10 @@ export function ClaimantVideoCallPage() {
       formData.append('type', 'CLAIMANT_SCREENSHOT');
       formData.append('file', blob, `screenshot-${Date.now()}.png`);
       const uploadUrl = `/claims/${joinData.claimId}/documents/upload`;
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+      // Same-origin fallback, matching the other call site above and the rest
+      // of the app. An absolute localhost default would have sent this upload
+      // to whatever else on the machine happened to hold that port.
+      const baseUrl = import.meta.env.VITE_API_URL || '/api/v1';
       const response = await fetch(`${baseUrl}${uploadUrl}`, {
         method: 'POST',
         body: formData,

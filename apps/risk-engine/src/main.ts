@@ -56,7 +56,9 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors();
 
-  const port = process.env.PORT || 3004;
+  // See apps/api-gateway/src/main.ts for the precedence rationale. 3004 is the
+  // compose-network port staging binds, not a local one.
+  const port = Number(process.env.PORT ?? process.env.RISK_ENGINE_PORT ?? 3004);
   await app.listen(port, '0.0.0.0');
   console.log(`Risk Engine Service is running on: http://localhost:${port}/api/v1/docs`);
 }

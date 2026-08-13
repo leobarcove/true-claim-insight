@@ -17,6 +17,7 @@ import {
   ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { AssessmentsService } from './assessments.service';
 import { FastifyRequest } from 'fastify';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
@@ -31,7 +32,10 @@ import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenan
 export class AssessmentsController {
   private readonly logger = new Logger(AssessmentsController.name);
 
-  constructor(private readonly assessmentsService: AssessmentsService) {}
+  constructor(
+    private readonly assessmentsService: AssessmentsService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('session/:sessionId')
   @ApiOperation({ summary: 'Get risk assessments for a video session' })
@@ -229,7 +233,9 @@ export class AssessmentsController {
     return {
       service: 'risk-analyzer',
       status: isHealthy ? 'healthy' : 'unhealthy',
-      url: 'http://localhost:3005',
+      // The URL actually probed, not a guess. A health report naming an
+      // address nobody called is worse than no address at all.
+      url: this.configService.get<string>('RISK_ANALYZER_URL', 'http://localhost:3005'),
     };
   }
 

@@ -131,10 +131,14 @@ Detailed guides and specifications are located in the `/docs` directory:
 
 ## Local Access Points (Development)
 
-- **Adjuster Portal**: [http://localhost:4000](http://localhost:4000)
-- **Claimant PWA**: [http://localhost:4001](http://localhost:4001)
-- **API Swagger Docs**: [http://localhost:3000/docs](http://localhost:3000/docs)
+- **Adjuster Portal**: [http://localhost:4300](http://localhost:4300)
+- **Claimant PWA**: [http://localhost:4301](http://localhost:4301)
+- **API Swagger Docs**: [http://localhost:3300/docs](http://localhost:3300/docs)
 - **Prisma Studio**: `pnpm prisma:studio`
+
+Ports come from the `SERVICE PORTS` block in the root `.env` — TCI owns the
+33xx/43xx block so it can share a machine with other projects. See the "API
+Ports" section of `CLAUDE.md` for the full allocation and how to change it.
 
 ---
 

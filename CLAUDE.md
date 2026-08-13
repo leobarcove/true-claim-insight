@@ -294,18 +294,47 @@ pnpm build
 
 ## API Ports (Development)
 
-| Service         | Port | Notes |
-| --------------- | ---- | ----- |
-| API Gateway     | 3000 | |
-| Case Service    | 3001 | |
-| Video Service   | 3002 | |
-| Risk Engine     | 3004 | |
-| Risk Analyzer   | 3005 | Python / FastAPI (uvicorn) |
-| Adjuster Portal | 4000 | |
-| Claimant Web    | 4001 | |
+TCI owns the **33xx / 43xx** block on a developer machine. 3000-3002 and
+4000-4001 are what every framework grabs by default, so on a machine running
+more than one project they collide; a block nothing else picks by default stops
+the problem recurring.
 
-There is no service on 3003. `identity-service` and `document-service` do not
-exist — see the "Not built" note above. Port 3005 belongs to `risk-analyzer`.
+| Service         | Local host port | Container port | Notes |
+| --------------- | --------------- | -------------- | ----- |
+| API Gateway     | 3300 | 3000 | |
+| Case Service    | 3301 | 3001 | WhatsApp webhook tunnel targets this |
+| Video Service   | 3302 | 3002 | |
+| Risk Engine     | 3304 | 3004 | |
+| Risk Analyzer   | 3305 | 3005 | Python / FastAPI (uvicorn) |
+| Adjuster Portal | 4300 | — | |
+| Claimant Web    | 4301 | — | |
+
+**The two columns are different namespaces and must not be "aligned."** Container
+ports are per-container on the compose network, so they can never collide and
+staging depends on them being what `deploy/staging/docker-compose.staging.yml`
+says. They are the values compiled into each `main.ts` as a fallback.
+
+**Local host ports have one source of truth:** the `SERVICE PORTS` block in the
+root `.env`. Each service reads its own named variable (`API_GATEWAY_PORT`,
+`CASE_SERVICE_PORT`, …) with precedence `PORT` > `<SERVICE>_PORT` > compiled-in
+default. Reading a different name per service is what lets one shared file
+allocate the whole stack — `apps/api-gateway/.env` is a symlink to the root
+file and the other services read it too, so a bare `PORT` there would make every
+service fight for one number. Do not reintroduce `PORT` into a per-service
+`.env`: it wins silently and is invisible from the allocation block.
+
+The portals need no API URL. They default to the same-origin path `/api/v1`,
+and `vite.config.ts` proxies `/api` to `API_GATEWAY_PORT` — matching staging,
+where the Caddy edge makes the API same-origin too, so cookie behaviour is the
+same in both.
+
+Nothing runs on 3303. `identity-service` and `document-service` do not exist —
+see the "Not built" note above.
+
+**Changing `CASE_SERVICE_PORT` requires one edit outside this repo:**
+`~/.cloudflared/tci-whatsapp.yml` tunnels `tci-wa.smitherytech.com` to it for
+Meta's WhatsApp webhook, and must be restarted after. The hostname is stable, so
+Meta's console never changes. A mismatch fails silently as a 502.
 
 ## Test Credentials (Local Development)
 
@@ -322,6 +351,6 @@ All seeded users share the same password: `DemoPass123!`
 | SUPPORT_DESK        | support@allianz.com      | Allianz                   |
 | SHARIAH_REVIEWER    | shariah@allianz.com      | Allianz                   |
 
-Use `adjuster@pacific.com` to log in to the adjuster-portal (http://localhost:4000).
+Use `adjuster@pacific.com` to log in to the adjuster-portal (http://localhost:4300).
 
-**Source of truth:** `packages/prisma-client/prisma/seed.ts`. To register additional users, use `POST /api/v1/auth/register` or Swagger docs at http://localhost:3000/docs.
+**Source of truth:** `packages/prisma-client/prisma/seed.ts`. To register additional users, use `POST /api/v1/auth/register` or Swagger docs at http://localhost:3300/docs.
