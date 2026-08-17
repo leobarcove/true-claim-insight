@@ -99,7 +99,7 @@ export interface PolicySummary {
   tenant?: { id: string; name: string };
 }
 
-export function useCases(filters: CaseFilters = {}) {
+export function useCases(filters: CaseFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: caseKeys.list(filters),
     queryFn: async () => {
@@ -117,6 +117,8 @@ export function useCases(filters: CaseFilters = {}) {
       return data.data;
     },
     staleTime: 30 * 1000,
+    // The sidebar badge shares this query; gated by the caller's permissions.
+    enabled: options?.enabled ?? true,
   });
 }
 

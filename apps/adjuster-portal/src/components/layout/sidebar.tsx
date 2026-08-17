@@ -32,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { InfoTooltip } from '@/components/ui/tooltip';
 import { TenantSelector } from './tenant-selector';
 import { useSuperAdminNoTenant } from '@/hooks/use-super-admin-no-tenant';
+import { useNavCounts } from '@/hooks/use-nav-counts';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@/lib/permissions';
 
 interface NavItem {
@@ -40,85 +41,84 @@ interface NavItem {
   icon: any;
   permissions?: string[];
   roles?: string[];
+  /** A fixed label pill, e.g. Help's "24/7". Not a count. */
+  staticBadge?: string;
 }
 
-const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+/**
+ * Navigation grouped by pipeline stage, not alphabetically or by accretion.
+ *
+ * The domain has a spine — intake → assessment → billing — and an operations
+ * team clears queues stage by stage, so the sidebar mirrors it. Each Intake
+ * surface carries a live count of items the firm owes action on (see
+ * use-nav-counts.ts for what "owes" means per queue), which makes the
+ * navigation itself the answer to "where is work waiting" rather than a list
+ * of doors to open one by one.
+ */
+const CLAIMS_VIEW = [
+  PERMISSIONS.CLAIMS_VIEW_OWN,
+  PERMISSIONS.CLAIMS_VIEW_BASIC,
+  PERMISSIONS.CLAIMS_VIEW_ALL,
+];
+
+const workSections: { title: string; items: NavItem[] }[] = [
   {
-    name: 'Cases',
-    href: '/cases',
-    icon: Inbox,
-    permissions: [
-      PERMISSIONS.CLAIMS_VIEW_OWN,
-      PERMISSIONS.CLAIMS_VIEW_BASIC,
-      PERMISSIONS.CLAIMS_VIEW_ALL,
+    title: 'Overview',
+    items: [{ name: 'Dashboard', href: '/', icon: LayoutDashboard }],
+  },
+  {
+    // Everything pre-claim, in arrival order: notifications land by email and
+    // by conversation, and both become Cases — the funnel the third item
+    // vets. All three are places a claimant is waiting on the firm, which is
+    // why this is the group that carries counts.
+    title: 'Intake',
+    items: [
+      { name: 'FNOL intake', href: '/intake', icon: MailQuestion, permissions: CLAIMS_VIEW },
+      {
+        name: 'Conversations',
+        href: '/conversations',
+        icon: MessagesSquare,
+        permissions: CLAIMS_VIEW,
+      },
+      { name: 'Cases', href: '/cases', icon: Inbox, permissions: CLAIMS_VIEW },
     ],
   },
   {
-    // Sits next to Cases because that is what an inbound email becomes. An
-    // operator working the intake funnel should not have to know the queue
-    // exists somewhere else.
-    name: 'FNOL intake',
-    href: '/intake',
-    icon: MailQuestion,
-    permissions: [
-      PERMISSIONS.CLAIMS_VIEW_OWN,
-      PERMISSIONS.CLAIMS_VIEW_BASIC,
-      PERMISSIONS.CLAIMS_VIEW_ALL,
+    // The regulated engagement a converted Case becomes, and the machinery of
+    // assessing it.
+    title: 'Assessment',
+    items: [
+      { name: 'Claims', href: '/claims', icon: FileText, permissions: CLAIMS_VIEW },
+      {
+        name: 'Sessions',
+        href: '/sessions',
+        icon: Video,
+        permissions: [PERMISSIONS.VIDEO_CONDUCT, PERMISSIONS.VIDEO_VIEW_RECORDINGS],
+      },
+      {
+        name: 'Schedule',
+        href: '/schedule',
+        icon: Calendar,
+        roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'],
+      },
     ],
-  },
-  {
-    // Beside FNOL intake for the same reason: both are places a claimant is
-    // waiting on the firm. A conversation with an agent needed is more urgent
-    // than an unparsed email, so it sits above Claims rather than under Admin.
-    name: 'Conversations',
-    href: '/conversations',
-    icon: MessagesSquare,
-    permissions: [
-      PERMISSIONS.CLAIMS_VIEW_OWN,
-      PERMISSIONS.CLAIMS_VIEW_BASIC,
-      PERMISSIONS.CLAIMS_VIEW_ALL,
-    ],
-  },
-  {
-    name: 'Claims',
-    href: '/claims',
-    icon: FileText,
-    permissions: [
-      PERMISSIONS.CLAIMS_VIEW_OWN,
-      PERMISSIONS.CLAIMS_VIEW_BASIC,
-      PERMISSIONS.CLAIMS_VIEW_ALL,
-    ],
-  },
-  {
-    name: 'Sessions',
-    href: '/sessions',
-    icon: Video,
-    permissions: [PERMISSIONS.VIDEO_CONDUCT, PERMISSIONS.VIDEO_VIEW_RECORDINGS],
-  },
-  {
-    name: 'Schedule',
-    href: '/schedule',
-    icon: Calendar,
-    roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR'],
   },
   {
     // The firm's own money. Restricted to those who may raise a note, which is
     // the same line the server draws on drafting and issuing one.
-    name: 'Fee notes',
-    href: '/billing',
-    icon: Receipt,
-    permissions: [PERMISSIONS.BILLING_MANAGE],
+    title: 'Finance',
+    items: [
+      {
+        name: 'Fee notes',
+        href: '/billing',
+        icon: Receipt,
+        permissions: [PERMISSIONS.BILLING_MANAGE],
+      },
+    ],
   },
   {
-    name: 'Documents',
-    href: '/documents',
-    icon: FileText,
-    permissions: [
-      PERMISSIONS.CLAIMS_VIEW_OWN,
-      PERMISSIONS.CLAIMS_VIEW_BASIC,
-      PERMISSIONS.CLAIMS_VIEW_ALL,
-    ],
+    title: 'Library',
+    items: [{ name: 'Documents', href: '/documents', icon: FileText, permissions: CLAIMS_VIEW }],
   },
 ];
 
@@ -150,7 +150,7 @@ const secondaryNavigation: NavItem[] = [
     icon: Settings,
     roles: ['ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SIU_INVESTIGATOR', 'COMPLIANCE_OFFICER'],
   },
-  { name: 'Help', href: '/help', icon: HelpCircle },
+  { name: 'Help', href: '/help', icon: HelpCircle, staticBadge: '24/7' },
 ];
 
 interface SidebarProps {
@@ -214,9 +214,26 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
     });
   };
 
-  const visibleGeneral = filterNavItems(navigation, 'general');
+  const visibleWork = workSections
+    .map(section => ({ ...section, items: filterNavItems(section.items, 'general') }))
+    .filter(section => section.items.length > 0);
   const visibleMasterData = filterNavItems(masterDataNavigation, 'master');
   const visibleSecondary = filterNavItems(secondaryNavigation, 'support');
+
+  // Badge queries run only for queues this role can actually open — the
+  // same visibility filter the items themselves just passed.
+  const visibleHrefs = new Set(visibleWork.flatMap(section => section.items.map(i => i.href)));
+  const counts = useNavCounts({
+    intake: visibleHrefs.has('/intake'),
+    conversations: visibleHrefs.has('/conversations'),
+    cases: visibleHrefs.has('/cases'),
+  });
+
+  const sections = [
+    ...visibleWork,
+    { title: 'Master Data', items: visibleMasterData },
+    { title: 'Support', items: visibleSecondary },
+  ].filter(section => section.items.length > 0);
 
   return (
     <>
@@ -253,25 +270,27 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
           </Link>
         </div>
 
-        <div className="flex-1 overflow-y-auto pt-2 pb-6 px-4 space-y-8 scrollbar-sidebar">
-          {/* General Section */}
-          {visibleGeneral.length > 0 && (
-            <div>
-              {!isCollapsed && (
+        <div className="flex-1 overflow-y-auto pt-2 pb-6 px-4 space-y-6 scrollbar-sidebar">
+          {sections.map((section, index) => (
+            <div key={section.title}>
+              {isCollapsed ? (
+                index > 0 && <div className="-mt-4 mb-1 border-t-[1.5px] border-border rounded-xl" />
+              ) : (
                 <h3 className="mb-2 px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">
-                  General
+                  {section.title}
                 </h3>
               )}
               <div className="space-y-1">
-                {visibleGeneral.map(item => {
+                {section.items.map(item => {
                   const isActive =
                     item.href === '/'
                       ? location.pathname === '/'
                       : location.pathname.startsWith(item.href);
+                  const count = counts[item.href] ?? 0;
                   return (
                     <InfoTooltip
                       key={item.name}
-                      content={item.name}
+                      content={count > 0 ? `${item.name} — ${count} pending` : item.name}
                       direction="right"
                       display="block"
                       fontSize="text-[12px]"
@@ -280,7 +299,7 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
                         <Link
                           to={item.href}
                           className={cn(
-                            'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
+                            'group relative flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
                             isActive
                               ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
@@ -296,109 +315,31 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
                             )}
                           />
                           {!isCollapsed && <span className="truncate">{item.name}</span>}
-                        </Link>
-                      }
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Master Data Section */}
-          {visibleMasterData.length > 0 && (
-            <div>
-              {isCollapsed ? (
-                <div className="-mt-6 mb-1 border-t-[1.5px] border-border rounded-xl" />
-              ) : (
-                <h3 className="mb-2 px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">
-                  Master Data
-                </h3>
-              )}
-              <div className="space-y-1">
-                {visibleMasterData.map(item => {
-                  const isActive = location.pathname === item.href;
-                  return (
-                    <InfoTooltip
-                      key={item.name}
-                      content={item.name}
-                      direction="right"
-                      display="block"
-                      fontSize="text-[12px]"
-                      disabled={!isCollapsed}
-                      trigger={
-                        <Link
-                          to={item.href}
-                          className={cn(
-                            'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                            isActive
-                              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                            isCollapsed && 'justify-center px-0 h-10 w-10 mx-auto'
+                          {/* The pending count: what this queue is owed. Red
+                              deliberately — it is a to-do, not information. */}
+                          {!isCollapsed && count > 0 && (
+                            <span
+                              className={cn(
+                                'ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-primary-foreground/20 text-primary-foreground'
+                                  : 'bg-destructive/10 text-destructive'
+                              )}
+                            >
+                              {count}
+                            </span>
                           )}
-                        >
-                          <item.icon
-                            className={cn(
-                              'h-4 w-4 transition-colors',
-                              isActive
-                                ? 'text-primary-foreground'
-                                : 'text-muted-foreground group-hover:text-current'
-                            )}
-                          />
-                          {!isCollapsed && <span className="truncate">{item.name}</span>}
-                        </Link>
-                      }
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Support Section */}
-          {visibleSecondary.length > 0 && (
-            <div>
-              {isCollapsed ? (
-                <div className="-mt-6 mb-1 border-t-[1.5px] border-border rounded-xl" />
-              ) : (
-                <h3 className="mb-2 px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">
-                  Support
-                </h3>
-              )}
-              <div className="space-y-1">
-                {visibleSecondary.map(item => {
-                  const isActive = location.pathname === item.href;
-                  return (
-                    <InfoTooltip
-                      key={item.name}
-                      content={item.name}
-                      direction="right"
-                      display="block"
-                      fontSize="text-[12px]"
-                      disabled={!isCollapsed}
-                      trigger={
-                        <Link
-                          to={item.href}
-                          className={cn(
-                            'group flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200',
-                            isActive
-                              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                            isCollapsed && 'justify-center px-0 h-10 w-10 mx-auto'
+                          {/* Collapsed: the number cannot fit, but "work is
+                              waiting here" still can. */}
+                          {isCollapsed && count > 0 && (
+                            <span
+                              aria-hidden
+                              className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+                            />
                           )}
-                        >
-                          <item.icon
-                            className={cn(
-                              'h-4 w-4 transition-colors',
-                              isActive
-                                ? 'text-primary-foreground'
-                                : 'text-muted-foreground group-hover:text-current'
-                            )}
-                          />
-                          {!isCollapsed && <span className="truncate">{item.name}</span>}
-                          {!isCollapsed && item.name === 'Help' && (
+                          {!isCollapsed && item.staticBadge && (
                             <span className="ml-auto rounded-full bg-emerald-100 text-emerald-600 px-2 py-0.5 text-[10px] font-bold">
-                              24/7
+                              {item.staticBadge}
                             </span>
                           )}
                         </Link>
@@ -408,7 +349,7 @@ export function Sidebar({ isCollapsed, onCollapseChange, isMobile }: SidebarProp
                 })}
               </div>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Bottom Section */}

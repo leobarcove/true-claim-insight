@@ -37,7 +37,10 @@ export interface InboundMessage {
   case?: { caseNumber: string; status: string } | null;
 }
 
-export function useInboundMessages(status?: InboundMessageStatus) {
+export function useInboundMessages(
+  status?: InboundMessageStatus,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: ingestionKeys.messages(status),
     queryFn: async () => {
@@ -50,6 +53,8 @@ export function useInboundMessages(status?: InboundMessageStatus) {
     // Intake arrives on a five-minute poll, so the queue is only ever a few
     // minutes stale; refetching on focus is enough without hammering it.
     refetchOnWindowFocus: true,
+    // The sidebar badge shares this query; gated by the caller's permissions.
+    enabled: options?.enabled ?? true,
   });
 }
 
