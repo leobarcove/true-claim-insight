@@ -44,6 +44,7 @@ import { DocumentValidationService } from './document-validation.service';
 import { isInlineRenderable, resolveMimeType } from './document-media';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ClaimsService } from '../claims/claims.service';
 import { render } from '../notifications/templates';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
@@ -133,7 +134,8 @@ export class CasesService {
     private readonly auditService: AuditService,
     private readonly notifications: NotificationsService,
     private readonly flows: FlowsService,
-    private readonly consent: ConsentService
+    private readonly consent: ConsentService,
+    private readonly claims: ClaimsService
   ) {}
 
   /**
@@ -290,18 +292,24 @@ export class CasesService {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Number(query.limit) || 20);
 
-    const where: Prisma.CaseWhereInput = this.tenantFilter(tenantContext);
-    if (query.status) where.status = query.status as CaseStatus;
-    if (query.travelClaimType) where.travelClaimType = query.travelClaimType as TravelClaimType;
-    if (query.channel) where.channel = query.channel as CaseChannel;
+    // Built in two layers deliberately. `scope` is everything *except* the
+    // status filter — tenant, channel, type, search — and is what the tab
+    // counts are computed over, so the tabs answer "where do my search hits
+    // sit" rather than advertising totals the filtered list contradicts.
+    // `where` adds the status on top for the rows themselves.
+    const scope: Prisma.CaseWhereInput = this.tenantFilter(tenantContext);
+    if (query.travelClaimType) scope.travelClaimType = query.travelClaimType as TravelClaimType;
+    if (query.channel) scope.channel = query.channel as CaseChannel;
     if (query.search) {
-      where.OR = [
+      scope.OR = [
         { caseNumber: { contains: query.search, mode: 'insensitive' } },
         { destination: { contains: query.search, mode: 'insensitive' } },
         { policyNumberRaw: { contains: query.search, mode: 'insensitive' } },
         { claimant: { fullName: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
+    const where: Prisma.CaseWhereInput = { ...scope };
+    if (query.status) where.status = query.status as CaseStatus;
 
     const [cases, total, requirements] = await Promise.all([
       this.prisma.case.findMany({
@@ -343,10 +351,12 @@ export class CasesService {
       };
     });
 
-    // Status breakdown for the queue tab bar
+    // Status breakdown for the queue tab bar — over `scope`, not `where`: the
+    // active tab must not zero out the other tabs' counts, but a search should
+    // narrow them, or the bar advertises rows the list will not show.
     const grouped = await this.prisma.case.groupBy({
       by: ['status'],
-      where: this.tenantFilter(tenantContext),
+      where: scope,
       _count: { _all: true },
     });
     const statusBreakdown = Object.fromEntries(
@@ -930,6 +940,15 @@ export class CasesService {
     this.logger.log(
       `Case ${converted.caseNumber} converted to claim ${converted.convertedClaim?.claimNumber}`
     );
+    // A conversationally-intaken claim can arrive with its mandatory evidence
+    // already collected — the bot checked the list before it allowed review.
+    // The CSP final-report window runs from *complete documents* (para 10.13),
+    // so the anchor must be evaluated the moment the copied set exists, not
+    // left to the next upload or the REPORT_PENDING proxy. Same method the
+    // upload path calls, so the checklist logic cannot drift into two copies.
+    if (converted.convertedClaimId) {
+      await this.claims.refreshDocumentsComplete(converted.convertedClaimId);
+    }
     // The conversion is the insurer handback — the most consequential decision
     // in the intake flow, so its audit record carries the full linkage.
     await this.audit(id, 'CASE_CONVERTED', tenantContext, {

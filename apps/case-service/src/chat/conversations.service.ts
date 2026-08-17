@@ -67,7 +67,16 @@ export class ConversationsService {
       include: {
         claimant: { select: { id: true, fullName: true, phoneNumber: true } },
         activeCase: {
-          select: { id: true, caseNumber: true, status: true, travelClaimType: true },
+          select: {
+            id: true,
+            caseNumber: true,
+            status: true,
+            travelClaimType: true,
+            // The regulated engagement, once conversion has created it. The
+            // inbox otherwise labels a Case with claim language and has
+            // nowhere to send an operator who wants the Claim itself.
+            convertedClaim: { select: { id: true, claimNumber: true, status: true } },
+          },
         },
         messages: {
           // The preview is what the conversation said, so an internal note is
@@ -594,7 +603,16 @@ export class ConversationsService {
       include: {
         claimant: { select: { id: true, fullName: true, phoneNumber: true } },
         activeCase: {
-          select: { id: true, caseNumber: true, status: true, travelClaimType: true },
+          select: {
+            id: true,
+            caseNumber: true,
+            status: true,
+            travelClaimType: true,
+            // The regulated engagement, once conversion has created it. The
+            // inbox otherwise labels a Case with claim language and has
+            // nowhere to send an operator who wants the Claim itself.
+            convertedClaim: { select: { id: true, claimNumber: true, status: true } },
+          },
         },
       },
     });

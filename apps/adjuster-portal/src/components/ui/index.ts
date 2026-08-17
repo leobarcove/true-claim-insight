@@ -9,6 +9,7 @@ export * from './toaster';
 export * from './table';
 export * from './dialog';
 export * from './select';
+export * from './native-select';
 export * from './skeleton';
 export * from './tooltip';
 export * from './switch';

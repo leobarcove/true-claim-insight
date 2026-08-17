@@ -6,9 +6,10 @@ import { FlowsService } from './flows.service';
 import { StorageService } from '../common/services/storage.service';
 import { TenantModule } from '../tenant/tenant.module';
 import { ConsentModule } from '../consent/consent.module';
+import { ClaimsModule } from '../claims/claims.module';
 
 @Module({
-  imports: [TenantModule, ConsentModule],
+  imports: [TenantModule, ConsentModule, ClaimsModule],
   controllers: [CasesController],
   providers: [CasesService, DocumentValidationService, FlowsService, StorageService],
   exports: [CasesService, FlowsService],

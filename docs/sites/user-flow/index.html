@@ -224,6 +224,7 @@
           <li><a href="#s9b"><span>9b</span><span>Telegram intake</span></a></li>
           <li><a href="#s9bb"><span>9b·2</span><span>WhatsApp intake</span></a></li>
           <li><a href="#s9c"><span>9c</span><span>How a flow is authored</span></a></li>
+          <li><a href="#s9d"><span>9d</span><span>The operator inbox</span></a></li>
           <li><a href="#s10"><span>10</span><span>Small-claims fast-track</span></a></li>
         </ol>
       </div>
@@ -473,7 +474,7 @@ sequenceDiagram
         CS->>ST: store file
         PWA->>CS: POST /conversation/turn with storedDocumentId
         CS->>CS: resolve the id scoped to this Case
-        CS->>CS: stamp documentsCompleteAt on the last mandatory item
+        CS->>CS: checklist complete on the last mandatory item
     end
 
     CL->>PWA: Review and confirm
@@ -487,6 +488,14 @@ sequenceDiagram
           <code>outOfWindow</code> marks more than 30 days. They surface as warnings to the
           operator and never auto-reject — the deadline is the insurer's to enforce, not the
           intake form's.
+        </p>
+        <p class="note">
+          <strong>The CSP evidence anchor lives on the Claim, not the Case.</strong>
+          <code>documentsCompleteAt</code> — the fact the fourteen-working-day final-report
+          window runs from (CSP 10.13) — is stamped when conversion copies a complete
+          mandatory set across, or on the later upload that completes it. Set once and never
+          moved: the documents <em>were</em> complete, and the clock that started from that
+          fact stays honest.
         </p>
       </section>
 
@@ -891,12 +900,17 @@ Platforms retry delivery;
 the database arbitrates`"]
     INS -->|"inserted"| BIND{"`Binding verified?`"}
 
-    BIND -->|no| ONB["`Ask for the number
+    BIND -->|no| ONB["`Ask to share the contact
 Telegram request_contact`"]
-    ONB --> OTP{"`One-time code`"}
-    OTP -->|"wrong · 5 strikes"| LOCK["`Paused —
-contact support`"]
-    OTP -->|correct| VER["`Bound to Claimant`"]
+    ONB --> OWN{"`The sender's
+own contact?`"}
+    OWN -->|"someone else's"| REF["`Refused — a foreign or
+typed number carries
+somebody else's identity`"]
+    REF --> ONB
+    OWN -->|yes| VER["`Bound to Claimant.
+No code sent — the platform
+already vouched for the number`"]
     VER --> BIND
 
     BIND -->|yes| CASE{"`Claim in progress?`"}
@@ -911,7 +925,7 @@ method the PWA calls`"]
 from the pinned flow`"]
 
     style DUP stroke:#5C7FCB,stroke-width:2.5px
-    style LOCK stroke:#C77A2E,stroke-width:2.5px
+    style REF stroke:#C77A2E,stroke-width:2.5px
     style ASK stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -925,7 +939,11 @@ from the pinned flow`"]
           Binding is the platform's own verified contact — <em>Share my number</em> — and a
           typed number is refused, because a contact card from an address book carries
           somebody else's. The adapter accepts it only when Telegram says the contact belongs
-          to the sender.
+          to the sender. <strong>No one-time code is sent on this channel</strong> (decided
+          11 Aug 2026): the code would go to the very number the platform had already vouched
+          for. The code survives where it earns its keep — the public web-chat door, where a
+          browser can claim any number; five wrong codes there burn the pending number and
+          the claimant starts that step again.
         </p>
         <p class="note">
           Every message is stored in both directions, and an outbound one records whether the
@@ -1083,6 +1101,51 @@ at creation`"]
         </p>
       </section>
 
+      <section id="s9d">
+        <div class="head"><span class="num">9d</span><h3>The operator inbox</h3></div>
+        <p class="lede">
+          Where the firm watches every channel's conversations, and steps in when the bot
+          cannot continue. Three panes: the queue, the transcript, and the claim beside it.
+        </p>
+        <div class="plate"><pre class="mermaid">
+flowchart LR
+    Q["`**Queue**
+search · views with counts
+wait chip · who holds it`"]
+    T["`**Transcript**
+claimant / bot / agent voices
+day separators · take-over marker
+reply ⇄ internal note`"]
+    C["`**Claim context**
+case link · intake progress
+evidence collected
+assign · snooze · hand back`"]
+
+    Q --> T --> C
+        </pre></div>
+        <p class="note">
+          <strong>Taking over pauses the intake — the screen says so.</strong> A generic
+          support console treats a slow reply as a service problem; here it is a claim that
+          has stopped being filled in while a CSP clock runs. The banner above the transcript
+          states it, the queue's wait chip escalates from amber to red as the wait ages, and
+          the sort puts the longest-owed conversation first rather than the newest.
+        </p>
+        <p class="note">
+          <strong>The claim travels with the message.</strong> The context panel keeps the
+          case, its intake progress and every document the conversation has collected beside
+          the thread — an agent who must open another tab to see what was being claimed
+          answers the wrong question. The same panel carries the channel's retention warning
+          in full: on Telegram or WhatsApp, what an agent types persists on the platform's
+          servers, and the moment that is worth saying is before they type it.
+        </p>
+        <p class="note">
+          Three voices stay visibly distinct — claimant, bot, agent — and an internal note is
+          a fourth thing entirely: amber, dashed, centred, never sent. The take-over moment is
+          marked inline in the transcript where the change of author happens, because that is
+          exactly where an auditor will ask who was speaking and why.
+        </p>
+      </section>
+
       <section id="s10">
         <div class="head"><span class="num">10</span><h3>Small-claims fast-track</h3></div>
         <p class="lede">
@@ -1187,9 +1250,14 @@ legal holds`"]
     style CLAIM stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
-          Cross-tenant access raises <code>ForbiddenException</code>. Treating it as an
-          existence check rather than an access check matters: a "403 Forbidden" would confirm
-          the record exists, which is itself a disclosure.
+          <strong>What a blocked read looks like differs by entity — recorded, not
+          designed.</strong> Case reads answer 404 for everyone, claimant and staff alike:
+          <code>assertAccess</code> treats a foreign record as one that does not exist,
+          because a "403 Forbidden" would confirm it does, which is itself a disclosure.
+          Claim reads split: a claimant reaching for another's claim gets the same
+          obfuscated 404, but staff of another tenant get <code>ForbiddenException</code> —
+          an asymmetry between the two entities that discloses existence on the staff path
+          and is noted here so it reads as the inconsistency it is rather than a policy.
         </p>
       </section>
 

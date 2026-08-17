@@ -65,7 +65,18 @@ export interface ConversationSummary {
   handoverReason: string | null;
   lastSeenAt: string;
   claimant: { id: string; fullName: string | null; phoneNumber: string } | null;
-  case: { id: string; caseNumber: string; status: string; travelClaimType: string | null } | null;
+  /**
+   * The Case this conversation is filling — the pre-claim intake funnel, not
+   * the regulated engagement. `convertedClaim` appears once conversion has
+   * created the Claim; until then there is no claim to link to.
+   */
+  case: {
+    id: string;
+    caseNumber: string;
+    status: string;
+    travelClaimType: string | null;
+    convertedClaim: { id: string; claimNumber: string; status: string } | null;
+  } | null;
   lastMessage: {
     text: string | null;
     direction: MessageDirection;
@@ -106,7 +117,7 @@ export function useAssignableAgents() {
   });
 }
 
-export function useConversations(mode?: ConversationMode) {
+export function useConversations(mode?: ConversationMode, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: conversationKeys.list(mode),
     queryFn: async () => {
@@ -120,6 +131,9 @@ export function useConversations(mode?: ConversationMode) {
     // between an inbox and a report.
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
+    // The sidebar badge asks too, for users whose role can see the inbox at
+    // all — same query key, so page and badge share one fetch.
+    enabled: options?.enabled ?? true,
   });
 }
 

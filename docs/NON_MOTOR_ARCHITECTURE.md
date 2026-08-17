@@ -234,6 +234,16 @@ and a typed number is refused, because the platform's own verified contact is
 the identity control. The PWA binds from the session instead — the claimant
 logged in, so the proof already happened and repeating it would be theatre.
 
+**The operator side** is the adjuster-portal's conversations console
+(`apps/adjuster-portal/src/pages/conversations/` +
+`components/conversations/`): queue, transcript and claim context in three
+panes, rebuilt 17 Aug 2026 (MASTER_PLAN §8, user-flow site §9d). Two
+architectural facts it renders rather than invents: taking over sets the mode
+to HANDOVER and the bot stands down until the conversation is handed back, and
+an INTERNAL message is never sent to the claimant on any channel — the console
+styles those facts loudly because the server enforcing them is not the same as
+an operator knowing them.
+
 ### Web chat has two doors, and they identify differently
 
 `/cases/new` is the signed-in one described above. **`/chat` is public** — the

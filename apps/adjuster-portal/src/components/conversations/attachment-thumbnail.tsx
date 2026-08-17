@@ -18,9 +18,17 @@ import { apiClient } from '@/lib/api-client';
 export function AttachmentThumbnail({
   attachment,
   onOpen,
+  variant = 'inline',
 }: {
   attachment: { id: string; caseId: string; fileName: string; mimeType: string | null };
   onOpen: () => void;
+  /**
+   * 'inline' sizes for the transcript, where the image sits inside a message
+   * bubble at its own aspect. 'tile' sizes for the evidence gallery, where a
+   * grid of mixed portrait screenshots and landscape photos needs one square
+   * footprint to read as a collection rather than a jumble.
+   */
+  variant?: 'inline' | 'tile';
 }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -92,10 +100,16 @@ export function AttachmentThumbnail({
       <button
         type="button"
         onClick={onOpen}
-        className="flex items-center gap-1.5 text-sm underline underline-offset-2"
+        className={
+          variant === 'tile'
+            ? 'flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded border border-border p-2 text-xs text-muted-foreground'
+            : 'flex items-center gap-1.5 text-sm underline underline-offset-2'
+        }
       >
-        <FileText className="h-3.5 w-3.5" />
-        {attachment.fileName}
+        <FileText className="h-3.5 w-3.5 shrink-0" />
+        <span className={variant === 'tile' ? 'w-full truncate text-center' : undefined}>
+          {attachment.fileName}
+        </span>
       </button>
     );
   }
@@ -109,7 +123,11 @@ export function AttachmentThumbnail({
     return (
       <span
         ref={holderRef}
-        className="flex h-32 w-[220px] items-center justify-center gap-1.5 rounded border border-border text-sm text-muted-foreground"
+        className={
+          variant === 'tile'
+            ? 'flex aspect-square w-full items-center justify-center gap-1.5 rounded border border-border text-xs text-muted-foreground'
+            : 'flex h-32 w-[220px] items-center justify-center gap-1.5 rounded border border-border text-sm text-muted-foreground'
+        }
       >
         {visible && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {visible ? 'Loading…' : ''}
@@ -118,11 +136,15 @@ export function AttachmentThumbnail({
   }
 
   return (
-    <button type="button" onClick={onOpen} className="block">
+    <button type="button" onClick={onOpen} className={variant === 'tile' ? 'block w-full' : 'block'}>
       <img
         src={objectUrl}
         alt={attachment.fileName}
-        className="max-h-48 max-w-[220px] rounded border border-border object-cover"
+        className={
+          variant === 'tile'
+            ? 'aspect-square w-full rounded border border-border object-cover'
+            : 'max-h-48 max-w-[220px] rounded border border-border object-cover'
+        }
       />
     </button>
   );

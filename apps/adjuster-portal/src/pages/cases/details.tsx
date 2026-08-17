@@ -47,6 +47,7 @@ import {
   TRAVEL_CLAIM_TYPE_LABELS,
   TravelClaimType,
   checkPayeeName,
+  formatDateAnswer,
   type FlowStep,
 } from '@tci/shared-types';
 import {
@@ -300,7 +301,13 @@ export function CaseDetailPage() {
                             ? 'Uploaded'
                             : step.answerType === 'choice'
                               ? convertToTitleCase(value)
-                              : value}
+                              : step.answerType === 'date' || step.answerType === 'datetime'
+                                ? /* The same formatter the bot's review summary uses, so the
+                                     operator reads the words the claimant confirmed — not the
+                                     raw ISO string this screen used to print. Null on an
+                                     unparseable value falls back to showing it verbatim. */
+                                  formatDateAnswer(String(value), step.answerType) ?? value
+                                : value}
                         </dd>
                       </div>
                     ))}
