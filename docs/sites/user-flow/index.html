@@ -931,9 +931,13 @@ from the pinned flow`"]
         <p class="note">
           The answer goes through <code>CasesService.patchAnswer</code> rather than a second
           write path. That is what keeps the masking of the bank account number, the policy
-          match, the deadline warnings and the audit row — and it is why a Telegram sender
+          match and the deadline warnings — and it is why a Telegram sender
           provably cannot reach another claimant's case: the same <code>assertAccess</code>
-          check runs as in the browser.
+          check runs as in the browser. Attribution differs by author:
+          a claimant's turns leave the conversation transcript, which is their record;
+          a <em>staff</em> correction has no transcript, so it goes through a separate,
+          audited endpoint that records actor and before/after values and never moves the
+          conversational cursor (MASTER_PLAN §6 item 21).
         </p>
         <p class="note">
           Binding is the platform's own verified contact — <em>Share my number</em> — and a

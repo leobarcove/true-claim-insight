@@ -165,6 +165,36 @@ export function useSubmitCase() {
   });
 }
 
+/**
+ * A staff correction to one intake answer — MASTER_PLAN §6 item 21.
+ *
+ * Deliberately not the conversational `PATCH :id/answers`: the corrections
+ * endpoint is staff-only, audited with before/after values, and leaves the
+ * claimant's conversational cursor where it was. The server returns
+ * `accepted: false` with the flow's own validation message for a bad value,
+ * so the caller surfaces that rather than a thrown error.
+ */
+export function useCorrectAnswer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      stepId,
+      value,
+    }: {
+      caseId: string;
+      stepId: string;
+      value: string | number | boolean;
+    }) => {
+      const { data } = await apiClient.patch<
+        ApiResponse<{ accepted: boolean; error?: string }>
+      >(`/cases/${caseId}/corrections`, { stepId, value });
+      return data.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: caseKeys.all }),
+  });
+}
+
 function useCaseAction(action: 'request-info' | 'refer-expert' | 'reject') {
   const queryClient = useQueryClient();
   return useMutation({

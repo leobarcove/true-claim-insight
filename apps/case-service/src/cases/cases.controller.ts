@@ -91,6 +91,20 @@ export class CasesController {
     return this.service.patchAnswer(id, dto, tenantContext);
   }
 
+  // Staff-only, and a separate route from the conversational patch above:
+  // a correction is audited and does not move the cursor — see the service
+  // method and MASTER_PLAN §6 item 21 for why the two must not be one door.
+  @Patch(':id/corrections')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Correct one intake answer on the claimant’s behalf (audited)' })
+  correctAnswer(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchAnswerDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.correctAnswer(id, dto, tenantContext);
+  }
+
   @Post(':id/documents/upload')
   @Roles(...INTAKE_ROLES)
   @ApiOperation({ summary: 'Upload an intake evidence document (multipart)' })

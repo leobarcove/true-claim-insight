@@ -500,6 +500,85 @@ export class CasesService {
     };
   }
 
+  /**
+   * A staff correction to one intake answer. MASTER_PLAN §6 item 21.
+   *
+   * Not `patchAnswer` with a role check, because a correction is not a turn.
+   * Three things differ, each load-bearing:
+   *
+   *  - **It is audited.** The claimant's own turns leave a transcript, so
+   *    their edits are attributable without a second record. A staff edit has
+   *    no transcript — an unaudited one would be an anonymous change to a
+   *    claimant's statement, which is the thing the evidential audit exists
+   *    to make impossible.
+   *  - **The cursor does not move.** `patchAnswer` advances `currentStepId`
+   *    because a turn answers the open question; a correction to step 3 of an
+   *    eighteen-step conversation must not send the claimant back to step 4.
+   *  - **Sensitive steps are refused.** The bank account number is masked in
+   *    `answers` and its plaintext lives behind the audited reveal; an inline
+   *    correction would end-run that gate.
+   *
+   * Same status gate as every other edit (`getEditableCase`): once a case is
+   * in vetting, the claimant's statements are frozen for staff exactly as
+   * they are for the claimant.
+   */
+  async correctAnswer(id: string, dto: PatchAnswerDto, tenantContext: TenantContext) {
+    if (tenantContext.userRole === 'CLAIMANT') {
+      // Claimants amend through the conversation, where the flow re-validates
+      // and the transcript records it — not through the correction door.
+      throw new ForbiddenException('Not permitted');
+    }
+    const caseRow = await this.getEditableCase(id, tenantContext);
+    const flow = await this.flows.forCase(caseRow);
+    const step = getStep(flow, dto.stepId);
+    if (!step) throw new BadRequestException(`Unknown step: ${dto.stepId}`);
+    if (SENSITIVE_ANSWER_STEPS.has(dto.stepId)) {
+      throw new BadRequestException(
+        'Payout details are corrected through their own gated path, not here.'
+      );
+    }
+    if (step.answerType === 'document' || step.isReview) {
+      throw new BadRequestException('This step is not a typed answer.');
+    }
+
+    const previousAnswers = caseRow.answers as CaseAnswers;
+    const result = validateAnswer(step, dto.value, {
+      answers: previousAnswers,
+      travelClaimType: flow.travelClaimType,
+    });
+    if (!result.valid) {
+      return { accepted: false, error: result.error, step };
+    }
+
+    const answers = { ...previousAnswers, [dto.stepId]: dto.value };
+    const promoted = await this.promoteAnswers(answers, dto.stepId);
+
+    const updated = await this.prisma.case.update({
+      where: { id },
+      data: {
+        answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
+        ...promoted,
+      },
+      include: { policy: true },
+    });
+
+    // Same retirement rule as the claimant's own edit: a corrected branch
+    // input must not leave contradictory evidence on the live checklist.
+    if (branchInputSteps(flow).has(dto.stepId)) {
+      await this.retireOffPathDocuments(id, flow, answers);
+    }
+
+    // The attribution the whole endpoint exists for: who changed which
+    // statement, from what, to what.
+    await this.audit(id, 'CASE_ANSWER_CORRECTED', tenantContext, {
+      oldValues: { [dto.stepId]: previousAnswers[dto.stepId] ?? null },
+      newValues: { [dto.stepId]: dto.value },
+      metadata: { stepId: dto.stepId, stepLabel: step.label },
+    });
+
+    return { accepted: true, case: await this.withFlowState(updated), step };
+  }
+
   async uploadDocument(
     id: string,
     file: { toBuffer: () => Promise<Buffer>; filename: string; mimetype: string; fields?: any },

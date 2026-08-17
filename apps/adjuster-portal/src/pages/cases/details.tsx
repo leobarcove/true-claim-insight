@@ -10,6 +10,7 @@ import {
   FileQuestion,
   FileText,
   Landmark,
+  Pencil,
   Search,
   Send,
   Upload,
@@ -43,6 +44,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api-client';
 import { convertToTitleCase } from '@/lib/utils';
 import {
+  ANSWER_MASK_PREFIX,
   CASE_FLOWS,
   TRAVEL_CLAIM_TYPE_LABELS,
   TravelClaimType,
@@ -50,10 +52,12 @@ import {
   formatDateAnswer,
   type FlowStep,
 } from '@tci/shared-types';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   caseKeys,
   useCase,
   useConvertCase,
+  useCorrectAnswer,
   useLinkCasePolicy,
   usePolicySearch,
   useReferCaseToExpert,
@@ -294,22 +298,13 @@ export function CaseDetailPage() {
                 ) : (
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                     {answeredSteps.map(({ step, value }) => (
-                      <div key={step.id} className="text-sm">
-                        <dt className="text-muted-foreground">{step.label}</dt>
-                        <dd className="font-medium break-words">
-                          {step.answerType === 'document'
-                            ? 'Uploaded'
-                            : step.answerType === 'choice'
-                              ? convertToTitleCase(value)
-                              : step.answerType === 'date' || step.answerType === 'datetime'
-                                ? /* The same formatter the bot's review summary uses, so the
-                                     operator reads the words the claimant confirmed — not the
-                                     raw ISO string this screen used to print. Null on an
-                                     unparseable value falls back to showing it verbatim. */
-                                  formatDateAnswer(String(value), step.answerType) ?? value
-                                : value}
-                        </dd>
-                      </div>
+                      <AnswerRow
+                        key={step.id}
+                        caseId={id}
+                        step={step}
+                        value={value}
+                        editable={isEditable}
+                      />
                     ))}
                   </dl>
                 )}
@@ -647,6 +642,152 @@ export function CaseDetailPage() {
       {viewing && (
         <EvidenceViewer caseId={id!} document={viewing} onClose={() => setViewing(null)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * One intake answer, with the staff correction affordance where it is lawful.
+ *
+ * Editable only while the claimant themselves could still change the answer
+ * (the page's isEditable — DRAFT / IN_PROGRESS / INFO_REQUESTED), and never
+ * for a document (that is the upload path), a masked value (payout details
+ * keep their own gated path) or a review confirmation. The pencil goes
+ * through the audited corrections endpoint, not the conversational patch —
+ * MASTER_PLAN §6 item 21 is the decision this screen implements.
+ */
+function AnswerRow({
+  caseId,
+  step,
+  value,
+  editable,
+}: {
+  caseId: string;
+  step: FlowStep;
+  value: string;
+  editable: boolean;
+}) {
+  const { toast } = useToast();
+  const correct = useCorrectAnswer();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const masked = value.startsWith(ANSWER_MASK_PREFIX);
+  const canCorrect =
+    editable &&
+    !masked &&
+    step.answerType !== 'document' &&
+    step.answerType !== 'confirm' &&
+    !step.isReview;
+
+  const display =
+    step.answerType === 'document'
+      ? 'Uploaded'
+      : step.answerType === 'choice'
+        ? convertToTitleCase(value)
+        : step.answerType === 'date' || step.answerType === 'datetime'
+          ? /* The same formatter the bot's review summary uses, so the operator
+               reads the words the claimant confirmed — not the raw ISO string
+               this screen used to print. Null on an unparseable value falls
+               back to showing it verbatim. */
+            formatDateAnswer(String(value), step.answerType) ?? value
+          : value;
+
+  const beginEdit = () => {
+    // HTML date controls speak exactly the ISO prefix the stored value carries.
+    if (step.answerType === 'date') setDraft(value.slice(0, 10));
+    else if (step.answerType === 'datetime') setDraft(value.slice(0, 16));
+    else setDraft(value);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    if (!draft.trim() || draft === value) {
+      setEditing(false);
+      return;
+    }
+    const result = await correct.mutateAsync({
+      caseId,
+      stepId: step.id,
+      value: step.answerType === 'number' ? Number(draft) : draft.trim(),
+    });
+    if (!result.accepted) {
+      // The flow's own validation message — the same words the claimant
+      // would have been given for the same mistake.
+      toast({ title: 'Not saved', description: result.error, variant: 'destructive' });
+      return;
+    }
+    setEditing(false);
+    toast({
+      title: 'Answer corrected',
+      description: 'Recorded in the audit trail with the previous value.',
+    });
+  };
+
+  return (
+    <div className="text-sm group">
+      <dt className="text-muted-foreground">{step.label}</dt>
+      <dd className="font-medium break-words">
+        {!editing && (
+          <span className="inline-flex items-center gap-1.5">
+            {display}
+            {canCorrect && (
+              <button
+                type="button"
+                onClick={beginEdit}
+                aria-label={`Correct ${step.label}`}
+                title="Correct this answer (audited)"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </span>
+        )}
+        {editing && (
+          <span className="flex items-center gap-1.5 mt-0.5">
+            {step.answerType === 'choice' && step.choices ? (
+              <NativeSelect
+                value={draft}
+                autoFocus
+                onChange={event => setDraft(event.target.value)}
+              >
+                {step.choices.map(choice => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            ) : (
+              <input
+                className="rounded-md border bg-background px-2 py-1 text-sm w-full max-w-[240px]"
+                type={
+                  step.answerType === 'number'
+                    ? 'number'
+                    : step.answerType === 'date'
+                      ? 'date'
+                      : step.answerType === 'datetime'
+                        ? 'datetime-local'
+                        : 'text'
+                }
+                value={draft}
+                autoFocus
+                onChange={event => setDraft(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') void save();
+                  if (event.key === 'Escape') setEditing(false);
+                }}
+              />
+            )}
+            <Button size="sm" onClick={() => void save()} disabled={correct.isPending}>
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </span>
+        )}
+      </dd>
     </div>
   );
 }

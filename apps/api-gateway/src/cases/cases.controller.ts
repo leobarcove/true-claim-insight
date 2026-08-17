@@ -145,6 +145,17 @@ export class CasesController {
     );
   }
 
+  @Patch(':id/corrections')
+  @ApiOperation({ summary: 'Correct one intake answer on the claimant’s behalf (audited)' })
+  correctAnswer(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.patch(`${this.caseServiceUrl}/api/v1/cases/${id}/corrections`, body, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to save correction'
+    );
+  }
+
   @Post(':id/documents/upload')
   @ApiOperation({ summary: 'Upload an intake document' })
   uploadDocument(@Param('id') id: string, @Req() req: any) {

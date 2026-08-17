@@ -545,6 +545,16 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
     **The condition that reverses this, written down so it is not quietly forgotten: the day the channel serves anything *back* — claim status, a document, a payout figure — binding becomes read-sensitive and needs a stronger proof.** The intended answer is a deep link from an authenticated PWA session (`t.me/<bot>?start=<one-time-token>`), which is stronger than SMS and costs nothing per message; the code is the fallback. Deep-link binding cannot replace the code *at the door*, because it presupposes an authenticated session and would remove cold-start intake, which is the channel's whole point.
 
+21. **Staff correction of intake answers: permitted pre-decision, attributed, never silent — decided 17 Aug 2026.** An operator asked whether the internal team is meant to be unable to edit a case's intake answers. The audit that answered it found the position was half-designed and half-accident, so this records the whole of it:
+
+    - **After submission (SUBMITTED / UNDER_REVIEW / REFERRED_TO_EXPERT), answers are frozen for everyone — kept, deliberately.** The intake answers are the claimant's own statements: the evidence the vetting decision and any later adjuster's report rest on, and part of the record §1 says must be honest from the first claim because pre-registration records are exactly what BNM examines. A staff member rewriting a statement after it has entered vetting would corrupt that chain. The correction path from those statuses stays the state machine's one backward edge: *Request more info* → INFO_REQUESTED → amend → resubmit.
+    - **In the editable statuses (DRAFT / IN_PROGRESS / INFO_REQUESTED), staff correction is legitimate and is now built.** The API always permitted it (`INTAKE_ROLES` on `PATCH /cases/:id/answers`) — the staff-capture channel depends on it — but the portal offered no way to do it, so an operator on the phone with a claimant during the info-requested loop could attach a document yet not fix a mistyped flight number. That asymmetry served nobody: the claimant could change the answer themselves in those statuses, so refusing the staff the same act protected nothing.
+    - **The non-negotiable condition is attribution, and it did not exist.** `patchAnswer` writes **no audit row** — the user-flow site claimed it did, which was false comfort of exactly the §3.6 kind. For a *claimant's* own turns the conversation transcript is the attributable record, so the gap is tolerable there; for a *staff* correction there is no transcript, so an unaudited edit would be an anonymous change to a claimant's statement. Staff corrections therefore go through a **separate endpoint** that refuses claimants, writes an evidential audit row (actor, step, before and after values) and does **not** move the conversational cursor — a correction is not a turn, and rewinding `currentStepId` would re-ask the claimant everything after the corrected step.
+    - **Sensitive answers are excluded.** Bank-account steps are masked at rest and their plaintext lives in encrypted columns behind the audited firm-admin reveal; an inline correction path would bypass that. Payout corrections keep their own gate.
+    - **What the claimant confirms still holds.** A correction in DRAFT / IN_PROGRESS happens before the claimant's review step, which shows the current answers; in INFO_REQUESTED the resubmission review does the same. Nothing reaches vetting that the claimant has not been shown.
+
+    **The condition that reverses this:** if registered-adjuster mode ever needs the stricter reading — that no firm hand may touch a claimant statement at all — the endpoint gains a `licensedMode` gate rather than a rebuild, same shape as every other regulated-mode flip.
+
 18. **FSA 2013 secrecy over AI inputs — open, needs counsel.** BNM's *Discussion Paper on Artificial Intelligence in the Malaysian Financial Sector* (5 Aug 2025) notes that where a model is trained on, or processes, information relating to the affairs or account of a customer of a financial institution, the **secrecy provision under the Financial Services Act 2013** may be engaged. Our exposure is narrower than training — we send a claimant's message for inference and retain nothing at the provider — but the question is not settled by that distinction alone, and it now applies to two paths (document extraction, intake normalisation). BNM points to its **Regulatory Sandbox** as the route where regulatory impediments exist. Put to counsel alongside item 7 rather than as a separate exercise.
 19. **AI-scope assessment — write it down before it is asked for.** The NAIC model bulletin, which the market treats as the reference governance text, states that *simple rule-based systems without adaptive or predictive components may fall outside* the definition of an AI System, **but that carriers should document that assessment explicitly**. Until 6 Aug 2026 the intake conversation was purely deterministic and plausibly outside scope — a position held by accident and never recorded. Adding the normaliser spends part of it. What remains defensible, and should be written as a short assessment: the *flow engine* is a versioned rule set with no learned or predictive component; the *model* touches only input interpretation, never what is asked, what is decided, or what is paid. BNM's discussion paper expects the same lifecycle disciplines under different names — fairness, accountability, transparency, explainability, reliability, security. **Owner: whoever prepares the vendor security assessment; the evidence already exists in the flow versioning, the publish gate and the conversation transcript.**
 
@@ -1692,6 +1702,26 @@ format. Remaining, recorded not churned: intake and conversations use pill
 buttons where the queue pages use underline tabs (both defensible, one should
 win eventually), and the per-domain status-style maps are deliberately
 separate because they describe different enums.
+
+### Staff correction of intake answers — 17 August 2026
+
+Implements §6 item 21, decision first, build second, in that order at the
+principal's instruction. `PATCH /cases/:id/corrections` (staff roles only,
+proxied by the gateway): same `validateAnswer`, same column promotion, same
+off-path document retirement as the claimant's own edit — but audited with
+actor and before/after values (`CASE_ANSWER_CORRECTED`), refusing masked
+payout steps, and leaving `currentStepId` untouched, because a correction is
+not a turn. The portal's case screen grows a pencil on each typed answer in
+the editable statuses only; frozen statuses show none.
+
+Verified end-to-end on a seeded INFO_REQUESTED case: correction saved through
+the UI, `audit_trail` row `{"destination":"Bali"} → {"Osaka"}` with the staff
+user attributed, no pencils on an UNDER_REVIEW case, and the demo value
+restored through the same endpoint (leaving both corrections in the trail, as
+the trail should). All 744 case-service tests pass. The user-flow §9b claim
+that `patchAnswer` writes "the audit row" — false since the method was
+written — is corrected to say what is actually true: transcripts attribute
+claimant turns; the corrections endpoint attributes staff ones.
 
 ### Deep audit: plan vs codebase — 10 August 2026
 
