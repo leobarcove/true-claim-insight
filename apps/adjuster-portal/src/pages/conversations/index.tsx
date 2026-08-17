@@ -734,13 +734,27 @@ function ConversationRow({
     <button
       type="button"
       onClick={onSelect}
+      // Announced as the current item, not merely drawn as one. The visual
+      // cues below are invisible to a screen reader.
+      aria-current={selected ? 'true' : undefined}
       className={cn(
-        'w-full text-left px-4 py-3 border-b hover:bg-muted/40 transition-colors',
-        selected && 'bg-muted/60'
+        'relative w-full text-left px-4 py-3 border-b transition-colors',
+        'hover:bg-muted/40',
+        // Three cues, deliberately redundant: an accent bar (position), a
+        // tint (colour) and a heavier title (typography). The previous
+        // selected state was bg-muted/60 against a bg-muted/40 hover — a 20%
+        // opacity step on one colour, so "selected" and "hovered" were all
+        // but identical. That is survivable when rows have distinct titles;
+        // here two channels for the same claimant both read as their phone
+        // number, and the highlight is the only thing telling them apart.
+        selected && 'bg-primary/10 hover:bg-primary/10'
       )}
     >
+      {selected && (
+        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-primary" />
+      )}
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm truncate">
+        <span className={cn('text-sm truncate', selected ? 'font-semibold' : 'font-medium')}>
           {conversation.claimant?.fullName || conversation.claimant?.phoneNumber || 'Unknown'}
         </span>
         {conversation.awaitingAgent > 0 && (
