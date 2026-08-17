@@ -14,7 +14,10 @@ export function formatDate(date: string | Date | null | undefined): string {
   if (isNaN(d.getTime())) {
     return 'N/A';
   }
-  return format(d, 'yyyy-MM-dd');
+  // 'dd MMM yyyy', matching formatDateTime and the tables that format
+  // inline — this used to emit ISO 'yyyy-MM-dd', so one column of a table
+  // read as machine output beside another column reading as a date.
+  return format(d, 'dd MMM yyyy');
 }
 
 export function formatDateTime(date: string | Date | null | undefined): string {

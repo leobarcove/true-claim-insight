@@ -1,16 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import {
-  FileText,
-  Plus,
-  List,
-  Grid,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Calendar,
-  Clock,
-} from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FileText, Plus, Eye, Calendar, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { claimTypeLabel } from '@/lib/claim-label';
 import { Header } from '@/components/layout/header';
@@ -31,6 +21,10 @@ import { InfoTooltip } from '@/components/ui/tooltip';
 import { convertToTitleCase, formatDate, cn } from '@/lib/utils';
 import { useClaims, useClaimStats } from '@/hooks/use-claims';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useListParams, usePageClamp } from '@/hooks/use-list-params';
+import { ListTabs } from '@/components/ui/list-tabs';
+import { ListPagination } from '@/components/ui/list-pagination';
+import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAuthStore } from '@/stores/auth-store';
 import { PERMISSIONS, useHasPermission } from '@/lib/permissions';
 import { useLayout } from '@/components/layout';
@@ -72,49 +66,41 @@ const typeLabels: Record<string, string> = {
  * on the TravelClaim child; property lines have no subtype at all and are
  * named by their category.
  */
+const CLAIM_QUEUE_TABS = ['SUBMITTED', 'SCHEDULED', 'APPROVED', 'REJECTED'];
+
 export function ClaimsListPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const searchFromUrl = searchParams.get('search') || '';
-  const [searchQuery, setSearchQuery] = useState(searchFromUrl);
-  const debouncedSearchQuery = useDebounce(searchQuery, 400);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [userFilter, setUserFilter] = useState<'ALL' | 'MY_CLAIMS'>('ALL');
+  // Status, search, page and the mine/all toggle live in the URL — see
+  // useListParams. Two instances on one URL: the second holds the ownership
+  // toggle under `view`, and changing either tab drops the page, which also
+  // fixes the old bug where switching to "My claims" kept you on page 4 of a
+  // list that no longer had one.
+  const {
+    tab: statusFilter,
+    setTab: setStatusFilter,
+    search: searchQuery,
+    setSearch: setSearchQuery,
+    page,
+    setPage,
+  } = useListParams({ tabs: CLAIM_QUEUE_TABS, tabKey: 'status' });
+  const { tab: viewTab, setTab: setViewTab } = useListParams({
+    tabs: ['MY_CLAIMS'],
+    tabKey: 'view',
+  });
+  const userFilter: 'ALL' | 'MY_CLAIMS' = viewTab === 'MY_CLAIMS' ? 'MY_CLAIMS' : 'ALL';
+  const setUserFilter = (value: 'ALL' | 'MY_CLAIMS') =>
+    setViewTab(value === 'MY_CLAIMS' ? 'MY_CLAIMS' : null);
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 400);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [page, setPage] = useState(1);
   const limit = 10;
 
   const { isMobile, currentWidth } = useLayout();
   const { user } = useAuthStore();
   const canCreateClaim = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
 
-  // Sync searchQuery with URL
-  useEffect(() => {
-    setSearchQuery(searchFromUrl);
-  }, [searchFromUrl]);
-
-  // Update URL when debounced search query changes
-  useEffect(() => {
-    const currentSearch = searchParams.get('search') || '';
-    if (debouncedSearchQuery !== currentSearch) {
-      if (debouncedSearchQuery) {
-        setSearchParams({ ...Object.fromEntries(searchParams), search: debouncedSearchQuery });
-      } else if (currentSearch) {
-        const nextParams = Object.fromEntries(searchParams);
-        delete nextParams.search;
-        setSearchParams(nextParams);
-      }
-    }
-  }, [debouncedSearchQuery, searchParams, setSearchParams]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearchQuery, statusFilter]);
-
   const { data, isLoading } = useClaims({
-    search: searchFromUrl,
+    search: debouncedSearchQuery,
     status: (statusFilter as any) || undefined,
     page,
     limit,
@@ -129,8 +115,7 @@ export function ClaimsListPage() {
 
   const claims = data?.claims || [];
   const pagination = data?.pagination;
-
-  const tabs = ['SUBMITTED', 'SCHEDULED', 'APPROVED', 'REJECTED'];
+  usePageClamp(page, pagination?.totalPages, setPage);
 
   return (
     <div className="flex flex-col h-full">
@@ -155,36 +140,18 @@ export function ClaimsListPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Status Tabs and View Toggle */}
-        <div
-          data-horizontal="true"
-          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
-        >
-          <div className="flex gap-2">
-            <button
-              onClick={() => setStatusFilter(null)}
-              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
-                statusFilter === null
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All ({statsData?.totalClaims || 0})
-            </button>
-            {tabs.map(status => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
-                  statusFilter === status
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {statusConfig[status].label} ({statsData?.statusBreakdown?.[status] || 0})
-              </button>
-            ))}
-          </div>
-
+        <ListTabs
+          tabs={[
+            { value: null, label: 'All', count: statsData?.totalClaims || 0 },
+            ...CLAIM_QUEUE_TABS.map(status => ({
+              value: status,
+              label: statusConfig[status].label,
+              count: statsData?.statusBreakdown?.[status] || 0,
+            })),
+          ]}
+          active={statusFilter}
+          onChange={setStatusFilter}
+          end={
           <div className="flex items-center gap-2 mb-1">
             {/* User Filter */}
             <div className="relative flex items-center bg-muted/30 border border-border/80 rounded-full overflow-hidden shadow-sm">
@@ -233,47 +200,10 @@ export function ClaimsListPage() {
               />
             </div>
 
-            {/* View Toggle */}
-            <div className="flex items-center bg-muted/50 rounded-lg p-1">
-              <InfoTooltip
-                content="List"
-                direction="top"
-                fontSize="text-[11px]"
-                trigger={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'h-7 w-7 rounded-md',
-                      viewMode === 'table' && 'bg-background shadow-sm'
-                    )}
-                    onClick={() => setViewMode('table')}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                }
-              />
-              <InfoTooltip
-                content="Grid"
-                direction="top"
-                fontSize="text-[11px]"
-                trigger={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'h-7 w-7 rounded-md',
-                      viewMode === 'card' && 'bg-background shadow-sm'
-                    )}
-                    onClick={() => setViewMode('card')}
-                  >
-                    <Grid className="h-4 w-4" />
-                  </Button>
-                }
-              />
-            </div>
+            <ViewToggle value={viewMode} onChange={setViewMode} />
           </div>
-        </div>
+          }
+        />
 
         {/* Claims List */}
         <div className="space-y-4 transition-all duration-300">
@@ -500,28 +430,14 @@ export function ClaimsListPage() {
           )}
 
           {/* Pagination */}
-          {!isLoading && pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {pagination.totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                disabled={page >= pagination.totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+          {!isLoading && pagination && (
+            <ListPagination
+              page={page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              noun="claims"
+              onPageChange={setPage}
+            />
           )}
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -18,6 +17,9 @@ import { getCategoryConfig } from '@/lib/category-config';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { Badge } from '@/components/ui/badge';
+import { ListTabs } from '@/components/ui/list-tabs';
+import { ListPagination } from '@/components/ui/list-pagination';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -31,6 +33,7 @@ import { InfoTooltip } from '@/components/ui/tooltip';
 import { TRAVEL_CLAIM_TYPE_LABELS } from '@tci/shared-types';
 import { useCases } from '@/hooks/use-cases';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useListParams, usePageClamp } from '@/hooks/use-list-params';
 import { PERMISSIONS, useHasPermission } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
@@ -77,15 +80,20 @@ const unknownChannel = (channel: string) => ({ icon: FileQuestion, label: channe
 const QUEUE_TABS = ['SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED', 'REFERRED_TO_EXPERT', 'CONVERTED', 'REJECTED'];
 
 export function CasesListPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearch = useDebounce(searchQuery, 400);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const canCreate = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
+  // Tab, search and page live in the URL — see useListParams for the rules.
+  // The URL is therefore an input surface, which is why CaseQueryDto
+  // validates these values instead of casting them.
+  const {
+    tab: statusFilter,
+    setTab: setStatusFilter,
+    search: searchQuery,
+    setSearch: setSearchQuery,
+    page,
+    setPage,
+  } = useListParams({ tabs: QUEUE_TABS, tabKey: 'status' });
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  const debouncedSearch = useDebounce(searchQuery, 400);
+  const canCreate = useHasPermission(PERMISSIONS.CLAIMS_CREATE);
 
   const { data, isLoading } = useCases({
     search: debouncedSearch || undefined,
@@ -98,6 +106,8 @@ export function CasesListPage() {
   const pagination = data?.pagination;
   const breakdown = data?.statusBreakdown || {};
   const total = Object.values(breakdown).reduce((sum, count) => sum + count, 0);
+
+  usePageClamp(page, pagination?.totalPages, setPage);
 
   return (
     <div className="flex flex-col h-full">
@@ -122,36 +132,18 @@ export function CasesListPage() {
       </Header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div
-          data-horizontal="true"
-          className="flex items-center border-b border-border overflow-x-auto whitespace-nowrap custom-scrollbar"
-        >
-          <button
-            onClick={() => setStatusFilter(null)}
-            className={cn(
-              'px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2',
-              statusFilter === null
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            All ({total})
-          </button>
-          {QUEUE_TABS.map(status => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={cn(
-                'px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2',
-                statusFilter === status
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {caseStatusConfig[status].label} ({breakdown[status] || 0})
-            </button>
-          ))}
-        </div>
+        <ListTabs
+          tabs={[
+            { value: null, label: 'All', count: total },
+            ...QUEUE_TABS.map(status => ({
+              value: status,
+              label: caseStatusConfig[status].label,
+              count: breakdown[status] || 0,
+            })),
+          ]}
+          active={statusFilter}
+          onChange={setStatusFilter}
+        />
 
         {isLoading ? (
           <div className="space-y-2">
@@ -160,13 +152,11 @@ export function CasesListPage() {
             ))}
           </div>
         ) : cases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Inbox className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="font-medium">No cases found</p>
-            <p className="text-sm text-muted-foreground">
-              Claim requests from the web intake, email inbox or staff capture will appear here.
-            </p>
-          </div>
+          <EmptyState
+            icon={Inbox}
+            title="No cases found"
+            description="Claim requests from the web intake, email inbox or staff capture will appear here."
+          />
         ) : (
           <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
@@ -281,30 +271,14 @@ export function CasesListPage() {
           </div>
         )}
 
-        {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Page {pagination.page} of {pagination.totalPages} ({pagination.total} cases)
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(current => current - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= pagination.totalPages}
-                onClick={() => setPage(current => current + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+        {pagination && (
+          <ListPagination
+            page={page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            noun="cases"
+            onPageChange={setPage}
+          />
         )}
       </div>
     </div>

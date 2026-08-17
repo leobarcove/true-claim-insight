@@ -9,8 +9,6 @@ import {
   Check,
   X,
   Network,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -63,15 +61,24 @@ import { convertToTitleCase } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { SearchInput } from '@/components/ui/search-input';
 import { useDebounce } from '@/hooks/use-debounce';
-import { InfoTooltip } from '@/components/ui';
+import { useListParams } from '@/hooks/use-list-params';
+import { InfoTooltip, ListTabs, ListPagination } from '@/components/ui';
 import { useLayout } from '@/components/layout';
 
 export function TenantsPage() {
-  const [activeTab, setActiveTab] = useState('tenants');
-  const [tenantsPage, setTenantsPage] = useState(1);
-  const [usersPage, setUsersPage] = useState(1);
-  const [userTenantsPage, setUserTenantsPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Tab, search and page live in the URL — see useListParams. One page param
+  // for the three tables: only one is ever visible, and both tab and search
+  // changes drop it, which is what the two reset effects used to do by hand.
+  const {
+    tab,
+    setTab,
+    search: searchQuery,
+    setSearch: setSearchQuery,
+    page,
+    setPage,
+  } = useListParams({ tabs: ['users', 'associations'] });
+  const activeTab = tab ?? 'tenants';
+  const setActiveTab = (id: string) => setTab(id === 'tenants' ? null : id);
   const debouncedSearch = useDebounce(searchQuery, 400);
   const limit = 10;
 
@@ -83,35 +90,20 @@ export function TenantsPage() {
   const associationsTableRef = useRef<any>(null);
 
   const { data: tenantsData, isLoading: isLoadingTenants } = useTenants({
-    page: tenantsPage,
+    page,
     limit,
     search: debouncedSearch,
   });
   const { data: usersData, isLoading: isLoadingUsers } = useUsers({
-    page: usersPage,
+    page,
     limit,
     search: debouncedSearch,
   });
   const { data: userTenantsData, isLoading: isLoadingUserTenants } = useUserTenants({
-    page: userTenantsPage,
+    page,
     limit,
     search: debouncedSearch,
   });
-
-  // Reset pages and search when tab changes
-  useEffect(() => {
-    setTenantsPage(1);
-    setUsersPage(1);
-    setUserTenantsPage(1);
-    // setSearchQuery('');
-  }, [activeTab]);
-
-  // Reset pages when search query changes
-  useEffect(() => {
-    setTenantsPage(1);
-    setUsersPage(1);
-    setUserTenantsPage(1);
-  }, [debouncedSearch]);
 
   const tenants = tenantsData?.tenants || [];
   const tenantsPagination = tenantsData?.pagination;
@@ -164,26 +156,15 @@ export function TenantsPage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto space-y-6">
           {/* Horizontal Tabs */}
-          <div
-            data-horizontal="true"
-            className="flex items-center border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
-          >
-            <div className="flex gap-4">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 mx-1 font-medium text-sm transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {tab.label} ({tab?.count || 0})
-                </button>
-              ))}
-            </div>
-          </div>
+          <ListTabs
+            tabs={tabs.map(option => ({
+              value: option.id === 'tenants' ? null : option.id,
+              label: option.label,
+              count: option.count,
+            }))}
+            active={tab}
+            onChange={value => setActiveTab(value ?? 'tenants')}
+          />
 
           <main>
             {activeTab === 'tenants' && (
@@ -194,8 +175,8 @@ export function TenantsPage() {
                   allTenants={selectionTenants}
                   isLoading={isLoadingTenants}
                   pagination={tenantsPagination}
-                  page={tenantsPage}
-                  onPageChange={setTenantsPage}
+                  page={page}
+                  onPageChange={setPage}
                   onRefresh={() => {}}
                 />
               </div>
@@ -209,8 +190,8 @@ export function TenantsPage() {
                   allUsers={selectionUsers}
                   isLoading={isLoadingUsers}
                   pagination={usersPagination}
-                  page={usersPage}
-                  onPageChange={setUsersPage}
+                  page={page}
+                  onPageChange={setPage}
                   onRefresh={() => {}}
                 />
               </div>
@@ -225,8 +206,8 @@ export function TenantsPage() {
                   users={selectionUsers}
                   isLoading={isLoadingUserTenants}
                   pagination={userTenantsPagination}
-                  page={userTenantsPage}
-                  onPageChange={setUserTenantsPage}
+                  page={page}
+                  onPageChange={setPage}
                 />
               </div>
             )}
@@ -452,27 +433,15 @@ const TenantsTable = forwardRef(
         </div>
 
         {/* Pagination */}
-        {!isLoading && pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground font-medium">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
-              disabled={page >= pagination.totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        {!isLoading && pagination && (
+          <div className="mt-6">
+            <ListPagination
+              page={page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              noun="rows"
+              onPageChange={onPageChange}
+            />
           </div>
         )}
 
@@ -821,27 +790,15 @@ const UsersTable = forwardRef(
         </div>
 
         {/* Pagination */}
-        {!isLoading && pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground font-medium">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
-              disabled={page >= pagination.totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        {!isLoading && pagination && (
+          <div className="mt-6">
+            <ListPagination
+              page={page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              noun="rows"
+              onPageChange={onPageChange}
+            />
           </div>
         )}
 
@@ -1206,27 +1163,15 @@ const UserTenantsTable = forwardRef(
         </div>
 
         {/* Pagination */}
-        {!isLoading && pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground font-medium">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(Math.min(pagination.totalPages, page + 1))}
-              disabled={page >= pagination.totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        {!isLoading && pagination && (
+          <div className="mt-6">
+            <ListPagination
+              page={page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              noun="rows"
+              onPageChange={onPageChange}
+            />
           </div>
         )}
 

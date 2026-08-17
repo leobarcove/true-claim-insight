@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Inbox, Loader2, MailX, RefreshCw } from 'lucide-react';
 
@@ -7,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { useListParams } from '@/hooks/use-list-params';
 import {
   InboundMessage,
   InboundMessageStatus,
@@ -42,7 +42,15 @@ const STATUS_STYLE: Record<InboundMessageStatus, string> = {
 };
 
 export function IntakeQueuePage() {
-  const [filter, setFilter] = useState<InboundMessageStatus | 'ALL'>('NEEDS_REVIEW');
+  // The filter lives in the URL — see useListParams. An absent param is the
+  // page's true default, NEEDS_REVIEW: the queue opens on what is owed.
+  const { tab, setTab } = useListParams({
+    tabs: FILTERS.map(option => option.value),
+    tabKey: 'status',
+  });
+  const filter = (tab as InboundMessageStatus | 'ALL' | null) ?? 'NEEDS_REVIEW';
+  const setFilter = (value: InboundMessageStatus | 'ALL') =>
+    setTab(value === 'NEEDS_REVIEW' ? null : value);
   const { data: messages, isLoading, refetch, isFetching } = useInboundMessages(
     filter === 'ALL' ? undefined : filter
   );

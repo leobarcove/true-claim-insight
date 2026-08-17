@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Eye, List, Grid, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Eye } from 'lucide-react';
 import { Header } from '@/components/layout/header';
-import { Button, Badge, Skeleton } from '@/components/ui';
+import { Button, Badge, Skeleton, ListPagination, ListTabs, ViewToggle } from '@/components/ui';
+import { useListParams, usePageClamp } from '@/hooks/use-list-params';
 import {
   Table,
   TableBody,
@@ -20,10 +21,15 @@ import { useLayout } from '@/components/layout';
 
 export function DocumentsListPage() {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
+  // Search and page live in the URL — see useListParams for the rules.
+  const {
+    search: searchTerm,
+    setSearch: setSearchTerm,
+    page,
+    setPage,
+  } = useListParams();
   const debouncedSearch = useDebounce(searchTerm, 500);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [page, setPage] = useState(1);
   const limit = 10;
 
   const { isMobile } = useLayout();
@@ -36,6 +42,7 @@ export function DocumentsListPage() {
 
   const claims = response?.claims || [];
   const pagination = response?.pagination;
+  usePageClamp(page, pagination?.totalPages, setPage);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -52,50 +59,12 @@ export function DocumentsListPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Filter Tab */}
-        <div
-          data-horizontal="true"
-          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
-        >
-          <div className="flex gap-2">
-            <button className="px-4 py- mx-1 font-medium text-sm transition-colors border-b-2 border-primary text-primary">
-              All ({response?.pagination?.total || 0})
-            </button>
-          </div>
-
-          {/* View Toggle */}
-          <div className="flex items-center bg-muted/50 rounded-lg p-1 mb-1">
-            <InfoTooltip
-              content="List"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'table' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('table')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              }
-            />
-            <InfoTooltip
-              content="Grid"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'card' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('card')}
-                >
-                  <Grid className="h-4 w-4" />
-                </Button>
-              }
-            />
-          </div>
-        </div>
+        <ListTabs
+          tabs={[{ value: null, label: 'All', count: response?.pagination?.total || 0 }]}
+          active={null}
+          onChange={() => {}}
+          end={<ViewToggle value={viewMode} onChange={setViewMode} className="mb-1" />}
+        />
 
         {/* Documents List */}
         <div className="transition-all duration-300">
@@ -346,28 +315,14 @@ export function DocumentsListPage() {
         </div>
 
         {/* Pagination */}
-        {!isLoading && pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-              disabled={page >= pagination.totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+        {!isLoading && pagination && (
+          <ListPagination
+            page={page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            noun="claims"
+            onPageChange={setPage}
+          />
         )}
       </div>
     </div>

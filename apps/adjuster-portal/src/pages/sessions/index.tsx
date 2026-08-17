@@ -6,6 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ListTabs } from '@/components/ui/list-tabs';
+import { ListPagination } from '@/components/ui/list-pagination';
+import { ViewToggle } from '@/components/ui/view-toggle';
+import { useListParams, usePageClamp } from '@/hooks/use-list-params';
 import {
   Video,
   Calendar,
@@ -15,10 +19,6 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  ChevronLeft,
-  ChevronRight,
-  List,
-  Grid,
   Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -78,10 +78,17 @@ type VideoSessionItem = { type: 'live'; data: Session } | { type: 'upload'; data
 export function VideoSessionsPage() {
   const navigate = useNavigate();
   const { isMobile } = useLayout();
-  const [filter, setFilter] = useState<'all' | 'live' | 'upload'>('all');
+  // Tab, search and page live in the URL — see useListParams for the rules.
+  const {
+    tab,
+    setTab,
+    search: searchQuery,
+    setSearch: setSearchQuery,
+    page,
+    setPage,
+  } = useListParams({ tabs: ['live', 'upload'], tabKey: 'type' });
+  const filter: 'all' | 'live' | 'upload' = (tab as 'live' | 'upload' | null) ?? 'all';
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [page, setPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 400);
   const limit = 10;
 
@@ -122,10 +129,11 @@ export function VideoSessionsPage() {
         ? sessionsRes?.totalPages || 0
         : uploadsRes?.totalPages || 0;
 
-  // Helper to handle filter change
+  usePageClamp(page, totalPages, setPage);
+
+  // Tab changes drop the page inside useListParams; null is the All view.
   const handleFilterChange = (newFilter: 'all' | 'live' | 'upload') => {
-    setFilter(newFilter);
-    setPage(1); // Reset to first page when switching tabs
+    setTab(newFilter === 'all' ? null : newFilter);
   };
 
   // Combine and sort sessions
@@ -193,77 +201,16 @@ export function VideoSessionsPage() {
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Filter Tabs and View Toggle */}
-        <div
-          data-horizontal="true"
-          className="flex items-center justify-between border-b border-border overflow-hidden overflow-x-auto whitespace-nowrap custom-scrollbar"
-        >
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleFilterChange('all')}
-              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
-                filter === 'all'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All ({totalSessions + totalUploads})
-            </button>
-            <button
-              onClick={() => handleFilterChange('live')}
-              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
-                filter === 'live'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Live Sessions ({totalSessions})
-            </button>
-            <button
-              onClick={() => handleFilterChange('upload')}
-              className={`px-4 py-2 mx-1 font-medium text-sm transition-colors border-b-2 ${
-                filter === 'upload'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Manual Uploads ({totalUploads})
-            </button>
-          </div>
-
-          {/* View Toggle */}
-          <div className="flex items-center bg-muted/50 rounded-lg p-1 mb-1">
-            <InfoTooltip
-              content="List"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'table' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('table')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              }
-            />
-            <InfoTooltip
-              content="Grid"
-              direction="top"
-              fontSize="text-[11px]"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 rounded-md ${viewMode === 'card' ? 'bg-background shadow-sm' : ''}`}
-                  onClick={() => setViewMode('card')}
-                >
-                  <Grid className="h-4 w-4" />
-                </Button>
-              }
-            />
-          </div>
-        </div>
+        <ListTabs
+          tabs={[
+            { value: null, label: 'All', count: totalSessions + totalUploads },
+            { value: 'live', label: 'Live Sessions', count: totalSessions },
+            { value: 'upload', label: 'Manual Uploads', count: totalUploads },
+          ]}
+          active={tab}
+          onChange={value => handleFilterChange((value as 'live' | 'upload' | null) ?? 'all')}
+          end={<ViewToggle value={viewMode} onChange={setViewMode} className="mb-1" />}
+        />
 
         {/* Sessions Grid */}
         <div className="transition-all duration-300">
@@ -536,28 +483,8 @@ export function VideoSessionsPage() {
           )}
         </div>
 
-        {!isLoading && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs font-medium">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+        {!isLoading && (
+          <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </div>
     </div>

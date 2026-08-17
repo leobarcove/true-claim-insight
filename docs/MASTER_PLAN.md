@@ -1552,6 +1552,147 @@ message. It is desk-review intake — no video, no prosody analysis, no eKYC.
 Not yet done: `runPhoneVerification` has no tests, and the route has run
 nowhere but a developer machine.
 
+### The inbox becomes a console — 17 August 2026
+
+**The conversations page was rebuilt as a three-pane operator console** — queue,
+transcript, claim context — after a survey of current (2026) support-inbox
+practice (Intercom's Fin-handover inbox, Zendesk copilot, the shared-inbox
+pattern literature). The finding that shaped it: context must travel with the
+message. An agent who opens another tab to see what was being claimed answers
+the wrong question, so the new right-hand panel keeps the case, its status, the
+intake's own progress (parsed from the bot's "(3 of 16)" numbering — derived
+presentation, nothing downstream may depend on it) and every document the
+conversation has collected, beside the thread.
+
+What else changed, and why:
+
+- **The queue answers "what needs me next" in one scan.** Search over name /
+  phone / case number; a wait chip that turns from amber to red at the hour
+  mark (a starting threshold, to be revisited against real queue data); the
+  assignee named on every handover row so two agents cannot silently draft
+  replies to one claimant; the preview prefixed `Bot:` / `You:` so who spoke
+  last is visible before what they said. ↑↓ and j/k walk the queue — inbox
+  work is hundreds of small decisions, and reaching for the mouse between each
+  is the cost that compounds.
+- **The transcript reads as a record.** Day separators, grouped consecutive
+  messages, and the take-over marked inline at the moment it happened —
+  including after the final message, where the bot otherwise just goes quiet —
+  because an unexplained change of author is exactly what an auditor will ask
+  about.
+- **The channel-retention warning is now said in full** in the context panel
+  (the header keeps the ⚠), at the place an agent decides what to type.
+- **The management controls left the thread header** for the panel; the header
+  keeps identity only.
+- The 896-line page split into `conversation-list` / `message-thread` /
+  `context-panel` / `shared` under `components/conversations/`, all behavioural
+  invariants kept (URL-held tab and thread, pinned scroll via ResizeObserver,
+  note-mode colour shift, take-over reason requirement, mirror of the server's
+  reassignment rule).
+- **A `NativeSelect` primitive** (`components/ui/native-select.tsx`) replaced
+  bare `<select>`s: the browser draws its caret flush against the edge where no
+  stylesheet can reach it, so `appearance-none` plus an owned chevron is the
+  only real fix. The two selects in the panel use it; a sweep found no other
+  raw selects in either portal.
+
+Verified in the running portal against the seeded conversations: search,
+keyboard navigation, note mode, day separators, the trailing take-over marker,
+the panel toggle, and both selects at 1440 and 1024 widths. `tsc` and the
+production build pass. Not yet done: none of the new components have unit
+tests, and the intake-progress regex is only as durable as the bot's numbering
+convention — both noted here so neither is mistaken for finished.
+
+### Conversation ↔ Case ↔ Claim audit — 17 August 2026
+
+**Question asked:** does the codebase strictly follow the user-flow site's
+account of how a conversation fills a Case and a Case becomes a Claim?
+Three rounds: doc claims enumerated, each verified against code, invariants
+checked on live rows (974 converted cases: every one holds a claim, no claim
+without CONVERTED status, claimant identity consistent across the boundary).
+
+**Held exactly:** both state machines match their transition tables
+edge-for-edge (the three unreachable claim statuses still pinned by test);
+`convert()` refuses MEDICAL outside expert referral; messaging answers go
+through `patchAnswer` + `assertAccess` with no second write path; insert-first
+dedupe on the platform message id; HANDOVER stands the bot down on every path
+including the error-apology one; only `isReview` submits; `activeCaseId`
+releases a finished Case so a claimant can file again.
+
+**Four discrepancies found, three fixed, one recorded:**
+
+1. **The inbox labelled a Case as "Claim"** — found live by an operator whose
+   click on the CSE-number landed on the case screen. The panel now says
+   "Claim request (case)" and, once conversion has run, links the actual Claim
+   — the conversations API's `activeCase` now carries
+   `convertedClaim {id, claimNumber, status}` for exactly that link.
+2. **User-flow §9b still drew the Telegram OTP** removed on 11 Aug (the
+   platform-verified contact binds with no code; the code survives on the
+   public web-chat door, where five wrong attempts burn the pending number and
+   restart — not the "paused, contact support" the diagram claimed). Diagram
+   and note corrected.
+3. **User-flow §3 stamped `documentsCompleteAt` during Case intake** — the
+   column is the Claim's CSP 10.13 anchor and nothing stamped it at
+   conversion, so a conversationally-intaken claim arriving with complete
+   evidence started its final-report clock only at the REPORT_PENDING proxy
+   the event was built to avoid. Fixed in code: `convert()` now calls
+   `refreshDocumentsComplete` after the copy (same method as the upload path,
+   so the checklist logic stays in one place); doc rewritten to say where the
+   anchor lives. All 744 case-service tests pass.
+4. **Cross-tenant reads disagree between the entities** — Cases answer an
+   obfuscated 404 to everyone; Claims 404 a claimant but throw 403 at staff of
+   another tenant, which confirms the record exists. User-flow §11 said
+   "ForbiddenException" and then praised 404 semantics in the same breath; it
+   now states the split honestly. **The code asymmetry is recorded, not
+   changed** — unifying claim reads onto 404 alters security-relevant API
+   behaviour and belongs to its own decision, not an audit's side-effect.
+
+**Two operator-reported fixes landed alongside the audit, same day:**
+
+- **Case details printed raw ISO strings** (`2026-08-17T00:00:00.000Z`) for
+  date and datetime intake answers. Now rendered through `formatDateAnswer` —
+  the same shared-types formatter the bot's review summary uses, UTC getters
+  by design so the operator reads the words the claimant confirmed. A third
+  formatter would eventually disagree with the other two; reusing the one is
+  the point.
+- **The sidebar regrouped by pipeline stage** — Overview / Intake / Assessment
+  / Finance / Library / Support — with live pending counts on the Intake
+  queues: emails NEEDS_REVIEW+FAILED, conversations OPEN, cases
+  SUBMITTED+UNDER_REVIEW. Counts are things the firm owes action on, not row
+  totals (INFO_REQUESTED and PENDING wait on the claimant and are excluded).
+  Badge queries reuse each page's query key so an open page and its badge
+  share one fetch, and are gated by the same permission filter as the nav
+  item. Three copy-pasted section renderers became one.
+
+### Listing pages: URL state and shared chrome — 17 August 2026
+
+**Every listing page now holds its tab, search and page in the URL**, through
+one hook (`use-list-params.ts`) rather than a convention: tab changes push and
+reset the page, search replaces (a back button walking a search letter by
+letter is unusable), page 1 stays out of the address, an out-of-range page
+snaps back (`usePageClamp`), and a hand-edited tab value falls back to the
+default view. Applied to cases, claims (which also gains `view=MY_CLAIMS` —
+and loses the bug where switching to My claims kept a stale page number),
+documents, sessions, FNOL intake and the tenants admin. Conversations already
+worked this way; the hook generalises its decisions.
+
+**The URL is thereby an input surface, so the API validates it**:
+`CaseQueryDto` now checks `status`/`channel`/`travelClaimType` against the
+Prisma enums and `page`/`limit` as numeric — a hand-typed
+`?status=NONSENSE` is a 400 naming the field, where it used to be cast blind
+into Prisma and surface as a 500. `findAll`'s tab-bar breakdown is computed
+over the search scope (not the status filter), so tab counts narrow with a
+search instead of advertising rows the list will not show.
+
+**Same-purpose chrome extracted after an audit found it pasted and drifting**:
+`ListTabs` (five hand-rolled tab strips, one of which never announced its
+active tab), `ListPagination` (four pagination footers in two disagreeing
+layouts), `ViewToggle` (three copies), `EmptyState`. `formatDate` in
+`lib/utils.ts` emitted ISO `yyyy-MM-dd` while its sibling and the inline
+formatters used `dd MMM yyyy` — one table showed both side by side; now one
+format. Remaining, recorded not churned: intake and conversations use pill
+buttons where the queue pages use underline tabs (both defensible, one should
+win eventually), and the per-domain status-style maps are deliberately
+separate because they describe different enums.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working
