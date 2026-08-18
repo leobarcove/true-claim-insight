@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'crypto';
+
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -92,6 +94,16 @@ export class MediaTooLargeError extends Error {
  * (WhatsApp's 10-row lists and template rules above all) is a tightening of
  * what already works here, not a new shape.
  */
+/**
+ * How long a Mini App launch stays usable, and how much clock drift to forgive.
+ *
+ * Fifteen minutes covers a claimant who opens the form, goes to find a boarding
+ * pass, and comes back — the session the gateway issues afterwards carries the
+ * rest of the visit, so this bounds the *launch*, not the conversation.
+ */
+const MINI_APP_MAX_AGE_SECONDS = 15 * 60;
+const MINI_APP_CLOCK_SKEW_SECONDS = 60;
+
 @Injectable()
 export class TelegramAdapter implements ChannelAdapter {
   readonly channel = CaseChannel.TELEGRAM;
@@ -105,6 +117,78 @@ export class TelegramAdapter implements ChannelAdapter {
     private readonly config: ConfigService
   ) {
     this.token = this.config.get<string>('TELEGRAM_BOT_TOKEN') || undefined;
+  }
+
+  /**
+   * Verify a Mini App's `initData` and return the Telegram user id it attests.
+   *
+   * Telegram signs the launch parameters with a key derived from the bot token,
+   * so a valid signature proves the page really was opened from a Telegram
+   * client for that user — the same attestation the thread relies on, arriving
+   * over HTTP instead of over the Bot API. Without this check `initData` is
+   * just a query string the browser could invent, and the Mini App would be an
+   * unauthenticated way into someone else's claim.
+   *
+   * The derivation is HMAC-of-HMAC and the order is not interchangeable: the
+   * *key* is `HMAC_SHA256("WebAppData", botToken)`, and that result keys the
+   * hash of the data. Signing with the raw token instead verifies nothing an
+   * attacker could not also compute if the token ever leaked into a client.
+   *
+   * @returns the Telegram user id as a string, or null if it does not verify.
+   */
+  verifyInitData(initData: string, now: Date = new Date()): string | null {
+    if (!this.token || !initData) return null;
+
+    let params: URLSearchParams;
+    try {
+      params = new URLSearchParams(initData);
+    } catch {
+      return null;
+    }
+
+    const hash = params.get('hash');
+    if (!hash) return null;
+
+    // Every field except `hash`, sorted, as `key=value` joined by newlines.
+    // Sorting is part of the spec, not a tidiness choice — Telegram signed the
+    // sorted form, so any other order hashes to something else entirely.
+    params.delete('hash');
+    const checkString = [...params.entries()]
+      .map(([key, value]) => `${key}=${value}`)
+      .sort()
+      .join('\n');
+
+    const secret = createHmac('sha256', 'WebAppData').update(this.token).digest();
+    const expected = createHmac('sha256', secret).update(checkString).digest('hex');
+
+    // Constant-time, because this is a value the caller supplies and can
+    // iterate on. Length-checked first: timingSafeEqual throws on a mismatch
+    // rather than returning false, and a thrown comparison is a 500 where a
+    // forged signature should be a refusal.
+    if (hash.length !== expected.length) return null;
+    if (!timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(expected, 'hex'))) return null;
+
+    // A signature stays valid forever; `auth_date` is what stops a captured
+    // launch URL being replayed next month. Telegram recommends checking it and
+    // does not enforce it, so the window is ours to choose — long enough that a
+    // claimant can be interrupted mid-claim, short enough that a leaked link in
+    // a screenshot or a shared browser history is not a way in.
+    const authDate = Number(params.get('auth_date'));
+    if (!Number.isFinite(authDate)) return null;
+    const ageSeconds = now.getTime() / 1000 - authDate;
+    if (ageSeconds < -MINI_APP_CLOCK_SKEW_SECONDS || ageSeconds > MINI_APP_MAX_AGE_SECONDS) {
+      this.logger.warn('Mini App initData verified but is outside the freshness window.');
+      return null;
+    }
+
+    try {
+      const user = JSON.parse(params.get('user') ?? '{}');
+      // Same string the poller stores as `platformUserId`, so the binding this
+      // resolves is the one the thread has been using all along.
+      return user?.id ? String(user.id) : null;
+    } catch {
+      return null;
+    }
   }
 
   isConfigured(): boolean {
@@ -399,7 +483,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
     if (step.answerType === 'choice' && step.choices?.length) {
       const page = prompt.choicePage ?? 0;
-      const rendering = renderChoices(this.capabilities, step.choices, page);
+      const rendering = renderChoices(this.capabilities, step.choices, page, step.allowOther);
       const rows = rendering.options.map(option => [
         { text: option.label, callback_data: this.callbackData(step.id, option.value) },
       ]);
@@ -415,17 +499,52 @@ export class TelegramAdapter implements ChannelAdapter {
     }
 
     if (step.answerType === 'confirm') {
-      return {
-        inline_keyboard: [
-          [
-            { text: '✅ Confirm', callback_data: this.callbackData(step.id, 'true') },
-            { text: '✏️ Change something', callback_data: this.callbackData(step.id, 'false') },
-          ],
+      const rows: Array<Array<Record<string, unknown>>> = [
+        [
+          { text: '✅ Confirm', callback_data: this.callbackData(step.id, 'true') },
+          { text: '✏️ Change something', callback_data: this.callbackData(step.id, 'false') },
         ],
-      };
+      ];
+      // The review is the strongest case for the form. In a thread the summary
+      // is a wall of text in a bubble, and the claimant is being asked to check
+      // the facts of their own claim in it.
+      const form = this.miniAppButton();
+      if (form) rows.push([form]);
+      return { inline_keyboard: rows };
+    }
+
+    // Dates, where a picker beats parsing what someone typed and where the
+    // thread has no affordance at all. Document steps are deliberately left
+    // alone: Telegram's own attach button already opens the camera and the
+    // file browser, so a form would be a longer route to the same place.
+    if (step.answerType === 'date' || step.answerType === 'datetime') {
+      const form = this.miniAppButton();
+      if (form) return { inline_keyboard: [[form]] };
     }
 
     return undefined;
+  }
+
+  /**
+   * The button that opens the Mini App, or nothing.
+   *
+   * Two conditions, and both must hold. `formPrimitive` is the channel's
+   * declared ability to show one at all — the reason this is a capability and
+   * not an `if (channel === TELEGRAM)` is that WhatsApp answers the same
+   * question with `native_form`, which is not a URL and cannot be offered this
+   * way. `CLAIMANT_WEB_URL` is the deployment fact: Telegram will only open an
+   * HTTPS origin it can reach, so on a developer machine with no tunnel there
+   * is no button rather than a broken one.
+   *
+   * It carries no token. The page proves who the claimant is with the
+   * `initData` Telegram hands it on launch, which is the whole point — a URL
+   * with a session in it is a URL that can be forwarded.
+   */
+  private miniAppButton(): Record<string, unknown> | undefined {
+    if (this.capabilities.formPrimitive !== 'webview') return undefined;
+    const url = this.config.get<string>('CLAIMANT_WEB_URL');
+    if (!url?.startsWith('https://')) return undefined;
+    return { text: '📝 Open the form', web_app: { url: `${url.replace(/\/$/, '')}/tg` } };
   }
 
   /**

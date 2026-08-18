@@ -3,6 +3,7 @@ import { Loader2, UserRound } from 'lucide-react';
 
 import {
   clearPublicSession,
+  isChannelSession,
   publicConversationKey,
   usePublicConversation,
   useSendPublicTurn,
@@ -96,7 +97,24 @@ export function PublicChatPage() {
     }
   };
 
+  /**
+   * Abandon this conversation and open a fresh one.
+   *
+   * Only ever offered on a web thread the visitor owns. In the Telegram Mini
+   * App the session names a binding the *thread* owns — clearing it would drop
+   * the claimant out of the claim they have been building with the bot and into
+   * a new anonymous web conversation, with no way back except closing the
+   * window. That is precisely the failure the session bridge exists to prevent,
+   * and it was reachable from a button.
+   */
   const startOver = () => {
+    // Guarded here as well as at the button, not instead of it. Hiding a
+    // control keeps it out of reach; refusing inside the function keeps it
+    // wrong for the next caller too, and this one is destructive enough that
+    // the two costs are not comparable — a mistaken tap loses a claim the
+    // claimant has been building with the bot, and the only route back is
+    // closing the window and reopening it from the thread.
+    if (isChannelSession()) return;
     clearPublicSession();
     queryClient.removeQueries({ queryKey: publicConversationKey });
     started.current = false;
@@ -188,14 +206,16 @@ export function PublicChatPage() {
                 <UserRound className="h-3.5 w-3.5" />
                 Talk to a person
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={startOver}
-                className="py-1 text-xs text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
-              >
-                Start again
-              </button>
+              {!isChannelSession() && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={startOver}
+                  className="py-1 text-xs text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
+                >
+                  Start again
+                </button>
+              )}
             </div>
           </>
         )}

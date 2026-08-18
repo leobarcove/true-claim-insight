@@ -110,8 +110,34 @@ export interface FlowStep {
   label: string;
   answerType: AnswerType;
   choices?: Array<{ value: string; label: string; title?: string; description?: string }>;
+  /**
+   * A choice step that also accepts a typed answer.
+   *
+   * The escape hatch for any list that is *common* rather than *complete* —
+   * airlines, destinations, banks. Without it a claimant whose answer is not
+   * on the list is stuck at a question they can see is wrong for them, and
+   * the documented failure mode of guided bots is exactly this: an option set
+   * that looks total and is not.
+   *
+   * A typed value is stored verbatim, so `value in choices` is what
+   * distinguishes a code from free text downstream. Do not set it on a step
+   * whose answer drives a branch — `branchInputSteps` routes on exact values,
+   * and free text would fall to the default arm without anyone noticing.
+   */
+  allowOther?: boolean;
   /** Present when answerType === 'document'. */
   documentType?: DocumentType;
+  /**
+   * Extra guidance shown under the prompt: where to find the thing, what an
+   * acceptable version of it looks like.
+   *
+   * Separate from `prompt` because the two have different jobs and different
+   * audiences. The prompt is the question, and it is what the staff capture
+   * form and the review summary show; this is the bit a claimant standing in
+   * an airport needs and an adjuster at a desk does not. Keeping them apart
+   * also means a channel too tight to carry both can drop this one.
+   */
+  hint?: string;
   optional?: boolean;
   /**
    * Refuse a date after today. Set on steps recording something that has
@@ -144,6 +170,16 @@ export interface FlowStep {
      * claimant has stopped thinking about it.
      */
     minLength?: number;
+    /**
+     * Replaces the generic "that does not look right" rejection with one that
+     * says what right looks like.
+     *
+     * The default names no rule, so a claimant who typed a bank account as
+     * "1234-5678" is told only that it is wrong — and the obvious repair, to
+     * retype the same thing more carefully, fails identically. An error that
+     * cannot be acted on is a loop, and the loop is at the payout step.
+     */
+    patternError?: string;
     /**
      * Replaces the "we need your own description" rejection on steps where
      * `minLength` is guarding something that is not a description.
@@ -189,6 +225,145 @@ export const NOTIFY_WITHIN_HOURS = 24;
 export const CLAIM_WINDOW_DAYS = 30;
 
 // ---------------------------------------------------------------------------
+// Bounded answer sets
+// ---------------------------------------------------------------------------
+
+/*
+ * Three questions used to be free text, and a real WhatsApp intake answered
+ * all three with abbreviations nothing downstream can use: destination "SG",
+ * airline "MAS", bank "CIMB". An adjuster can guess; a payout file and a
+ * flight-delay lookup cannot.
+ *
+ * Every one of these steps keeps `allowOther`. Offering a list and refusing
+ * anything outside it is the classic conversational-form failure — a claimant
+ * flying a carrier we did not think of has no way past the question, and the
+ * cost of that is the whole claim, not one poor answer.
+ *
+ * ORDER IS LOAD-BEARING. Only the first `CHOICE_DISPLAY_MAX` entries are
+ * offered as taps; everything after is reachable by typing. The cap is a
+ * usability limit rather than a channel one — Telegram will render a hundred
+ * buttons and nobody reads them.
+ */
+
+/**
+ * Where a payout is sent.
+ *
+ * The stored value is a slug, deliberately **not** a SWIFT/BIC or a DuitNow
+ * participant code. Those are properties of a payment rail we have not built
+ * yet, they differ per rail, and an answer already recorded against a live
+ * claim must not turn out to have been the wrong identifier for whichever rail
+ * is chosen. One mapping table, written when payouts are, converts these.
+ *
+ * Islamic subsidiaries are not listed separately: a claimant reads the brand
+ * on their card, and "CIMB" versus "CIMB Islamic" is a distinction the payout
+ * rail resolves from the account number, not one to make a stressed claimant
+ * choose between.
+ */
+export const BANK_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'MAYBANK', label: 'Maybank' },
+  { value: 'CIMB', label: 'CIMB Bank' },
+  { value: 'PUBLIC_BANK', label: 'Public Bank' },
+  { value: 'RHB', label: 'RHB Bank' },
+  { value: 'HONG_LEONG', label: 'Hong Leong Bank' },
+  { value: 'AMBANK', label: 'AmBank' },
+  { value: 'BANK_ISLAM', label: 'Bank Islam' },
+  { value: 'BSN', label: 'Bank Simpanan Nasional' },
+  // Below the fold — typed, not tapped.
+  { value: 'BANK_RAKYAT', label: 'Bank Rakyat' },
+  { value: 'ALLIANCE', label: 'Alliance Bank' },
+  { value: 'AFFIN', label: 'Affin Bank' },
+  { value: 'OCBC', label: 'OCBC Bank' },
+  { value: 'HSBC', label: 'HSBC Bank Malaysia' },
+  { value: 'UOB', label: 'UOB Malaysia' },
+  { value: 'STANDARD_CHARTERED', label: 'Standard Chartered' },
+  { value: 'BANK_MUAMALAT', label: 'Bank Muamalat' },
+  { value: 'AGROBANK', label: 'Agrobank' },
+  { value: 'MBSB', label: 'MBSB Bank' },
+  { value: 'AL_RAJHI', label: 'Al Rajhi Bank' },
+  { value: 'KFH', label: 'Kuwait Finance House' },
+  { value: 'CITIBANK', label: 'Citibank' },
+];
+
+/**
+ * Carriers, keyed by IATA code.
+ *
+ * IATA rather than ICAO for two reasons. It is what the claimant is holding —
+ * the boarding pass and the booking email both print it — and it is the prefix
+ * of the flight number the very next step already validates, so "MH" against
+ * "MH168" is a consistency check available for free. ICAO ("MAS") is an
+ * operational code a passenger never sees, which is exactly why a claimant
+ * typing it unprompted is ambiguous.
+ */
+export const AIRLINE_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'MH', label: 'Malaysia Airlines' },
+  { value: 'AK', label: 'AirAsia' },
+  { value: 'D7', label: 'AirAsia X' },
+  { value: 'OD', label: 'Batik Air Malaysia' },
+  { value: 'FY', label: 'Firefly' },
+  { value: 'SQ', label: 'Singapore Airlines' },
+  { value: 'TR', label: 'Scoot' },
+  { value: 'CX', label: 'Cathay Pacific' },
+  // Below the fold — typed, not tapped.
+  { value: 'EK', label: 'Emirates' },
+  { value: 'QR', label: 'Qatar Airways' },
+  { value: 'TG', label: 'Thai Airways' },
+  { value: 'VJ', label: 'VietJet Air' },
+  { value: 'VN', label: 'Vietnam Airlines' },
+  { value: 'GA', label: 'Garuda Indonesia' },
+  { value: 'JL', label: 'Japan Airlines' },
+  { value: 'NH', label: 'ANA' },
+  { value: 'KE', label: 'Korean Air' },
+  { value: 'BR', label: 'EVA Air' },
+  { value: 'CI', label: 'China Airlines' },
+  { value: 'MF', label: 'Xiamen Air' },
+  { value: 'QZ', label: 'Indonesia AirAsia' },
+  { value: 'PR', label: 'Philippine Airlines' },
+];
+
+/**
+ * Destinations, keyed by ISO 3166-1 alpha-2.
+ *
+ * A published standard rather than our own list, so the value stays meaningful
+ * to anything it is ever handed to. The claimant who typed "SG" had in fact
+ * written the correct code — the problem was that nothing said so, and "SG"
+ * from a free-text box could equally have been a typo.
+ */
+export const DESTINATION_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'SG', label: 'Singapore' },
+  { value: 'TH', label: 'Thailand' },
+  { value: 'ID', label: 'Indonesia' },
+  { value: 'JP', label: 'Japan' },
+  { value: 'VN', label: 'Vietnam' },
+  { value: 'AU', label: 'Australia' },
+  { value: 'KR', label: 'South Korea' },
+  { value: 'CN', label: 'China' },
+  // Below the fold — typed, not tapped.
+  { value: 'TW', label: 'Taiwan' },
+  { value: 'HK', label: 'Hong Kong' },
+  { value: 'PH', label: 'Philippines' },
+  { value: 'IN', label: 'India' },
+  { value: 'KH', label: 'Cambodia' },
+  { value: 'LA', label: 'Laos' },
+  { value: 'MM', label: 'Myanmar' },
+  { value: 'BN', label: 'Brunei' },
+  { value: 'NZ', label: 'New Zealand' },
+  { value: 'AE', label: 'United Arab Emirates' },
+  { value: 'SA', label: 'Saudi Arabia' },
+  { value: 'TR', label: 'Türkiye' },
+  { value: 'GB', label: 'United Kingdom' },
+  { value: 'FR', label: 'France' },
+  { value: 'IT', label: 'Italy' },
+  { value: 'DE', label: 'Germany' },
+  { value: 'CH', label: 'Switzerland' },
+  { value: 'NL', label: 'Netherlands' },
+  { value: 'ES', label: 'Spain' },
+  { value: 'US', label: 'United States' },
+  { value: 'CA', label: 'Canada' },
+  { value: 'EG', label: 'Egypt' },
+  { value: 'ZA', label: 'South Africa' },
+];
+
+// ---------------------------------------------------------------------------
 // Shared step fragments
 // ---------------------------------------------------------------------------
 
@@ -221,8 +396,10 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
   },
   {
     id: 'policy-number',
-    prompt:
-      'What is your travel policy number? You will find it on your policy schedule or confirmation email. If you do not have it to hand, type "skip" and our team will look it up.',
+    prompt: 'What is your travel policy number?',
+    hint:
+      'It is on your policy schedule or the confirmation email you were sent when you bought the cover. ' +
+      'If you cannot find it, type "skip" — our team will look it up for you.',
     label: 'Policy number',
     answerType: 'text',
     optional: true,
@@ -242,9 +419,12 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
   },
   {
     id: 'destination',
-    prompt: 'Which country or destination were you travelling to?',
+    prompt: 'Which country were you travelling to?',
+    hint: 'Tap your destination below, or type the country name if it is not listed.',
     label: 'Destination',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...DESTINATION_CHOICES],
+    allowOther: true,
   },
   {
     id: 'incident-date',
@@ -269,21 +449,33 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
       'Nearly done — the last part is where to send your payout.\n\n' +
       'Your account number is encrypted and our team only ever sees the last four digits. ' +
       'We will never ask you to pay us anything.\n\n' +
-      'Which bank is your account with? (e.g. Maybank, CIMB, Public Bank)',
+      'Which bank is your account with?',
+    hint: 'Tap your bank below, or type its name if it is not listed.',
     label: 'Bank name',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...BANK_CHOICES],
+    allowOther: true,
   },
   {
     id: 'bank-account-number',
     prompt: 'What is your bank account number?',
+    hint: 'Numbers only — no spaces or dashes.',
     label: 'Bank account number',
     answerType: 'text',
-    validation: { pattern: '^[0-9]{6,20}$' },
+    validation: {
+      pattern: '^[0-9]{6,20}$',
+      // The generic rejection told a claimant their account number was wrong
+      // without saying why, at the last step before submission, with the
+      // obvious repair — retyping it the same way — failing identically.
+      patternError:
+        'Please type the account number using numbers only, with no spaces or dashes.',
+    },
     system: true, // keys SENSITIVE_ANSWER_STEPS — the redaction set is by step id
   },
   {
     id: 'bank-account-holder',
     prompt: 'And the account holder name, exactly as registered with the bank?',
+    hint: 'If the account is in someone else’s name, give their name here — we will ask about it later.',
     label: 'Account holder name',
     answerType: 'text',
   },
@@ -303,15 +495,27 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   },
 ];
 
+/**
+ * `hint` is mandatory here, unlike on `FlowStep` generally.
+ *
+ * A document step is the one place a claimant is asked for something they may
+ * not have, may not recognise by the name we call it, and cannot invent. The
+ * flow used to name the artefact and stop — "the Property Irregularity Report"
+ * is what the airline calls it and not what the claimant was handed. Naming a
+ * thing is not the same as telling someone where to find it, so the parameter
+ * is positional and required rather than optional and forgotten.
+ */
 const documentStep = (
   id: string,
   documentType: DocumentType,
   prompt: string,
   label: string,
+  hint: string,
   optional = false
 ): Omit<FlowStep, 'next'> => ({
   id,
   prompt,
+  hint,
   label,
   answerType: 'document',
   documentType,
@@ -347,15 +551,24 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
   {
     id: 'airline',
     prompt: 'Which airline were you flying with?',
+    hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...AIRLINE_CHOICES],
+    allowOther: true,
   },
   {
     id: 'flight-number',
-    prompt: 'What was your flight number? (e.g. MH370, AK6042)',
+    prompt: 'What was your flight number?',
+    hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
     answerType: 'text',
-    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+    validation: {
+      pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
+      patternError:
+        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'for example MH168 or AK6042. You will find it on your boarding pass.',
+    },
   },
   {
     id: 'scheduled-departure',
@@ -374,19 +587,25 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     'doc-airline-delay-confirmation',
     Doc.AIRLINE_DELAY_CONFIRMATION,
     'Please upload the airline’s written confirmation of the delay or cancellation.',
-    'Airline delay confirmation'
+    'Airline delay confirmation',
+    'This is the email, SMS or printed slip from the airline saying your flight was delayed ' +
+    'or cancelled. A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-boarding-pass',
     Doc.BOARDING_PASS,
     'Please upload your boarding pass for the delayed flight.',
-    'Boarding pass'
+    'Boarding pass',
+    'The paper stub, or the pass saved in your phone. ' +
+    'A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-flight-itinerary',
     Doc.FLIGHT_ITINERARY,
     'Please upload your e-ticket or booking confirmation.',
-    'Flight itinerary'
+    'Flight itinerary',
+    'The email the airline or travel agent sent you when you booked. ' +
+    'A clear photo or screenshot is fine.',
   ),
 ]);
 
@@ -394,15 +613,24 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
   {
     id: 'airline',
     prompt: 'Which airline were you flying with when the damage occurred?',
+    hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...AIRLINE_CHOICES],
+    allowOther: true,
   },
   {
     id: 'flight-number',
     prompt: 'What was your flight number?',
+    hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
     answerType: 'text',
-    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+    validation: {
+      pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
+      patternError:
+        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'for example MH168 or AK6042. You will find it on your boarding pass.',
+    },
   },
   {
     id: 'baggage-tag',
@@ -427,26 +655,34 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
   documentStep(
     'doc-pir',
     Doc.PROPERTY_IRREGULARITY_REPORT,
-    'Please upload the Property Irregularity Report (PIR) issued by the airline. You can request it at the airline’s baggage services counter.',
-    'Property Irregularity Report (PIR)'
+    'Please send the baggage report the airline issued.',
+    'Airline baggage report (PIR)',
+    'The form the airline gave you at the baggage counter when you reported the problem — ' +
+    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-baggage-tag',
     Doc.BAGGAGE_TAG,
     'Please upload a photo of the baggage tag.',
-    'Baggage tag'
+    'Baggage tag',
+    'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
+    'A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-damage-photo',
     Doc.DAMAGE_PHOTO,
     'Please upload clear photographs of the damaged luggage.',
-    'Damage photographs'
+    'Damage photographs',
+    'Take them in good light: one of the whole bag, then a close-up of each damaged part. ' +
+    'Several photos are better than one.',
   ),
   documentStep(
     'doc-proof-of-ownership',
     Doc.PROOF_OF_OWNERSHIP,
     'If you have a receipt or proof of purchase for the luggage, please upload it. Otherwise type "skip".',
     'Proof of ownership',
+    'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
+    'A clear photo or screenshot is fine.',
     true
   ),
 ]);
@@ -455,15 +691,24 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
   {
     id: 'airline',
     prompt: 'Which airline were you flying with when your luggage was lost?',
+    hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...AIRLINE_CHOICES],
+    allowOther: true,
   },
   {
     id: 'flight-number',
     prompt: 'What was your flight number?',
+    hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
     answerType: 'text',
-    validation: { pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$' },
+    validation: {
+      pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
+      patternError:
+        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'for example MH168 or AK6042. You will find it on your boarding pass.',
+    },
   },
   {
     id: 'baggage-tag',
@@ -488,20 +733,26 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
   documentStep(
     'doc-pir',
     Doc.PROPERTY_IRREGULARITY_REPORT,
-    'Please upload the Property Irregularity Report (PIR) issued by the airline.',
-    'Property Irregularity Report (PIR)'
+    'Please send the baggage report the airline issued.',
+    'Airline baggage report (PIR)',
+    'The form the airline gave you at the baggage counter when you reported the problem — ' +
+    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-baggage-tag',
     Doc.BAGGAGE_TAG,
     'Please upload a photo of the baggage tag or check-in receipt.',
-    'Baggage tag'
+    'Baggage tag',
+    'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
+    'A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-proof-of-ownership',
     Doc.PROOF_OF_OWNERSHIP,
     'Please upload receipts or proof of ownership for the items you are claiming.',
-    'Proof of ownership'
+    'Proof of ownership',
+    'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
+    'A clear photo or screenshot is fine.',
   ),
 ]);
 
@@ -532,19 +783,25 @@ const tripCancellationFlow = buildFlow(
       'doc-medical-report',
       Doc.MEDICAL_REPORT,
       'As the cancellation was for medical reasons, please upload the medical report or certificate.',
-      'Medical report'
+      'Medical report',
+      'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
+      'A clear photo or screenshot is fine.',
     ),
     documentStep(
       'doc-booking-invoice',
       Doc.TRAVEL_BOOKING_INVOICE,
       'Please upload your booking invoices and any cancellation or refund correspondence.',
-      'Booking invoices'
+      'Booking invoices',
+      'Your booking invoices, plus any email showing what was refunded and what was not. ' +
+      'A clear photo or screenshot is fine.',
     ),
     documentStep(
       'doc-flight-itinerary',
       Doc.FLIGHT_ITINERARY,
       'Please upload the e-ticket or booking confirmation for the cancelled trip.',
-      'Flight itinerary'
+      'Flight itinerary',
+      'The email the airline or travel agent sent you when you booked. ' +
+      'A clear photo or screenshot is fine.',
     ),
   ],
   {
@@ -564,8 +821,11 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
   {
     id: 'treatment-country',
     prompt: 'In which country did you receive treatment?',
+    hint: 'Tap the country below, or type its name if it is not listed.',
     label: 'Treatment country',
-    answerType: 'text',
+    answerType: 'choice',
+    choices: [...DESTINATION_CHOICES],
+    allowOther: true,
   },
   {
     id: 'hospital-name',
@@ -591,19 +851,25 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     'doc-overseas-medical-bill',
     Doc.OVERSEAS_MEDICAL_BILL,
     'Please upload your itemised medical bills and receipts.',
-    'Overseas medical bills'
+    'Overseas medical bills',
+    'The itemised bills and receipts — the ones listing each treatment and what it cost. ' +
+    'A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-medical-report',
     Doc.MEDICAL_REPORT,
     'Please upload the medical report or discharge summary from the treating hospital.',
-    'Medical report'
+    'Medical report',
+    'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
+    'A clear photo or screenshot is fine.',
   ),
   documentStep(
     'doc-passport',
     Doc.PASSPORT,
     'Please upload the passport pages showing your identity and travel entry/exit stamps.',
-    'Passport'
+    'Passport',
+    'The photo page, plus the pages stamped when you entered and left the country. ' +
+    'A clear photo or screenshot is fine.',
   ),
   {
     id: 'medical-review-note',
@@ -876,6 +1142,22 @@ export function parseAmount(raw: string): number {
 }
 
 /**
+ * A label lowered into running prose without flattening its acronyms.
+ *
+ * Word-by-word rather than a whole-string `toLowerCase`, because the only
+ * tokens that must survive are the ones that are already all capitals.
+ */
+const sentenceCase = (label: string): string =>
+  label
+    .split(' ')
+    .map(word => {
+      const bare = word.replace(/[()]/g, '');
+      const isAcronym = bare.length > 1 && bare === bare.toUpperCase() && /[A-Z]/.test(bare);
+      return isAcronym ? word : word.toLowerCase();
+    })
+    .join(' ');
+
+/**
  * What a claimant should go and find before starting.
  *
  * The single most useful thing a form can tell someone, and this conversation
@@ -890,7 +1172,10 @@ export const whatYouWillNeed = (flow: CaseFlow): string[] => {
     needs.push('your travel policy number');
   }
   for (const step of flow.steps) {
-    if (step.answerType === 'document') needs.push(step.label.toLowerCase());
+    // Lower-cased to sit in a sentence-style list, except for acronyms, which
+    // read as typos in lower case — "airline baggage report (pir)" looks like a
+    // mistake in the first message a claimant gets.
+    if (step.answerType === 'document') needs.push(sentenceCase(step.label));
   }
   if (flow.steps.some(step => step.id === 'bank-account-number')) {
     needs.push('your bank details for the payout');
@@ -1161,7 +1446,12 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         }
       }
       if (step.validation?.pattern && !new RegExp(step.validation.pattern).test(value.trim())) {
-        return { valid: false, error: 'That does not look right — please check the format and try again.' };
+        return {
+          valid: false,
+          error:
+            step.validation.patternError ??
+            'That does not look right — please check the format and try again.',
+        };
       }
       return { valid: true };
     }
@@ -1239,10 +1529,21 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
       return { valid: true };
     }
     case 'choice': {
-      if (!step.choices?.some(choice => choice.value === value)) {
-        return { valid: false, error: 'Please choose one of the options.' };
+      if (step.choices?.some(choice => choice.value === value)) return { valid: true };
+
+      // Not on the list. On an `allowOther` step that is an answer, not an
+      // error — the list was the common cases, and this claimant is not one.
+      // Held to the same floor as a text step so "?" is still refused.
+      if (step.allowOther) {
+        if (typeof value !== 'string' || value.trim().length < 2) {
+          return {
+            valid: false,
+            error: 'Please tap one of the options, or type your answer in full.',
+          };
+        }
+        return { valid: true };
       }
-      return { valid: true };
+      return { valid: false, error: 'Please choose one of the options.' };
     }
     case 'document': {
       // Value is the uploaded CaseDocument id (or "skip" for optional docs).

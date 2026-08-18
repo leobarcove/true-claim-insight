@@ -95,7 +95,54 @@ export interface ChannelCapabilities {
    * in-channel anyway is deliberate and logged against MASTER_PLAN §3.
    */
   readonly retainsPlaintext: boolean;
+  /**
+   * The richer surface this channel can escalate a question to, if any.
+   *
+   * A messaging thread asks one question at a time and offers a keyboard. Both
+   * platforms in scope can do better than that without the claimant leaving the
+   * app, and they do it in incompatible ways:
+   *
+   *  - `webview` — Telegram Mini Apps. The channel opens *our* page, so the
+   *    renderer is `claimant-web` and there is nothing new to build per step.
+   *  - `native_form` — WhatsApp Flows. Meta renders the form from Flow JSON we
+   *    supply, so a step must be compiled into their component vocabulary.
+   *  - `none` — the thread is all there is.
+   *
+   * Declared rather than inferred because it decides whether the bot offers the
+   * escalation at all, and because the two are not interchangeable: a WhatsApp
+   * CTA-URL button *looks* like a webview and is not one — it leaves the app for
+   * the phone's browser, where the platform vouches for nobody, so the claimant
+   * would have to prove a number again to reach the claim they were already in.
+   */
+  readonly formPrimitive: 'none' | 'native_form' | 'webview';
 }
+
+/*
+ * A note on why there is no "webview capability profile" here.
+ *
+ * The obvious next move is a variant of these capabilities for when a claimant
+ * is answering in a Mini App rather than the thread — date pickers instead of
+ * "please type DD/MM/YYYY", an uncapped list instead of eight. It was written
+ * and then removed, because it is wrong for the surface Telegram actually
+ * gives us.
+ *
+ * **One message serves both surfaces.** A Mini App turn resolves the same
+ * binding as the thread, so the bot's reply is persisted once and appears in
+ * both — and it must, because the claimant can close the window mid-question
+ * and has to be able to carry on where they were. A prompt rendered for the
+ * webview would therefore land in the thread stripped of the format hint that
+ * is the only thing making it answerable there.
+ *
+ * So an outbound prompt renders for the *least* capable surface it can reach.
+ * What the richer surface adds is better **input controls**, and those are the
+ * client's own business: `AnswerControl` in claimant-web already draws a real
+ * date control from `answerType` alone and never consults these capabilities.
+ *
+ * The profile becomes correct the moment a surface has its own message stream —
+ * which is exactly what WhatsApp Flows is, since a Flow's screens are rendered
+ * from Flow JSON and never enter the thread at all. It belongs with that work,
+ * not ahead of it.
+ */
 
 /**
  * How a channel is named to staff.
@@ -134,6 +181,8 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     platformVerifiedPhone: false,
     requestsContactShare: false,
     retainsPlaintext: false,
+    // It is already the web; the Mini App renders this same page.
+    formPrimitive: 'webview',
   },
   [Channel.TELEGRAM]: {
     channel: Channel.TELEGRAM,
@@ -146,6 +195,8 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     platformVerifiedPhone: true,
     requestsContactShare: true,
     retainsPlaintext: true,
+    // Mini Apps, opened from a `web_app` inline button, showing claimant-web.
+    formPrimitive: 'webview',
   },
   [Channel.WHATSAPP]: {
     channel: Channel.WHATSAPP,
@@ -160,6 +211,9 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     // wa_id rides every inbound message, so there is no share step.
     requestsContactShare: false,
     retainsPlaintext: true,
+    // Flows. Not a webview: Meta renders the form, so a step has to be compiled
+    // into Flow JSON rather than handed to a page we already have.
+    formPrimitive: 'native_form',
   },
   [Channel.MESSENGER]: {
     channel: Channel.MESSENGER,
@@ -174,6 +228,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     // this channel will need its own identity step when it is built.
     requestsContactShare: true,
     retainsPlaintext: true,
+    formPrimitive: 'none',
   },
 };
 
@@ -221,12 +276,48 @@ export interface ChoiceRendering {
  * function never paginates for either. Revisit it if WhatsApp arrives, whose
  * limit of ten is the first that would genuinely truncate.
  */
+/**
+ * How many options a person will actually read, as distinct from how many the
+ * channel can physically render.
+ *
+ * These are different numbers and conflating them is a trap: Telegram accepts
+ * roughly a hundred inline buttons, so paginating to `choiceMax` there means
+ * showing a wall nobody scans. Guidance on guided bots converges on six to
+ * eight before a button grid stops helping, and long option sets being poorly
+ * served by paging through them is a long-standing usability finding.
+ *
+ * So the visible list is the *common* answers, and the rest of the set is
+ * reached by typing — which is why every long list here sets `allowOther`.
+ * A step without it still pages to the channel limit, because there the list
+ * is the complete set of legal values and hiding one would be a dead end.
+ */
+export const CHOICE_DISPLAY_MAX = 8;
+
 export const renderChoices = (
   capabilities: ChannelCapabilities,
   choices: RenderableChoice[],
-  page = 0
+  page = 0,
+  /**
+   * Set for a step whose list is illustrative rather than exhaustive. Caps the
+   * visible options and reports no further pages: "more" is the keyboard.
+   */
+  typeableOverflow = false
 ): ChoiceRendering => {
   const { choiceMax, choiceStyle } = capabilities;
+
+  if (typeableOverflow) {
+    const visible = Math.min(CHOICE_DISPLAY_MAX, choiceMax);
+    return {
+      style: choiceStyle,
+      options: choices.slice(0, visible),
+      page: 0,
+      // Deliberately false even when options were dropped. `hasMore` renders a
+      // "More options" affordance that pages through the list, and offering
+      // that alongside "or type it" gives two routes to the same place — one
+      // of which is a long crawl. The prompt's hint carries the real answer.
+      hasMore: false,
+    };
+  }
 
   if (!Number.isFinite(choiceMax) || choices.length <= choiceMax) {
     return { style: choiceStyle, options: choices, page: 0, hasMore: false };

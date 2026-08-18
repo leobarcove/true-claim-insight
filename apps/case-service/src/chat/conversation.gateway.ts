@@ -27,6 +27,7 @@ import {
   parseTextDate,
   ANSWER_MASK_PREFIX,
   SENSITIVE_ANSWER_STEPS,
+  SHARED_MEDIA_DESCRIPTION,
   SHARED_PHONE_DESCRIPTION,
   SKIP_VALUE,
   summariseAnswers,
@@ -601,9 +602,17 @@ export class ConversationGateway implements OnModuleInit {
           // contact gets a marker rather than the number, because this column
           // is neither encrypted nor swept by anonymisation and a transcript
           // must not become a second copy of personal data.
+          //
+          // Media is tested before the contact marker, and the order is the
+          // whole point: WhatsApp puts `wa_id` on every inbound message, so
+          // `sharedPhone` is always set there and an uncaptioned upload used
+          // to be described as a shared contact. Telegram, which only sets it
+          // on a real `request_contact` tap, never showed the fault — so the
+          // channel where it mattered was the one where it was invisible.
           text:
             payload.text ??
             describeCallbackValue(payload.callbackValue) ??
+            (payload.mediaRef ? SHARED_MEDIA_DESCRIPTION : null) ??
             (payload.sharedPhone ? SHARED_PHONE_DESCRIPTION : null),
           callbackValue: payload.callbackValue ?? null,
           mediaRef: payload.mediaRef ?? null,
@@ -2665,14 +2674,33 @@ export class ConversationGateway implements OnModuleInit {
     const shown = progress ?? (flow ? this.progressOf(flow, step.id) : undefined);
     let text = shown ? `(${shown.position} of ${shown.total}) ${step.prompt}` : step.prompt;
 
+    // Where to find the thing, and what an acceptable version of it looks
+    // like. Sits between the question and the format rules because that is the
+    // order someone answers in: understand what is wanted, find it, then worry
+    // about how to type it.
+    if (step.hint) text += `\n\n${step.hint}`;
+
     // A channel with no date control gets an explicit format hint, because the
     // claimant is about to type free text that has to parse.
+    //
+    // It advertises what `parseTextDate` actually accepts, not the narrowest
+    // legal form. The parser has always taken "16 June 2026", "16 Jun 26" and
+    // the relative words — but only the recovery message said so, so the
+    // generous wording was reserved for claimants who had already failed once.
+    // Telling them up front is the same sentence moved one turn earlier, and
+    // it removes the turn.
     const capabilities = adapter.capabilities ?? CHANNEL_CAPABILITIES[adapter.channel];
     if (
       capabilities?.dateEntry === 'text' &&
       (step.answerType === 'date' || step.answerType === 'datetime')
     ) {
-      text += step.answerType === 'date' ? '\n\nPlease use DD/MM/YYYY.' : '\n\nPlease use DD/MM/YYYY HH:MM.';
+      text +=
+        step.answerType === 'date'
+          ? '\n\nFor example 16/06/2026, or 16 June 2026 — or just "today" or "yesterday".'
+          : // No relative words offered here: `parseTextDate` refuses them on a
+            // datetime step, because inventing a clock reading the claimant
+            // never gave would put a made-up time on an incident record.
+            '\n\nFor example 16/06/2026 14:30, or 16 June 2026 2:30pm.';
     }
 
     if (step.answerType === 'document' && capabilities?.document === 'link_out') {
@@ -2694,7 +2722,17 @@ export class ConversationGateway implements OnModuleInit {
     // A correction feature nobody knows about does not exist. Kept to one
     // short line rather than repeated instructions, and only on steps a
     // claimant types into — a tapped button is not where typos happen.
-    if (step.answerType !== 'confirm' && step.answerType !== 'choice') {
+    //
+    // Periodic rather than every turn. On a sixteen-question flow the same
+    // sentence appeared under fourteen consecutive questions, and a line that
+    // never changes stops being read after the second sighting — so the one
+    // claimant who needed it at question eleven had long since tuned it out.
+    // First question and every fifth after: still always on screen within a
+    // few turns of wanting it, without becoming wallpaper. Re-asks carry no
+    // position, and those show it, which is right — a claimant who just got
+    // something wrong is exactly who the line is for.
+    const remindable = step.answerType !== 'confirm' && step.answerType !== 'choice';
+    if (remindable && (!shown || shown.position === 1 || shown.position % 5 === 0)) {
       text += '\n\nType "back" to change your last answer, or "edit" to change any of them.';
     }
 

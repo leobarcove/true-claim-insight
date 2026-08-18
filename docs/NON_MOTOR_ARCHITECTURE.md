@@ -167,7 +167,8 @@ asking different questions or storing different values. A choice override may
 relabel a value the base step already defines, never add one — adding one would
 change what can be stored, which is structure.
 
-Two rules generalise beyond travel, and both matter as fire and flood arrive:
+Three rules generalise beyond travel, and all three matter as fire and flood
+arrive:
 
 - **Mark what the rest of the system reads by name.** `system: true` protects
   `incident-date` (CSP deadline flags), `trip-start` (promoted to
@@ -178,6 +179,46 @@ Two rules generalise beyond travel, and both matter as fire and flood arrive:
   `flowVersion` mean publishing an edit cannot rewrite an intake in flight.
   Overlays need no pin, because copy cannot move the cursor or invalidate an
   answer — which is what makes live copy correction safe.
+- **A list of common answers must accept an uncommon one** (`allowOther`,
+  added 18 Aug 2026). Travel learned this the expensive way: destination,
+  airline and bank were free text and arrived as "SG", "MAS" and "CIMB" —
+  unusable downstream. Offering the bounded set fixes that, but an option set
+  that looks complete and is not is the documented failure of guided intake,
+  and here it would also have invalidated every case already in flight. So a
+  long list is offered *and* typeable, and only the first `CHOICE_DISPLAY_MAX`
+  entries are shown — a readability limit, not a channel one, since Telegram
+  will happily render a hundred buttons nobody reads.
+
+  The exception is the one that matters for the property lines: **a step a
+  branch routes on stays closed.** `evaluateNext` matches exact values, so free
+  text on a cause-of-loss `switch` would fall to the default arm and send a
+  claimant down the wrong peril with no error raised anywhere. A test enforces
+  the exclusion rather than trusting an author to remember it.
+
+**One conversation, more than one surface (added 18 Aug 2026).** A channel is
+not limited to its thread. `ChannelCapabilities.formPrimitive` records what
+richer surface it can escalate to — `webview` for Telegram (a Mini App showing
+`claimant-web`), `native_form` for WhatsApp (Flows, rendered by Meta from Flow
+JSON), `none` for the rest. They are not interchangeable, which is why this is
+declared rather than inferred: a WhatsApp CTA-URL button looks like a webview
+and leaves the app for the phone's browser, where nothing vouches for the
+claimant.
+
+Reaching a surface means answering one question: *who is this, and which
+conversation are they already in?* The shape is the same on both channels —
+**attested token → existing binding → scoped session** — and only the signature
+differs, since Telegram signs the launch and we mint the Flow token ourselves.
+`ConversationIdentity` carries the resolved `(channel, platformUserId)`, and
+`bindingFor` **finds and never creates** for it: an attestation establishes who
+someone is, not that they have a claim, and a conversation started here would
+have skipped the consent notice the thread gives first.
+
+The corollary is easy to get backwards. Where a surface shares the thread's
+message stream — as a Mini App does, since both resolve one binding — an
+outbound prompt must render for the **least** capable surface it can reach, or
+someone who closes the window is left with a question the thread cannot answer.
+A surface only earns its own rendering when it has its own stream, which is
+what a Flow screen has and a Mini App does not.
 
 Multi-way branching is a `switch` rule rather than nested binary branches,
 specifically for the property lines: a cause-of-loss list fanning out to

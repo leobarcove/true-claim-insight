@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { CASE_FLOWS, whatYouWillNeed } from '@tci/shared-types';
+import { branchInputSteps, CASE_FLOWS, CHOICE_DISPLAY_MAX, whatYouWillNeed } from '@tci/shared-types';
 
 /**
  * THE SCRIPT, READ AS A CLAIMANT READS IT.
@@ -89,5 +89,100 @@ describe('asking for a payout account in a chat', () => {
     const bankStep = CASE_FLOWS.LUGGAGE_LOSS.steps.find(step => step.id === 'bank-name');
     expect(bankStep?.prompt).toMatch(/encrypted/i);
     expect(bankStep?.prompt).toMatch(/never ask you to pay/i);
+  });
+});
+
+describe('a question with a known set of answers offers it', () => {
+  /** Every step across every flow, so a fix to one flow cannot miss the others. */
+  const allSteps = Object.values(CASE_FLOWS).flatMap(flow => flow.steps);
+
+  it.each(['destination', 'airline', 'bank-name', 'treatment-country'])(
+    '%s is a list, not a blank box',
+    stepId => {
+      // A real intake answered these three as "SG", "MAS" and "CIMB" — each
+      // an abbreviation an adjuster can guess at and nothing downstream can
+      // use. The answers are drawn from bounded, well-known sets, and asking
+      // for them as free text is what made them ambiguous.
+      const steps = allSteps.filter(step => step.id === stepId);
+      expect(steps.length).toBeGreaterThan(0);
+      for (const step of steps) {
+        expect(step.answerType).toBe('choice');
+        expect(step.choices?.length).toBeGreaterThan(0);
+      }
+    }
+  );
+
+  it('never traps a claimant whose answer is not on the list', () => {
+    // The documented failure of guided bots: an option set that looks complete
+    // and is not. Any list longer than what a channel shows at once is by
+    // definition partial, so it must accept typing — otherwise the claimant
+    // who flies an unlisted carrier cannot get past the question at all.
+    const partial = allSteps.filter(
+      step => step.answerType === 'choice' && (step.choices?.length ?? 0) > CHOICE_DISPLAY_MAX
+    );
+    expect(partial.length).toBeGreaterThan(0);
+    for (const step of partial) {
+      expect({ step: step.id, allowOther: step.allowOther }).toEqual({
+        step: step.id,
+        allowOther: true,
+      });
+    }
+  });
+
+  it('keeps free text out of anything a branch routes on', () => {
+    // `evaluateNext` matches exact values, so a typed answer on a branch input
+    // would fall silently to the default arm — a claimant sent down the wrong
+    // half of the flow with no error anywhere.
+    for (const flow of Object.values(CASE_FLOWS)) {
+      const routed = branchInputSteps(flow);
+      const offenders = flow.steps
+        .filter(step => routed.has(step.id) && step.allowOther)
+        .map(step => step.id);
+      expect(offenders).toEqual([]);
+    }
+  });
+});
+
+describe('a claimant is told where to find what we ask for', () => {
+  it('never names a document without saying what it is', () => {
+    // "Please upload the Property Irregularity Report" names the artefact and
+    // stops. That is the airline's term for a form the claimant was handed
+    // without being told its name — so the prompt is only useful to someone
+    // who already knows the answer.
+    const documents = Object.values(CASE_FLOWS)
+      .flatMap(flow => flow.steps)
+      .filter(step => step.answerType === 'document');
+
+    expect(documents.length).toBeGreaterThan(0);
+    for (const step of documents) {
+      expect({ step: step.id, hint: (step.hint ?? '').length > 30 }).toEqual({
+        step: step.id,
+        hint: true,
+      });
+    }
+  });
+
+  it('says what a rejected format should have looked like', () => {
+    // "That does not look right" names no rule, so the obvious repair —
+    // retyping the same thing more carefully — fails identically. At the
+    // payout step that is a loop, not a correction.
+    const patterned = Object.values(CASE_FLOWS)
+      .flatMap(flow => flow.steps)
+      .filter(step => step.validation?.pattern);
+
+    expect(patterned.length).toBeGreaterThan(0);
+    for (const step of patterned) {
+      expect({ step: step.id, explains: Boolean(step.validation?.patternError) }).toEqual({
+        step: step.id,
+        explains: true,
+      });
+    }
+  });
+
+  it('offers the date formats it actually accepts, not the narrowest one', () => {
+    // `parseTextDate` has always taken "16 June 2026" and "today". Only the
+    // recovery message said so, so the generous wording was reserved for
+    // claimants who had already failed once.
+    expect(codeOnly()).toMatch(/For example 16\/06\/2026, or 16 June 2026/);
   });
 });

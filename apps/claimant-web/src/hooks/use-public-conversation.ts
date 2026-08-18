@@ -107,6 +107,33 @@ export async function uploadPublicDocument(file: File, documentType: string, ste
 }
 
 /** Forget this conversation — the claimant asked to start over. */
+/**
+ * Whether this browser is holding a session that names a messaging binding
+ * rather than a web thread of its own.
+ *
+ * Derived from the session itself rather than passed down as a prop, because
+ * the thing it guards — "start again" — is destructive in one case and
+ * harmless in the other, and a prop is something a future page can forget to
+ * set. Reading the truth means any page rendering the chat is safe by default.
+ */
+export function isChannelSession(): boolean {
+  return (readSession() ?? '').startsWith('tg:');
+}
+
+/**
+ * Adopt a session issued somewhere other than `start` — today, the one the
+ * gateway mints for a verified Telegram Mini App launch.
+ *
+ * Exported rather than letting the caller write the key itself, because the
+ * key is this module's private business and a second place spelling it would
+ * drift the day it changes. Everything downstream — transcript, turns,
+ * uploads — then works unchanged, which is the point: the Mini App is not a
+ * second client, it is this one with its identity established differently.
+ */
+export function adoptPublicSession(session: string) {
+  localStorage.setItem(SESSION_KEY, session);
+}
+
 export function clearPublicSession() {
   localStorage.removeItem(SESSION_KEY);
 }

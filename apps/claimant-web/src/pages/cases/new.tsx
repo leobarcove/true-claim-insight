@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Paperclip, Send, UserRound } from 'lucide-react';
-import { formatDateAnswer, type FlowStep } from '@tci/shared-types';
+import { CHOICE_DISPLAY_MAX, formatDateAnswer, type FlowStep } from '@tci/shared-types';
 
 import { uploadCaseDocument } from '@/hooks/use-cases';
 import {
@@ -236,18 +236,54 @@ export function AnswerControl({
   if (!step) return null;
 
   if (step.answerType === 'choice') {
+    // An `allowOther` list is the common answers, not the legal ones, so it is
+    // trimmed to the readable few and paired with a box. Rendering all of them
+    // is what a channel with no width limit tempts you into: thirty-one
+    // destination chips is not a choice, it is a search problem with no search.
+    //
+    // A closed list still renders in full — there every option is a value the
+    // step will accept, and hiding one would be a dead end with nothing to
+    // type instead.
+    const options = step.allowOther ? step.choices?.slice(0, CHOICE_DISPLAY_MAX) : step.choices;
+
     return (
-      <div className="flex flex-wrap gap-2">
-        {step.choices?.map(choice => (
-          <button
-            key={choice.value}
-            disabled={busy}
-            onClick={() => onChoose(choice.value)}
-            className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
-          >
-            {choice.label}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {options?.map(choice => (
+            <button
+              key={choice.value}
+              disabled={busy}
+              onClick={() => onChoose(choice.value)}
+              className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+
+        {step.allowOther && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={value}
+              disabled={busy}
+              onChange={event => onChange(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && value.trim()) onSend();
+              }}
+              placeholder="Not listed? Type it here"
+              aria-label="Type your answer if it is not listed above"
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-60"
+            />
+            <button
+              disabled={busy || !value.trim()}
+              onClick={onSend}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            >
+              Send
+            </button>
+          </div>
+        )}
       </div>
     );
   }

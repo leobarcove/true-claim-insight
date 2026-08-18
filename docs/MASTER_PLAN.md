@@ -2425,6 +2425,197 @@ it corrected the code, the seed and §3.2, and missed the two sentences that
 had specified the wrong number in the first place. All annotated rather than
 rewritten, so the reasoning stays and the tense no longer lies.
 
+### Intake guidance: bounded answers become lists (18 August 2026)
+
+Read from a completed WhatsApp intake (`CSE-2026-000033`, sixteen questions in
+eight minutes). It submitted successfully, which is why nothing had flagged it
+— the losses were all in the *quality* of what arrived, and one defect that
+only showed on the operator's side.
+
+**The defect.** Three real document uploads were recorded in the transcript as
+"Shared their phone number". `wa_id` rides every inbound WhatsApp message, so
+the adapter sets `sharedPhone` on all of them, and the description fallback
+reached it before it tested for media. An operator reviewing that conversation
+saw a claimant who sent a number three times and no evidence at all. Telegram
+sets the field only on a genuine contact tap, so the channel where this
+mattered was the one where it was invisible. Media is now tested first, with a
+source-order test pinning it.
+
+**The quality losses.** Destination, airline and bank were free text and came
+back as "SG", "MAS" and "CIMB" — each an abbreviation an adjuster can guess at
+and nothing downstream can consume. All three are drawn from bounded, published
+sets, and are now `choice` steps: ISO 3166 alpha-2 for countries, IATA for
+carriers (what the boarding pass prints, and the prefix of the flight number
+the next step already validates), and a slug for banks. The bank value is
+deliberately **not** a SWIFT/BIC or DuitNow participant code — those belong to
+a payment rail not yet built, and an answer already recorded against a live
+claim must not turn out to have been the wrong identifier for whichever rail is
+chosen.
+
+**Every long list accepts typing** (`FlowStep.allowOther`). A list offered
+without an escape is the documented failure of guided intake — an option set
+that looks complete and is not — and it would also have broken every case
+already in flight, whose stored "CIMB" and "MAS" are not values on the new
+lists. A test refuses `allowOther` on any step a branch routes on, because
+`evaluateNext` matches exact values and free text would fall silently to the
+default arm.
+
+**Visible options are capped at eight** (`CHOICE_DISPLAY_MAX`), independent of
+what the channel can render. Telegram accepts roughly a hundred inline buttons
+and paginating to that limit produces a wall nobody reads; the rest of the set
+is reached by typing, not by paging.
+
+Also: document steps now carry a mandatory `hint` saying where to find the
+thing and that a photo will do (the "Property Irregularity Report" is what the
+airline calls a form the claimant was handed unnamed); `validation.patternError`
+replaces "that does not look right" with the actual rule, which at the bank
+account step was a loop rather than a correction; the first date prompt now
+advertises what `parseTextDate` has always accepted ("16 June 2026", "today"),
+wording previously reserved for claimants who had already failed once; and the
+back/edit footer moved from every question to the first and every fifth, having
+appeared under fourteen consecutive prompts.
+
+791 case-service tests pass, 13 packages typecheck, flows republished.
+
+**Not done, and sequenced next.** Research for this work surfaced **WhatsApp
+Flows** — Meta's native in-chat multi-screen forms, with `Dropdown`,
+`DatePicker`, `CalendarPicker` (range mode, which is trip start/end in one
+control) and `DocumentPicker`. It is the better answer to this problem *and*
+would improve the §3.4 position: a Flow response is encrypted to our endpoint
+rather than left in the chat thread, so payout details would stop persisting in
+Meta's message history — the trade §3.4 currently records as knowingly
+accepted. Two constraints keep it an enhancement rather than a replacement, both
+confirmed against Meta's own documentation: Flows is **not supported on
+companion devices including WhatsApp Web**, and it requires a verified WABA
+with a signed 2048-bit RSA key per phone number and an endpoint implementing
+payload encryption. The conversational path is therefore permanent, which is
+what makes the work above worth doing regardless. Telegram's equivalent is a
+Mini App pointing at the existing claimant-web PWA. The durable shape is one
+`CaseFlow` compiled to three renderers rather than three hand-maintained forms;
+`ChannelCapabilities` is where the tier belongs.
+
+### Telegram Mini App, and the bridge it shares with WhatsApp Flows (18 August 2026)
+
+Phase 1 of the intake work. The claimant taps **Open the form** in the Telegram
+thread and gets the existing `claimant-web` conversation — real date controls, a
+scrollable list, a readable review — against *their own* binding and case.
+
+**What made it more than a link.** `claimant-conversation.service.ts` keyed a web
+session to a `WEB_CHAT` binding on the session id, so a Telegram claimant opening
+the PWA would have landed in a brand-new conversation on a different case. The
+fix is a third identity shape (`ConversationIdentity`): a claimant already bound
+on a messaging channel, resolved by `(channel, platformUserId)`. It is
+**find-only** — `bindingFor` refuses rather than creating one, because an
+attestation says who someone is and must not be able to conjure a conversation
+the thread, and its consent notice, never started.
+
+**The attestation.** Telegram signs the Mini App launch with a key derived from
+the bot token (`HMAC_SHA256("WebAppData", botToken)` keying the hash of the
+sorted parameters — the order is not interchangeable). `verifyInitData` checks
+it in constant time and enforces a 15-minute `auth_date` window, because a
+signature alone never expires and a launch URL in a screenshot would otherwise
+be a permanent key. Verification lives in case-service, which owns the bot
+token; the session it produces is signed by api-gateway, which owns that key.
+Two secrets, two services, neither crossing.
+
+Verified live end to end: a signed launch with no binding → 403 and **nothing
+created**; with an unverified binding → 403 "verify your number in the chat";
+with a verified one → a session whose transcript resolves to the Telegram
+binding, with no second `WEB_CHAT` row appearing. A launch with the user id
+edited after signing → 401, and a session token with its id swapped → refused
+at the edge. 19 tests cover the two crypto paths as attacks rather than as happy
+paths.
+
+**Why this is the Phase 2 groundwork.** WhatsApp has no Mini App: a CTA-URL
+button leaves the app for the phone's browser, where the platform vouches for
+nobody, so the claimant would have to prove a number again to reach the claim
+they were already in. Flows is the answer there, and it needs the same sentence
+this work implements — *attested token → existing binding → scoped session* —
+differing only in that we mint the `flow_token` ourselves rather than verifying
+someone else's signature. `formPrimitive` on `ChannelCapabilities` records which
+of the two a channel supports (`webview` for Telegram and web chat,
+`native_form` for WhatsApp, `none` for Messenger) and is what decides whether
+the button is offered at all.
+
+**One thing deliberately not built.** A webview capability profile — date
+pickers instead of "type DD/MM/YYYY", uncapped lists — was written and removed,
+with the reasoning kept in `channel-capabilities.ts`. A Mini App turn resolves
+the same binding as the thread, so the bot's reply is persisted once and appears
+in both; a prompt rendered for the webview would reach the thread stripped of
+the hint that makes it answerable there. An outbound prompt must render for the
+*least* capable surface it can reach. The profile becomes correct with Flows,
+whose screens never enter the thread at all.
+
+`CLAIMANT_WEB_URL` gates the button and is unset by default: Telegram only opens
+an HTTPS origin it can reach.
+
+### Audit of the two intake phases, and the tunnel (18 August 2026, same day)
+
+A deliberate second pass over the work above, run as attacks rather than as a
+re-read. Five findings, all fixed, and the two that mattered were both in code
+written the same afternoon.
+
+| # | Finding | Severity |
+|---|---|---|
+| 1 | **"Start again" abandoned a Telegram claim.** The Mini App renders the web chat page, which offers a start-again button that clears the session. On a channel session that discards the binding and opens a fresh anonymous `WEB_CHAT` thread — the exact failure the bridge exists to prevent, one tap away and with no route back but closing the window | **High** |
+| 2 | **The channel session never expired.** A visitor token names a thread attached to nobody; this one names a binding with a claimant, a case and payout details behind it, and sat in `localStorage` indefinitely with the same absent lifetime | **Medium** |
+| 3 | **`channel in CaseChannel` walked the prototype chain**, so `toString` and `constructor` passed as channel names and reached Prisma as invalid enums — a 500 where a refusal belongs | Low |
+| 4 | The Mini App button's comment promised "dates and documents"; the code offered it on dates only | Low |
+| 5 | `whatYouWillNeed` lower-cased whole labels, so the first message of every luggage claim asked for an "airline baggage report (pir)" | Cosmetic |
+
+Fixes: start-again is now hidden when the session names a channel binding, **and
+`startOver` refuses internally as well** — hiding a control keeps it out of
+reach, refusing inside the function keeps it wrong for the next caller too, and
+the costs are not comparable when a mistaken tap loses a claim. The check is
+**derived from the session rather than passed as a prop**, so any page rendering
+the chat is safe without remembering to opt in. `clearPublicSession` has exactly
+one caller, and it is that function. The channel
+session carries its issued-at *inside the signed payload* and expires after 12
+hours — nearly free to the claimant, since every launch mints a fresh one from
+`initData`. Channel narrowing is against `Object.values`. Documents are now
+explicitly left to Telegram's own attach button, which already opens the camera.
+Acronyms survive the lower-casing.
+
+Re-verified live afterwards, not just in tests: a signed launch resolves to the
+correct Telegram binding; a token back-dated by hand to extend it is refused; a
+token retargeted at another user id is refused; a session 11 hours old still
+resolves and one 13 hours old does not; `x-channel: toString` answers 400 rather
+than 500. 808 case-service tests, 117 gateway tests, 13 packages typecheck.
+
+**The gap that named itself, closed the same day.** `claimant-web` had no test
+runner at all, so the start-again guard — the highest-severity finding — was
+covered by structure rather than by a test. Vitest + Testing Library now run
+there (`vitest.config.ts` merges the app's own Vite config, so the aliases stay
+defined once), with 16 tests across three files:
+
+- **the guard itself**, both layers, each mutation-tested independently:
+  removing the button check fails the rendering test, removing the early return
+  inside `startOver` fails a source scan. The inner guard exists for a caller
+  that does not exist yet, which no rendering test can reach — so it is
+  asserted against the source, the same way the services assert their own
+  invariants.
+- **`isChannelSession`**, the input to that destructive decision.
+- **`AnswerControl`**, the Phase 0 work that had no coverage: the eight-option
+  cap, the typed escape, Enter-to-send, refusing an empty answer, and a closed
+  list correctly offering no box at all.
+
+Writing them found a weak test of my own: the first version of the inner-guard
+test asserted `localStorage` after render without clicking anything, and passed
+with both guards deleted. Mutation testing each layer separately is what caught
+it, and is why the numbers above are worth anything.
+
+Two things left as they were, deliberately: adjuster-portal still has no test
+setup, and `pnpm lint` is broken repo-wide — no ESLint 9 flat config exists in
+any package, which predates this work and is its own job.
+
+**Tunnel.** `tci-app.smitherytech.com` now routes to `localhost:4301` on the
+existing `tci-whatsapp` tunnel — a second ingress rule rather than a second
+process, since one tunnel serves several hostnames. The WhatsApp webhook was
+re-checked after the restart and still answers 200. Vite refuses an unrecognised
+`Host` header, so `allowedHosts` is **derived from `CLAIMANT_WEB_URL`** rather
+than hardcoded, keeping the hostname in one place — a mismatch would otherwise
+surface as a bot button that opens a Vite error page.
+
 ---
 
 ## 9. Feasibility check

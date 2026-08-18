@@ -58,8 +58,18 @@ const DECLARED: Record<string, { count: number; reason: string }> = {
       'staff correction door, or the staff case loader. No id is consulted to decide',
   },
   'apps/case-service/src/chat/claimant-conversation.service.ts': {
+    count: 2,
+    reason:
+      'Both are facts about the caller, not about a record they named. One is verification ' +
+      'state — "prove your number first". The other refuses a Mini App launch with no binding ' +
+      'behind it, and the caller has already proved they are that platform user, so the only ' +
+      'existence they can probe is their own',
+  },
+  'apps/case-service/src/chat/public-conversation.controller.ts': {
     count: 1,
-    reason: 'Verification state of the caller — "prove your number first", not a record decision',
+    reason:
+      'A Mini App launch whose binding exists but has not yet proved a number. Verification ' +
+      'state of the caller, established from an attestation they had to hold to get here',
   },
   'apps/case-service/src/chat/conversations.service.ts': {
     count: 1,

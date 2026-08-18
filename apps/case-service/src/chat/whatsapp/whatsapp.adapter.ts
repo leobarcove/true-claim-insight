@@ -351,10 +351,19 @@ export class WhatsAppAdapter implements ChannelAdapter {
     }
   }
 
-  /** The choice rows for this prompt, paginated to the channel's ten-row cap. */
+  /**
+   * The choice rows for this prompt, paginated to the channel's ten-row cap —
+   * or trimmed to the readable few when the step accepts a typed answer, in
+   * which case paging through a long tail is the worse of two routes.
+   */
   private choicesFor(prompt: OutboundPrompt) {
     if (prompt.step?.answerType !== 'choice' || !prompt.step.choices?.length) return null;
-    return renderChoices(this.capabilities, prompt.step.choices, prompt.choicePage ?? 0);
+    return renderChoices(
+      this.capabilities,
+      prompt.step.choices,
+      prompt.choicePage ?? 0,
+      prompt.step.allowOther
+    );
   }
 
   /**

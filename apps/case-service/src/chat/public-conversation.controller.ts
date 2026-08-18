@@ -1,20 +1,27 @@
 import {
   BadRequestException,
   Body,
+  ForbiddenException,
   Controller,
   Get,
   Headers,
   Post,
   Query,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { CaseChannel } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { ApiExcludeController, ApiOperation } from '@nestjs/swagger';
 
 import { InternalKeyGuard } from '../common/guards/internal-key.guard';
-import { ClaimantConversationService } from './claimant-conversation.service';
+import {
+  ClaimantConversationService,
+  type ConversationIdentity,
+} from './claimant-conversation.service';
 import { ClaimantTurnDto } from './dto/claimant-turn.dto';
+import { TelegramAdapter } from './telegram/telegram.adapter';
 
 /**
  * The intake conversation for someone who has not logged in.
@@ -45,27 +52,128 @@ import { ClaimantTurnDto } from './dto/claimant-turn.dto';
 @Controller({ path: 'public/conversation', version: '1' })
 @UseGuards(InternalKeyGuard)
 export class PublicConversationController {
-  constructor(private readonly service: ClaimantConversationService) {}
+  constructor(
+    private readonly service: ClaimantConversationService,
+    private readonly telegram: TelegramAdapter
+  ) {}
+
+  /**
+   * Which conversation this request is for.
+   *
+   * Two ways in, and the difference is who vouched for the claimant:
+   *
+   *  - **a web session** — an opaque id the gateway signed. It names a thread
+   *    and nothing more; the conversation itself proves a number before the
+   *    thread is attached to anyone.
+   *  - **a channel identity** — a claimant already bound on Telegram or
+   *    WhatsApp, opening that channel's richer surface. The platform attested
+   *    them and the gateway verified the attestation; here it resolves an
+   *    existing binding and refuses to create one.
+   *
+   * Both arrive as internal headers set by api-gateway, which is the only
+   * caller `InternalKeyGuard` admits. Neither is a value a claimant can set:
+   * the public surface is the gateway's edge route, which owns the signed
+   * token and does the verification.
+   */
+  private identityFrom(
+    sessionId: string | undefined,
+    channel: string | undefined,
+    platformUserId: string | undefined
+  ): ConversationIdentity {
+    if (channel && platformUserId?.trim()) {
+      // Narrowed against the enum's *values*, not with `in`. `in` walks the
+      // prototype chain, so `toString` and `constructor` passed as channels and
+      // then reached Prisma as invalid enums — a 500 where a refusal belongs.
+      // The header is internal and the gateway never sets those, which is
+      // exactly why it would have gone unnoticed.
+      if (!Object.values(CaseChannel).includes(channel as CaseChannel)) {
+        throw new BadRequestException(`Unknown channel ${channel}.`);
+      }
+      return { channel: channel as CaseChannel, platformUserId };
+    }
+    return { sessionId: sessionId as string };
+  }
+
+  /**
+   * Exchange a Mini App launch for the conversation it belongs to.
+   *
+   * The claimant is already known — they have been talking to the bot, the
+   * platform vouched for them, and a code proved their number. All this does is
+   * establish that the browser now asking is genuinely that Telegram client,
+   * and hand back the identity the gateway should scope a session to.
+   *
+   * Two refusals, and they are different failures:
+   *
+   *  - the signature does not verify, or is stale → nothing is attested, so
+   *    there is nobody to be. 401.
+   *  - it verifies, but no binding exists → a real Telegram user who has never
+   *    messaged us. `bindingFor` refuses to invent one; opening the form is not
+   *    a way to start a claim, because a conversation begun here would have
+   *    skipped the consent notice the thread gives first.
+   *
+   * Returns no claim data of any kind. It names a conversation; reading it is a
+   * separate, scoped request.
+   */
+  @Post('channel/telegram')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Resolve a Telegram Mini App launch to its binding (internal)' })
+  async telegramLaunch(@Body() body: { initData?: string }) {
+    const platformUserId = this.telegram.verifyInitData(body?.initData ?? '');
+    if (!platformUserId) {
+      throw new UnauthorizedException('This form link could not be verified. Please reopen it from the chat.');
+    }
+
+    // Throws ForbiddenException when there is no binding — the honest answer,
+    // and the one that tells the claimant what to do instead.
+    const binding = await this.service.bindingFor({
+      channel: CaseChannel.TELEGRAM,
+      platformUserId,
+    });
+
+    // A binding with no claimant has not proved a number yet. The thread is
+    // where that happens, and it must stay there: the onboarding steps that
+    // ask for it also carry the privacy notice.
+    if (!binding.claimantId) {
+      throw new ForbiddenException('Please finish verifying your number in the chat first.');
+    }
+
+    return { channel: CaseChannel.TELEGRAM, platformUserId };
+  }
 
   @Post('start')
   @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 10, ttl: 10_000 } })
   @ApiOperation({ summary: 'Open the public intake conversation' })
-  start(@Headers('x-web-session-id') sessionId: string, @Query('locale') locale?: string) {
-    return this.service.start({ sessionId }, locale);
+  start(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Query('locale') locale?: string
+  ) {
+    return this.service.start(this.identityFrom(sessionId, channel, platformUserId), locale);
   }
 
   @Get()
   @ApiOperation({ summary: 'The visitor’s own transcript' })
-  transcript(@Headers('x-web-session-id') sessionId: string) {
-    return this.service.transcript({ sessionId });
+  transcript(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string
+  ) {
+    return this.service.transcript(this.identityFrom(sessionId, channel, platformUserId));
   }
 
   @Post('turn')
   @Throttle({ short: { limit: 3, ttl: 1000 }, medium: { limit: 40, ttl: 10_000 } })
   @ApiOperation({ summary: 'Send one turn as an unidentified visitor' })
-  async turn(@Headers('x-web-session-id') sessionId: string, @Body() dto: ClaimantTurnDto) {
-    await this.service.handleTurn({ sessionId }, dto);
-    return this.service.transcript({ sessionId });
+  async turn(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Body() dto: ClaimantTurnDto
+  ) {
+    const identity = this.identityFrom(sessionId, channel, platformUserId);
+    await this.service.handleTurn(identity, dto);
+    return this.service.transcript(identity);
   }
 
   /**
@@ -76,9 +184,17 @@ export class PublicConversationController {
   @Post('upload')
   @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: 'Attach a document to the visitor’s open claim' })
-  async upload(@Headers('x-web-session-id') sessionId: string, @Req() req: any) {
+  async upload(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Req() req: any
+  ) {
     const file = await req.file();
     if (!file) throw new BadRequestException('No file uploaded');
-    return this.service.uploadDocument({ sessionId }, file);
+    return this.service.uploadDocument(
+      this.identityFrom(sessionId, channel, platformUserId),
+      file
+    );
   }
 }

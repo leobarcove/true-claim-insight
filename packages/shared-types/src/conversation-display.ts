@@ -47,6 +47,23 @@ export const RESUME_CASE_CALLBACK_PREFIX = '__resume:';
 export const SHARED_PHONE_DESCRIPTION = 'Shared their phone number';
 
 /**
+ * What an uploaded file looks like in a transcript.
+ *
+ * Needed because "carried no text" is not one situation but two, and on
+ * WhatsApp they overlap. `wa_id` rides *every* inbound message, so the adapter
+ * sets `sharedPhone` on all of them — which meant an uncaptioned photo fell
+ * through to the contact-share marker. Three genuine document uploads on one
+ * claim were recorded as "Shared their phone number", and an operator reading
+ * that transcript sees a claimant who sent their number three times and never
+ * sent the evidence.
+ *
+ * Deliberately says nothing about the file. The transcript is not encrypted
+ * and not swept by anonymisation, so a filename a claimant chose does not
+ * belong in it — the CaseDocument row is where the evidence lives.
+ */
+export const SHARED_MEDIA_DESCRIPTION = 'Sent an attachment';
+
+/**
  * A human-readable description of a tapped value.
  *
  * `stepChoices` is the step's own choice list where one applies — passing it

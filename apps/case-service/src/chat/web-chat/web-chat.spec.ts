@@ -53,9 +53,20 @@ describe('web chat', () => {
 
   describe('the claimant service', () => {
     const context = { tenantId: 'tenant-1', userId: 'claimant-1', userRole: 'CLAIMANT' } as never;
-    const binding = { id: 'binding-1', platformUserId: 'claimant-1', mode: 'BOT', activeCaseId: 'case-1' };
+    // `channel` is not decoration: the turn is dispatched on the binding's own
+    // channel now, because a Mini App turn arrives through this service while
+    // belonging to a TELEGRAM binding. A real row always carries it.
+    const binding = {
+      id: 'binding-1',
+      channel: CaseChannel.WEB_CHAT,
+      platformUserId: 'claimant-1',
+      mode: 'BOT',
+      activeCaseId: 'case-1',
+    };
 
     let upsert: jest.Mock;
+    let findUnique: jest.Mock;
+    let update: jest.Mock;
     let handleTurn: jest.Mock;
     let findMany: jest.Mock;
     let count: jest.Mock;
@@ -65,6 +76,8 @@ describe('web chat', () => {
 
     beforeEach(() => {
       upsert = jest.fn().mockResolvedValue(binding);
+      findUnique = jest.fn().mockResolvedValue(binding);
+      update = jest.fn().mockResolvedValue(binding);
       handleTurn = jest.fn().mockResolvedValue(undefined);
       findMany = jest.fn().mockResolvedValue([]);
       count = jest.fn().mockResolvedValue(0);
@@ -73,7 +86,7 @@ describe('web chat', () => {
 
       service = new ClaimantConversationService(
         {
-          conversationBinding: { upsert },
+          conversationBinding: { upsert, findUnique, update },
           conversationMessage: { findMany, count, findFirst },
           case: { findUnique: jest.fn().mockResolvedValue(null) },
         } as never,
@@ -121,6 +134,34 @@ describe('web chat', () => {
       // collide, and the second answer would be dropped as already seen.
       expect(payload.platformMessageId).toBe('binding-1:abc');
       expect(payload.channel).toBe(CaseChannel.WEB_CHAT);
+    });
+
+    it('dispatches on the binding’s channel, not on this service’s', async () => {
+      // A Telegram claimant answering in the Mini App posts here, but their
+      // binding is TELEGRAM — and the reply has to reach the thread too, since
+      // they can close the window mid-question. Hardcoding WEB_CHAT sent the
+      // turn to an adapter that was not theirs, and the gateway dropped it.
+      findUnique.mockResolvedValue({ ...binding, channel: CaseChannel.TELEGRAM });
+
+      await service.handleTurn(
+        { channel: CaseChannel.TELEGRAM, platformUserId: '987654321' },
+        { clientMessageId: 'abc', text: 'hi' }
+      );
+
+      const [payload] = handleTurn.mock.calls[0];
+      expect(payload.channel).toBe(CaseChannel.TELEGRAM);
+    });
+
+    it('never creates a binding for a channel identity', async () => {
+      // The security property behind the Mini App. A verified attestation says
+      // who someone is; it must not be able to conjure a conversation that the
+      // thread — and its consent notice — never started.
+      findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.bindingFor({ channel: CaseChannel.TELEGRAM, platformUserId: '987654321' })
+      ).rejects.toThrow(/before opening the form/i);
+      expect(upsert).not.toHaveBeenCalled();
     });
 
     it('passes the tapped step through, so a stale tap is still caught', async () => {
@@ -250,5 +291,25 @@ describe('web chat', () => {
         expect(result.currentStep).toBeNull();
       });
     });
+  });
+});
+
+describe('the channel identity header is narrowed, not trusted', () => {
+  // `in` walks the prototype chain, so `toString` and `constructor` passed as
+  // channel names and reached Prisma as invalid enums — a 500 where a refusal
+  // belongs. The gateway never sends those, which is exactly why nothing would
+  // have caught it in normal use.
+  const CHANNEL_VALUES = Object.values(CaseChannel) as string[];
+
+  it.each(['toString', 'constructor', 'hasOwnProperty', '__proto__', 'valueOf'])(
+    'does not accept the inherited property %s as a channel',
+    inherited => {
+      expect(inherited in CaseChannel).toBe(true); // the trap
+      expect(CHANNEL_VALUES.includes(inherited)).toBe(false); // the narrowing
+    }
+  );
+
+  it('still accepts every real channel', () => {
+    for (const channel of CHANNEL_VALUES) expect(CHANNEL_VALUES.includes(channel)).toBe(true);
   });
 });
