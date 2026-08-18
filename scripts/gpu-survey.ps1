@@ -8,7 +8,7 @@
 
     Written because the inference host is a machine nobody working on the repo
     can see. `OllamaGpuLlmProvider` talks to a service at GPU_SERVICE_URL over
-    /v3/ocr, /v3/llm/generate and /v3/llm/vision — but nothing records what that
+    /v3/ocr, /v3/llm/generate and /v3/llm/vision -- but nothing records what that
     service runs on, how much VRAM it has, or whether the box stays awake. The
     hardcoded fallback in that provider is a dead Cloudflare quick tunnel, which
     is what happens when the answer lives in one person's memory.
@@ -16,6 +16,11 @@
     Run it, paste the SUMMARY block back into the repo discussion.
 
 .NOTES
+    ASCII ONLY. Windows PowerShell 5.1 reads a .ps1 as ANSI unless the file
+    carries a UTF-8 BOM, and PowerShell accepts smart quotes as real string
+    delimiters -- so a single em dash in a comment can close a string early and
+    break the parse forty lines later. Keep every character in this file
+    below U+0080.
     VRAM is the number that decides the model stack:
       <12 GB : one model resident; the pipeline swaps between layers
        12 GB : a 7B vision model at 4-bit, comfortably
@@ -45,7 +50,7 @@ function Try-Version($exe) {
     return $null
 }
 
-Write-Host "TCI GPU desktop survey — read-only, changes nothing" -ForegroundColor Green
+Write-Host "TCI GPU desktop survey -- read-only, changes nothing" -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
 # GPU. The one that decides everything else.
@@ -65,7 +70,7 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
         $summary['cuda'] = $cudaVer
     }
 } else {
-    Write-Host "nvidia-smi not found — no NVIDIA driver on PATH." -ForegroundColor Yellow
+    Write-Host "nvidia-smi not found -- no NVIDIA driver on PATH." -ForegroundColor Yellow
     Write-Host "If this box has an AMD or Intel GPU, say so: it changes the whole stack."
     $summary['gpu'] = 'NONE / not NVIDIA'
 }
@@ -93,7 +98,7 @@ $summary['ram']   = "$ramGb GB"
 $summary['diskC'] = "$freeGb GB free"
 
 # ---------------------------------------------------------------------------
-# Runtimes. Ollama is listed because the provider class is named after it —
+# Runtimes. Ollama is listed because the provider class is named after it --
 # its absence on a box that serves /v3 is itself a finding.
 # ---------------------------------------------------------------------------
 Section "Runtimes"
@@ -116,7 +121,7 @@ if ($runtimes.ContainsKey('ollama')) {
 
 # ---------------------------------------------------------------------------
 # Docker. If Ollama is absent but /v3 answers, the stack is almost certainly
-# containerised — which is good news for moving it to staging later.
+# containerised -- which is good news for moving it to staging later.
 # ---------------------------------------------------------------------------
 if ($runtimes.ContainsKey('docker')) {
     Section "Docker containers"
@@ -140,7 +145,7 @@ if ($runtimes.ContainsKey('docker')) {
 
 # ---------------------------------------------------------------------------
 # What is listening, and on which interface. 0.0.0.0 means the whole office
-# LAN can reach it — and the provider sends no API key of any kind.
+# LAN can reach it -- and the provider sends no API key of any kind.
 # ---------------------------------------------------------------------------
 Section "Listening ports"
 $listen = Get-NetTCPConnection -State Listen |
@@ -224,7 +229,7 @@ if ($runtimes.ContainsKey('cloudflared')) {
         }
         $summary['cloudflared'] = ($ymls | ForEach-Object { $_.Name }) -join ', '
     } else {
-        Write-Host "no ~/.cloudflared directory — any tunnel was a quick tunnel" -ForegroundColor DarkGray
+        Write-Host "no ~/.cloudflared directory -- any tunnel was a quick tunnel" -ForegroundColor DarkGray
         $summary['cloudflared'] = 'installed, no config'
     }
 }
@@ -238,18 +243,18 @@ $standby = (powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 2>&1 |
 Write-Host "$standby"
 $hex = ([regex]::Match("$standby", '0x([0-9a-fA-F]+)')).Groups[1].Value
 if ($hex -eq '00000000') {
-    Write-Host "Never sleeps on mains — can serve as a dependency." -ForegroundColor Green
+    Write-Host "Never sleeps on mains -- can serve as a dependency." -ForegroundColor Green
     $summary['sleep'] = 'never (on mains)'
 } elseif ($hex) {
     $mins = [Convert]::ToInt32($hex, 16) / 60
-    Write-Host "Sleeps after $mins minutes idle — fine for development, not as a dependency." -ForegroundColor Yellow
+    Write-Host "Sleeps after $mins minutes idle -- fine for development, not as a dependency." -ForegroundColor Yellow
     $summary['sleep'] = "after $mins min idle"
 }
 
 # ---------------------------------------------------------------------------
 # One block to paste back.
 # ---------------------------------------------------------------------------
-Section "SUMMARY — paste this back"
+Section "SUMMARY -- paste this back"
 Write-Host "----------8<----------"
 foreach ($k in $summary.Keys) { Write-Host ("{0,-12}: {1}" -f $k, $summary[$k]) }
 Write-Host "----------8<----------"
