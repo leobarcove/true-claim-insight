@@ -246,6 +246,28 @@ export class CasesController {
     );
   }
 
+  @Post(':id/expert-outcome')
+  @ApiOperation({ summary: 'Record what the expert answered' })
+  recordExpertOutcome(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.post(`${this.caseServiceUrl}/api/v1/cases/${id}/expert-outcome`, body, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to record the expert outcome'
+    );
+  }
+
+  @Get(':id/expert-referrals')
+  @ApiOperation({ summary: 'Expert instructions on this case' })
+  listExpertReferrals(@Param('id') id: string, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.get(`${this.caseServiceUrl}/api/v1/cases/${id}/expert-referrals`, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to load expert referrals'
+    );
+  }
+
   @Post(':id/refer-expert')
   @ApiOperation({ summary: 'Refer a medical case to a claims expert' })
   referExpert(@Param('id') id: string, @Body() body: any, @Req() req: any) {

@@ -54,6 +54,7 @@ import {
   type FlowStep,
 } from '@tci/shared-types';
 import { NativeSelect } from '@/components/ui/native-select';
+import { ExpertReferralCard } from '@/components/cases/expert-referral-card';
 import {
   caseKeys,
   useCase,
@@ -546,6 +547,8 @@ export function CaseDetailPage() {
             </Card>
 
             {/* Actions */}
+            <ExpertReferralCard caseId={id} />
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Actions</CardTitle>

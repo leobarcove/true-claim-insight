@@ -19,6 +19,7 @@ import { CasesService } from './cases.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto, LinkPolicyDto, ReviewCaseDto } from './dto/review-case.dto';
+import { RecordExpertOutcomeDto, ReferToExpertDto } from './dto/expert-outcome.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
@@ -182,10 +183,31 @@ export class CasesController {
   @ApiOperation({ summary: 'Refer a medical case to a claims expert' })
   referToExpert(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ReviewCaseDto,
+    @Body() dto: ReferToExpertDto,
     @Tenant() tenantContext: TenantContext
   ) {
-    return this.service.referToExpert(id, dto.note, tenantContext);
+    return this.service.referToExpert(id, dto.note, tenantContext, dto.expertName);
+  }
+
+  @Post(':id/expert-outcome')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Record what the expert answered (once per referral)' })
+  recordExpertOutcome(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordExpertOutcomeDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.recordExpertOutcome(id, dto, tenantContext);
+  }
+
+  @Get(':id/expert-referrals')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Every expert instruction on this case, newest first' })
+  listExpertReferrals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.listExpertReferrals(id, tenantContext);
   }
 
   @Get(':id/payout-details')

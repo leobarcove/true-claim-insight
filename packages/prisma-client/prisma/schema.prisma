@@ -609,6 +609,7 @@ model Case {
   convertedClaim             Claim?                @relation(fields: [convertedClaimId], references: [id])
   flowDefinition             FlowDefinition?       @relation(fields: [flowDefinitionId], references: [id])
   documents                  CaseDocument[]
+  expertReferrals            ExpertReferral[]
   inboundMessage             InboundMessage?
   conversationBindings       ConversationBinding[]
 
@@ -616,6 +617,59 @@ model Case {
   @@index([claimantId])
   @@index([createdAt(sort: Desc)])
   @@map("cases")
+}
+
+/// What an expert was asked, and what they answered.
+///
+/// A medical travel case cannot convert without passing through
+/// REFERRED_TO_EXPERT (cases.service `convert`), so the referral is a real
+/// step in the regulated path — and until this model existed it left no trace
+/// but a `reviewNote`. A report citing an expert opinion therefore had no
+/// record of that opinion on file, which is the same defect the site-visit
+/// findings record closed: PD 12.6 asks for the facts, assumptions, methods
+/// and *sources* behind an assessment, and an expert is a source.
+///
+/// One row per instruction. The outcome arrives later and is written once —
+/// a second opinion is a second referral, not an edit of the first, for the
+/// same reason a revisit is a second site visit.
+model ExpertReferral {
+  id       String @id @default(uuid())
+  caseId   String
+  tenantId String
+
+  /// What the expert was asked. Seeded from the operator's referral note,
+  /// because that is what was actually written at the moment of referring.
+  question         String
+  /// Who was instructed. Free text: an expert is often a named consultant at
+  /// a practice, not a record in this system.
+  expertName       String?
+  referredAt       DateTime @default(now())
+  referredByUserId String?
+
+  /// Null while the opinion is outstanding — which is the state an operator
+  /// needs to see, and the state a conversion gate asks about.
+  outcome         ExpertOutcome?
+  /// What the expert answered, in their terms, carried into the report.
+  opinion         String?
+  outcomeAt       DateTime?
+  outcomeByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([tenantId])
+  @@map("expert_referrals")
+}
+
+/// Whether the expert supports the claim proceeding. Deliberately not a score:
+/// the firm recommends and the insurer decides, and an expert's answer to a
+/// vetting question is binary in practice — proceed, or do not.
+enum ExpertOutcome {
+  PROCEED
+  DECLINE
 }
 
 model CaseDocument {

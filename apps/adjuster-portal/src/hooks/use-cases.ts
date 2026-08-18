@@ -209,6 +209,53 @@ function useCaseAction(action: 'request-info' | 'refer-expert' | 'reject' | 'aba
   });
 }
 
+export interface ExpertReferral {
+  id: string;
+  question: string;
+  expertName: string | null;
+  referredAt: string;
+  outcome: 'PROCEED' | 'DECLINE' | null;
+  opinion: string | null;
+  outcomeAt: string | null;
+}
+
+/** Every expert instruction on a case — what was asked, and what came back. */
+export function useExpertReferrals(caseId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...caseKeys.detail(caseId), 'expert-referrals'] as const,
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<ExpertReferral[]>>(
+        `/cases/${caseId}/expert-referrals`
+      );
+      return data.data;
+    },
+    enabled: (options?.enabled ?? true) && !!caseId,
+  });
+}
+
+/** Record what the expert answered. Once per referral — the server enforces it. */
+export function useRecordExpertOutcome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      outcome,
+      opinion,
+    }: {
+      caseId: string;
+      outcome: 'PROCEED' | 'DECLINE';
+      opinion: string;
+    }) => {
+      const { data } = await apiClient.post<ApiResponse<ExpertReferral>>(
+        `/cases/${caseId}/expert-outcome`,
+        { outcome, opinion }
+      );
+      return data.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: caseKeys.all }),
+  });
+}
+
 export const useRequestCaseInfo = () => useCaseAction('request-info');
 export const useReferCaseToExpert = () => useCaseAction('refer-expert');
 export const useRejectCase = () => useCaseAction('reject');

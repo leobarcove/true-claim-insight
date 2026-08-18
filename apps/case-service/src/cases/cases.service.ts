@@ -13,6 +13,7 @@ import {
   ClaimCategory,
   ConsentPurpose,
   DocumentType,
+  ExpertOutcome,
   Prisma,
   TenantType,
   TravelClaimType,
@@ -45,6 +46,7 @@ import { isInlineRenderable, resolveMimeType } from './document-media';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ClaimsService } from '../claims/claims.service';
+import { isLicensedMode } from '../tenant/tenant-settings';
 import { AssessmentService } from '../assessment/assessment.service';
 import { InfoRequestEvents } from './info-request-events';
 import { render } from '../notifications/templates';
@@ -836,12 +838,99 @@ export class CasesService {
     return updated;
   }
 
-  async referToExpert(id: string, note: string, tenantContext: TenantContext) {
+  async referToExpert(
+    id: string,
+    note: string,
+    tenantContext: TenantContext,
+    expertName?: string
+  ) {
     const caseRow = await this.getStaffCase(id, tenantContext);
     if (caseRow.travelClaimType !== TravelClaimType.MEDICAL) {
       throw new BadRequestException('Only medical cases can be referred to an expert');
     }
-    return this.transitionWithNote(id, CaseStatus.REFERRED_TO_EXPERT, note, tenantContext);
+    const updated = await this.transitionWithNote(
+      id,
+      CaseStatus.REFERRED_TO_EXPERT,
+      note,
+      tenantContext
+    );
+
+    // The instruction, recorded as its own fact. The note alone said what was
+    // asked but not that an expert had been asked it, left no place for the
+    // answer, and vanished the moment the next note overwrote it — so a
+    // report citing an expert opinion had no record of that opinion on file.
+    await this.prisma.expertReferral.create({
+      data: {
+        caseId: id,
+        tenantId: updated.tenantId,
+        question: note.trim(),
+        expertName: expertName?.trim() || null,
+        referredByUserId: tenantContext.userId ?? null,
+      },
+    });
+    await this.audit(id, 'CASE_REFERRED_TO_EXPERT', tenantContext, {
+      newValues: { question: note.trim(), expertName: expertName?.trim() ?? null },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Record what the expert answered.
+   *
+   * Written once per referral: a second opinion is a second referral, not an
+   * edit of the first — the same reason a revisit is a second site visit, and
+   * the same reason an exceptional circumstance cannot be extended twice. The
+   * outstanding referral is the one answered, because an operator recording an
+   * outcome means the one they are waiting on.
+   */
+  async recordExpertOutcome(
+    id: string,
+    input: { outcome: ExpertOutcome; opinion: string },
+    tenantContext: TenantContext
+  ) {
+    const caseRow = await this.getStaffCase(id, tenantContext);
+    if (input.opinion.trim().length < 8) {
+      throw new BadRequestException(
+        "The expert's opinion is required — it is what the report will cite."
+      );
+    }
+
+    const referral = await this.prisma.expertReferral.findFirst({
+      where: { caseId: caseRow.id, outcome: null },
+      orderBy: { referredAt: 'desc' },
+    });
+    if (!referral) {
+      throw new BadRequestException(
+        'There is no outstanding expert referral on this case to record an outcome against.'
+      );
+    }
+
+    const updated = await this.prisma.expertReferral.update({
+      where: { id: referral.id },
+      data: {
+        outcome: input.outcome,
+        opinion: input.opinion.trim(),
+        outcomeAt: new Date(),
+        outcomeByUserId: tenantContext.userId ?? null,
+      },
+    });
+
+    await this.audit(id, 'CASE_EXPERT_OUTCOME_RECORDED', tenantContext, {
+      newValues: { outcome: input.outcome, opinion: input.opinion.trim() },
+      metadata: { expertReferralId: referral.id },
+    });
+
+    return updated;
+  }
+
+  /** Every expert instruction on a case, newest first. */
+  async listExpertReferrals(id: string, tenantContext: TenantContext) {
+    const caseRow = await this.getStaffCase(id, tenantContext);
+    return this.prisma.expertReferral.findMany({
+      where: { caseId: caseRow.id },
+      orderBy: { referredAt: 'desc' },
+    });
   }
 
   /**
@@ -989,6 +1078,36 @@ export class CasesService {
       );
     }
     this.assertTransition(caseRow.status, CaseStatus.CONVERTED);
+
+    // A medical case reaches conversion only through expert referral, so by
+    // the time it converts an opinion exists — somewhere. Requiring it to
+    // exist *on the file* is the same licence-flip shape as the evidence
+    // checklist: blocking in registered mode, recorded as an advisory as a
+    // TPA. An adjuster's report that cites an expert the record cannot
+    // produce is the failure this prevents (PD 12.6 — sources).
+    if (caseRow.status === CaseStatus.REFERRED_TO_EXPERT) {
+      const answered = await this.prisma.expertReferral.count({
+        where: { caseId: id, outcome: { not: null } },
+      });
+      if (answered === 0) {
+        const tenant = await this.prisma.tenant.findUnique({
+          where: { id: caseRow.tenantId },
+          select: { settings: true },
+        });
+        if (isLicensedMode(tenant?.settings)) {
+          throw new BadRequestException(
+            "No expert outcome is recorded on this case. Record what the expert answered " +
+              'before converting — the report will cite it.'
+          );
+        }
+        await this.audit(id, 'CASE_CONVERTED_WITHOUT_EXPERT_OUTCOME', tenantContext, {
+          metadata: {
+            advisory:
+              'Converted from expert referral with no recorded outcome; blocked in registered mode.',
+          },
+        });
+      }
+    }
 
     if (!caseRow.claimantId) {
       throw new BadRequestException('Case has no claimant — link a claimant before converting');

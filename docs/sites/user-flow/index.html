@@ -361,7 +361,7 @@ TPA schedule or adjuster fee scale`"]
     style DESK stroke:#17966A,stroke-width:2.5px
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
     style INFO stroke:#17966A,stroke-width:2.5px
-    style EXP stroke:#C77A2E,stroke-width:2.5px
+    style EXP stroke:#17966A,stroke-width:2.5px
     style SITE stroke:#17966A,stroke-width:2.5px
     style REJ stroke:#C05A50,stroke-width:2.5px
     style ABAN stroke:#C05A50,stroke-width:2.5px
@@ -570,7 +570,8 @@ no automated assessment`"]
     Q3 -->|other| Q4{"`Covered under
 the policy?`"}
 
-    EXPERT --> EOUT{"Expert outcome"}
+    EXPERT --> EOUT{"`Expert outcome recorded —
+question, expert, opinion`"}
     EOUT -->|proceed| CONVERT
     EOUT -->|decline| REJECT
 
@@ -583,7 +584,7 @@ reason recorded`"]
     style AMEND stroke:#17966A,stroke-width:2.5px
     style REMIND stroke:#17966A,stroke-width:2.5px
     style ABANDON stroke:#C05A50,stroke-width:2.5px
-    style EXPERT stroke:#C77A2E,stroke-width:2.5px
+    style EXPERT stroke:#17966A,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
     style PAYEE stroke:#17966A,stroke-width:2.5px
@@ -1364,7 +1365,7 @@ legal holds`"]
             </thead>
             <tbody>
               <tr><td>Assessment-mode router wired into the journey</td><td><span class="chip pass">Built</span></td><td>The router was real and tested but unreachable — no gateway route, no screen, and <code>convert()</code> did not call it — so a converted claim carried <code>assessmentMode = null</code> and never routed, hidden by seeded claims whose modes the seed writes directly. <code>convert()</code> now routes the claim the moment it exists, fail-soft like the SLA transitions: a claim that cannot be routed is logged and stays unrouted rather than failing the insurer handback, and an unrouted claim is visible because it has no mode</td></tr>
-              <tr><td>Expert-referral instruction and outcome record</td><td><span class="chip fail">Not built</span></td><td>Routing works — a travel medical case is refused conversion until it has passed <code>REFERRED_TO_EXPERT</code>, and the router returns <code>EXPERT_REFERRAL</code> ahead of the economic tests. What is not recorded is what the expert was <em>asked</em> and what they <em>answered</em>: the referral carries a <code>reviewNote</code> and nothing else, so a report citing an expert opinion has no record of it on file. Exactly the shape of the site-visit findings gap closed on 17 Aug, and the same fix — an append-only record with an attributable author — applies</td></tr>
+              <tr><td>Expert-referral instruction and outcome record</td><td><span class="chip pass">Built</span></td><td>Referring now writes an <code>ExpertReferral</code> — the question asked, who was instructed, by whom — and the opinion is recorded against it once, because a second opinion is a second referral rather than an edit of the first. Conversion from <code>REFERRED_TO_EXPERT</code> then meets the same licence-flip gate as the evidence checklist: blocked in registered mode when no outcome is on file, recorded as an advisory audit row as a TPA. A report citing an expert can now produce them (PD 12.6 — sources)</td></tr>
               <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>

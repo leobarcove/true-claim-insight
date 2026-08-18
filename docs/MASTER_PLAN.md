@@ -1800,6 +1800,33 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### The expert's answer is now on the file — 18 August 2026
+
+The last code-only gap in §1's journey. A travel medical case can only convert
+through `REFERRED_TO_EXPERT`, so an expert opinion is part of the regulated
+path — and it lived nowhere but a `reviewNote` that the next note overwrote. A
+report citing an expert could not produce the opinion it cited, which is the
+same defect the site-visit findings record closed, and PD 12.6 asks for
+sources as plainly as it asks for facts.
+
+`ExpertReferral` records the instruction when the referral is made — the
+question, who was instructed, by whom — and the opinion is written against it
+**once**: a second opinion is a second referral, not an edit of the first, the
+same doctrine as a revisit and as a second exceptional circumstance.
+
+Conversion then meets the licence-flip gate the evidence checklist already
+uses: **blocked in registered mode** when no outcome is on file, **recorded as
+an advisory audit row as a TPA** (`CASE_CONVERTED_WITHOUT_EXPERT_OUTCOME`).
+Verified live in both modes — TPA converted and left the advisory row;
+licensed mode refused with the reason, accepted the outcome, then converted.
+The `expertName` field also exposed that `refer-expert` shared `ReviewCaseDto`
+with reject and request-info; it now has its own DTO, because those two have
+no expert to name.
+
+Reachable end to end — service, endpoints, gateway proxies, and a card on the
+case screen — which is the standing lesson from the router that had none.
+767 tests pass.
+
 ### Every diagram swept against the code — 18 August 2026
 
 Asked to fix all discrepancies, so each section's diagram was read beside the

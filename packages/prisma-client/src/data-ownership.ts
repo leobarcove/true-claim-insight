@@ -72,6 +72,9 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   // What the visit found on the ground — the firm's inspection record, the
   // evidence PD 12.6's facts section cites.
   siteVisit: 'claims',
+  // What an expert was asked and answered — a source behind an assessment,
+  // and PD 12.6 asks for sources.
+  expertReferral: 'claims',
   // How long claim records live; platform-wide but written by case-service.
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.
