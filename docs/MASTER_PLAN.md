@@ -1769,6 +1769,34 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### §1 re-audited against the code — 18 August 2026
+
+Asked to check the journey diagram against the codebase rather than against
+its own labels. Three discrepancies, one of them substantial:
+
+- **The assessment-mode router is an engine with no ignition.**
+  `resolveAssessmentMode`, the per-tenant fast-track and inspection policies,
+  the escalation ladder and `POST /claims/:id/assessment/decide` are all real
+  and tested — but **nothing reaches them**: the gateway proxies no route to
+  the endpoint, no screen calls it, and `convert()` does not invoke it. A
+  newly converted claim therefore carries `assessmentMode = null` and never
+  routes; the seeded book shows modes only because the seed writes the column
+  directly, which is exactly what made this invisible — including to the
+  fast-track SLA work earlier today, which tested against seeded modes. Step 4
+  of §1 was drawn green, "built and running". It is now amber with its own
+  §12 row.
+- **A referred case could only convert.** `REFERRED_TO_EXPERT → REJECTED` is
+  in the transition table and drawn in §4, but §1 showed the expert path
+  leading to conversion alone — an expert who declines had nowhere to go.
+- **A returned case could not end.** `INFO_REQUESTED → ABANDONED` was built
+  this morning and drawn in §4; §1 still showed the info-request loop as a
+  circle with no exit.
+
+**Method note, worth keeping:** the first two were found by reading the
+transition table beside the diagram; the third by asking "who calls this?"
+rather than "does this exist?". Existence and reachability are different
+questions, and only the second one matters to a journey diagram.
+
 ### The chart said "not built" in the one language a chart speaks — 18 August 2026
 
 Asked three times why the info-requested item still read as unbuilt, and
