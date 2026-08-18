@@ -36,6 +36,14 @@ The design borrows directly from these proven systems:
 | **Munich Re NatCatSERVICE** | DE | Linkage of individual claims to named catastrophe events. → `FloodClaim.metMalaysiaEventRef`. |
 | **Sompo Japan** | JP | Satellite-imagery cross-check for declared flood events. → Future provider (`SentinelFloodImageryProvider`) — interface ready, integration deferred. |
 
+## Verifying a Case before conversion
+
+The checks that run over a submitted Case — and the non-motor replacement for
+the motor-era Trinity engine — have their own document:
+**`docs/CASE_VERIFICATION_ENGINE.md`**. It builds on the `FraudSignalProvider`
+pattern below rather than replacing it, and explains why autonomy is a property
+of the independent event source rather than of the model.
+
 ## Schema
 
 ### Polymorphic claim model

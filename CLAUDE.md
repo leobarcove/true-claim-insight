@@ -268,6 +268,7 @@ platform is, what it must comply with, and what is built versus planned:
 Supporting documents:
 
 - **Market and cost analysis:** `docs/MARKET_RESEARCH_TPA_REVENUE.md` (fee pool, year-1 P&L, the three revenue paths — governs §5 sequencing and §9)
+- **Case verification engine (non-motor):** `docs/CASE_VERIFICATION_ENGINE.md` — the plan for checking a Case before conversion. Replaces the motor-era Trinity engine for non-motor perils; Trinity itself stays, unextended, for motor
 - **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
 - **Business requirements:** `docs/REQUIREMENTS.md`
 - **Technical architecture:** `docs/ARCHITECTURE.md`
