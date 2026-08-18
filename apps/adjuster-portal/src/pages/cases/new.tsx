@@ -37,6 +37,15 @@ const TYPE_ICONS: Record<TravelClaimType, any> = {
  * a single page for phone/walk-in captures and manual logging of FNOL emails.
  * Documents are uploaded afterwards on the case detail page.
  */
+/**
+ * The dropdown row that means "none of these".
+ *
+ * Prefixed so it cannot collide with a real choice value — the lists carry ISO
+ * and IATA codes, and a bare "OTHER" is exactly the sort of thing one of them
+ * could legitimately contain.
+ */
+const OTHER_OPTION = '__other';
+
 export function NewCasePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -59,6 +68,21 @@ export function NewCasePage() {
       step => step.answerType !== 'document' && step.answerType !== 'confirm'
     );
   }, [claimType]);
+
+  /**
+   * Steps the operator has switched to free text.
+   *
+   * Held rather than derived, because "not on the list" and "nothing entered
+   * yet" look identical in the answer itself: the moment they pick *Not listed*
+   * the value is empty, and a derived check would immediately snap the control
+   * back to the dropdown and discard the choice they just made.
+   *
+   * No seeding, because this page only ever creates: `answers` starts empty and
+   * nothing loads a draft into it. If it ever gains an edit mode, this set has
+   * to be initialised from the answers — an off-list value arriving into an
+   * empty dropdown would be silently dropped on save.
+   */
+  const [otherSteps, setOtherSteps] = useState<Set<string>>(new Set());
 
   const setAnswer = (stepId: string, value: string) => {
     setAnswers(current => ({ ...current, [stepId]: value }));
@@ -127,22 +151,61 @@ export function NewCasePage() {
 
     let control: React.ReactNode;
     switch (step.answerType) {
-      case 'choice':
+      case 'choice': {
+        // A list that is *common* rather than complete has to accept an answer
+        // that is not on it. The claimant's side of this flow does — that is
+        // what `allowOther` means — and without the same escape here a staff
+        // member capturing a claim for an unlisted airline could not get past
+        // a required step at all. Same dead end, one screen over.
+        const typing = otherSteps.has(step.id);
         control = (
-          <Select value={value} onValueChange={selected => setAnswer(step.id, selected)}>
-            <SelectTrigger className={cn(error && 'border-destructive')}>
-              <SelectValue placeholder="Select..." />
-            </SelectTrigger>
-            <SelectContent>
-              {step.choices?.map(choice => (
-                <SelectItem key={choice.value} value={choice.value}>
-                  {choice.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <Select
+              value={typing ? OTHER_OPTION : value}
+              onValueChange={selected => {
+                if (selected === OTHER_OPTION) {
+                  // Cleared, not carried over: leaving the previously chosen
+                  // airline in the box invites saving it back unedited.
+                  setOtherSteps(current => new Set(current).add(step.id));
+                  setAnswer(step.id, '');
+                  return;
+                }
+                setOtherSteps(current => {
+                  const next = new Set(current);
+                  next.delete(step.id);
+                  return next;
+                });
+                setAnswer(step.id, selected);
+              }}
+            >
+              <SelectTrigger className={cn(error && 'border-destructive')}>
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                {step.choices?.map(choice => (
+                  <SelectItem key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </SelectItem>
+                ))}
+                {step.allowOther && (
+                  <SelectItem value={OTHER_OPTION}>Not listed — type it</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {typing && (
+              <Input
+                autoFocus
+                value={value}
+                placeholder="Type the answer in full"
+                aria-label={`${step.label} — not listed`}
+                className={cn(error && 'border-destructive')}
+                onChange={e => setAnswer(step.id, e.target.value)}
+              />
+            )}
+          </div>
         );
         break;
+      }
       case 'date':
         control = (
           <Input {...common} type="date" onChange={e => setAnswer(step.id, e.target.value)} />
