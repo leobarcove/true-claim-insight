@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards, Body, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
@@ -44,6 +44,18 @@ export class SlaProxyController {
     return firstValueFrom(
       this.httpService
         .get(`${this.caseServiceUrl}/api/v1/sla/claims/${claimId}`, {
+          headers: this.forward(req),
+        })
+        .pipe(map(response => unwrapEnvelope(response.data)))
+    );
+  }
+
+  @Post('claims/:claimId/exceptional')
+  @ApiOperation({ summary: 'Record a CSP 10.13 exceptional circumstance on a clock' })
+  recordExceptional(@Param('claimId') claimId: string, @Body() body: any, @Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .post(`${this.caseServiceUrl}/api/v1/sla/claims/${claimId}/exceptional`, body, {
           headers: this.forward(req),
         })
         .pipe(map(response => unwrapEnvelope(response.data)))

@@ -241,13 +241,44 @@ Verdicts from the formal per-requirement codebase audit (verified by spot-check)
 |---|---|---|---|
 | Firm ack of appointment ≤1 wkg day | **PARTIAL** — `Assignment` records the instruction and starts the clock from *when it arrived*, not when work began; acknowledging or declining stops it, since both answer the insurer. Verified live: received Fri 31 Jul → due Mon 3 Aug, and a claim cannot be opened on an unacknowledged appointment. The acknowledgement has been **sent** since the notification layer landed 5 Aug (`assignment.acknowledged` template, delivery-logged) — this row's earlier "recorded, not sent" reason was stale by five days when the 10 Aug audit caught it. Remains PARTIAL only until the send path is verified live, per the rule that built is not the same as operating | `SlaClock` ACK_TO_ITO + auto-ack template | 1 |
 | Preliminary report ~7–14 days (market practice) | **PASS** — `SlaClock` starts on adjuster assignment (7 working days, per-insurer override, KL calendar) and is stopped by the act CSP measures: issuing the PRELIMINARY report through the report engine. Pauses on awaiting-documents and SIU referral bank the remaining days. Operating on real dates since the 2026 calendar was installed — verified live: assignment Fri 31 Jul → due Tue 11 Aug | 2027 calendar when gazetted | done |
-| Final report ≤14 wkg days from complete documents (CSP 10.13, non-motor) | **PASS** — the clock now anchors where CSP puts it: `documentsCompleteAt`, stamped when the last mandatory checklist item is uploaded (set-once — a later upload cannot move the anchor, a deletion cannot unset the fact), starting the fourteen-working-day clock from that moment. Verified live: the completing upload stamped the anchor and started the clock, 31 Jul → due 14 Aug. `REPORT_PENDING` remains an idempotent fallback start for claims with no checklist. Moving to REPORT_PENDING with mandatory evidence missing blocks in registered mode and is recorded as a TPA — §3.6 #8 closes with this | 2027 calendar when gazetted | done |
+| Final report ≤14 wkg days from complete documents (CSP 10.13, non-motor) | **PASS** — the clock now anchors where CSP puts it: `documentsCompleteAt`, stamped when the last mandatory checklist item is uploaded (set-once — a later upload cannot move the anchor, a deletion cannot unset the fact), starting the fourteen-working-day clock from that moment. Verified live: the completing upload stamped the anchor and started the clock, 31 Jul → due 14 Aug. `REPORT_PENDING` remains an idempotent fallback start for claims with no checklist. Moving to REPORT_PENDING with mandatory evidence missing blocks in registered mode and is recorded as a TPA — §3.6 #8 closes with this. **18 Aug: 10.13's exceptional-circumstance limb is now modelled too** — the clause the PASS previously answered only half of. `SlaExceptionalGround` (complex claim, catastrophe event, suspected fraud — the PD's own examples, minus motor) with a bounded extension, a required reason, an attributable actor and an audit row; never automatic and never twice on one clock. Without it a flood surge — the event this book is most exposed to — would have shown as mass firm failure the PD expressly excuses | 2027 calendar when gazetted | done |
 | Supplementary claims 5 wkg days | **PASS** — no longer structurally precluded: `POST /claims/:id/supplementary` reopens a CLOSED claim (the one legal exit, reflected in the state machine so it tells the truth), starts the **5-working-day** `SUPPLEMENTARY_CLAIM` clock, requires the supplementary described, clears `closedAt` (retention re-anchors on the next closure), and works under a legal hold — the hold protects records, not work. Verified live: reopen Fri 31 Jul → due Fri 7 Aug; refused on a non-CLOSED claim. The response itself is the report engine's SUPPLEMENTARY type, which already stops this clock on issue | — | done |
 | ITO decision ≤7 days / payment ≤14 days (monitor) | **PARTIAL** — `INSURER_PAYMENT` runs as `monitorOnly` and `GET /sla/insurer-mi` now reports each panel insurer's met/breached/running counts per stage — the evidence that a delay originated with the insurer, verified live. `INSURER_DECISION` remains defined but unreachable (starts at `UNDER_REVIEW`, which the claim state machine has no route to) | Close the lifecycle gap | 2 |
 | Fee settlement by ITO (CSP 11.16–11.18) | **PASS** — the billing foundation, client-agnostic per §6.8: `FeeScale` per insurer (SCALE with **progressive** bands like a tax schedule — a flat-on-total reading would make fees jump at band edges — plus TIME and FIXED; SST as a configurable rate, applied to the professional fee only, never to disbursements, which are reimbursements), `TimeEntry`, `Disbursement`, and a `FeeNote` that stores its own **derivation** — the number without its working is unanswerable in a dispute. Draft only after the claim is decided; issued notes immutable; paid requires the payment reference; the per-insurer statement ages outstanding notes (CURRENT/1–30/31–60/61–90/90+) — the CSP 11.16–11.18 evidence. Verified live: RM 25,000 → 1,750.00 + 140.00 SST + 85.50 disbursement = 1,975.50, due +30 days. MSIG's actual terms arrive as a row, not a release. **Tests:** 10, in CI | Rates await each insurer's real terms | done |
 | Records readily available (audit-readiness) | **PASS** — `audit_trail` is append-only by database trigger (UPDATE never permitted; DELETE only under an explicit maintenance flag, verified). The interceptor persists rather than carrying a TODO and never reads request bodies. Coverage across gateway, case-service and video-service through one shared writer; refusals recorded via the exception filter — the only place that sees guard rejections. **Tests:** 24, in CI | — (bespoke writers migrated 31 July; the export seal stays direct and fail-closed by design) | done |
 
 Working-day arithmetic requires a Malaysian holiday calendar (national + state) — part of the SLA engine (Ph 1).
+
+### 3.2a PIAM — what it is, and what it does not bind
+
+Asked to confirm compliance with PIAM guidelines. The honest position, checked
+rather than assumed, because asserting compliance with an instrument that does
+not exist is the §3.6 failure in its purest form:
+
+- **PIAM is a trade association of insurers**, not a regulator. Its 23 members
+  are licensed general insurers and reinsurers. It binds *its members*; it does
+  not license, register or discipline adjusters. That is BNM's role, under the
+  Adjuster PD and the CSP PD — both already in §3.1 and §3.2.
+- **PIAM has published no non-motor claims guideline.** Its own "Guideline of
+  Claims" page reads *Coming Soon* (checked 18 Aug 2026). There is therefore no
+  PIAM claims standard for this book to comply with, and any statement that we
+  comply with one would be fiction.
+- **PIAM's one adjuster-facing instrument is PARS**, the panel-approved
+  repairer scheme, under which PIAM appoints an adjuster to inspect a workshop.
+  PARS is **motor**, which §1 excludes. The repo's existing PARS references sit
+  in `docs/CLAIMS_WORKFLOW.md` beside other motor legacy, correctly.
+- **Where PIAM can still reach us: by contract, not by rule.** A panel insurer
+  is a PIAM member and carries its own customer-service commitments; those
+  reach an adjusting firm through the SLA in the appointment, which CSP 9.1
+  requires the insurer to align with its consumer promises. So the binding
+  path is *insurer SLA → us*, and the system already models it — per-tenant SLA
+  policies, per-tenant fast-track profiles, per-tenant assessment thresholds.
+  Nothing further is required until an insurer's SLA names a term we cannot
+  express.
+
+**Verdict: not applicable as a compliance regime; watch as a commercial one.**
+Revisit if PIAM publishes the claims guideline its site promises, or if a panel
+SLA cites a PIAM standard by name.
 
 ### 3.3 FSA 2013 constraints
 
@@ -1768,6 +1799,40 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 (G8/G9); production deployment is a funding decision; BM overlays are legal
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
+
+### The audit's findings fixed, and PIAM checked rather than assumed — 18 August 2026
+
+**The router has ignition.** `convert()` now calls `AssessmentService.decide`
+the moment the claim exists, fail-soft in the same shape as the SLA
+transitions: a claim that cannot be routed is logged and stays unrouted rather
+than failing the insurer handback, and an unrouted claim is visible precisely
+because it has no mode. §1's step 4 is green again on the strength of a code
+path rather than a hope.
+
+**CSP 10.13's other limb is now modelled.** The clause sets the non-motor
+window *and* excuses it in exceptional circumstances — complex claims,
+catastrophe and large-event losses, suspected fraud. §3.2 recorded a PASS on
+the first half while the SLA engine had no concept of the second, so a Klang
+Valley flood — the surge this book is most exposed to (§2.5) — would have
+produced mass breaches and escalations against the firm for delay the PD
+expressly permits, with no way to evidence why. `SlaExceptionalGround` takes
+the PD's own examples (minus motor, out of scope) and the relief is
+deliberately hard to abuse: a named ground, a required reason, a bounded
+extension in working days, an attributable actor, an audit row, never
+automatic, and never twice on one clock. A clock already breached against the
+old window returns to running, because that breach was measured against a
+deadline the PD did not require. Reachable end to end — service, endpoint,
+gateway proxy — which is the lesson the morning's audit taught.
+
+**PIAM: checked, and it does not bind us.** PIAM is a trade association of
+insurers, not a regulator of adjusters; it has published no non-motor claims
+guideline (its own page reads "Coming Soon"); and its one adjuster-facing
+instrument, PARS, is motor, which §1 excludes. The honest finding is recorded
+as §3.2a rather than a comfortable claim of compliance — asserting conformity
+with an instrument that does not exist is the §3.6 failure in its purest form.
+What does reach us is commercial: a panel insurer's own service commitments
+arrive by SLA in the appointment, which the per-tenant policy surfaces already
+model. 763 tests pass.
 
 ### §1 re-audited against the code — 18 August 2026
 

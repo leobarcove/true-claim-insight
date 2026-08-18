@@ -331,8 +331,7 @@ never desk-reviewed, at any value`"]
     CONV["`3 · convert to **Claim**
 the insurer-facing handback record`"]
 
-    CONV --> MODE{"`4 · Assessment-mode router
-*endpoint only — nothing calls it yet*`"}
+    CONV --> MODE{"4 · Assessment-mode router"}
     MODE -->|"`small claim, evidence in,
 no fraud signal`"| DESK["`DESK_REVIEW fast-track
 documents only, no interview`"]
@@ -358,7 +357,7 @@ TPA schedule or adjuster fee scale`"]
     style CASE stroke:#17966A,stroke-width:2.5px
     style CONV stroke:#17966A,stroke-width:2.5px
     style ING stroke:#17966A,stroke-width:2.5px
-    style MODE stroke:#C77A2E,stroke-width:2.5px
+    style MODE stroke:#17966A,stroke-width:2.5px
     style DESK stroke:#17966A,stroke-width:2.5px
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
     style INFO stroke:#17966A,stroke-width:2.5px
@@ -1330,7 +1329,7 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
-              <tr><td>Assessment-mode router wired into the journey</td><td><span class="chip fail">Not built</span></td><td>The router itself is real and tested — <code>resolveAssessmentMode</code>, the per-tenant fast-track and inspection policies, the escalation ladder, and <code>POST /claims/:id/assessment/decide</code> on case-service. What does not exist is any way to reach it: the gateway proxies no route to it and no screen calls it, and <code>convert()</code> does not invoke it either. So a newly converted claim carries <code>assessmentMode = null</code> and never routes; the seeded claims show modes because the seed writes them directly. Step 4 of §1 is therefore a built engine with no ignition</td></tr>
+              <tr><td>Assessment-mode router wired into the journey</td><td><span class="chip pass">Built</span></td><td>The router was real and tested but unreachable — no gateway route, no screen, and <code>convert()</code> did not call it — so a converted claim carried <code>assessmentMode = null</code> and never routed, hidden by seeded claims whose modes the seed writes directly. <code>convert()</code> now routes the claim the moment it exists, fail-soft like the SLA transitions: a claim that cannot be routed is logged and stays unrouted rather than failing the insurer handback, and an unrouted claim is visible because it has no mode</td></tr>
               <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>

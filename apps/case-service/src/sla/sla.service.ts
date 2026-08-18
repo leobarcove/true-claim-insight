@@ -1,6 +1,12 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, SlaClockState, SlaStage } from '@prisma/client';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, SlaClockState, SlaExceptionalGround, SlaStage } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
@@ -207,6 +213,89 @@ export class SlaService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Record an exceptional circumstance against a running clock (CSP 10.13).
+   *
+   * The policy document lets the standard window give way for complex claims,
+   * catastrophe losses and suspected fraud — and until this existed the
+   * system could not say so. A flood surge, which is precisely the event this
+   * book is most exposed to (§2.5), would have shown as mass firm failure:
+   * every clock breaching, every claim escalating, and no way to evidence
+   * that the PD excused the delay. The dashboard would have been wrong in the
+   * direction that costs a firm its panel.
+   *
+   * Three deliberate constraints, because relief a firm grants itself is the
+   * kind an examiner reads hardest:
+   *
+   *  - **Never automatic.** A person names the ground and gives a reason.
+   *    Inferring "this looks like a CAT" and extending silently would be the
+   *    firm marking its own homework.
+   *  - **Bounded.** The extension is a number of working days someone chose,
+   *    not an open-ended suspension — a clock always has a deadline to answer
+   *    to, which is the whole point of measuring turnaround.
+   *  - **Once.** A clock already carrying a ground is not extended again;
+   *    a second extension is a new decision, and repeatedly buying time in
+   *    small increments is how a deadline quietly stops meaning anything.
+   */
+  async recordExceptionalCircumstance(
+    claimId: string,
+    stage: SlaStage,
+    input: {
+      ground: SlaExceptionalGround;
+      reason: string;
+      workingDays: number;
+      userId: string | null;
+    }
+  ) {
+    const clock = await this.prisma.slaClock.findFirst({
+      where: { claimId, stage, state: { in: LIVE } },
+      include: { policy: true },
+    });
+    if (!clock) return null;
+    if (clock.exceptionalGround) {
+      throw new BadRequestException(
+        'This clock already carries an exceptional circumstance. Recording a second ' +
+          'is a fresh decision, not an adjustment of the first.'
+      );
+    }
+    if (!Number.isInteger(input.workingDays) || input.workingDays < 1 || input.workingDays > 60) {
+      throw new BadRequestException('An extension must be between 1 and 60 working days.');
+    }
+    if (input.reason.trim().length < 8) {
+      throw new BadRequestException(
+        'A reason is required — it is what makes the extension explicable later.'
+      );
+    }
+
+    const dueAt = dueDateFor(clock.dueAt, {
+      ...this.targetOf(clock.policy),
+      workingDays: input.workingDays,
+    });
+
+    const updated = await this.prisma.slaClock.update({
+      where: { id: clock.id },
+      data: {
+        dueAt,
+        exceptionalGround: input.ground,
+        exceptionalReason: input.reason.trim(),
+        exceptionalAt: new Date(),
+        exceptionalByUserId: input.userId,
+        exceptionalWorkingDays: input.workingDays,
+        // A clock already past its old deadline returns to running: the
+        // breach was measured against a window the PD did not require.
+        state: SlaClockState.RUNNING,
+        breachedAt: null,
+        warnedAt: null,
+      },
+    });
+
+    this.logger.log(
+      `${stage} clock on ${claimId}: ${input.ground} recorded, ` +
+        `+${input.workingDays} working days → ${dueAt.toISOString().slice(0, 10)}`
+    );
+    return updated;
   }
 
   /**

@@ -12,9 +12,10 @@ import { QUEUE } from '../queue/queue.constants';
 import { TenantModule } from '../tenant/tenant.module';
 import { ConsentModule } from '../consent/consent.module';
 import { ClaimsModule } from '../claims/claims.module';
+import { AssessmentModule } from '../assessment/assessment.module';
 
 @Module({
-  imports: [TenantModule, ConsentModule, ClaimsModule],
+  imports: [TenantModule, ConsentModule, ClaimsModule, AssessmentModule],
   controllers: [CasesController],
   providers: [
     CasesService,

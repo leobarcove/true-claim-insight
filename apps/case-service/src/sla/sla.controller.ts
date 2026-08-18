@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
@@ -6,13 +6,62 @@ import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { SlaService } from './sla.service';
+import { RecordExceptionalDto } from './dto/record-exceptional.dto';
+import { AuditService } from '../common/audit/audit.service';
 
 @ApiTags('sla')
 @Controller({ path: 'sla', version: '1' })
 @UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class SlaController {
-  constructor(private readonly sla: SlaService) {}
+  constructor(
+    private readonly sla: SlaService,
+    private readonly audit: AuditService
+  ) {}
+
+  /**
+   * Record an exceptional circumstance on a clock (CSP 10.13).
+   *
+   * Restricted to those who answer for turnaround: the adjuster working the
+   * file, a firm admin, or compliance. Audited without exception — relief the
+   * firm grants itself is the first thing an examiner asks about, and "who
+   * decided, on what ground, for how long" must be answerable without reading
+   * application logs.
+   */
+  @Post('claims/:claimId/exceptional')
+  @ApiOperation({ summary: 'Record a CSP 10.13 exceptional circumstance on a clock' })
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SUPER_ADMIN)
+  async recordExceptional(
+    @Param('claimId', ParseUUIDPipe) claimId: string,
+    @Body() dto: RecordExceptionalDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    const clock = await this.sla.recordExceptionalCircumstance(claimId, dto.stage, {
+      ground: dto.ground,
+      reason: dto.reason,
+      workingDays: dto.workingDays,
+      userId: tenantContext.userId ?? null,
+    });
+
+    await this.audit.record({
+      entityType: 'CLAIM',
+      entityId: claimId,
+      action: 'SLA_EXCEPTIONAL_CIRCUMSTANCE_RECORDED',
+      newValues: {
+        stage: dto.stage,
+        ground: dto.ground,
+        workingDays: dto.workingDays,
+        reason: dto.reason,
+        dueAt: clock?.dueAt ?? null,
+      },
+      tenantId: tenantContext.tenantId,
+      userId: tenantContext.userId,
+      actorId: tenantContext.userId,
+      actorType: tenantContext.userRole ?? 'SYSTEM',
+    });
+
+    return clock;
+  }
 
   /**
    * Every clock on one claim, newest first.

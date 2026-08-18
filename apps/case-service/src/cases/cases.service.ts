@@ -45,6 +45,7 @@ import { isInlineRenderable, resolveMimeType } from './document-media';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ClaimsService } from '../claims/claims.service';
+import { AssessmentService } from '../assessment/assessment.service';
 import { InfoRequestEvents } from './info-request-events';
 import { render } from '../notifications/templates';
 import { CreateCaseDto } from './dto/create-case.dto';
@@ -137,7 +138,8 @@ export class CasesService {
     private readonly flows: FlowsService,
     private readonly consent: ConsentService,
     private readonly claims: ClaimsService,
-    private readonly infoRequests: InfoRequestEvents
+    private readonly infoRequests: InfoRequestEvents,
+    private readonly assessment: AssessmentService
   ) {}
 
   /**
@@ -1108,6 +1110,34 @@ export class CasesService {
     // upload path calls, so the checklist logic cannot drift into two copies.
     if (converted.convertedClaimId) {
       await this.claims.refreshDocumentsComplete(converted.convertedClaimId);
+
+      // Route the claim the moment it exists. The router, its per-tenant
+      // fast-track and inspection policies and its decision history were all
+      // built and tested — and nothing called them: no gateway route, no
+      // screen, and not this method either. Converted claims carried
+      // `assessmentMode = null` and never routed, while the seeded book showed
+      // modes because the seed writes the column directly, which is what hid
+      // it (audit, 18 Aug).
+      //
+      // Fail-soft, like the SLA transitions: a claim that cannot be routed is
+      // logged and stays unrouted, because refusing the insurer handback over
+      // a routing failure would be the worse outcome. An unrouted claim is
+      // visible — it has no mode — where a refused conversion is a dead end.
+      try {
+        const decision = await this.assessment.decide(
+          converted.convertedClaimId,
+          tenantContext
+        );
+        this.logger.log(
+          `Claim ${converted.convertedClaim?.claimNumber} routed to ${decision.mode}` +
+            (decision.fastTracked ? ' (fast-tracked)' : '')
+        );
+      } catch (error) {
+        this.logger.error(
+          `Claim ${converted.convertedClaim?.claimNumber} could not be routed: ` +
+            `${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
     // The conversion is the insurer handback — the most consequential decision
     // in the intake flow, so its audit record carries the full linkage.

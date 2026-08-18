@@ -1548,6 +1548,24 @@ enum SlaStage {
   INSURER_PAYMENT /// insurer side: 14 working days non-motor — monitored
 }
 
+/// Grounds on which CSP para 10.13 excuses the standard turnaround.
+///
+/// Taken from the policy document's own examples rather than invented, so a
+/// recorded extension can be traced to the clause that permits it. Motor's
+/// example (extensive vehicle damage) is deliberately absent: this platform
+/// does not serve that line (MASTER_PLAN §1).
+enum SlaExceptionalGround {
+  /// Marine cargo, aviation, transit, contractors' all risk, liability,
+  /// engineering, business interruption — claims whose complexity the PD
+  /// names directly.
+  COMPLEX_CLAIM
+  /// Natural catastrophe and large event losses — major floods above all,
+  /// which is the surge this book is most exposed to (§2.5).
+  CATASTROPHE_EVENT
+  /// Suspected fraud requiring further investigation.
+  SUSPECTED_FRAUD
+}
+
 enum SlaClockState {
   RUNNING
   PAUSED /// stopped by a dependency outside the firm's control
@@ -1622,6 +1640,20 @@ model SlaClock {
   /// recomputed from the resume date, so a pause never silently consumes time.
   remainingWorkingDaysAtPause Int?
   pauseReason                 String?
+
+  /// CSP 10.13 lets the standard window give way in exceptional
+  /// circumstances. Claiming that relief is a deliberate, attributable act,
+  /// never automatic: a firm that excused itself silently would be marking
+  /// its own homework, and the ground and reason are what an examiner asks
+  /// for. Absent on almost every clock.
+  exceptionalGround   SlaExceptionalGround?
+  exceptionalReason   String?
+  exceptionalAt       DateTime?
+  exceptionalByUserId String?
+  /// Working days added when the ground was recorded. Kept beside the ground
+  /// so the extension is a number someone chose and can be asked about,
+  /// rather than an open-ended suspension.
+  exceptionalWorkingDays Int?
 
   stoppedAt       DateTime?
   breachedAt      DateTime?
