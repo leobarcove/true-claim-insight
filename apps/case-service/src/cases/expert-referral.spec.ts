@@ -115,3 +115,39 @@ describe('expert referral record', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+/**
+ * Identity belongs to the gateway (ownership exception #6, retired 18 Aug
+ * 2026). A caller that reaches case-service with a phone but no claimantId
+ * has skipped that resolution, and the case would be orphaned from its
+ * claimant — so it is refused loudly rather than opened unattached.
+ */
+describe('claimant resolution is the gateway\'s, not ours', () => {
+  const service = () =>
+    new CasesService(
+      { claimant: { upsert: jest.fn() } } as never, {} as never, {} as never,
+      {} as never, {} as never, { record: jest.fn() } as never, {} as never,
+      {} as never, {} as never, {} as never,
+      { on: jest.fn(), emit: jest.fn() } as never, {} as never
+    );
+
+  const resolve = (dto: Record<string, unknown>, role = 'ADJUSTER') =>
+    (service() as never as {
+      resolveClaimantId(d: unknown, t: unknown): Promise<string | null>;
+    }).resolveClaimantId(dto, { userRole: role, userId: 'user-1', tenantId: 't1' });
+
+  it('refuses a phone with no id rather than writing identity itself', async () => {
+    await expect(resolve({ claimantPhone: '+60123456789' })).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+  });
+
+  it('takes the id the gateway resolved', async () => {
+    await expect(resolve({ claimantId: 'claimant-7' })).resolves.toBe('claimant-7');
+  });
+
+  it('still trusts a claimant’s own JWT subject', async () => {
+    // Self-serve needs no resolution: the token's sub IS the claimant.
+    await expect(resolve({}, 'CLAIMANT')).resolves.toBe('user-1');
+  });
+});

@@ -39,6 +39,21 @@ export interface ClaimantResolver {
    * the check lives in the adapter where the platform's own evidence is.
    */
   resolveByVerifiedPhone(phoneNumber: string, channel: string): Promise<ResolvedClaimant>;
+
+  /**
+   * Resolve a claimant from contact details nobody verified — an FNOL email's
+   * phone number, above all.
+   *
+   * Separate from the verified path because the two say different things
+   * about the same claimant. Keeping one method and a boolean would have let
+   * a caller assert verification by omission; two methods make the weaker
+   * claim the one you have to ask for by name.
+   */
+  resolveByUnverifiedContact(input: {
+    phoneNumber: string;
+    fullName?: string;
+    source: string;
+  }): Promise<ResolvedClaimant>;
 }
 
 export const CLAIMANT_RESOLVER = Symbol('CLAIMANT_RESOLVER');

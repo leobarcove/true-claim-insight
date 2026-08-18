@@ -1800,6 +1800,39 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### Two partials cleared: the session list, and the last identity write — 18 August 2026
+
+**Sessions are listed from our own records.** `getAllSessions` filtered to
+rooms the video provider still held a recording for, dropped any row whose
+recording link failed, returned nothing at all when the provider was
+unreachable, and — worse — estimated the paging total by scaling the real
+count by how many rows survived the current page's lookups, so page 2 could
+report a different total from page 1. A completed assessment therefore
+vanished when the provider expired its recording: a third party's retention
+policy editing our history. The session is the firm's record of what it did;
+the recording is an artefact someone else holds. Listing now comes from
+`Session`, with availability annotated per row and *why* it is absent — "not
+held" and "provider unreachable" are different facts to an operator chasing
+one.
+
+**The last identity write left case-service.** Ownership exception #6 —
+`resolveClaimantId` upserting a Claimant by phone — was live, reached by FNOL
+email ingestion on every parsed email carrying a contact number. Intake now
+resolves through the gateway that owns identity, via a **new** internal route
+deliberately separate from the channel one: that endpoint's whole contract is
+that a messaging platform vouched for the number, while a phone scraped from
+an email is unverified, and reusing it would have logged an unattested contact
+as attested. Two methods rather than one and a boolean, so the weaker claim is
+the one a caller must ask for by name. Best-effort by design: an unreachable
+identity service opens the case without a claimant rather than losing the
+notification of loss, which is the thing ingestion exists to catch. A phone
+arriving with no id is now refused loudly instead of upserted.
+
+**Exceptions: five, down from six.** The remaining ones are video-service
+(`claim`, `document`, `user`) and risk-engine (`document`, `floodClaim`) —
+each a real cross-service refactor with its own recorded resolution, not
+paperwork. 773 tests pass.
+
 ### Cross-tenant claim reads unified on 404 — 18 August 2026
 
 The one item the 18 Aug audit deliberately left as the principal's call, now

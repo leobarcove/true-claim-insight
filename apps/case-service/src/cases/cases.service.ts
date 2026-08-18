@@ -1438,21 +1438,19 @@ export class CasesService {
     if (tenantContext.userRole === 'CLAIMANT') return tenantContext.userId;
 
     if (dto.claimantId) return dto.claimantId;
+
+    // A phone with no id used to be upserted into `claimant` right here — the
+    // last identity write left in this service, and ownership exception #6.
+    // Both callers now resolve through the gateway before they get this far:
+    // the portal proxy for staff capture, and FNOL ingestion for a phone
+    // parsed out of an email. Refusing loudly rather than silently opening an
+    // unattached case, because a caller that reaches this line has skipped
+    // identity resolution and the case would be orphaned from its claimant.
     if (dto.claimantPhone) {
-      // Fallback only. The gateway normally resolves the claimant (it owns the
-      // identity context) and passes claimantId. Deliberately does NOT write the
-      // NRIC: that needs both the encryption key and the index pepper, and
-      // keeping identity writes in one service is the point of ownership
-      // exception #6. A staff-supplied NRIC arrives via the gateway path.
-      const claimant = await this.prisma.claimant.upsert({
-        where: { phoneNumber: dto.claimantPhone },
-        update: { fullName: dto.claimantFullName || undefined },
-        create: {
-          phoneNumber: dto.claimantPhone,
-          fullName: dto.claimantFullName,
-        },
-      });
-      return claimant.id;
+      throw new BadRequestException(
+        'A claimant phone was supplied without a claimantId. Identity is resolved by the ' +
+          'gateway — call it first and pass the id.'
+      );
     }
     return null;
   }

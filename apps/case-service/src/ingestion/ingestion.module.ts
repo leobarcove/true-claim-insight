@@ -1,3 +1,4 @@
+import { HttpModule } from '@nestjs/axios';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,8 @@ import { PrismaModule } from '../config/prisma.module';
 import { QUEUE } from '../queue/queue.constants';
 import { INBOUND_MAIL_SOURCE } from './inbound-mail.interface';
 import { ImapMailSource } from './imap-mail.source';
+import { HttpClaimantResolver } from '../chat/http-claimant-resolver';
+import { CLAIMANT_RESOLVER, type ClaimantResolver } from '../chat/claimant-resolver.interface';
 import { IngestionController } from './ingestion.controller';
 import { IngestionProcessor } from './ingestion.processor';
 import { IngestionReviewService } from './ingestion-review.service';
@@ -25,7 +28,7 @@ import { IngestionService } from './ingestion.service';
  * production mailbox and consuming real claim notifications.
  */
 @Module({
-  imports: [PrismaModule, CasesModule],
+  imports: [PrismaModule, CasesModule, HttpModule],
   controllers: [IngestionController],
   providers: [
     IngestionService,
@@ -33,6 +36,11 @@ import { IngestionService } from './ingestion.service';
     IngestionProcessor,
     ImapMailSource,
     { provide: INBOUND_MAIL_SOURCE, useExisting: ImapMailSource },
+    // Identity is the gateway's to write, so intake resolves a claimant
+    // through it rather than upserting one here — the recorded resolution of
+    // the case-service → claimant ownership exception.
+    HttpClaimantResolver,
+    { provide: CLAIMANT_RESOLVER, useExisting: HttpClaimantResolver },
   ],
   exports: [IngestionService],
 })

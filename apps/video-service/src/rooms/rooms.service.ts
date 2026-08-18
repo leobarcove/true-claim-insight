@@ -265,30 +265,33 @@ export class RoomsService {
   /**
    * Get all sessions with pagination
    */
+  /**
+   * Every assessment session the firm holds, newest first.
+   *
+   * Listed from our own `Session` rows, not from the video provider's
+   * recordings. It used to be the other way round — the query filtered to
+   * rooms Daily still held a recording for, dropped any session whose
+   * recording link failed to resolve, and returned nothing at all when Daily
+   * was unreachable. A completed assessment therefore vanished from the list
+   * when the provider expired its recording, and the screen said the
+   * assessment never happened. The session is the firm's record of what it
+   * did; the recording is an artefact held by someone else, and confusing the
+   * two let a third party's retention policy edit our history.
+   *
+   * The paging total was invented too: `Math.round(total * validRatio)`
+   * scaled the real count by how many rows survived the current page's link
+   * lookups, so page 2 could report a different total from page 1.
+   *
+   * Recording availability is now a property of each row, with a reason when
+   * it is absent — "the provider no longer holds it" and "we could not reach
+   * the provider" are different facts, and an operator chasing a recording
+   * needs to know which one they are looking at.
+   */
   async getAllSessions(page = 1, limit = 10, search?: string, tenantContext?: TenantContext) {
-    if (!this.dailyService.isReady()) {
-      return { data: [], total: 0, page, limit, totalPages: 0 };
-    }
-
     const skip = (page - 1) * limit;
-    const recordingsRes = (await this.dailyService.listRecordings()) as any;
-    const allRecordings = recordingsRes.data || [];
 
-    // Map room names to their latest recording info
-    const roomToLatestRecording = new Map<string, any>();
-    for (const rec of allRecordings) {
-      const existing = roomToLatestRecording.get(rec.room_name);
-      if (!existing || new Date(rec.created_at) > new Date(existing.created_at)) {
-        roomToLatestRecording.set(rec.room_name, rec);
-      }
-    }
-
-    const recordedRoomNames = Array.from(roomToLatestRecording.keys());
-    let whereClause = this.tenantService.buildSessionTenantFilter(tenantContext || null, {
+    const whereClause = this.tenantService.buildSessionTenantFilter(tenantContext || null, {
       status: { in: [SessionStatus.COMPLETED, SessionStatus.IN_PROGRESS] },
-      OR: recordedRoomNames.map(name => ({
-        roomUrl: { contains: name },
-      })),
     });
 
     if (search) {
@@ -315,11 +318,7 @@ export class RoomsService {
             select: {
               id: true,
               claimNumber: true,
-              claimant: {
-                select: {
-                  fullName: true,
-                },
-              },
+              claimant: { select: { fullName: true } },
             },
           },
         },
@@ -327,36 +326,60 @@ export class RoomsService {
       this.prisma.session.count({ where: whereClause }),
     ]);
 
-    const enhancedSessions = await Promise.all(
+    // Best-effort annotation. A provider outage degrades what we can say
+    // about recordings; it must not decide which assessments existed.
+    const roomToLatestRecording = new Map<string, any>();
+    let providerReachable = false;
+    if (this.dailyService.isReady()) {
+      try {
+        const recordingsRes = (await this.dailyService.listRecordings()) as any;
+        for (const rec of recordingsRes?.data ?? []) {
+          const existing = roomToLatestRecording.get(rec.room_name);
+          if (!existing || new Date(rec.created_at) > new Date(existing.created_at)) {
+            roomToLatestRecording.set(rec.room_name, rec);
+          }
+        }
+        providerReachable = true;
+      } catch (error) {
+        this.logger.warn(
+          `Could not list recordings; sessions are listed without them: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    const data = await Promise.all(
       sessions.map(async session => {
         const roomName = session.roomUrl?.split('/').pop();
-        if (!roomName) return null;
+        const recording = roomName ? roomToLatestRecording.get(roomName) : undefined;
 
-        const recording = roomToLatestRecording.get(roomName);
-        if (!recording) return null;
+        if (!recording) {
+          return {
+            ...session,
+            recordingUrl: null,
+            recordingStatus: providerReachable ? 'NOT_HELD' : 'PROVIDER_UNAVAILABLE',
+          };
+        }
 
         try {
           const linkRes = await this.dailyService.getRecordingAccessLink(recording.id);
           if (linkRes?.download_link && linkRes.download_link !== '#') {
-            return { ...session, recordingUrl: linkRes.download_link };
+            return { ...session, recordingUrl: linkRes.download_link, recordingStatus: 'AVAILABLE' };
           }
-        } catch (e) {
+        } catch {
           this.logger.warn(`Failed to resolve link for session ${session.id}`);
         }
-        return null;
+        return { ...session, recordingUrl: null, recordingStatus: 'LINK_FAILED' };
       })
     );
 
-    const finalData = enhancedSessions.filter(s => s !== null);
-    const validRatio = sessions.length > 0 ? finalData.length / sessions.length : 0;
-    const adjustedTotal = Math.round(total * validRatio);
-
     return {
-      data: finalData,
-      total: adjustedTotal,
+      data,
+      total,
       page,
       limit,
-      totalPages: Math.ceil(adjustedTotal / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 

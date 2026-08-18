@@ -4,6 +4,7 @@ import { CaseChannel, CaseInitiator, InboundMessageStatus, Prisma } from '@prism
 import { CaseAnswers, getFlow, getStep, validateAnswer } from '@tci/shared-types';
 
 import { PrismaService } from '../config/prisma.service';
+import { CLAIMANT_RESOLVER, type ClaimantResolver } from '../chat/claimant-resolver.interface';
 import { CasesService } from '../cases/cases.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
@@ -42,7 +43,8 @@ export class IngestionService {
     private readonly prisma: PrismaService,
     private readonly casesService: CasesService,
     private readonly config: ConfigService,
-    @Inject(INBOUND_MAIL_SOURCE) private readonly mailSource: InboundMailSource
+    @Inject(INBOUND_MAIL_SOURCE) private readonly mailSource: InboundMailSource,
+    @Inject(CLAIMANT_RESOLVER) private readonly claimants: ClaimantResolver
   ) {}
 
   /** One poll cycle. Safe to run concurrently — see `recordArrival`. */
@@ -208,6 +210,28 @@ export class IngestionService {
   }
 
   private async createCase(message: InboundMessage, parsed: ParsedFnol) {
+    // The gateway owns identity, so a phone parsed out of an email is resolved
+    // there rather than upserted here. Best-effort: a case with no claimant is
+    // still a notification of loss an operator must see, and refusing to
+    // record it because the identity service was unreachable would lose the
+    // very thing FNOL ingestion exists to catch.
+    let claimantId: string | null = null;
+    if (parsed.claimantPhone) {
+      try {
+        const resolved = await this.claimants.resolveByUnverifiedContact({
+          phoneNumber: parsed.claimantPhone,
+          fullName: parsed.claimantName,
+          source: 'FNOL_EMAIL',
+        });
+        claimantId = resolved.claimantId;
+      } catch (error) {
+        this.logger.error(
+          `Could not resolve a claimant for ${message.messageId}; the case is opened without one: ` +
+            `${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
     return this.casesService.create(
       {
         travelClaimType: parsed.travelClaimType!,
@@ -215,8 +239,7 @@ export class IngestionService {
         // SYSTEM, not STAFF: nobody keyed this in, and the distinction is what
         // lets an operator see which cases arrived unattended.
         initiatedBy: CaseInitiator.SYSTEM,
-        claimantPhone: parsed.claimantPhone,
-        claimantFullName: parsed.claimantName,
+        claimantId: claimantId ?? undefined,
         answers: this.toAnswers(parsed),
         sourceMeta: {
           from: message.from,

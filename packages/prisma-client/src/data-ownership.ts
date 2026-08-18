@@ -234,12 +234,6 @@ export const OWNERSHIP_EXCEPTIONS: OwnershipException[] = [
     // case-service. Awaits a runnable fraud-orchestrator flow to verify against.
     resolution: 'Emit the FraudSignal only; case-service applies the parametric flag',
   },
-  {
-    service: 'case-service',
-    model: 'claimant',
-    reason: 'resolveClaimantId upserts a Claimant by phone during case intake',
-    resolution: 'Gateway resolves the claimant and passes claimantId; case-service stops writing identity',
-  },
 ];
 
 const WRITE_OPERATIONS = new Set([

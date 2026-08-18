@@ -56,4 +56,34 @@ export class HttpClaimantResolver implements ClaimantResolver {
 
     return { claimantId: claimant.claimantId, tenantId: claimant.tenantId ?? undefined };
   }
+
+  async resolveByUnverifiedContact(input: {
+    phoneNumber: string;
+    fullName?: string;
+    source: string;
+  }): Promise<ResolvedClaimant> {
+    if (!this.internalKey) {
+      throw new Error(
+        'INTERNAL_API_KEY is not configured — cannot resolve a claimant for intake.'
+      );
+    }
+
+    const { data } = await firstValueFrom(
+      this.http.post(
+        `${this.gatewayUrl}/api/v1/auth/intake/resolve-claimant`,
+        input,
+        { headers: { 'x-internal-key': this.internalKey } }
+      )
+    );
+
+    const claimant = data?.data ?? data;
+    if (!claimant?.claimantId) {
+      this.logger.error(
+        'intake/resolve-claimant returned success without a claimant; refusing to open a case.'
+      );
+      throw new Error('Identity service returned no claimant');
+    }
+
+    return { claimantId: claimant.claimantId, tenantId: claimant.tenantId ?? undefined };
+  }
 }

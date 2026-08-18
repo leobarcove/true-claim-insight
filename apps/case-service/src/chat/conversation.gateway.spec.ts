@@ -112,6 +112,12 @@ describe('ConversationGateway', () => {
         claimantId: 'claimant-1',
         tenantId: 'tenant-1',
       })),
+      // The unverified path belongs to FNOL intake, not to a chat binding;
+      // present to satisfy the port, unused here.
+      resolveByUnverifiedContact: jest.fn(async () => ({
+        claimantId: 'claimant-1',
+        tenantId: 'tenant-1',
+      })),
     };
 
     const cases = {

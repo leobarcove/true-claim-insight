@@ -23,6 +23,7 @@ import { ClaimantsService } from '../claimants/claimants.service';
 import { RegisterDto, LoginDto, ChangePasswordDto, RegisterVerifyDto } from './dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResolveIntakeClaimantDto } from './dto/resolve-intake-claimant.dto';
 import { ResolveChannelClaimantDto } from './dto/resolve-channel-claimant.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -231,6 +232,35 @@ export class AuthController {
 
     this.logger.log(
       `Channel binding: ${dto.channel} resolved a platform-verified number to claimant ${claimant.id}.`
+    );
+    return { claimantId: claimant.id, tenantId };
+  }
+
+  /**
+   * Resolve a claimant from unverified intake contact details (internal).
+   *
+   * The sibling of the route above, and deliberately not the same one: that
+   * one exists because a messaging platform vouched for the number, while
+   * this one takes a phone parsed out of an email nobody authenticated. Both
+   * may create a Claimant, because `claimant` is identity-context data only
+   * this service may write — which is the whole point of the case-service →
+   * claimant ownership exception this route retires. What differs is what the
+   * record can later claim about how the contact was obtained.
+   */
+  @Post('intake/resolve-claimant')
+  @Public()
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resolve a claimant from unverified intake details (internal)' })
+  async resolveIntakeClaimant(@Body() dto: ResolveIntakeClaimantDto) {
+    const claimant = await this.claimantsService.findOrCreate({
+      phoneNumber: dto.phoneNumber,
+      fullName: dto.fullName,
+    });
+    const tenantId = await this.claimantsService.getFirstTenantId(claimant.id);
+
+    this.logger.log(
+      `Intake (${dto.source}): resolved an UNVERIFIED contact to claimant ${claimant.id}.`
     );
     return { claimantId: claimant.id, tenantId };
   }
