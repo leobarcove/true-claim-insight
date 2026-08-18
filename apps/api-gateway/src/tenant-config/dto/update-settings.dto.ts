@@ -4,11 +4,14 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumberString,
   IsObject,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   Validate,
   ValidatorConstraint,
@@ -117,6 +120,18 @@ export class UpdateTenantSettingsDto {
   @IsObject()
   @Validate(CategoryAmountMapRule)
   siteVisitThresholds?: Record<string, string>;
+
+  /**
+   * Working days of claimant silence before a returned case earns its one
+   * reminder. Absent or null means no reminder — chasing a claimant is a
+   * tone decision each firm makes for itself.
+   */
+  @ApiPropertyOptional({ example: 3, minimum: 1, maximum: 60 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  infoRequestReminderDays?: number;
 
   /** Display name on white-labelled claimant-facing output. */
   @ApiPropertyOptional()

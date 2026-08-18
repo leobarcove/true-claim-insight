@@ -109,7 +109,7 @@ export interface FlowStep {
   /** Shorter label used by the staff form and the review summary. */
   label: string;
   answerType: AnswerType;
-  choices?: Array<{ value: string; label: string }>;
+  choices?: Array<{ value: string; label: string; title?: string; description?: string }>;
   /** Present when answerType === 'document'. */
   documentType?: DocumentType;
   optional?: boolean;

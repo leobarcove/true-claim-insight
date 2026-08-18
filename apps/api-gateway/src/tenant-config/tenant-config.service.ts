@@ -56,6 +56,7 @@ export class TenantConfigService {
         fastTrackLimits: stored.fastTrackLimits ?? {},
         siteVisitCategories: stored.siteVisitCategories ?? [],
         siteVisitThresholds: stored.siteVisitThresholds ?? {},
+        infoRequestReminderDays: stored.infoRequestReminderDays ?? null,
         brandingName: stored.brandingName ?? tenant.name,
       },
     };

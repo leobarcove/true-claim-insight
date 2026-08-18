@@ -235,6 +235,17 @@ export class CasesController {
     );
   }
 
+  @Post(':id/abandon')
+  @ApiOperation({ summary: 'Retire a case the claimant will not finish' })
+  abandon(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.post(`${this.caseServiceUrl}/api/v1/cases/${id}/abandon`, body, {
+        headers: this.identityHeaders(req),
+      }),
+      'Failed to abandon the case'
+    );
+  }
+
   @Post(':id/refer-expert')
   @ApiOperation({ summary: 'Refer a medical case to a claims expert' })
   referExpert(@Param('id') id: string, @Body() body: any, @Req() req: any) {

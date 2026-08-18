@@ -195,7 +195,7 @@ export function useCorrectAnswer() {
   });
 }
 
-function useCaseAction(action: 'request-info' | 'refer-expert' | 'reject') {
+function useCaseAction(action: 'request-info' | 'refer-expert' | 'reject' | 'abandon') {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ caseId, note }: { caseId: string; note: string }) => {
@@ -212,6 +212,7 @@ function useCaseAction(action: 'request-info' | 'refer-expert' | 'reject') {
 export const useRequestCaseInfo = () => useCaseAction('request-info');
 export const useReferCaseToExpert = () => useCaseAction('refer-expert');
 export const useRejectCase = () => useCaseAction('reject');
+export const useAbandonCase = () => useCaseAction('abandon');
 
 export function useConvertCase() {
   const queryClient = useQueryClient();

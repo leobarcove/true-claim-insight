@@ -273,7 +273,7 @@
       <section id="s1">
         <div class="head"><span class="num">01</span><h3>The whole journey, end to end</h3></div>
         <p class="lede">
-          Five intake channels converge on a single Case funnel. A vetted Case converts into a
+          Six intake doors converge on a single Case funnel. A vetted Case converts into a
           Claim, which is the regulated engagement — and where the firm's professional
           obligations attach.
         </p>
@@ -282,6 +282,8 @@ flowchart TD
     subgraph INTAKE["1 · Notification of loss"]
         C1["`Claimant
 PWA`"]
+        C7["`Public web chat
+no login — /chat`"]
         C5["`Claimant
 Telegram`"]
         C6["`Claimant
@@ -296,8 +298,10 @@ portal`"]
 
     C1 --> CASE
     C5 --> BIND["`Bind on the platform's
-verified contact`"]
+verified contact —
+web chat proves by code`"]
     C6 --> BIND
+    C7 --> BIND
     BIND --> CASE
     C2 --> ING["`FNOL email ingestion
 deterministic parse + policy match`"]
@@ -310,7 +314,8 @@ channel · answers · documents · consent`"]
 
     CASE --> VET{"2 · Operator vets"}
     VET -->|"detail missing"| INFO["`INFO_REQUESTED
-claimant amends`"]
+claimant amends on their own
+channel, or staff amend for them`"]
     INFO --> CASE
     VET -->|"medical"| EXP["`REFERRED_TO_EXPERT
 never auto-assessed`"]
@@ -329,7 +334,7 @@ documents only, no interview`"]
 Daily.co + risk-analyzer`"]
     MODE -->|"`property loss at or over
 the firm's threshold`"| SITE["`Site visit or expert
-*appointment held, claimant not told*`"]
+*appointment notified · findings recorded*`"]
 
     DESK --> ASSESS
     VIDEO --> ASSESS
@@ -526,12 +531,22 @@ complete?`"}
 
     REQ["`**INFO_REQUESTED**
 reviewNote carries the ask`"]
-    REQ --> NOTIFY["`Notify claimant
-by email`"]
-    NOTIFY --> AMEND["`Claimant reopens intake,
-adds the missing item`"]
-    AMEND --> RESUB["Resubmit → SUBMITTED"]
+    REQ --> NOTIFY["`Notify claimant: email, and
+the ask said in their own
+conversation — bot reattaches
+the returned case`"]
+    NOTIFY --> AMEND["`Claimant resumes at the missing
+item and amends; or staff amend —
+upload + audited correction`"]
+    AMEND --> RESUB["`Resubmit → SUBMITTED
+the ask comes off the case`"]
     RESUB --> OPEN
+    NOTIFY -.->|"`silence past the tenant's
+quiet period`"| REMIND["`One reminder — both doors,
+stamped, never repeated`"]
+    REMIND -.->|"still silent"| ABANDON["`Operator abandons: reason
+recorded, claimant told the
+way back in. Never automatic`"]
 
     Q3 -->|MEDICAL| EXPERT["`**REFERRED_TO_EXPERT**
 form + routing only,
@@ -549,6 +564,9 @@ reason recorded`"]
 
     style REQ stroke:#C77A2E,stroke-width:2.5px
     style NOTIFY stroke:#17966A,stroke-width:2.5px
+    style AMEND stroke:#17966A,stroke-width:2.5px
+    style REMIND stroke:#17966A,stroke-width:2.5px
+    style ABANDON stroke:#C05A50,stroke-width:2.5px
     style EXPERT stroke:#C77A2E,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
@@ -1286,13 +1304,14 @@ legal holds`"]
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
               <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td>video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>; case-service writes <code>claimant</code>. The list only shrinks</td></tr>
               <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
-              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip plan">Planned</span></td><td>Every claim runs the one CSP target of 14 working days. A shorter promise on fast-tracked claims is a commercial commitment per insurer, not a regulatory one</td></tr>
+              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip pass">Built</span></td><td>A tenant may hold a <code>fastTrack</code> final-report policy row beside its standard one; it is resolved only for a claim that took the §2.4 fast track <em>and is still on it</em> — an escalated claim gets the full window back. Deliberately no platform default: the shorter promise is a commercial commitment per insurer, and the demo firm's is seeded at 3 working days</td></tr>
               <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
               <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
-              <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip plan">Partial</span></td><td>Routing, the appointment and the claimant notification are all live — <code>PATCH /claims/:id/appointment</code> books the visit, audits it and emails the claimant the date, Malaysian time and address. What is still missing is a <code>SiteVisit</code> record of what was found on the ground</td></tr>
+              <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip pass">Built</span></td><td>Both halves now exist: <code>PATCH /claims/:id/appointment</code> books the visit and tells the claimant, and <code>POST /claims/:id/site-visits</code> records what was found — attendance time, attributable attendee, findings and the limitations that bounded the inspection. Append-only and audited: a revisit is a second row, and the report cites the record rather than an inspection the file cannot evidence</td></tr>
+              <tr><td>Claimant-side amend on info request</td><td><span class="chip pass">Built</span></td><td>Returning a case now tells the claimant in their own conversation and reattaches it: the bot says the <code>reviewNote</code>, sets the cursor at the first missing item (or the review step, where <code>edit</code> reaches any answer), and the existing confirm resubmits. Eager on the operator's action when the binding is idle; lazy on the claimant's next message otherwise — with no hijack of an intake mid-flight, and silence when an agent holds the conversation. The silence side is handled too: one reminder per return after the tenant's own quiet period (absent by default; demo firm at 3 working days), then a person decides — the operator's abandon action closes the case with a recorded reason, a confirmation dialog that states the consequence, a neutral closure notice to the claimant with the way back in, and the conversation released. Resubmission takes the ask off the case. One caveat stands: WhatsApp outside its 24-hour service window cannot receive the push without an approved template, so there the lazy path is the door</td></tr>
             </tbody>
           </table>
         </div>

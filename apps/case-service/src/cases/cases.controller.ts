@@ -227,4 +227,15 @@ export class CasesController {
   ) {
     return this.service.reject(id, dto.note, tenantContext);
   }
+
+  @Post(':id/abandon')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Retire a case the claimant will not finish (reason required)' })
+  abandon(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewCaseDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.abandon(id, dto.note, tenantContext);
+  }
 }

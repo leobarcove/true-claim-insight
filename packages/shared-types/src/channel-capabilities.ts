@@ -161,7 +161,18 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
 /** One renderable option in a degraded choice prompt. */
 export interface RenderableChoice {
   value: string;
+  /** The full readable option — what channels with room display. */
   label: string;
+  /**
+   * A short heading and a separate value, for channels whose rows have both
+   * slots and tight caps. WhatsApp truncates a list-row title at 24
+   * characters server-side, which turned "Trip start date — 18 Aug 2026"
+   * into "Trip start date — 2026-0" on a real handset; its rows also carry a
+   * 72-character description that was going unused. Optional: a choice
+   * without them renders from `label` exactly as before.
+   */
+  title?: string;
+  description?: string;
 }
 
 /**

@@ -335,7 +335,11 @@ export class WhatsAppAdapter implements ChannelAdapter {
       // Meta truncates a row title over 24 characters server-side, which would
       // silently clip a claim-type label. Cut here so at least it is visible
       // in our own payload when someone asks why the option reads oddly.
-      title: option.label.slice(0, 24),
+      // A choice that carries a short title uses it — the edit menu's
+      // "label — value" form lost its value to this very cap on a real
+      // handset — and the value rides the 72-character description row.
+      title: (option.title ?? option.label).slice(0, 24),
+      ...(option.description ? { description: option.description.slice(0, 72) } : {}),
     }));
 
     if (rendering.hasMore) {

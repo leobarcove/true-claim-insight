@@ -590,6 +590,15 @@ model Case {
   notifiedLate               Boolean               @default(false) // notified >24h after incident
   outOfWindow                Boolean               @default(false) // notified >30 days after incident
   reviewNote                 String? // info request / expert note / reject reason
+  /// When the case was last returned to the claimant. The reminder sweep
+  /// measures silence from here, not from updatedAt — any staff touch bumps
+  /// that, and a nudge clock that resets when an operator opens the file
+  /// never fires. Cleared on resubmission.
+  infoRequestedAt            DateTime?
+  /// When the one reminder for this return was sent. Null means not yet;
+  /// set means never again for this return — a claimant who has been asked
+  /// twice and stays silent is a decision for a person, not a louder robot.
+  infoRequestRemindedAt      DateTime?
   convertedClaimId           String?               @unique
   submittedAt                DateTime?
   createdAt                  DateTime              @default(now())

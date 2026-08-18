@@ -45,6 +45,7 @@ import { isInlineRenderable, resolveMimeType } from './document-media';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ClaimsService } from '../claims/claims.service';
+import { InfoRequestEvents } from './info-request-events';
 import { render } from '../notifications/templates';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
@@ -135,7 +136,8 @@ export class CasesService {
     private readonly notifications: NotificationsService,
     private readonly flows: FlowsService,
     private readonly consent: ConsentService,
-    private readonly claims: ClaimsService
+    private readonly claims: ClaimsService,
+    private readonly infoRequests: InfoRequestEvents
   ) {}
 
   /**
@@ -751,14 +753,29 @@ export class CasesService {
     }
 
     this.assertTransition(caseRow.status, CaseStatus.SUBMITTED);
+    // A resubmission answers the ask, so the ask comes off the case — an
+    // operator opening it must not read "please provide the invoice" on a
+    // file that just provided it. The ask survives where it belongs: the
+    // request-info audit row, and this one's oldValues.
+    const resubmitted = caseRow.status === CaseStatus.INFO_REQUESTED;
     const updated = await this.prisma.case.update({
       where: { id },
-      data: { status: CaseStatus.SUBMITTED, submittedAt: new Date() },
+      data: {
+        status: CaseStatus.SUBMITTED,
+        submittedAt: new Date(),
+        ...(resubmitted
+          ? { reviewNote: null, infoRequestedAt: null, infoRequestRemindedAt: null }
+          : {}),
+      },
     });
     this.logger.log(`Case submitted: ${updated.caseNumber}`);
     await this.audit(id, 'CASE_SUBMITTED', tenantContext, {
-      oldValues: { status: caseRow.status },
+      oldValues: {
+        status: caseRow.status,
+        ...(resubmitted ? { reviewNote: caseRow.reviewNote } : {}),
+      },
       newValues: { status: CaseStatus.SUBMITTED, submittedAt: updated.submittedAt },
+      metadata: resubmitted ? { resubmission: true } : undefined,
     });
     return this.withFlowState(updated);
   }
@@ -774,6 +791,13 @@ export class CasesService {
       note,
       tenantContext
     );
+
+    // The reminder sweep measures silence from this stamp — not updatedAt,
+    // which any staff touch bumps. A fresh return re-arms the one reminder.
+    await this.prisma.case.update({
+      where: { id },
+      data: { infoRequestedAt: new Date(), infoRequestRemindedAt: null },
+    });
 
     // Until this existed, an operator could ask for a document and the claimant
     // was never told — the case simply stopped, and the SLA clock kept running
@@ -801,6 +825,12 @@ export class CasesService {
       }),
     });
 
+    // Tell the claimant on the channel they actually used, not only by email
+    // — messaging-bound claimants often have none. Fire-and-forget by design:
+    // the vetting action must not fail over an undeliverable courtesy, and
+    // the chat gateway's listener does its own fail-soft logging.
+    this.infoRequests.emit(updated.id);
+
     return updated;
   }
 
@@ -810,6 +840,57 @@ export class CasesService {
       throw new BadRequestException('Only medical cases can be referred to an expert');
     }
     return this.transitionWithNote(id, CaseStatus.REFERRED_TO_EXPERT, note, tenantContext);
+  }
+
+  /**
+   * Retire a case the claimant will not finish.
+   *
+   * ABANDONED had been in the transition table since the machine was drawn,
+   * and nothing reached it: no endpoint, no screen. So a returned case whose
+   * claimant never answered had no exit at all — it aged in the queue
+   * forever, indistinguishable from work. A deliberate act with a recorded
+   * reason, never a sweep: writing off a notification of loss is a fairness
+   * call a person answers for, which is also why there is no auto-abandon.
+   *
+   * The conversation lets go of the case so the claimant's next message
+   * starts fresh rather than reopening a file the firm has closed — and the
+   * lazy resume only looks for INFO_REQUESTED, so an abandoned case is never
+   * offered back.
+   */
+  async abandon(id: string, note: string, tenantContext: TenantContext) {
+    const updated = await this.transitionWithNote(
+      id,
+      CaseStatus.ABANDONED,
+      note,
+      tenantContext
+    );
+    await this.prisma.conversationBinding.updateMany({
+      where: { activeCaseId: id },
+      data: { activeCaseId: null },
+    });
+
+    // The claimant is told, in neutral words with a way back in. A silent
+    // write-off of a notification of loss is the unfairness the claims-
+    // handling literature warns about; the closure is theirs to know.
+    const claimant = updated.claimantId
+      ? await this.prisma.claimant.findUnique({
+          where: { id: updated.claimantId },
+          select: { email: true, fullName: true },
+        })
+      : null;
+    await this.notifications.enqueue({
+      tenantId: updated.tenantId,
+      template: 'case.closed-unfinished',
+      recipient: claimant?.email,
+      entityType: 'CASE',
+      entityId: updated.id,
+      message: render('case.closed-unfinished', {
+        caseNumber: updated.caseNumber,
+        claimantName: claimant?.fullName ?? undefined,
+      }),
+    });
+
+    return updated;
   }
 
   async reject(id: string, note: string, tenantContext: TenantContext) {

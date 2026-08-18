@@ -23,6 +23,7 @@
 
 export type TemplateId =
   | 'case.information-requested'
+  | 'case.closed-unfinished'
   | 'claim.assessment-scheduled'
   | 'sla.breach-escalated'
   | 'assignment.acknowledged';
@@ -37,6 +38,17 @@ export interface InformationRequestedInput {
   caseNumber: string;
   /** The operator's note. Written by staff for the claimant to read. */
   request: string;
+  claimantName?: string;
+}
+
+/**
+ * A claim request was retired unfinished. Deliberately neutral: it states
+ * the closure, the path back in, and nothing about fault — writing off a
+ * notification of loss silently is the unfairness this exists to prevent,
+ * and speculating about why the claimant went quiet would be another.
+ */
+export interface CaseClosedUnfinishedInput {
+  caseNumber: string;
   claimantName?: string;
 }
 
@@ -84,6 +96,21 @@ export interface AssessmentScheduledInput {
 }
 
 export const TEMPLATES = {
+  'case.closed-unfinished': (input: CaseClosedUnfinishedInput): RenderedMessage => ({
+    subject: `Your claim request ${input.caseNumber} has been closed`,
+    text: [
+      input.claimantName ? `Dear ${input.claimantName},` : 'Hello,',
+      '',
+      `Your claim request ${input.caseNumber} has been closed because we did not`,
+      'receive the information needed to take it further.',
+      '',
+      'If you still wish to proceed, you can start a new claim request at any',
+      'time, or contact our team and we will help you pick things up.',
+      '',
+      'True Claim Insight',
+      '',
+    ].join('\n'),
+  }),
   'case.information-requested': (input: InformationRequestedInput): RenderedMessage => ({
     subject: `Action needed on your claim ${input.caseNumber}`,
     text: [
@@ -197,6 +224,10 @@ export function render(
   id: 'case.information-requested',
   input: InformationRequestedInput
 ): RenderedMessage;
+export function render(
+  id: 'case.closed-unfinished',
+  input: CaseClosedUnfinishedInput
+): RenderedMessage;
 export function render(id: 'sla.breach-escalated', input: SlaBreachInput): RenderedMessage;
 export function render(
   id: 'assignment.acknowledged',
@@ -210,6 +241,7 @@ export function render(
   id: TemplateId,
   input:
     | InformationRequestedInput
+    | CaseClosedUnfinishedInput
     | SlaBreachInput
     | AssignmentAcknowledgedInput
     | AssessmentScheduledInput

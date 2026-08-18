@@ -112,10 +112,27 @@ describe('notification templates — content', () => {
   });
 });
 
+describe('the closure notice', () => {
+  it('states the closure and the way back in, and speculates about nothing', () => {
+    const message = render('case.closed-unfinished', {
+      caseNumber: 'CSE-2026-000050',
+      claimantName: 'Leo Boey',
+    });
+    expect(message.subject).toContain('CSE-2026-000050');
+    expect(message.text).toContain('has been closed');
+    // The path forward is the fairness half of the message.
+    expect(message.text).toMatch(/start a new claim request/i);
+    expect(message.text).toMatch(/contact our team/i);
+    // Neutral: no fault, no deadline threats, no reason guessed at.
+    expect(message.text).not.toMatch(/fail|refus|reject|fault/i);
+  });
+});
+
 describe('notification templates — held in code', () => {
   it('declares exactly the templates the registry exports', () => {
     const ids: TemplateId[] = [
       'case.information-requested',
+      'case.closed-unfinished',
       'claim.assessment-scheduled',
       'sla.breach-escalated',
       'assignment.acknowledged',

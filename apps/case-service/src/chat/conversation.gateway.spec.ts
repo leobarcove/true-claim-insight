@@ -77,9 +77,15 @@ describe('ConversationGateway', () => {
         // binding look like it had no claimant, which is not a state that can
         // occur in production.
         update: jest.fn(async ({ data }: any) => ({ ...binding, ...data })),
+        // The eager push resolves the claimant's most recent binding with
+        // this. Null by default; the returned-case tests supply their own.
+        findFirst: jest.fn(async () => null),
       },
       case: {
         findUnique: jest.fn(async () => over.caseRow ?? null),
+        // The lazy returned-case lookup. Null by default: no case is waiting
+        // on the claimant, so every older test keeps its original path.
+        findFirst: jest.fn(async () => null),
         update: jest.fn(async () => ({})),
       },
       transferRecord: { create: jest.fn(async () => ({ id: 'transfer-1' })) },
@@ -183,7 +189,10 @@ describe('ConversationGateway', () => {
       consent as never,
       // A handling firm is configured, as it is in every real deployment. The
       // null case has its own test.
-      { get: (key: string) => (key === 'HANDLING_FIRM_TENANT_ID' ? 'tenant-handling' : undefined) } as never
+      { get: (key: string) => (key === 'HANDLING_FIRM_TENANT_ID' ? 'tenant-handling' : undefined) } as never,
+      // The info-request event port. Tests that exercise the returned-case
+      // resume call the gateway's handler directly; nothing here emits.
+      { on: jest.fn(), emit: jest.fn() } as never
     );
 
     return {
@@ -1017,7 +1026,10 @@ describe('ConversationGateway', () => {
       expect(sent.map(s => s.text).join(' ')).not.toMatch(/in the app/i);
     });
 
-    it('asks for a human when the claimant wants to change something', async () => {
+    it('opens the edit menu when the claimant wants to change something', async () => {
+      // This used to hand the conversation to a human — the branch predated
+      // the edit flow. Found live: the review says type "edit", the claimant
+      // taps the button instead, and the bot stood down mid-conversation.
       const { gateway, cases, prisma, flows, sent } = setup({
         binding: verified,
         caseRow: reviewCase,
@@ -1027,12 +1039,13 @@ describe('ConversationGateway', () => {
       await gateway.handleTurn(turn({ callbackValue: 'false' }));
 
       expect(cases.submit).not.toHaveBeenCalled();
-      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+      // No handover, no bot standing down — the decline is served, not queued.
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ mode: ConversationMode.HANDOVER }),
         })
       );
-      expect(sent[0].text).toMatch(/team will pick this up/i);
+      expect(sent.map(message => message.text).join(' ')).toMatch(/which answer|change/i);
     });
   });
 
@@ -1727,6 +1740,163 @@ describe('ConversationGateway', () => {
         ([args]) => args?.data?.verifiedAt
       );
       expect(wrote?.[0].data.tenantId).toBe('tenant-1');
+    });
+  });
+
+  describe('a case returned for more information', () => {
+    const returnedCase = {
+      id: 'case-7',
+      caseNumber: 'CSE-2026-000042',
+      tenantId: 'tenant-1',
+      claimantId: 'claimant-1',
+      status: 'INFO_REQUESTED',
+      reviewNote: 'Please provide the itemised medical invoice.',
+      answers: {},
+      travelClaimType: 'FLIGHT_DELAY',
+      currentStepId: null,
+    };
+
+    const boundIdle = () =>
+      setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: null,
+          verifiedAt: new Date(),
+        },
+      });
+
+    it('resumes the returned case instead of offering a new one', async () => {
+      const { gateway, prisma, sent, consent } = boundIdle();
+      (prisma.case.findFirst as jest.Mock).mockResolvedValue(returnedCase);
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      // Reattached, and the cursor points at what is actually missing.
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: 'case-7' }) })
+      );
+      expect(prisma.case.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'case-7' },
+          data: expect.objectContaining({ currentStepId: 'airline' }),
+        })
+      );
+      // The operator's ask is said in the claimant's own channel, then the
+      // missing step is asked — and no fresh-claim consent gate underneath.
+      const all = sent.map(message => message.text).join(' ');
+      expect(all).toMatch(/needs one more thing on CSE-2026-000042/i);
+      expect(all).toMatch(/itemised medical invoice/i);
+      expect(all).toMatch(/which airline/i);
+      expect(consent.hasConsent).not.toHaveBeenCalled();
+    });
+
+    it('pushes the ask the moment the operator returns the case', async () => {
+      const { gateway, prisma, sent, binding } = boundIdle();
+      (prisma.case.findUnique as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.conversationBinding.findFirst as jest.Mock).mockResolvedValue(binding);
+
+      await (gateway as never as { handleInfoRequested(id: string): Promise<void> })
+        .handleInfoRequested('case-7');
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: 'case-7' }) })
+      );
+      const all = sent.map(message => message.text).join(' ');
+      expect(all).toMatch(/itemised medical invoice/i);
+      expect(all).toMatch(/which airline/i);
+    });
+
+    it('re-asks a complete case as a correction, not the submission ceremony', async () => {
+      // Everything is answered — the operator wants an answer *changed* — so
+      // the cursor falls back to the review step. The re-ask must read as a
+      // correction: no "(2 of 2)" counter, no "confirm to submit your claim",
+      // and the note message must not duplicate the instruction the review
+      // carries. Reported from the first live use, where the pinned review
+      // prompt arrived verbatim and read as the bot repeating itself.
+      const { gateway, prisma, sent, flows } = boundIdle();
+      (flows.forCase as jest.Mock).mockResolvedValue({
+        travelClaimType: 'FLIGHT_DELAY',
+        entryStepId: 'airline',
+        steps: [
+          {
+            id: 'airline',
+            prompt: 'Which airline?',
+            label: 'Airline',
+            answerType: 'text',
+            next: { type: 'step', stepId: 'review' },
+          },
+          {
+            id: 'review',
+            prompt: '(2 of 2) Thank you. Please review, then confirm to submit.',
+            label: 'Review',
+            answerType: 'confirm',
+            isReview: true,
+            next: { type: 'end' },
+          },
+        ],
+      });
+      (prisma.case.findFirst as jest.Mock).mockResolvedValue({
+        ...returnedCase,
+        answers: { airline: 'MAS' },
+      });
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      const all = sent.map(message => message.text).join('\n');
+      expect(all).toMatch(/needs one more thing/i);
+      expect(all).toMatch(/type "edit" to change an answer, then confirm to resubmit/i);
+      expect(all).not.toMatch(/\(2 of 2\)/);
+      expect(all).not.toMatch(/confirm to submit your claim/i);
+      // Said once — in the re-asked review, not also in the note message.
+      expect(all.match(/confirm to resubmit/gi)).toHaveLength(1);
+    });
+
+    it('does not hijack a binding mid-way through another intake', async () => {
+      const { gateway, prisma, sent } = setup({
+        binding: {
+          claimantId: 'claimant-1',
+          tenantId: 'tenant-1',
+          activeCaseId: 'case-other',
+          verifiedAt: new Date(),
+        },
+      });
+      (prisma.case.findUnique as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.conversationBinding.findFirst as jest.Mock).mockResolvedValue({
+        id: 'bind-1',
+        channel: CaseChannel.TELEGRAM,
+        platformUserId: '55501',
+        activeCaseId: 'case-other',
+        mode: ConversationMode.BOT,
+      });
+
+      await (gateway as never as { handleInfoRequested(id: string): Promise<void> })
+        .handleInfoRequested('case-7');
+
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(0);
+    });
+
+    it('reattaches but stays silent when an agent has the conversation', async () => {
+      const { gateway, prisma, sent } = boundIdle();
+      (prisma.case.findUnique as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.conversationBinding.findFirst as jest.Mock).mockResolvedValue({
+        id: 'bind-1',
+        channel: CaseChannel.TELEGRAM,
+        platformUserId: '55501',
+        activeCaseId: null,
+        mode: ConversationMode.HANDOVER,
+      });
+
+      await (gateway as never as { handleInfoRequested(id: string): Promise<void> })
+        .handleInfoRequested('case-7');
+
+      // The case is waiting for them when the conversation is handed back…
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: 'case-7' }) })
+      );
+      // …but the bot said nothing over the agent.
+      expect(sent).toHaveLength(0);
     });
   });
 });

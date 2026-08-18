@@ -1723,6 +1723,167 @@ that `patchAnswer` writes "the audit row" — false since the method was
 written — is corrected to say what is actually true: transcripts attribute
 claimant turns; the corrections endpoint attributes staff ones.
 
+### The journey's two buildable gaps closed — 17 August 2026
+
+The user-flow site's §12 named the end-to-end journey's steps that do not yet
+run. Two were buildable without a vendor, a gate or money, and both are now
+built and verified end-to-end:
+
+**Site-visit findings record** (§12's "missing half" of the site-visit mode).
+`SiteVisit`: append-only rows — attendance time, attributable attendee,
+findings, and the limitations that bounded the inspection — because the
+appointment side said a visit was *arranged* while nothing evidenced what was
+*found*, and PD 12.6's facts section cites findings, not diaries. `POST/GET
+/claims/:id/site-visits` (gateway-proxied, audited `SITE_VISIT_RECORDED`),
+guarded to SITE_VISIT mode with no future attendances; a card on the claim
+screen lists visits and records new ones. Registered in the data-ownership
+map (claims context) — the ownership spec caught the unregistered write on
+the first test run, exactly as designed.
+
+**Fast-track SLA profile** (§2.4's shorter promise, previously "Planned").
+`SlaPolicy.fastTrack` joins the unique key, so a tenant holds its fast-track
+final-report row beside its standard one. Resolution lives inside
+`SlaService.startFor` so no start site can forget to ask, and demands both
+that the fast track *fired* (the decision row) and that it *held* (the claim
+is still DESK_REVIEW) — an escalated claim gets the full window back. Tenant
+rows only, no platform default: the shorter promise is a commercial
+commitment per insurer. The demo firm is seeded at 3 working days. Verified
+live through the real transition path: a fast-tracked claim's clock resolved
+the 3-day row (due date correct on the KL working-day calendar), an ordinary
+claim's the standard 14.
+
+**Found and fixed on the way: the migration chain could not replay.**
+`20260811061655` dropped an index that recorded history does not create until
+`20260811082911` — generated on a database ahead of its own history, so every
+`prisma migrate dev` shadow replay failed, and once repaired the replay
+*still* diverged from the live schema because nothing after 082911 dropped
+the index again. Repair kept history append-only: the drop is now idempotent
+(checksum updated to match), and the site-visit migration re-drops it so
+replayed history converges with the schema. `migrate diff` now reports no
+difference between recorded history and the datamodel. All case-service
+tests pass.
+
+**What remains in §12 stays blocked for stated reasons, not neglect:** eKYC,
+signatures, local-LLM validation and the policy feed await vendors or gates
+(G8/G9); production deployment is a funding decision; BM overlays are legal
+copy that must not be machine-fabricated (PDPA s.7 treats notice language as
+substantive); the data-ownership exception shrink is its own scoped work.
+
+### The info-requested loop, completed: reminder, exit, and the ask that clears — 18 August 2026
+
+Three gaps the loop still had, all closed, with the UX choices checked against
+current practice (destructive-action and dunning-cadence guidance) before
+building:
+
+- **One reminder per return.** A returned case whose claimant stayed silent
+  got silence back, forever. An hourly sweep (`CaseRemindersProcessor`, new
+  `cases` queue) now sends one nudge — both doors: the same email template
+  (a reminder is the same ask re-sent) and the same channel port, under the
+  same no-hijack and handover-silence guards — after the tenant's own quiet
+  period. `infoRequestReminderDays` is absent by default, settable through
+  the tenant-config DTO and read response *from day one* (the §2.4
+  seed-was-the-only-writer trap, not repeated); the demo firm runs at 3
+  working days. The stamp is written before anything sends, so a delivery
+  failure can never double-remind; measured from `infoRequestedAt`, not
+  `updatedAt`, so a staff touch cannot reset the clock. Deliberately at the
+  conservative end of dunning practice: once, then a person.
+- **An exit for the case nobody will finish.** ABANDONED had been in the
+  transition table with nothing reaching it. `POST /cases/:id/abandon`
+  (staff, reason required) closes it, releases the conversation, and — per
+  the fair-claims guidance the UX audit surfaced — tells the claimant in a
+  neutral new template (`case.closed-unfinished`): closed, and the way back
+  in, with no fault guessed at. The portal action sits behind a confirmation
+  dialog that names the case, states the consequence and keeps "Keep case"
+  as the default — friction scaled to an irreversible, infrequent act.
+  **No auto-abandon, decided:** writing off a notification of loss is a
+  fairness call a person answers for.
+- **Resubmission clears the ask.** `reviewNote` and both stamps come off the
+  case, audited with the cleared note and `resubmission: true` — an operator
+  can no longer read "please provide the invoice" on a file that just did.
+
+Walked live end-to-end: return → stamps + push + reattach; backdated four
+days → one-off sweep run → reminder stamped, audited (SYSTEM), second channel
+push, email logged; staff resubmit → 201 with note and stamps cleared and
+the resubmission audited (the incomplete attempt first refused with the
+exact missing list — the gate holding); return again → abandon → ABANDONED
+with reason, binding released, closure notice logged, status audited. The
+walk also tripped the audit trail's append-only trigger during cleanup —
+the control refusing deletion exactly as designed; the walk's audit rows
+stay, as true records should. 753 tests pass, four new.
+
+### The info-requested loop's claimant half — built the same day — 18 August 2026
+
+The gap below closed within the day. `InfoRequestEvents` (a one-file port in
+CasesModule, the same inversion the chat module already practises) lets
+`requestInfo` tell the gateway without a module cycle; the gateway then runs
+the loop's claimant half:
+
+- **Eager**: the moment an operator returns a case, the bot says the
+  `reviewNote` in the claimant's own conversation, reattaches the binding and
+  sets the cursor at the first unmet mandatory step — or the review step,
+  where the existing `edit` machinery reaches any answer. A binding mid-way
+  through a different intake is never hijacked, and a conversation an agent
+  holds gets the reattachment but not the message: handover means the machine
+  stays silent.
+- **Lazy**: where a claimant with no active case used to be offered a *new*
+  claim, the gateway now first looks for one of theirs in INFO_REQUESTED and
+  resumes it — the branch that closes the dead end the morning's audit found.
+- **Resubmission needed nothing**: the review step's confirm already runs
+  INFO_REQUESTED → SUBMITTED.
+
+Verified live end-to-end: operator's request-info on a case bound to the test
+claimant → 201, binding reattached, cursor at `trip-start` ("(3 of 16)",
+correct for the answers present), and both messages — the ask and the missing
+question — in the conversation transcript the operator inbox reads.
+
+*The first real-handset test found two more, both fixed the same morning:*
+tapping the review's **"Change something" button hung the conversation** — the
+branch predated the typed-`edit` flow and still handed to a human, its comment
+("there is no edit-a-single-answer flow") stale since 11 Aug; the claimant
+follows the visible button, landed in a queue, and the bot stood down. It now
+opens the same edit menu typed `edit` does ("human" still reaches a person).
+And the **edit menu's values vanished on WhatsApp** — Meta truncates list-row
+titles at 24 characters, so "Trip start date — 2026-0" lost its value, made
+worse by raw ISO dates. Choices now carry an optional short `title` and
+`description` which WhatsApp maps to its two row slots (24/72 chars), values
+render through `formatDateAnswer`, and every other channel keeps the combined
+label unchanged. Both pinned by tests; 749 pass.
+
+*First live use found the review-fallback's copy wrong:* a complete case falls
+back to the review step, whose pinned prompt is the submission ceremony —
+"(16 of 16) Thank you… confirm to submit" — which after a return reads as the
+bot repeating itself. The re-ask now carries correction copy ("Here is what
+you told us… confirm to resubmit"), no progress counter (that counts forward
+steps, and a correction is not one), and the instruction said once — the note
+message carries only the operator's ask. Pinned by its own test; 749 pass. Four new
+gateway tests (resume-not-offer-new, eager push, no-hijack, handover
+silence); 748 pass. Caveat recorded in §12: WhatsApp outside its 24-hour
+service window cannot receive the push without an approved template — the
+lazy path is the door there.
+
+### The info-requested loop's claimant half does not exist — 18 August 2026
+
+An operator asked whether §1's "INFO_REQUESTED — claimant amends" edge is
+actually handled. Audited end-to-end: **it is not, on any claimant channel.**
+The server's half is real — answers and documents are editable in
+INFO_REQUESTED, resubmission is a legal transition, and the ask travels in
+`reviewNote` with an email notification — but the conversation gateway, which
+serves the PWA, the public web chat, Telegram and WhatsApp alike, contains no
+INFO_REQUESTED handling at all. The binding released `activeCaseId` at
+submission, so a claimant whose case was returned is offered a *new* claim;
+the reviewNote is never said in the conversation; and the email-only
+notification misses messaging-bound claimants who have no email on file. The
+loop completes today only staff-side (document upload + audited correction +
+resubmit — both verified this week).
+
+A §3.6-class false-comfort finding: the user-flow site drew the claimant half
+as built (§4's "Claimant reopens intake" node, §1's edge label). Both
+corrected to say what is true, and the gap is now a §12 row. The build —
+gateway reattachment of a returned case, the reviewNote said on the
+claimant's own channel, routing to the missing item — is scoped but not
+started; it touches conversation UX on four channels and deserves its own
+piece of work rather than a footnote to an audit.
+
 ### Deep audit: plan vs codebase — 10 August 2026
 
 Four delegated auditors verified this document's claims against the working

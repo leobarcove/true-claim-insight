@@ -62,6 +62,13 @@ export interface TenantSettings {
   siteVisitCategories?: string[];
   siteVisitThresholds?: Record<string, string>;
 
+  /**
+   * Working days of claimant silence after which a returned case earns its
+   * one reminder. Absent means no reminder — see case-service's
+   * tenant-settings.ts, the reading side of this contract.
+   */
+  infoRequestReminderDays?: number;
+
   /** Display name on white-labelled claimant-facing output. */
   brandingName?: string;
 }

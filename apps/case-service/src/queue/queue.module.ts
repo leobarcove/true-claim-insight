@@ -52,7 +52,8 @@ import { JOB_RETENTION, QUEUE, QUEUE_PREFIX } from './queue.constants';
       { name: QUEUE.SLA },
       { name: QUEUE.NOTIFICATIONS },
       { name: QUEUE.RETENTION },
-      { name: QUEUE.INGESTION }
+      { name: QUEUE.INGESTION },
+      { name: QUEUE.CASES }
     ),
   ],
   exports: [BullModule],

@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   CaseChannel,
   CaseInitiator,
+  CaseStatus,
   ConsentChannel,
   ConsentPurpose,
   ConversationMessageStatus,
@@ -30,6 +31,7 @@ import {
   SKIP_VALUE,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
+  REVIEW_STEP_ID,
   validateAnswer,
   whatYouWillNeed,
   type CaseAnswers,
@@ -39,6 +41,7 @@ import {
 import { TransferRegister, type OffshoreProviderKey } from '@tci/prisma-client';
 import { PrismaService } from '../config/prisma.service';
 import { CasesService } from '../cases/cases.service';
+import { InfoRequestEvents } from '../cases/info-request-events';
 import type { CreateCaseDto } from '../cases/dto/create-case.dto';
 import { FlowsService } from '../cases/flows.service';
 import { ConsentService } from '../consent/consent.service';
@@ -312,7 +315,7 @@ function noticeLocale(tag?: string | null): string {
  *     conversation and a browser conversation on the same Case agree.
  */
 @Injectable()
-export class ConversationGateway {
+export class ConversationGateway implements OnModuleInit {
   private readonly logger = new Logger(ConversationGateway.name);
   private readonly transfers: TransferRegister;
 
@@ -325,7 +328,8 @@ export class ConversationGateway {
     @Inject(ANSWER_NORMALISER) private readonly normaliser: AnswerNormaliser,
     @Inject(PHONE_VERIFIER) private readonly phones: PhoneVerifier,
     private readonly consent: ConsentService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly infoRequests: InfoRequestEvents
   ) {
     // Every conversational turn crosses a border: the claimant's words reach
     // the platform's servers abroad, and ours reach them the same way. The
@@ -379,6 +383,127 @@ export class ConversationGateway {
   private bindingExpired(verifiedAt: Date): boolean {
     const ageMs = Date.now() - verifiedAt.getTime();
     return ageMs > BINDING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * Subscribe to "a case was returned to the claimant" (MASTER_PLAN §8,
+   * 18 Aug). Registered here rather than injected the other way because the
+   * cases module must not import the chat module back — the same inversion as
+   * this module's other ports, via the InfoRequestEvents provider.
+   */
+  onModuleInit(): void {
+    this.infoRequests.on(caseId => this.handleInfoRequested(caseId));
+  }
+
+  /**
+   * The eager half of the claimant-amend loop: the moment an operator returns
+   * a case, tell the claimant on the channel they actually used and put the
+   * conversation back on that case — the email notification alone missed
+   * everyone bound by phone.
+   *
+   * Deliberately narrow: no binding means email was genuinely the only door;
+   * a binding mid-way through a *different* intake keeps its place (no
+   * hijack — the lazy path in `applyAnswer` resumes the returned case once
+   * they are free); and a binding in HANDOVER gets the reattachment but not
+   * the bot message, because the whole point of handover is that the machine
+   * stops talking.
+   */
+  private async handleInfoRequested(caseId: string): Promise<void> {
+    const caseRow = await this.prisma.case.findUnique({ where: { id: caseId } });
+    if (!caseRow || caseRow.status !== CaseStatus.INFO_REQUESTED || !caseRow.claimantId) return;
+
+    const binding = await this.prisma.conversationBinding.findFirst({
+      where: { claimantId: caseRow.claimantId, verifiedAt: { not: null } },
+      orderBy: { lastSeenAt: 'desc' },
+    });
+    if (!binding) return;
+    if (binding.activeCaseId && binding.activeCaseId !== caseRow.id) return;
+
+    const adapter = this.adapterFor(binding.channel);
+    await this.resumeReturnedCase(binding.id, caseRow, {
+      adapter,
+      platformUserId: binding.platformUserId,
+      speak: binding.mode === ConversationMode.BOT,
+    });
+  }
+
+  /**
+   * Point the conversation back at a returned case: reattach the binding, set
+   * the cursor at what is actually missing (the first unmet mandatory step,
+   * else the review step so the existing `edit` machinery can change any
+   * answer), say the operator's ask, and ask the step. Shared by the eager
+   * push above and the lazy branch in `applyAnswer`, so the two cannot drift.
+   */
+  private async resumeReturnedCase(
+    bindingId: string,
+    caseRow: { id: string; caseNumber: string; reviewNote: string | null; answers: unknown },
+    options: { adapter?: ChannelAdapter; platformUserId: string; speak: boolean }
+  ): Promise<void> {
+    const flow = await this.flows.forCase(caseRow as never);
+    const answers = (caseRow.answers ?? {}) as CaseAnswers;
+    const step =
+      missingSteps(flow, answers)[0] ??
+      getStep(flow, REVIEW_STEP_ID) ??
+      flow.steps.find(candidate => candidate.isReview) ??
+      null;
+
+    await this.prisma.case.update({
+      where: { id: caseRow.id },
+      data: { currentStepId: step?.id ?? null },
+    });
+    await this.prisma.conversationBinding.update({
+      where: { id: bindingId },
+      data: { activeCaseId: caseRow.id },
+    });
+
+    if (!options.speak || !options.adapter) return;
+
+    const ask = caseRow.reviewNote?.trim();
+    // The note message carries the ask alone; what to *do* about it belongs
+    // to the question that follows, which on the button channels is also
+    // where the controls are. Saying "type edit, then confirm" here and then
+    // asking a review step that says it again read as the bot repeating
+    // itself — which is exactly how it was reported.
+    await this.say(options.adapter, bindingId, options.platformUserId, {
+      text:
+        `Our team needs one more thing on ${caseRow.caseNumber}` +
+        (ask ? `:\n\n${ask}` : '.') +
+        (step && !step.isReview
+          ? '\n\nOnce it is in, review and confirm to resubmit.'
+          : ''),
+    });
+    if (step) {
+      if (step.isReview) {
+        // Not the submission ceremony. The pinned review prompt says
+        // "(16 of 16) Thank you… confirm to submit", which after a return
+        // reads as if nothing happened. Reworded for the correction, and no
+        // progress counter — that counts forward steps, and this is not one.
+        await this.ask(
+          options.adapter,
+          bindingId,
+          options.platformUserId,
+          {
+            ...step,
+            prompt:
+              'Here is what you told us. Type "edit" to change an answer, ' +
+              'then confirm to resubmit.',
+          },
+          0,
+          { steps: flow.steps, answers }
+        );
+      } else {
+        await this.ask(
+          options.adapter,
+          bindingId,
+          options.platformUserId,
+          step,
+          0,
+          { steps: flow.steps, answers },
+          undefined,
+          flow
+        );
+      }
+    }
   }
 
   private adapterFor(channel: CaseChannel): ChannelAdapter | undefined {
@@ -994,6 +1119,37 @@ export class ConversationGateway {
         return;
       }
 
+      // The lazy half of the claimant-amend loop: before offering a fresh
+      // claim, look for one of theirs an operator has returned. Without this,
+      // a claimant whose case sat in INFO_REQUESTED was offered a *new* claim
+      // while the one waiting on them stayed unreachable — the dead end the
+      // 18 Aug audit found behind §1's "claimant amends" edge.
+      if (binding.claimantId) {
+        const returned = await this.prisma.case.findFirst({
+          where: {
+            claimantId: binding.claimantId,
+            status: CaseStatus.INFO_REQUESTED,
+            ...(binding.tenantId ? { tenantId: binding.tenantId } : {}),
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (returned) {
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.PROCESSED,
+              processedAt: new Date(),
+            },
+          });
+          await this.resumeReturnedCase(binding.id, returned, {
+            adapter,
+            platformUserId: payload.platformUserId,
+            speak: true,
+          });
+          return;
+        }
+      }
+
       await this.requireConsentThenStart(messageId, payload, adapter, binding);
       return;
     }
@@ -1250,32 +1406,25 @@ export class ConversationGateway {
       else if (DECLINE_WORDS.has(word)) raw = 'false';
     }
 
-    // "Change something" at the review. There is no edit-a-single-answer flow,
-    // and a button that quietly does nothing is worse than no button — so it
-    // asks for a person, which is exactly what the inbox exists to serve.
+    // "Change something" at the review opens the edit menu — the same thing
+    // typed "edit" does. This used to hand the conversation to a human: the
+    // branch predates the edit flow, and its comment ("there is no
+    // edit-a-single-answer flow") stayed true long after the flow existed.
+    // The cost was found live on 18 Aug: the review *instructs* typing
+    // "edit", the claimant reasonably taps the visible button instead, and
+    // lands in a queue with the bot stood down — a hang, from following the
+    // interface. "human" still reaches a person; a decline reaches the tool
+    // that answers it.
     if (step.answerType === 'confirm' && raw === 'false') {
-      await this.prisma.conversationBinding.update({
-        where: { id: binding.id },
-        data: {
-          mode: ConversationMode.HANDOVER,
-          handoverAt: new Date(),
-          handoverReason: 'Claimant asked to change a detail at the review step',
-          resolvedAt: null,
-        },
-      });
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
         data: {
-          status: ConversationMessageStatus.AWAITING_AGENT,
+          status: ConversationMessageStatus.PROCESSED,
           stepId: step.id,
           processedAt: new Date(),
         },
       });
-      await this.say(adapter, binding.id, payload.platformUserId, {
-        text:
-          'No problem. Tell us what needs changing and one of our team will pick this up ' +
-          'with you shortly.',
-      });
+      await this.offerEditMenu(messageId, payload, adapter, binding, flow, answers);
       return;
     }
 
@@ -2178,10 +2327,19 @@ export class ConversationGateway {
             ? 'provided'
             : step.answerType === 'choice'
               ? (step.choices?.find(choice => choice.value === value)?.label ?? String(value))
-              : String(value);
+              : step.answerType === 'date' || step.answerType === 'datetime'
+                ? // The claimant is hunting the wrong value; an ISO timestamp
+                  // is not how they said it and not how they will spot it.
+                  (formatDateAnswer(String(value), step.answerType) ?? String(value))
+                : String(value);
         return {
           value: `${EDIT_CALLBACK_PREFIX}${step.id}`,
           label: `${step.label} — ${shown}`.slice(0, 60),
+          // Split for channels with two-slot rows: WhatsApp shows 24
+          // characters of title and 72 of description, so the value lives in
+          // the slot that fits it.
+          title: step.label,
+          description: shown,
         };
       });
 

@@ -14,6 +14,8 @@ export const QUEUE = {
   RETENTION: 'retention',
   /** FNOL email intake: poll the dedicated mailbox, parse, create Cases. */
   INGESTION: 'ingestion',
+  /** Case-lifecycle sweeps: the info-request reminder, and whatever joins it. */
+  CASES: 'cases',
 } as const;
 
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];

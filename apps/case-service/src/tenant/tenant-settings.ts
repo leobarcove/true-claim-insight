@@ -53,6 +53,16 @@ export interface TenantSettings {
   siteVisitCategories?: string[];
   siteVisitThresholds?: Record<string, string>;
 
+  /**
+   * Working days of claimant silence after which a returned case earns its
+   * one reminder. Absent by default, and absence means no reminder — chasing
+   * a claimant is a tone decision each firm makes for itself, the same
+   * refuse-don't-default posture as the fast track. One reminder per return,
+   * never a drumbeat: a claimant reminded once and still silent is a matter
+   * for a person.
+   */
+  infoRequestReminderDays?: number;
+
   /** Display name on white-labelled claimant-facing output. */
   brandingName?: string;
 }

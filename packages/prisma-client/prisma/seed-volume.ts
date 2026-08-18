@@ -327,6 +327,9 @@ const INSPECTABLE: ClaimCategory[] = [
 ];
 
 const ASSESSMENT_SETTINGS = {
+  // One nudge after three working days of claimant silence on a returned
+  // case — a demo-firm tone decision, like every threshold in this block.
+  infoRequestReminderDays: 3,
   fastTrackCategories: [ClaimCategory.TRAVEL],
   fastTrackLimits: { [ClaimCategory.TRAVEL]: FAST_TRACK_LIMIT_TRAVEL.toFixed(2) },
   siteVisitCategories: INSPECTABLE,

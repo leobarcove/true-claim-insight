@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api-client';
 import { convertToTitleCase } from '@/lib/utils';
@@ -62,6 +63,7 @@ import {
   usePolicySearch,
   useReferCaseToExpert,
   useRejectCase,
+  useAbandonCase,
   useRequestCaseInfo,
   useSubmitCase,
 } from '@/hooks/use-cases';
@@ -82,10 +84,12 @@ export function CaseDetailPage() {
   const requestInfo = useRequestCaseInfo();
   const referExpert = useReferCaseToExpert();
   const rejectCase = useRejectCase();
+  const abandonCase = useAbandonCase();
   const convertCase = useConvertCase();
   const linkPolicy = useLinkCasePolicy();
 
   const [reviewNote, setReviewNote] = useState('');
+  const [abandonDialogOpen, setAbandonDialogOpen] = useState(false);
   const [policySearch, setPolicySearch] = useState('');
   const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
   const { data: policyResults } = usePolicySearch(policySearch);
@@ -548,15 +552,59 @@ export function CaseDetailPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {isEditable && (
-                  <Button
-                    className="w-full"
-                    onClick={() =>
-                      runAction(() => submitCase.mutateAsync(id), 'Case submitted for vetting')
-                    }
-                    disabled={submitCase.isPending}
-                  >
-                    <Send className="h-4 w-4 mr-1" /> Submit for vetting
-                  </Button>
+                  <>
+                    <Button
+                      className="w-full"
+                      onClick={() =>
+                        runAction(() => submitCase.mutateAsync(id), 'Case submitted for vetting')
+                      }
+                      disabled={submitCase.isPending}
+                    >
+                      <Send className="h-4 w-4 mr-1" /> Submit for vetting
+                    </Button>
+                    {/* The exit for a case the claimant will not finish. A
+                        deliberate act with a recorded reason, never a sweep —
+                        writing off a notification of loss is a fairness call
+                        a person answers for. */}
+                    <Textarea
+                      placeholder="Reason for abandoning — recorded on the file…"
+                      value={reviewNote}
+                      onChange={e => setReviewNote(e.target.value)}
+                      rows={2}
+                    />
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      disabled={!reviewNote.trim() || abandonCase.isPending}
+                      onClick={() => setAbandonDialogOpen(true)}
+                    >
+                      Abandon case
+                    </Button>
+                    {/* Irreversible and rare, so it earns real friction: the
+                        dialog names the case, states the consequence and who
+                        is told, and keeps the safe choice as the default. */}
+                    <ConfirmationDialog
+                      open={abandonDialogOpen}
+                      onOpenChange={setAbandonDialogOpen}
+                      title={`Abandon ${caseData.caseNumber}?`}
+                      description={
+                        `This closes the claim request permanently — there is no reopen. ` +
+                        `The claimant will be notified that it was closed and how to start ` +
+                        `again, and your reason is recorded on the file.`
+                      }
+                      confirmText="Abandon case"
+                      cancelText="Keep case"
+                      variant="destructive"
+                      isLoading={abandonCase.isPending}
+                      onConfirm={() => {
+                        setAbandonDialogOpen(false);
+                        void runAction(
+                          () => abandonCase.mutateAsync({ caseId: id, note: reviewNote }),
+                          'Case abandoned — reason recorded, claimant notified'
+                        );
+                      }}
+                    />
+                  </>
                 )}
 
                 {(isReviewable || canConvert) && (
