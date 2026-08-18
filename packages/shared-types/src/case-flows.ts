@@ -679,7 +679,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
   documentStep(
     'doc-proof-of-ownership',
     Doc.PROOF_OF_OWNERSHIP,
-    'If you have a receipt or proof of purchase for the luggage, please upload it. Otherwise type "skip".',
+    'If you have a receipt or proof of purchase for the luggage, please send it.',
     'Proof of ownership',
     'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
     'A clear photo or screenshot is fine.',
@@ -1186,6 +1186,27 @@ export const whatYouWillNeed = (flow: CaseFlow): string[] => {
 export const SKIP_VALUE = 'skip';
 
 /**
+ * What a claimant types when they will have the document, but not today.
+ *
+ * Distinct from `skip`, and the difference is the whole point. `skip` means
+ * "this does not apply to me" and is only offered where the flow says a step is
+ * optional. This means "it is coming" — it is accepted on *mandatory* documents,
+ * and the claim records the evidence as still outstanding rather than waived.
+ *
+ * It exists because the alternative was a dead end. A mandatory upload with no
+ * file simply re-asked, so a claimant standing at the airport — where the
+ * airline's written delay confirmation routinely arrives by email hours later —
+ * stalled at question eleven of sixteen with no way past it. The five questions
+ * after it, bank details among them, were never asked at all. Abandoning the
+ * claim was the only move the conversation left them.
+ *
+ * Nothing is waived by using it: `computeCompleteness` counts *uploaded*
+ * document types, so a deferred document stays in `missingMandatory` and the
+ * evidence checklist an adjuster reads is unchanged.
+ */
+export const DEFER_VALUE = 'later';
+
+/**
  * Steps whose answer must never be stored in the clear.
  *
  * Shared rather than duplicated: the Case answer bag masks these before
@@ -1315,7 +1336,7 @@ const asDate = (value: AnswerValue | undefined): Date | null => {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
   if (text === '' || text.toLowerCase() === SKIP_VALUE) return null;
-  const date = new Date(text);
+  const date = parseStoredDate(text);
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
@@ -1546,7 +1567,8 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
       return { valid: false, error: 'Please choose one of the options.' };
     }
     case 'document': {
-      // Value is the uploaded CaseDocument id (or "skip" for optional docs).
+      // Value is the uploaded CaseDocument id, "skip" for an optional document
+      // that does not apply, or "later" for one that is coming.
       if (typeof value !== 'string' || value.trim().length === 0) {
         return { valid: false, error: 'Please upload the requested document.' };
       }
@@ -1586,6 +1608,45 @@ export const validateAnswer = (
   return validateAgainstAnswers(step, value, context.answers, context.travelClaimType);
 };
 
+/**
+ * The wall-clock reading a claimant gave, marked as the instant we store it as.
+ *
+ * Intake records the time as the claimant experienced it and reads it back with
+ * UTC getters, which is why nothing here applies an offset. The trouble is that
+ * only *some* inputs say so. `parseTextDate` returns `toISOString()` and carries
+ * a `Z`; the PWA's `<input type="datetime-local">` returns `2026-08-18T10:00`
+ * and carries nothing — and ECMA-262 reads a date-*time* without a designator as
+ * **local** while reading a date-only form as UTC. So the same 10:00 became two
+ * different instants depending on which surface the claimant used.
+ *
+ * That is not a display blemish. `computeDeadlineFlags` measures the CSP
+ * notification clock from this value, and on a UTC+8 server a naive reading
+ * lands eight hours early — enough to mark a claimant who notified *inside* the
+ * 24-hour window as late, with nothing on screen to show why.
+ *
+ * A `Z` is appended, never converted: the point is to keep 10:00 meaning 10:00.
+ * Anything already carrying a designator, and anything not in this shape, is
+ * returned untouched.
+ */
+export const asStoredInstant = (value: string): string => {
+  const text = value.trim();
+  // A date-time with no trailing `Z` and no ±HH:MM offset.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)) {
+    return `${text}Z`;
+  }
+  return value;
+};
+
+/**
+ * Read a stored answer as the instant it was meant to be.
+ *
+ * Applied on the way *out* as well as the way in, because rows written before
+ * `asStoredInstant` existed still hold naive values, and a migration that
+ * rewrote them would be editing the recorded answers on live claims to fix a
+ * reader. Tolerating both shapes costs one call and leaves the evidence alone.
+ */
+export const parseStoredDate = (value: string): Date => new Date(asStoredInstant(value));
+
 export interface DeadlineFlags {
   notifiedLate: boolean;
   outOfWindow: boolean;
@@ -1600,7 +1661,8 @@ export const computeDeadlineFlags = (
   incidentDate: Date | string,
   now: Date = new Date()
 ): DeadlineFlags => {
-  const incident = new Date(incidentDate);
+  const incident =
+    typeof incidentDate === 'string' ? parseStoredDate(incidentDate) : new Date(incidentDate);
   const hoursSince = (now.getTime() - incident.getTime()) / (1000 * 60 * 60);
   const notifiedLate = hoursSince > NOTIFY_WITHIN_HOURS;
   const outOfWindow = hoursSince > CLAIM_WINDOW_DAYS * 24;

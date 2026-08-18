@@ -16,7 +16,7 @@
  * circular evaluation — harmless under CJS, fatal under native ESM (Vite dev).
  * Same reason, same shape as the mirror in `case-flows.ts`.
  */
-import { SKIP_VALUE } from './case-flows';
+import { DEFER_VALUE, parseStoredDate, SKIP_VALUE } from './case-flows';
 import type { AnswerType } from './case-flows';
 import type { CaseChannel } from './index';
 
@@ -548,7 +548,11 @@ export const formatDateAnswer = (
   value: string,
   answerType: 'date' | 'datetime'
 ): string | null => {
-  const parsed = new Date(value);
+  // Through `parseStoredDate`, so a naive `2026-08-18T10:00` reads as the 10:00
+  // the claimant typed rather than as local time. This function renders the one
+  // screen where they check the facts of their own claim; showing 02:00 there
+  // and asking them to confirm is worse than showing nothing.
+  const parsed = parseStoredDate(value);
   if (Number.isNaN(parsed.getTime())) return null;
 
   const day = parsed.toLocaleString('en-GB', {
@@ -606,8 +610,14 @@ export const summariseAnswers = (
       display = 'not provided';
     } else if (step.answerType === 'document') {
       // The stored answer is a CaseDocument id, which means nothing to a
-      // claimant reading it back.
-      display = 'provided';
+      // claimant reading it back. A deferred one has to read differently: this
+      // is the summary they confirm a submission against, and "provided" over
+      // a document they told us was still coming is the one line on the screen
+      // they would know to be untrue.
+      display =
+        typeof value === 'string' && value.trim().toLowerCase() === DEFER_VALUE
+          ? 'to be sent later'
+          : 'provided';
     } else if (step.answerType === 'choice') {
       display = step.choices?.find(choice => choice.value === value)?.label ?? String(value);
     } else if (step.answerType === 'date' || step.answerType === 'datetime') {

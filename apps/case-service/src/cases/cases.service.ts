@@ -25,7 +25,9 @@ import {
   computeCompleteness,
   computeDeadlineFlags,
   evaluateNext,
+  asStoredInstant,
   getStep,
+  parseStoredDate,
   missingSteps,
   pathSteps,
   resolveNextStep,
@@ -459,13 +461,30 @@ export class CasesService {
       return { accepted: false, error: result.error, step };
     }
 
-    const answers = { ...(caseRow.answers as CaseAnswers), [dto.stepId]: dto.value };
+    // Canonicalised before it is stored, so every surface writes the same shape.
+    // The PWA's `<input type="datetime-local">` hands over `2026-08-18T10:00`
+    // with no designator, which ECMA-262 reads as *local* — while the messaging
+    // channels arrive from `parseTextDate` carrying a `Z`. The same 10:00 was
+    // therefore two different instants depending on where the claimant typed
+    // it, and on a UTC+8 server the naive one lands eight hours early: enough
+    // to mark someone who notified inside the CSP 24-hour window as late.
+    //
+    // Marked, not converted — 10:00 keeps meaning 10:00. Readers tolerate the
+    // old shape too (`parseStoredDate`), because rewriting answers already
+    // recorded on live claims to fix a reader is editing evidence.
+    const value =
+      (step.answerType === 'date' || step.answerType === 'datetime') &&
+      typeof dto.value === 'string'
+        ? asStoredInstant(dto.value)
+        : dto.value;
+
+    const answers = { ...(caseRow.answers as CaseAnswers), [dto.stepId]: value };
     const promoted = await this.promoteAnswers(answers, dto.stepId);
     const nextStepId = resolveNextStep(flow, dto.stepId, answers);
 
     const warnings: string[] = [];
     if (dto.stepId === 'incident-date') {
-      warnings.push(...computeDeadlineFlags(String(dto.value)).warnings);
+      warnings.push(...computeDeadlineFlags(String(value)).warnings);
     }
     if (dto.stepId === 'policy-number' && promoted.needsPolicyReview) {
       warnings.push(
@@ -1398,7 +1417,10 @@ export class CasesService {
 
     const incident = answers['incident-date'];
     if (incident !== undefined) {
-      const date = new Date(String(incident));
+      // The CSP notification clock is computed from this. Read naively on a
+      // UTC+8 server it lands eight hours early, which is enough to flag a
+      // claimant who notified inside the 24-hour window as late.
+      const date = parseStoredDate(String(incident));
       if (!Number.isNaN(date.getTime())) {
         const flags = computeDeadlineFlags(date);
         promoted.incidentDate = date;
@@ -1618,9 +1640,17 @@ export class CasesService {
     return str.length > 0 ? str : undefined;
   }
 
+  /**
+   * An answer read as the instant it records, on its way into a real column.
+   *
+   * `parseStoredDate` rather than `new Date`, because this is a promotion path:
+   * whatever it returns stops being an answer and becomes `Claim.tripStartDate`.
+   * A naive value read as local time would bake the server's offset into a
+   * column nothing downstream would ever question.
+   */
   private answerDate(value: string | number | boolean | undefined): Date | null {
     if (value === undefined) return null;
-    const date = new Date(String(value));
+    const date = parseStoredDate(String(value));
     return Number.isNaN(date.getTime()) ? null : date;
   }
 }

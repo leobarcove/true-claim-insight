@@ -1,7 +1,15 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { branchInputSteps, CASE_FLOWS, CHOICE_DISPLAY_MAX, whatYouWillNeed } from '@tci/shared-types';
+import {
+  branchInputSteps,
+  CASE_FLOWS,
+  CHOICE_DISPLAY_MAX,
+  DEFER_VALUE,
+  SKIP_VALUE,
+  summariseAnswers,
+  whatYouWillNeed,
+} from '@tci/shared-types';
 
 /**
  * THE SCRIPT, READ AS A CLAIMANT READS IT.
@@ -184,5 +192,67 @@ describe('a claimant is told where to find what we ask for', () => {
     // recovery message said so, so the generous wording was reserved for
     // claimants who had already failed once.
     expect(codeOnly()).toMatch(/For example 16\/06\/2026, or 16 June 2026/);
+  });
+});
+
+describe('a claimant who does not have the document yet', () => {
+  const gateway = readFileSync(join(__dirname, 'conversation.gateway.ts'), 'utf8');
+
+  it('is offered a way past a mandatory upload', () => {
+    // The only true dead end the intake had. A mandatory document with no file
+    // simply re-asked, so someone at an airport — where the airline's written
+    // delay confirmation routinely arrives by email hours later — stalled at
+    // question eleven of sixteen. The five questions after it, bank details
+    // among them, were never asked at all.
+    expect(gateway).toContain('word === DEFER_VALUE');
+    expect(codeOnly()).toMatch(/Do not have it yet\? Type "\$\{DEFER_VALUE\}"/);
+  });
+
+  it('tells them on the step, not after three failures', () => {
+    // Offered on sight. Saving it for the escalation means the claimants who
+    // quietly gave up after one attempt never hear it.
+    const advertised = gateway.indexOf('Do not have it yet?');
+    const escalation = gateway.indexOf('If this is not working,');
+    expect(advertised).toBeGreaterThan(-1);
+    expect(advertised).not.toBe(escalation);
+  });
+
+  it('keeps "later" distinct from "skip"', () => {
+    // `skip` means this does not apply and is only offered where the flow says
+    // a step is optional. `later` means it is coming, and waives nothing:
+    // `computeCompleteness` counts uploads, so a deferred document stays in
+    // `missingMandatory` and the adjuster's checklist is unchanged.
+    expect(DEFER_VALUE).not.toBe(SKIP_VALUE);
+    const summary = summariseAnswers(
+      [{ id: 'doc-boarding-pass', label: 'Boarding pass', answerType: 'document' }],
+      { 'doc-boarding-pass': DEFER_VALUE }
+    );
+    expect(summary).toContain('to be sent later');
+    expect(summary).not.toContain('provided');
+  });
+
+  it('names what is still owed on the submission confirmation', () => {
+    // Ending with an unqualified "submitted" would read as though the gap had
+    // closed itself, and the file would never arrive.
+    expect(gateway).toContain('Still to send, whenever you have them');
+  });
+});
+
+describe('a claimant who cannot get an answer accepted', () => {
+  const gateway = readFileSync(join(__dirname, 'conversation.gateway.ts'), 'utf8');
+
+  it('is offered a person from any step, not only a date', () => {
+    // The escalation existed and was reachable from exactly one call site: the
+    // date parser. Every other rejection repeated its message indefinitely, so
+    // the claimant most in need of a person was never told there was one.
+    const calls = gateway.match(/this\.withEscapeHatch\(/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('counts only refused answers, so a greeting never earns it', () => {
+    // Saying hello three times would otherwise offer a way out of a question
+    // the claimant has not tried to answer.
+    expect(gateway).toContain('status: ConversationMessageStatus.UNPARSEABLE');
+    expect(gateway).toMatch(/greeted\s*\n?\s*\?\s*lines\.join/);
   });
 });

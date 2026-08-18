@@ -2616,6 +2616,67 @@ re-checked after the restart and still answers 200. Vite refuses an unrecognised
 than hardcoded, keeping the hostname in one place — a mismatch would otherwise
 surface as a bot button that opens a Vite error page.
 
+### The last two intake dead ends, and a clock that was eight hours out (18 August 2026)
+
+Closing the gaps the audit left, plus one the live walk-through found.
+
+**A mandatory document could not be got past.** With no file, the bot re-asked;
+only *optional* documents accepted "skip". So a claimant at an airport — where
+the airline's written delay confirmation routinely arrives by email hours later
+— stalled at question eleven of sixteen, and the five questions after it, bank
+details among them, were never asked. Abandoning was the only move left.
+
+`DEFER_VALUE` ("later") is accepted on mandatory documents and is deliberately
+not `skip`: skip means *does not apply*, later means *it is coming*. Nothing is
+waived — `computeCompleteness` counts uploads, so the document stays in
+`missingMandatory` and the adjuster's checklist is unchanged. The review reads
+"to be sent later" rather than "provided", because that is the one line on a
+submission summary a claimant would know to be false, and the confirmation names
+what is still owed. Offered on the step itself rather than saved for the third
+failure: the claimants who quietly gave up after one attempt never reach an
+escalation.
+
+**The escape hatch reached one step in the flow.** The "type human and a person
+will take over" escalation was called from exactly one place — the date parser.
+Every other rejection repeated its message indefinitely, so the claimant most in
+need of a person was never told there was one. The wording was never the
+problem; the single call site was. Now `withEscapeHatch`, called from three.
+
+**And the clock.** Walking a claim end to end to prove the above, the review
+summary showed a 10:00 incident as 02:00. Intake stores the wall clock the
+claimant gave and reads it back with UTC getters — but only some inputs said so.
+`parseTextDate` returns `toISOString()` and carries a `Z`; the PWA's
+`<input type="datetime-local">` returns `2026-08-18T10:00` and carries nothing,
+and ECMA-262 reads a date-*time* without a designator as **local** while reading
+a date-only form as UTC. The same 10:00 was two different instants depending on
+which surface the claimant used.
+
+Not cosmetic: `computeDeadlineFlags` measures the CSP notification clock from
+this value, and on a UTC+8 server the naive reading lands eight hours early.
+Demonstrated — a claimant reporting 20 hours after the incident, inside the
+24-hour window, came back `notifiedLate: true` from the app and `false` from the
+chat.
+
+`asStoredInstant` marks a naive value as UTC on write — marked, never converted,
+so 10:00 keeps meaning 10:00 — and `parseStoredDate` tolerates the old shape on
+read, in `formatDateAnswer`, `computeDeadlineFlags`, the cross-answer date
+comparisons and both promotion paths into `Claim.incidentDate` and
+`Claim.tripStartDate`. Read-side tolerance rather than a migration, because
+rewriting answers already recorded on live claims to fix a reader is editing
+evidence. Rows written before this keep whatever flags were computed then; they
+recompute on the next answer, since promotion runs on every patch. Locally only
+four rows were ever affected — the other 1,192 incident dates are date-only,
+which JS already reads as UTC.
+
+Verified by walking a whole claim through the public chat, twice: deferring
+three mandatory documents reached the review and submitted with all three named
+as outstanding; the lists from the earlier work read back as "Singapore",
+"Malaysia Airlines" and "CIMB Bank"; and after the clock fix a typed
+`18/08/2026 10:00` stores as `2026-08-18T10:00Z`, promotes to `10:00:00`, and is
+read back to the claimant as "18 August 2026 at 10:00". 825 case-service tests,
+16 claimant-web, 117 gateway; 13 packages typecheck. Each new guarantee was
+mutation-tested — reverting `asStoredInstant` to a no-op fails five tests.
+
 ---
 
 ## 9. Feasibility check

@@ -29,6 +29,7 @@ import {
   SENSITIVE_ANSWER_STEPS,
   SHARED_MEDIA_DESCRIPTION,
   SHARED_PHONE_DESCRIPTION,
+  DEFER_VALUE,
   SKIP_VALUE,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -316,6 +317,25 @@ function noticeLocale(tag?: string | null): string {
  *  4. Drive the flow pinned on the Case, never the built-in one, so a Telegram
  *     conversation and a browser conversation on the same Case agree.
  */
+/**
+ * The documents a claimant said they would send, rendered for the confirmation.
+ *
+ * Empty string when there are none, so the happy path reads exactly as it did.
+ */
+const outstanding = (flow: CaseFlow, answers: CaseAnswers): string => {
+  const deferred = flow.steps.filter(
+    step =>
+      step.answerType === 'document' &&
+      String(answers[step.id] ?? '').trim().toLowerCase() === DEFER_VALUE
+  );
+  if (deferred.length === 0) return '';
+
+  return (
+    '\n\nStill to send, whenever you have them — just send them in this chat:\n' +
+    deferred.map(step => `• ${step.label}`).join('\n')
+  );
+};
+
 @Injectable()
 export class ConversationGateway implements OnModuleInit {
   private readonly logger = new Logger(ConversationGateway.name);
@@ -1628,16 +1648,32 @@ export class ConversationGateway implements OnModuleInit {
         });
       } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;
+      } else if (!payload.mediaRef && word === DEFER_VALUE) {
+        // Accepted on a *mandatory* document, unlike "skip". Nothing is
+        // waived: the answer records that the evidence is still owed, the
+        // checklist an adjuster reads counts uploads and so still shows it
+        // missing, and the claimant is told both of those things below.
+        //
+        // The alternative was re-asking until they gave up, which is what the
+        // conversation did — and it stalled the flow before the payout details,
+        // so the claim was lost rather than merely incomplete.
+        value = DEFER_VALUE;
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text:
+            `Noted — we will carry on without it for now, and your claim will show ` +
+            `"${step.label}" as still to come. You can send it in this chat whenever you have it.`,
+        });
       } else if (!payload.mediaRef) {
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
           data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
         });
         await this.say(adapter, binding.id, payload.platformUserId, {
-          text: step.optional
-            ? 'Please send the document as a photo or a file — or type "skip" if you do not have it.'
-            : 'Please send the document as a photo or a file.',
+          text: await this.withEscapeHatch(binding, step, [
+            'Please send the document as a photo or a file.',
+          ]),
         });
+        await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
         return;
       } else {
 
@@ -1823,7 +1859,9 @@ export class ConversationGateway implements OnModuleInit {
         data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: result.error ?? 'Sorry, that does not look right.',
+        text: await this.withEscapeHatch(binding, step, [
+          result.error ?? 'Sorry, that does not look right.',
+        ]),
       });
       await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
       return;
@@ -1975,7 +2013,12 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
           `Thank you — your claim request ${submitted.caseNumber} has been submitted. ` +
-          'Our team will review it and contact you if anything further is needed.',
+          'Our team will review it and contact you if anything further is needed.' +
+          // Named, not just counted. A claimant who deferred a document has
+          // been told the claim would carry on without it; ending with a
+          // cheerful confirmation and no mention of it would read as though
+          // the gap had closed itself, and they would not send the file.
+          outstanding(flow, (submitted.answers ?? {}) as CaseAnswers),
       });
       return;
     }
@@ -2585,6 +2628,49 @@ export class ConversationGateway implements OnModuleInit {
 
   /** Put one step to the claimant, degraded to what this channel can render. */
   /**
+   * The message a claimant gets when their answer was refused — plus a way out
+   * once refusing it again has stopped being useful.
+   *
+   * The escalation existed before this, and was reachable from exactly one
+   * place: the date parser. Every other rejection — a flight number that will
+   * not match, a description under the length floor, a document that never
+   * arrives — repeated the same line indefinitely, so the claimant most in need
+   * of a person was never told there was one. The wording was never the
+   * problem; the single call site was.
+   *
+   * Three, because someone who has missed three times will not succeed by being
+   * told the rule a fourth time. Offered, never forced: `skip` only where the
+   * step allows it, `later` only on a document, and a person only on request,
+   * since an unstaffed queue out of hours is its own kind of silence.
+   */
+  private async withEscapeHatch(
+    binding: { id: string },
+    step: FlowStep,
+    lines: string[]
+  ): Promise<string> {
+    // Counted from the transcript rather than a counter column: the rows are
+    // already written, and a schema field would be one more thing to reset
+    // correctly when a claimant goes "back" to an earlier step.
+    const attempts = await this.prisma.conversationMessage.count({
+      where: {
+        bindingId: binding.id,
+        stepId: step.id,
+        direction: MessageDirection.INBOUND,
+        status: ConversationMessageStatus.UNPARSEABLE,
+      },
+    });
+    if (attempts < 3) return lines.join('\n\n');
+
+    const escapes: string[] = [];
+    if (step.optional) escapes.push(`type "${SKIP_VALUE}" to leave this one blank`);
+    if (step.answerType === 'document') {
+      escapes.push(`type "${DEFER_VALUE}" and send it when you have it`);
+    }
+    escapes.push('type "human" and a person will take over');
+    return [...lines, `If this is not working, ${escapes.join(', or ')}.`].join('\n\n');
+  }
+
+  /**
    * An answer we could not read must not end the conversation.
    *
    * The old behaviour sent one error bubble and returned. The claimant was
@@ -2611,18 +2697,6 @@ export class ConversationGateway implements OnModuleInit {
     raw: string,
     flow?: CaseFlow
   ): Promise<void> {
-    // Counted from the transcript rather than a counter column: the rows are
-    // already written, and a schema field would be one more thing to reset
-    // correctly when a claimant goes "back" to an earlier step.
-    const attempts = await this.prisma.conversationMessage.count({
-      where: {
-        bindingId: binding.id,
-        stepId: step.id,
-        direction: MessageDirection.INBOUND,
-        status: ConversationMessageStatus.UNPARSEABLE,
-      },
-    });
-
     const greeted = GREETING_WORDS.has(raw.trim().toLowerCase());
     const lines: string[] = [];
 
@@ -2640,14 +2714,14 @@ export class ConversationGateway implements OnModuleInit {
       lines.push('You can write it as 16/06/2026 14:30, or as 16 June 2026 2:30pm.');
     }
 
-    if (!greeted && attempts >= 3) {
-      const escapes: string[] = [];
-      if (step.optional) escapes.push(`type "${SKIP_VALUE}" to leave this one blank`);
-      escapes.push('type "human" and a person will take over');
-      lines.push(`If this is not working, ${escapes.join(', or ')}.`);
-    }
+    // A greeting is not a failed answer, so it never earns the escape line —
+    // otherwise saying hello three times would offer someone a way out of a
+    // question they have not tried to answer.
+    const text = greeted
+      ? lines.join('\n\n')
+      : await this.withEscapeHatch(binding, step, lines);
 
-    await this.say(adapter, binding.id, platformUserId, { text: lines.join('\n\n') });
+    await this.say(adapter, binding.id, platformUserId, { text });
     await this.ask(adapter, binding.id, platformUserId, step, 0, undefined, undefined, flow);
   }
 
@@ -2705,6 +2779,17 @@ export class ConversationGateway implements OnModuleInit {
 
     if (step.answerType === 'document' && capabilities?.document === 'link_out') {
       text += '\n\nPlease upload this document in the app.';
+    }
+
+    // Said on the step itself, not saved for the third failure. A claimant who
+    // does not have the airline's confirmation yet should learn on sight that
+    // the claim can go on without it — waiting until they have failed three
+    // times means the ones who quietly gave up after one never heard it.
+    if (step.answerType === 'document') {
+      text += step.optional
+        ? `\n\nIf this one does not apply to you, type "${SKIP_VALUE}".`
+        : `\n\nDo not have it yet? Type "${DEFER_VALUE}" and we will carry on — you can send it ` +
+          'in this chat later.';
     }
 
     // A confirm step on a channel with nowhere to put a summary must carry the
