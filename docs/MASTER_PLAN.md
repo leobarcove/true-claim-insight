@@ -1800,6 +1800,28 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### Cross-tenant claim reads unified on 404 — 18 August 2026
+
+The one item the 18 Aug audit deliberately left as the principal's call, now
+decided and closed. Case reads had always answered 404 to a foreign record —
+`assertAccess` carries the comment "cross-tenant reads must look like a 404" —
+while claim reads answered 403 to staff of another tenant. A 403 confirms the
+record exists, which is the disclosure an enumerating attacker actually wants:
+walk ids, keep the refusals, and you have a map of another firm's book without
+reading a single claim.
+
+Unified on the safer answer in **both** services — case-service and
+risk-engine each carry a `validateClaimAccess`, and leaving one behind would
+have had the pair disagree about whether a claim exists. The claimant path was
+already 404, so this only moves staff of another tenant onto the answer their
+claimants already got.
+
+Pinned by three tests, one of which asserts the property that matters rather
+than the status code: a forbidden read and a genuinely missing one must be
+**indistinguishable from outside**, same status and same message. That is the
+kind of behaviour a well-meaning "improve the error message" change undoes
+without noticing. 770 tests pass.
+
 ### The expert's answer is now on the file — 18 August 2026
 
 The last code-only gap in §1's journey. A travel medical case can only convert

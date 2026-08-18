@@ -144,3 +144,69 @@ describe('TenantService.redactClaim (compliance)', () => {
     });
   });
 });
+
+/**
+ * A claim that is not yours reads as one that does not exist.
+ *
+ * Decided 18 Aug 2026, after an audit put case and claim reads side by side:
+ * cases had always answered 404 ("cross-tenant reads must look like a 404"),
+ * while claims answered 403 to staff of another tenant — which confirms the
+ * record exists. That is the disclosure an enumerating attacker wants: walk
+ * ids, keep the 403s, and you have a map of another firm's book without
+ * reading a single claim. Pinned here because it is the kind of thing a
+ * well-meaning "improve the error message" change would quietly undo.
+ */
+describe('TenantService.validateClaimAccess — cross-tenant reads are absences', () => {
+  const claimOwnedByAnotherFirm = {
+    id: 'claim-1',
+    tenantId: 'tenant-other',
+    insurerTenantId: 'insurer-other',
+    claimantId: 'claimant-9',
+    adjuster: { tenantId: 'tenant-other' },
+  };
+
+  const serviceFor = (claim: unknown) =>
+    new TenantService({
+      claim: { findUnique: jest.fn(async () => claim) },
+    } as never);
+
+  const staffElsewhere = {
+    tenantId: 'tenant-mine',
+    userId: 'user-1',
+    userRole: 'ADJUSTER',
+  } as never;
+
+  it('answers 404, not 403, for staff of another tenant', async () => {
+    const service = serviceFor(claimOwnedByAnotherFirm);
+
+    await expect(service.validateClaimAccess('claim-1', staffElsewhere)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('is indistinguishable from a claim that genuinely does not exist', async () => {
+    // The point of the rule: both answers must look the same from outside.
+    const missing = serviceFor(null);
+    const forbidden = serviceFor(claimOwnedByAnotherFirm);
+
+    const [a, b] = await Promise.all([
+      missing.validateClaimAccess('claim-1', staffElsewhere).catch(error => error),
+      forbidden.validateClaimAccess('claim-1', staffElsewhere).catch(error => error),
+    ]);
+
+    expect(a.status).toBe(b.status);
+    expect(a.message).toBe(b.message);
+  });
+
+  it('still lets the owning firm through', async () => {
+    const service = serviceFor(claimOwnedByAnotherFirm);
+
+    await expect(
+      service.validateClaimAccess('claim-1', {
+        tenantId: 'tenant-other',
+        userId: 'user-2',
+        userRole: 'ADJUSTER',
+      } as never)
+    ).resolves.toBeUndefined();
+  });
+});

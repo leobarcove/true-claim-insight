@@ -195,13 +195,21 @@ export class TenantService {
       (claim as any).tenantId === tenantContext.tenantId;
 
     if (!hasAccess) {
+      // Logged as the violation it is, answered as absence.
+      //
+      // A 403 tells the asker the claim exists — which is a disclosure, and
+      // the one an enumerating attacker wants: walk ids, keep the 403s, and
+      // you have a map of another firm's book without reading a single claim.
+      // Case reads have always answered 404 here (`assertAccess`, "cross-tenant
+      // reads must look like a 404"), and claims disagreed with them until an
+      // audit on 18 Aug 2026 put the two side by side. Unified on the safer
+      // of the two, deliberately: a claimant reaching for another's claim
+      // already got this answer, and staff of another tenant now get the same.
       this.logger.warn(
         `Claim access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
           `attempted to access claim ${claimId}`
       );
-      throw new ForbiddenException(
-        'Access denied: This claim does not belong to your organisation'
-      );
+      throw new NotFoundException(`Claim with ID ${claimId} not found`);
     }
   }
 

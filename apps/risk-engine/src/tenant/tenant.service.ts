@@ -37,10 +37,13 @@ export class TenantService {
       return;
     }
 
+    // Answered as absence, not refusal — the same rule case-service applies,
+    // and it must be the same here or the pair of services disagree about
+    // whether a claim exists (18 Aug 2026 audit).
     this.logger.warn(
       `Tenant ${tenantContext.tenantId} attempted unauthorized access to claim ${claimId}`
     );
-    throw new ForbiddenException('You do not have access to this claim');
+    throw new NotFoundException(`Claim with ID ${claimId} not found`);
   }
 
   /**

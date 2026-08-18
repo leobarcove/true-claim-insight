@@ -1331,14 +1331,15 @@ legal holds`"]
     style CLAIM stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
-          <strong>What a blocked read looks like differs by entity — recorded, not
-          designed.</strong> Case reads answer 404 for everyone, claimant and staff alike:
-          <code>assertAccess</code> treats a foreign record as one that does not exist,
-          because a "403 Forbidden" would confirm it does, which is itself a disclosure.
-          Claim reads split: a claimant reaching for another's claim gets the same
-          obfuscated 404, but staff of another tenant get <code>ForbiddenException</code> —
-          an asymmetry between the two entities that discloses existence on the staff path
-          and is noted here so it reads as the inconsistency it is rather than a policy.
+          <strong>A record that is not yours reads as one that does not exist.</strong>
+          Cases and claims both answer <strong>404</strong> to every blocked read — claimant
+          and staff alike, in case-service and risk-engine alike. A "403 Forbidden" would
+          confirm the record exists, which is itself a disclosure and precisely the one an
+          enumerating attacker wants: walk ids, keep the refusals, and you have a map of
+          another firm's book without reading a single claim. The two entities disagreed
+          until 18 Aug 2026 — cases obfuscated, claims refused — and the audit that put them
+          side by side ended in unifying on the safer answer, pinned by a test that asserts
+          a forbidden read and a genuinely missing one are indistinguishable from outside.
         </p>
       </section>
 
