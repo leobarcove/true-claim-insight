@@ -14,6 +14,11 @@ Two do, because both are business-initiated by definition:
 | Login code | `WHATSAPP_OTP_TEMPLATE` | AUTHENTICATION | The claimant has not messaged us yet — there is no window |
 | Information request | `WHATSAPP_INFO_REQUEST_TEMPLATE` | UTILITY | An operator returns a case; the claimant may have been silent for days, which is precisely who a request is for |
 
+**Status:** `tci_claim_information_request` was **approved by Meta on 18 August
+2026** and is configured on this deployment. The paragraphs below remain the
+record of what was submitted and why — needed again for a Malay variant, or if
+Meta ever asks for the template to be re-justified.
+
 Both are **absent by default**. Unset, the platform simply does not send that
 message: the login code falls back to its other transport, and the information
 request waits for the claimant's next message (the conversation resumes it
