@@ -1769,6 +1769,32 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### Two things using it exposed — 18 August 2026
+
+**"Hi" was answered with "Thank you."** on a real WhatsApp handset. The
+acknowledgement was written for Telegram, where the claimant taps *Share my
+number* and the thanks acknowledges that act (and dismisses the keyboard it
+came from). WhatsApp puts `wa_id` on every inbound message, so the binding
+happens on the claimant's first word and the thanks lands for something they
+never did. Behind it sat a quieter fault: that channel had **no greeting at
+all**, because the greeting lives inside the share request WhatsApp never
+sends — a claimant's first contact with the firm was an unexplained
+thank-you. Both fixed by naming the real difference in the capability table
+(`requestsContactShare`, Telegram true, WhatsApp false) rather than inferring
+it at the call site: Telegram still thanks, WhatsApp greets.
+
+**§12's heading contradicted its own rows.** The section was titled "Drawn
+here, but not yet built" with a lede saying "these are the steps that do not
+yet run", while four of its rows had shipped and carried green Built chips.
+A reader who trusted the heading over the chip — as one reasonably would, and
+as the principal did — was told the opposite of the truth about finished
+work. This is the §3.6 shape inverted: not a claim of something unbuilt, but
+a stale frame burying something built. Renamed to "Drawn here — what runs,
+and what does not", rows ordered unbuilt-first, and a note recording why
+shipped rows stay rather than vanishing on the day they ship — deleting them
+would hide the same thing more quietly, and what a step was promised to be
+is part of its record.
+
 ### The loop's last three, and the claimant walk that proves it — 18 August 2026
 
 The three items left standing after the loop was built are closed:

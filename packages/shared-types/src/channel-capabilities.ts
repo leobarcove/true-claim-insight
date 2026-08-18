@@ -75,6 +75,18 @@ export interface ChannelCapabilities {
    */
   readonly platformVerifiedPhone: boolean;
   /**
+   * Whether the claimant must be *asked* to hand over their number, or the
+   * platform supplies it unasked.
+   *
+   * Both messaging channels vouch for the number, but they differ in who
+   * does the work: Telegram needs a deliberate "Share my number" tap, while
+   * WhatsApp puts `wa_id` on every inbound message, so binding happens on
+   * the claimant's first word without them doing anything. That difference
+   * decides what the bot should say next — an acknowledgement thanks an act,
+   * and there is no act to thank on a channel that asked for nothing.
+   */
+  readonly requestsContactShare: boolean;
+  /**
    * Whether a value typed here stays under our control. False for every
    * third-party messaging platform: the plaintext persists in the platform's
    * own message history, outside our retention and anonymisation jobs.
@@ -120,6 +132,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     // Flip it back the day a panel actually renders beside the thread.
     summaryPanel: false,
     platformVerifiedPhone: false,
+    requestsContactShare: false,
     retainsPlaintext: false,
   },
   [Channel.TELEGRAM]: {
@@ -131,6 +144,7 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     maxMessageChars: 4096,
     summaryPanel: false,
     platformVerifiedPhone: true,
+    requestsContactShare: true,
     retainsPlaintext: true,
   },
   [Channel.WHATSAPP]: {
@@ -143,6 +157,8 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     maxMessageChars: 1024, // interactive message body limit, not the 4096 text limit
     summaryPanel: false,
     platformVerifiedPhone: true,
+    // wa_id rides every inbound message, so there is no share step.
+    requestsContactShare: false,
     retainsPlaintext: true,
   },
   [Channel.MESSENGER]: {
@@ -154,6 +170,9 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     maxMessageChars: 2000,
     summaryPanel: false,
     platformVerifiedPhone: true,
+    // Messenger has no contact-share primitive; the PSID is not a number, so
+    // this channel will need its own identity step when it is built.
+    requestsContactShare: true,
     retainsPlaintext: true,
   },
 };

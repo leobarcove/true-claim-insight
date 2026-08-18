@@ -232,7 +232,7 @@
         <h2>Reference</h2>
         <ol>
           <li><a href="#s11"><span>11</span><span>Who may do what</span></a></li>
-          <li><a href="#gaps"><span>12</span><span>Not yet built</span></a></li>
+          <li><a href="#gaps"><span>12</span><span>What runs, what does not</span></a></li>
         </ol>
       </div>
     </nav>
@@ -1292,12 +1292,20 @@ legal holds`"]
       </section>
 
       <section id="gaps">
-        <div class="head"><span class="num">12</span><h3>Drawn here, but not yet built</h3></div>
+        <div class="head"><span class="num">12</span><h3>Drawn here — what runs, and what does not</h3></div>
         <p class="lede">
           A flow diagram is persuasive precisely because it looks like a specification, and an
-          unmarked planned step reads exactly like a shipped one. These are the steps above
-          that do not yet run. The three that ran headlessly — report, handback and fee note —
-          now have screens; what is left is listed here.
+          unmarked planned step reads exactly like a shipped one. So every step that has ever
+          been a gap is listed here with its <em>current</em> state — the unbuilt first, then
+          the partial, then what now runs.
+        </p>
+        <p class="note">
+          <strong>Built rows stay, they do not vanish.</strong> This section was headed "not yet
+          built" while three of its rows had shipped, so a reader who trusted the heading over
+          the status chip — as one reasonably would — was told the opposite of the truth about
+          work that was finished. Deleting a row on the day it ships would have hidden the same
+          thing more quietly. What a step was promised to be, and what it became, are both part
+          of the record.
         </p>
         <div class="tablewrap">
           <table>
@@ -1305,23 +1313,22 @@ legal holds`"]
               <tr><th scope="col">Flow step</th><th scope="col">Status</th><th scope="col">Blocked by</th></tr>
             </thead>
             <tbody>
+              <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
+              <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
+              <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
+              <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
+              <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
+              <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
               <tr><td>Session recordings for assessments held</td><td><span class="chip plan">Partial</span></td><td>The Sessions list is built from recordings held by the video provider, so a completed assessment whose recording the provider does not hold never appears there</td></tr>
               <tr><td>Per-channel and per-locale wording</td><td><span class="chip plan">Partial</span></td><td>The overlay resolver is wired as of 11 Aug and the consent notice follows the claimant's Telegram language. No overlays are authored yet, so every flow still reads in its base wording — the mechanism runs, the content does not exist</td></tr>
               <tr><td>Automated eKYC</td><td><span class="chip plan">Partial</span></td><td>The gate is built: <code>REPORT_PENDING</code>, <code>APPROVED</code> and <code>REJECTED</code> refuse on an unverified claimant in registered mode and record the advisory as a TPA. Verification is an audited manual act with a mandatory basis — no verification vendor integrated</td></tr>
-              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
-              <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
               <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td>video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>; case-service writes <code>claimant</code>. The list only shrinks</td></tr>
-              <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
-              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip pass">Built</span></td><td>A tenant may hold a <code>fastTrack</code> final-report policy row beside its standard one; it is resolved only for a claim that took the §2.4 fast track <em>and is still on it</em> — an escalated claim gets the full window back. Deliberately no platform default: the shorter promise is a commercial commitment per insurer, and the demo firm's is seeded at 3 working days</td></tr>
-              <tr><td>Policy file feed from the insurer</td><td><span class="chip plan">Planned</span></td><td><span class="chip gate">Gate G9</span></td></tr>
-              <tr><td>Proactive flight-delay detection</td><td><span class="chip plan">Planned</span></td><td>G9 data + a WhatsApp channel</td></tr>
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
-              <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
-              <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
+              <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
+              <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip pass">Built</span></td><td>A tenant may hold a <code>fastTrack</code> final-report policy row beside its standard one; it is resolved only for a claim that took the §2.4 fast track <em>and is still on it</em> — an escalated claim gets the full window back. Deliberately no platform default: the shorter promise is a commercial commitment per insurer, and the demo firm's is seeded at 3 working days</td></tr>
               <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip pass">Built</span></td><td>Both halves now exist: <code>PATCH /claims/:id/appointment</code> books the visit and tells the claimant, and <code>POST /claims/:id/site-visits</code> records what was found — attendance time, attributable attendee, findings and the limitations that bounded the inspection. Append-only and audited: a revisit is a second row, and the report cites the record rather than an inspection the file cannot evidence</td></tr>
               <tr><td>Claimant-side amend on info request</td><td><span class="chip pass">Built</span></td><td>Returning a case now tells the claimant in their own conversation and reattaches it: the bot says the <code>reviewNote</code>, sets the cursor at the first missing item (or the review step, where <code>edit</code> reaches any answer), and the existing confirm resubmits. Eager on the operator's action when the binding is idle; lazy on the claimant's next message otherwise — with no hijack of an intake mid-flight, and silence when an agent holds the conversation. The silence side is handled too: one reminder per return after the tenant's own quiet period (absent by default; demo firm at 3 working days), then a person decides — the operator's abandon action closes the case with a recorded reason, a confirmation dialog that states the consequence, a neutral closure notice to the claimant with the way back in, and the conversation released. Resubmission takes the ask off the case. More than one returned case is asked about rather than guessed at — a chooser naming each case number, because filing an answer against the wrong claim is worse than an extra tap. WhatsApp outside its 24-hour service window is handled by an approved <strong>utility template</strong>, spent only when the ordinary push was refused and written into the transcript when it lands (<code>WHATSAPP_INFO_REQUEST_TEMPLATE</code>, inert until Meta approves one — see <code>docs/WHATSAPP_TEMPLATES.md</code>); with none configured the lazy resume is still the door</td></tr>
-            </tbody>
-          </table>
+            </table>
         </div>
       </section>
 

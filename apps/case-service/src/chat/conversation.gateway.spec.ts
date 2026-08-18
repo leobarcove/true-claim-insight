@@ -5,7 +5,7 @@ import {
   MessageDirection,
   Prisma,
 } from '@prisma/client';
-import { CHANNEL_CAPABILITIES } from '@tci/shared-types';
+import { CHANNEL_CAPABILITIES, type ChannelCapabilities } from '@tci/shared-types';
 import { ConversationGateway } from './conversation.gateway';
 import {
   PAGE_CALLBACK_PREFIX,
@@ -1741,6 +1741,36 @@ describe('ConversationGateway', () => {
         ([args]) => args?.data?.verifiedAt
       );
       expect(wrote?.[0].data.tenantId).toBe('tenant-1');
+    });
+  });
+
+  describe('what the bot says when a binding is made', () => {
+    // Reported from a real WhatsApp handset: "Hi" was answered with
+    // "Thank you." — an acknowledgement of an act the claimant never
+    // performed, because wa_id binds them on their first word.
+    const unbound = { verifiedAt: null, claimantId: null };
+
+    it('greets rather than thanks where the number arrives unasked', async () => {
+      const { gateway, adapter, sent } = setup({ binding: unbound });
+      (adapter as { capabilities: ChannelCapabilities }).capabilities = {
+        ...CHANNEL_CAPABILITIES[CaseChannel.WHATSAPP],
+      };
+
+      await gateway.handleTurn(turn({ text: 'Hi', sharedPhone: '+60123456789' }));
+
+      const all = sent.map(message => message.text).join(' ');
+      expect(all).toMatch(/we handle insurance claims/i);
+      expect(all).not.toMatch(/^Thank you\.$/m);
+    });
+
+    it('thanks where the claimant actually shared their contact', async () => {
+      // Telegram asks, so the tap is a real act and the acknowledgement —
+      // with the keyboard dismissed — is exactly right.
+      const { gateway, sent } = setup({ binding: unbound });
+
+      await gateway.handleTurn(turn({ text: '', sharedPhone: '+60123456789' }));
+
+      expect(sent.map(message => message.text)).toContain('Thank you.');
     });
   });
 

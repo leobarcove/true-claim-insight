@@ -1106,11 +1106,21 @@ export class ConversationGateway implements OnModuleInit {
       },
     });
 
-    // Just an acknowledgement. "Let us begin" used to live here, and again in
-    // the case-opened message, and again in the first question's own wording
-    // — three openings in a row, none of which moved the claimant forward.
+    // What to say depends on whether the claimant actually did anything.
+    //
+    // On Telegram they tapped "Share my number", so "Thank you." acknowledges
+    // that act and `removeKeyboard` dismisses the keyboard it came from. On
+    // WhatsApp `wa_id` rides every inbound message, so this binding happened
+    // on the claimant's first word: thanking them there thanks them for
+    // nothing they did, and — reported from a real handset — reads as a
+    // non-sequitur ("Hi" → "Thank you."). Worse, that channel then had no
+    // greeting at all, because the greeting lives in the share request it
+    // never sends. So it gets the greeting instead.
+    const shared = adapter.capabilities?.requestsContactShare ?? true;
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: 'Thank you.',
+      text: shared
+        ? 'Thank you.'
+        : 'Hello — we handle insurance claims, and we can start yours here.',
       // The share-contact keyboard has done its job; without this it stays
       // pinned beneath every question that follows.
       removeKeyboard: true,
