@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
@@ -65,26 +65,6 @@ export class TenantService {
   }
 
   /**
-   * Validate that a resource belongs to the current user (and their tenant)
-   */
-  validateOwnership(
-    resourceTenantId: string | null,
-    resourceUserId: string | null,
-    tenantContext: TenantContext,
-    resourceName: string = 'Resource'
-  ): void {
-    // First validate tenant access
-    this.validateTenantAccess(resourceTenantId, tenantContext, resourceName);
-
-    // If not a cross-tenant admin, and we are in strict mode, validate user ownership if required
-    if (!this.canAccessCrossTenant(tenantContext)) {
-      if (resourceUserId !== tenantContext.userId && tenantContext.userRole === 'CLAIMANT') {
-        throw new ForbiddenException(`Access denied: This ${resourceName} does not belong to you`);
-      }
-    }
-  }
-
-  /**
    * Build tenant filter for claims (uses adjusterId relationship or insurerTenantId)
    */
   buildClaimTenantFilter(
@@ -128,12 +108,15 @@ export class TenantService {
   }
 
   /**
-   * Validate that a resource belongs to the user's tenant
+   * Validate that a resource belongs to the user's tenant.
    *
-   * @param resourceTenantId - The tenant ID of the resource
-   * @param tenantContext - The tenant context from the request
-   * @param resourceName - Name of the resource for error messages
-   * @throws ForbiddenException if tenant mismatch
+   * Refuses as absence. The caller has already fetched the row, so a distinct
+   * "not yours" answer would confirm the id names something real in another
+   * firm's book — walk ids, keep the refusals, and you have a map of their
+   * portfolio without reading a single record. The server still knows the
+   * difference and says so in the log below; the client never does.
+   *
+   * @throws NotFoundException on tenant mismatch, worded as a genuine miss
    */
   validateTenantAccess(
     resourceTenantId: string | null,
@@ -153,9 +136,7 @@ export class TenantService {
         `Tenant access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
           `attempted to access ${resourceName} belonging to tenant ${resourceTenantId}`
       );
-      throw new ForbiddenException(
-        `Access denied: ${resourceName} does not belong to your organisation`
-      );
+      throw new NotFoundException(`${resourceName} not found`);
     }
   }
 

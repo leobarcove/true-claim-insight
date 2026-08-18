@@ -1345,14 +1345,25 @@ legal holds`"]
         </p>
         <p class="note">
           <strong>A record that is not yours reads as one that does not exist.</strong>
-          Cases and claims both answer <strong>404</strong> to every blocked read — claimant
-          and staff alike, in case-service and risk-engine alike. A "403 Forbidden" would
-          confirm the record exists, which is itself a disclosure and precisely the one an
-          enumerating attacker wants: walk ids, keep the refusals, and you have a map of
-          another firm's book without reading a single claim. The two entities disagreed
-          until 18 Aug 2026 — cases obfuscated, claims refused — and the audit that put them
-          side by side ended in unifying on the safer answer, pinned by a test that asserts
-          a forbidden read and a genuinely missing one are indistinguishable from outside.
+          Every by-id refusal answers <strong>404</strong>, with the wording of a genuine
+          miss — claims, cases, assignments, sessions, worksheets, fee notes, clocks, consent
+          and firm settings, across all four services. A "403 Forbidden" would confirm the
+          record exists, which is itself a disclosure and precisely the one an enumerating
+          attacker wants: walk ids, keep the refusals, and you have a map of another firm's
+          book without reading a single claim. Cases and claims were unified on 18 Aug 2026;
+          the sweep that same day found the rule was written as a comment above a dozen
+          call sites that then threw a 403 one line later, in four services at once — so a
+          source scan now names every remaining refusal and why it discloses nothing.
+        </p>
+        <p class="note">
+          <strong>Hidden from the caller, kept for the examiner.</strong> The two halves had
+          to move together. The audit rule keyed on the status code, so answering as absence
+          would have stopped recording the very attempt an examiner looks for; 404s that name
+          a record are audited now, which also means a run of them from one actor — the shape
+          enumeration actually has — is on file. And the edge had been discarding the answer
+          anyway: seven proxy controllers turned every downstream 400, 403 and 404 into a
+          <em>500</em>, so the control looked present because the service raised the right
+          exception while the gateway threw it away.
         </p>
       </section>
 

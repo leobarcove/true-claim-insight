@@ -1807,6 +1807,47 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### Every refusal answered as absence, and the edge stopped eating it — 18 August 2026
+
+Following the flow-page audit, a sweep of every `ForbiddenException` in the
+four services. Three findings, and they only work as one change.
+
+**The rule was a comment, not a control.** Five call sites carried the words
+*"Existence check, not an access check: confirming a claim exists in another
+tenant is itself a disclosure"* directly above a line that threw a 403 — which
+confirms exactly that. The same shape appeared in the gateway's tenant-config
+loader and in video-service, whose `validateClaimAccess` answered a claimant
+correctly (404) and a rival firm incorrectly (403) two lines apart. risk-engine
+leaked claims through their sessions, the side door left open when claim reads
+were unified earlier the same day. Twelve refusals in four services now answer
+404 with the wording of a genuine miss; the server still logs which it was.
+Because a comment cannot enforce anything and nobody writes a unit test for a
+site they do not suspect, a **source scan** now names every remaining
+`ForbiddenException` outside the guards with a reason it discloses nothing —
+each is a role rule before any lookup, a verification state, or an authorship
+rule on a record the caller can already see.
+
+**Hiding it from the caller must not hide it from the examiner.** `shouldAudit`
+keyed on the status, so answering as absence would have silently stopped
+recording the attempt an examiner most wants to see. 404s that name a record
+are audited now. That is better than parity: a run of them from one actor is
+what enumeration actually looks like, and it is on file.
+
+**The edge was discarding the answer anyway.** Six proxy controllers translated
+no downstream error at all and a seventh rethrew the raw axios rejection, so
+every downstream 400, 403 and 404 on those routes surfaced as a **500** — the
+control looked present because the service raised the right exception while the
+gateway threw it away. Worse, a 500 was not audited either. One shared operator
+now carries the downstream status and body out unchanged, with a scanner test
+asserting no proxy can be added without it.
+
+Verified live end to end: an Allianz user asking for a Pacific claim and for an
+id that exists nowhere receive identical 404s on `/claims/:id`,
+`/claims/:id/quantum` and `/quantum/history` — the quantum routes answered 500
+to both before — and all six attempts are on the audit trail with the id asked
+after. 896 tests pass, up from 878; risk-engine and video-service had no tests
+at all before this.
+
 ### The audit that found the demo firm had no policy — 18 August 2026
 
 A pass over `docs/sites/user-flow/index.html` against the code, looking for

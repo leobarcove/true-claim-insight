@@ -64,6 +64,22 @@ export function normalisePath(url: string): string {
 }
 
 /**
+ * The record a path names, if it names one.
+ *
+ * First id-shaped segment after the resource. UUIDs are the common case; fall
+ * back to any segment containing a digit so numeric or prefixed ids still bind.
+ * Empty when the path addresses a collection rather than a record — which is
+ * what separates "someone asked after this claim" from a mistyped route.
+ */
+function pathIdentifier(segments: string[]): string {
+  return (
+    segments.slice(1).find(segment => UUID.test(segment)) ??
+    segments.slice(1).find(segment => /\d/.test(segment)) ??
+    ''
+  );
+}
+
+/**
  * Should this request be persisted as an audit row?
  *
  * Failures are recorded as readily as successes: a refused attempt to reach
@@ -83,7 +99,22 @@ export function shouldAudit(method: string, url: string, statusCode: number): bo
   if (searchesOnIdentifier(url)) return true;
 
   // An authorisation failure on any route is evidence, read or not.
-  return statusCode === 401 || statusCode === 403;
+  if (statusCode === 401 || statusCode === 403) return true;
+
+  // And so is a 404 that named a record.
+  //
+  // The services answer a blocked cross-tenant read as absence rather than
+  // refusal, so that a 403 cannot be used to confirm another firm's claim
+  // exists. That decision moved the evidence out of reach of a rule keyed on
+  // 403 alone: the attempt an examiner most wants to see had become the one
+  // status this function ignored. Auditing 404s that carry an identifier puts
+  // it back, and does it without reintroducing the oracle — the trail records
+  // the attempt either way, and cannot itself be used to tell the two apart.
+  //
+  // Bounded to paths that name something. A 404 from a mistyped route is noise;
+  // a 404 on `/claims/<uuid>` is somebody asking after a specific record, and a
+  // run of them from one actor is what enumeration looks like.
+  return statusCode === 404 && pathIdentifier(normalisePath(url).split('/').filter(Boolean)) !== '';
 }
 
 /**
@@ -99,12 +130,7 @@ export function auditTarget(method: string, url: string): AuditTarget {
   const resource = segments[0] ?? 'unknown';
   const entityType = ENTITY_TYPES[resource] ?? resource.toUpperCase();
 
-  // First id-shaped segment after the resource. UUIDs are the common case;
-  // fall back to any non-word-only segment so numeric or prefixed ids still bind.
-  const identifier =
-    segments.slice(1).find(segment => UUID.test(segment)) ??
-    segments.slice(1).find(segment => /\d/.test(segment)) ??
-    '';
+  const identifier = pathIdentifier(segments);
 
   // A stable action string: the route shape rather than the concrete id, so
   // rows for the same operation group together.

@@ -3,11 +3,12 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
+import { passThroughDownstreamError } from '../common/proxy-error';
 
 /**
  * Edge proxy for quantum worksheets.
@@ -53,9 +54,7 @@ export class QuantumProxyController {
     return firstValueFrom(
       this.httpService.post(this.base(claimId), body, { headers: this.forward(req) }).pipe(
         map(response => unwrapEnvelope(response.data)),
-        catchError(error => {
-          throw error;
-        })
+        passThroughDownstreamError('The quantum service is unavailable')
       )
     );
   }
@@ -66,7 +65,10 @@ export class QuantumProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base(claimId), { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The quantum service is unavailable')
+        )
     );
   }
 
@@ -76,7 +78,10 @@ export class QuantumProxyController {
     return firstValueFrom(
       this.httpService
         .get(`${this.base(claimId)}/history`, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The quantum service is unavailable')
+        )
     );
   }
 }

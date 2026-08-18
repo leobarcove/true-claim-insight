@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -136,7 +135,11 @@ export class AssignmentsService {
       assignment.insurerTenantId !== tenantContext.tenantId &&
       tenantContext.userRole !== 'SUPER_ADMIN'
     ) {
-      throw new ForbiddenException('This assignment does not belong to your organisation');
+      // Answered as absence, not refusal: a 403 here would confirm the record
+      // exists, which is the disclosure an enumerating caller is after. Same
+      // message as the genuine-miss branch above, or the message becomes the
+      // oracle the status code no longer is.
+      throw new NotFoundException('Assignment not found');
     }
     return assignment;
   }

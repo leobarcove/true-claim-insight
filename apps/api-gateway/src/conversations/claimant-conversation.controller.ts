@@ -9,6 +9,7 @@ import { map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
+import { passThroughDownstreamError } from '../common/proxy-error';
 
 /**
  * Edge proxy for the claimant's own conversation in the PWA.
@@ -58,7 +59,10 @@ export class ClaimantConversationProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base('/start'), {}, { headers: this.forward(req), params: { locale } })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -68,7 +72,10 @@ export class ClaimantConversationProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base(), { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -79,7 +86,10 @@ export class ClaimantConversationProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base('/turn'), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 }

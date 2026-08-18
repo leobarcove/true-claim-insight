@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
+import { passThroughDownstreamError } from '../common/proxy-error';
 
 /**
  * Edge proxy for consent, so the claimant app can show the approved notice and
@@ -49,7 +50,10 @@ export class ConsentProxyController {
           headers: this.forward(req),
           params: query,
         })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The consent service is unavailable')
+        )
     );
   }
 
@@ -61,7 +65,10 @@ export class ConsentProxyController {
         .get(`${this.caseServiceUrl}/api/v1/consent/claimant/${claimantId}`, {
           headers: this.forward(req),
         })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The consent service is unavailable')
+        )
     );
   }
 
@@ -73,7 +80,10 @@ export class ConsentProxyController {
         .post(`${this.caseServiceUrl}/api/v1/consent/claimant/${claimantId}/grant`, body, {
           headers: this.forward(req),
         })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The consent service is unavailable')
+        )
     );
   }
 }

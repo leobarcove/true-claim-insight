@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, SettlementBasis } from '@prisma/client';
 
 import { AuditService } from '../common/audit/audit.service';
@@ -143,14 +143,16 @@ export class QuantumService {
       select: { id: true, tenantId: true, category: true },
     });
 
-    // Existence check, not an access check: confirming a claim exists in
-    // another tenant is itself a disclosure.
+    // Confirming a claim exists in another tenant is itself a disclosure, so
+    // absence and refusal are answered identically: one message, one status,
+    // for "there is no such claim" and "there is, and it is not yours". This
+    // comment used to sit above a 403 that said the opposite (18 Aug 2026).
     if (!claim) throw new NotFoundException('Claim not found');
     if (
       claim.tenantId !== tenantContext.tenantId &&
       tenantContext.userRole !== 'SUPER_ADMIN'
     ) {
-      throw new ForbiddenException('This claim does not belong to your organisation');
+      throw new NotFoundException('Claim not found');
     }
     return claim;
   }

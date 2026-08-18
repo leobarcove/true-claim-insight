@@ -59,6 +59,26 @@ describe('Audit scope', () => {
       expect(shouldAudit('GET', '/api/v1/claims/someone-elses', 401)).toBe(true);
     });
 
+    it('records a 404 on a named record, because that is now what a refusal looks like', () => {
+      // The services answer a blocked cross-tenant read as absence so a 403
+      // cannot confirm another firm's claim exists. That moved the evidence
+      // out of reach of a rule keyed on 403 alone — the attempt an examiner
+      // most wants to see became the one status this function ignored. Both
+      // halves of the control have to move together, which is why they are
+      // asserted together (18 Aug 2026 audit).
+      const claim = '/api/v1/claims/8b1f6c2e-1111-4222-8333-444455556666';
+      expect(shouldAudit('GET', claim, 404)).toBe(true);
+      expect(shouldAudit('GET', claim, 403)).toBe(true);
+      expect(shouldAudit('GET', claim, 200)).toBe(false);
+    });
+
+    it('does not record a 404 from a route that named nothing', () => {
+      // A mistyped path is noise. A run of 404s naming specific ids from one
+      // actor is enumeration, and that is the shape worth keeping.
+      expect(shouldAudit('GET', '/api/v1/claimz', 404)).toBe(false);
+      expect(shouldAudit('GET', '/api/v1/cases', 404)).toBe(false);
+    });
+
     it('ignores health, metrics and docs traffic', () => {
       for (const path of ['/health', '/api/v1/health', '/metrics', '/docs', '/favicon.ico']) {
         expect(shouldAudit('GET', path, 200)).toBe(false);

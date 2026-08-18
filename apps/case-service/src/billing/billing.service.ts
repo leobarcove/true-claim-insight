@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { FeeNoteStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
@@ -213,11 +213,11 @@ export class BillingService {
       where: { id: claimId },
       select: { id: true, tenantId: true, status: true, insurerTenantId: true },
     });
-    // Existence check, not an access check: confirming a claim exists in
-    // another tenant is itself a disclosure.
+    // Confirming a claim exists in another tenant is itself a disclosure, so
+    // absence and refusal are answered identically — see the quantum service.
     if (!claim) throw new NotFoundException('Claim not found');
     if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('This claim does not belong to your organisation');
+      throw new NotFoundException('Claim not found');
     }
 
     const [note, timeEntries, disbursements] = await Promise.all([

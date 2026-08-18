@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { AuditService } from '../common/audit/audit.service';
@@ -132,11 +132,12 @@ export class TenantConfigService {
       select: { id: true, name: true, settings: true },
     });
 
-    // Existence check, not an access check — a tenant that is not yours must be
-    // indistinguishable from one that does not exist.
+    // A tenant that is not yours is indistinguishable from one that does not
+    // exist: same status, same wording. This comment said exactly that while
+    // the line under it threw a 403 that said the opposite (18 Aug 2026).
     if (!tenant) throw new NotFoundException('Tenant not found');
     if (tenant.id !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('You cannot read or change another organisation’s settings');
+      throw new NotFoundException('Tenant not found');
     }
     return tenant;
   }

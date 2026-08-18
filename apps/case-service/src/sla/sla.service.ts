@@ -1,7 +1,6 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -396,11 +395,11 @@ export class SlaService {
         where: { id: claimId },
         select: { id: true, tenantId: true },
       });
-      // Existence check, not an access check: confirming a claim exists in
-      // another tenant is itself a disclosure.
+      // Confirming a claim exists in another tenant is itself a disclosure,
+      // so absence and refusal are answered identically — see the quantum service.
       if (!claim) throw new NotFoundException('Claim not found');
       if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-        throw new ForbiddenException('This claim does not belong to your organisation');
+        throw new NotFoundException('Claim not found');
       }
     }
 

@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
@@ -49,31 +49,6 @@ export class TenantService {
     }
 
     return existingWhere;
-  }
-
-  /**
-   * Validate that a resource belongs to the current user (and their tenant)
-   */
-  validateOwnership(
-    resourceTenantId: string | null,
-    resourceUserId: string | null,
-    tenantContext: TenantContext,
-    resourceName: string = 'Resource'
-  ): void {
-    const hasAccess =
-      tenantContext.scope === TenantScope.NONE || this.canAccessCrossTenant(tenantContext);
-
-    if (hasAccess) return;
-
-    if (resourceTenantId !== tenantContext.tenantId) {
-      throw new ForbiddenException(
-        `Access denied: ${resourceName} does not belong to your organisation`
-      );
-    }
-
-    if (resourceUserId !== tenantContext.userId && tenantContext.userRole === 'CLAIMANT') {
-      throw new ForbiddenException(`Access denied: This ${resourceName} does not belong to you`);
-    }
   }
 
   /**
@@ -154,9 +129,10 @@ export class TenantService {
         `Claim access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
           `attempted to access claim ${claimId}`
       );
-      throw new ForbiddenException(
-        'Access denied: This claim does not belong to your organisation'
-      );
+      // Absence, not refusal — the same answer the claimant branch above has
+      // always given, and the same one case-service and risk-engine give. A
+      // 403 here confirmed the claim existed in another firm's book.
+      throw new NotFoundException(`Claim with ID ${claimId} not found`);
     }
   }
 

@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
+import { passThroughDownstreamError } from '../common/proxy-error';
 
 /**
  * Edge proxy for fee notes, time and disbursements.
@@ -44,7 +45,10 @@ export class BillingProxyController {
     return firstValueFrom(
       this.httpService
         .get(`${this.caseServiceUrl}/api/v1/billing/${path}`, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The billing service is unavailable')
+        )
     );
   }
 
@@ -54,7 +58,10 @@ export class BillingProxyController {
         .post(`${this.caseServiceUrl}/api/v1/billing/${path}`, body ?? {}, {
           headers: this.forward(req),
         })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The billing service is unavailable')
+        )
     );
   }
 

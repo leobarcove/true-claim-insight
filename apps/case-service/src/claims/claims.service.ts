@@ -947,8 +947,9 @@ export class ClaimsService {
       },
     });
     if (!claim) throw new NotFoundException('Claim not found');
+    // Absence and refusal answered identically — see the quantum service.
     if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('This claim does not belong to your organisation');
+      throw new NotFoundException('Claim not found');
     }
 
     if (Number.isNaN(when.getTime())) {
@@ -1021,8 +1022,9 @@ export class ClaimsService {
       select: { id: true, claimNumber: true, tenantId: true, assessmentMode: true },
     });
     if (!claim) throw new NotFoundException('Claim not found');
+    // Absence and refusal answered identically — see the quantum service.
     if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('This claim does not belong to your organisation');
+      throw new NotFoundException('Claim not found');
     }
     if (claim.assessmentMode !== 'SITE_VISIT') {
       throw new BadRequestException(

@@ -1,8 +1,8 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -91,7 +91,9 @@ export class ConsentController {
    */
   private assertOwnRecord(claimantId: string, tenantContext: TenantContext) {
     if (tenantContext.userRole === 'CLAIMANT' && tenantContext.userId !== claimantId) {
-      throw new ForbiddenException('Not permitted');
+      // Absence, not refusal: to this claimant no other claimant exists, and a
+      // 403 would have confirmed which ids do.
+      throw new NotFoundException('Not found');
     }
   }
 

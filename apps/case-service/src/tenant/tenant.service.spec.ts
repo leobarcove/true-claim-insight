@@ -210,3 +210,50 @@ describe('TenantService.validateClaimAccess — cross-tenant reads are absences'
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * SECURITY TESTS — a blocked read is indistinguishable from a missing record.
+ *
+ * `validateTenantAccess` is the shared helper behind adjuster lookups, and it
+ * answered "does not belong to your organisation" — which confirms the record
+ * exists. Every by-id refusal in the four services now answers as absence
+ * instead (18 Aug 2026 audit); the log line still records the truth server-side.
+ */
+describe('TenantService.validateTenantAccess (isolation)', () => {
+  const service = new TenantService({} as any);
+
+  const context = (tenantId: string, userRole = 'ADJUSTER'): TenantContext => ({
+    tenantId,
+    userId: 'user-1',
+    userRole,
+    scope: TenantScope.STRICT,
+    allowCrossTenant: false,
+  });
+
+  it('refuses a foreign record as absence, not as forbidden', () => {
+    try {
+      service.validateTenantAccess('other-firm', context('mine'), 'Adjuster');
+      throw new Error('expected a refusal');
+    } catch (error: any) {
+      expect(error.getStatus?.()).toBe(404);
+      expect(error.message).toBe('Adjuster not found');
+    }
+  });
+
+  it('says nothing about which organisation holds it', () => {
+    try {
+      service.validateTenantAccess('other-firm', context('mine'), 'Adjuster');
+    } catch (error: any) {
+      expect(error.message).not.toMatch(/other-firm|organisation|belong/i);
+    }
+  });
+
+  it('lets the owning tenant through', () => {
+    expect(() => service.validateTenantAccess('mine', context('mine'), 'Adjuster')).not.toThrow();
+  });
+
+  it('lets a cross-tenant super admin through', () => {
+    const admin = { ...context('mine', 'SUPER_ADMIN'), allowCrossTenant: true };
+    expect(() => service.validateTenantAccess('other-firm', admin, 'Adjuster')).not.toThrow();
+  });
+});

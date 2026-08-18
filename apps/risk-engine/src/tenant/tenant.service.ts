@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
@@ -73,7 +73,11 @@ export class TenantService {
         (claim as any)?.tenantId !== tenantContext.tenantId &&
         claim?.adjuster?.tenantId !== tenantContext.tenantId
       ) {
-        throw new ForbiddenException('You do not have access to this session');
+        // Absence, not refusal, and worded exactly as the genuine miss above.
+        // A session hangs off a claim, so a distinct answer here leaked the
+        // existence of another firm's claims by their sessions instead — the
+        // side door left open when claim reads were unified (18 Aug 2026).
+        throw new NotFoundException(`Session with ID ${sessionId} not found`);
       }
     }
   }
@@ -111,28 +115,5 @@ export class TenantService {
     }
 
     return tenantOrFilter;
-  }
-
-  /**
-   * Validate that a resource belongs to the current user (and their tenant)
-   */
-  validateOwnership(
-    resourceTenantId: string | null,
-    resourceUserId: string | null,
-    tenantContext: TenantContext,
-    resourceName: string = 'Resource'
-  ): void {
-    if (tenantContext.userRole === 'SUPER_ADMIN') return;
-
-    // Check tenant isolation (Simplified generic check)
-    if (resourceTenantId && resourceTenantId !== tenantContext.tenantId) {
-      throw new ForbiddenException(
-        `Access denied: ${resourceName} does not belong to your organisation`
-      );
-    }
-
-    if (resourceUserId !== tenantContext.userId && tenantContext.userRole === 'CLAIMANT') {
-      throw new ForbiddenException(`Access denied: This ${resourceName} does not belong to you`);
-    }
   }
 }

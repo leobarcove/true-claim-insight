@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AssessmentMode,
   EscalationTrigger,
@@ -238,10 +238,10 @@ export class AssessmentService {
       },
     });
 
-    // Existence check, not an access check — see the quantum service.
+    // Absence and refusal are answered identically — see the quantum service.
     if (!claim) throw new NotFoundException('Claim not found');
     if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('This claim does not belong to your organisation');
+      throw new NotFoundException('Claim not found');
     }
     return claim;
   }

@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
+import { passThroughDownstreamError } from '../common/proxy-error';
 
 /**
  * Edge proxy for the conversations inbox.
@@ -50,7 +51,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base(), { headers: this.forward(req), params: query })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -60,7 +64,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base(`/${id}`), { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -70,7 +77,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/take-over`), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -80,7 +90,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/reply`), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -90,7 +103,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/resolve`), {}, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -100,7 +116,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .get(this.base('/agents'), { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -110,7 +129,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/assign`), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -120,7 +142,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/status`), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 
@@ -130,7 +155,10 @@ export class ConversationsProxyController {
     return firstValueFrom(
       this.httpService
         .post(this.base(`/${id}/notes`), body, { headers: this.forward(req) })
-        .pipe(map(response => unwrapEnvelope(response.data)))
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The conversation service is unavailable')
+        )
     );
   }
 }
