@@ -1769,6 +1769,31 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### The chart said "not built" in the one language a chart speaks — 18 August 2026
+
+Asked three times why the info-requested item still read as unbuilt, and
+answered three times by pointing at the label and the §12 chip. Both were
+right; both were the wrong thing to look at. The user-flow site carries a
+**colour key** — green "built and running", amber "planned, not built" — and
+the INFO_REQUESTED node was still amber. On a diagram the stroke colour *is*
+the status field; the label is prose beside it. Every "it is built" answer was
+contradicted by the chart's own formal encoding, and the reader was right to
+keep asking.
+
+Auditing every styled node against that key found the fault was systemic, not
+local: amber had drifted into a second, undocumented meaning — "exception
+path" — worn by eight nodes that were nothing of the kind. A claimant (outside
+the firm), a control refusing a foreign contact, the publish gate refusing a
+broken flow, the payee-name check, the FNOL review queue: all built or
+refusing, all painted "planned, not built". Recoloured to what they are, and
+the key itself widened to the two meanings actually in use ("planned or
+partial — see §12", "refused, or ended without a claim") so the drift has
+somewhere honest to go next time.
+
+**Lesson worth keeping:** when a document encodes status in a visual channel,
+updating the prose is not updating the status. Search for the encoding, not
+the sentence.
+
 ### Two things using it exposed — 18 August 2026
 
 **"Hi" was answered with "Thank you."** on a real WhatsApp handset. The

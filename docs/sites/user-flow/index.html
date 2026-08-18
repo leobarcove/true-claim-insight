@@ -264,9 +264,9 @@
         <div class="legend">
           <p>Colour key</p>
           <span class="key"><span class="swatch ok"></span> Built and running</span>
-          <span class="key"><span class="swatch plan"></span> Planned, not built</span>
+          <span class="key"><span class="swatch plan"></span> Planned or partial — see §12</span>
           <span class="key"><span class="swatch ext"></span> Outside the firm</span>
-          <span class="key"><span class="swatch no"></span> Refused by a control</span>
+          <span class="key"><span class="swatch no"></span> Refused, or ended without a claim</span>
         </div>
       </header>
 
@@ -317,8 +317,9 @@ channel · answers · documents · consent`"]
 claimant amends on their own
 channel, or staff amend for them`"]
     INFO --> CASE
-    VET -->|"medical"| EXP["`REFERRED_TO_EXPERT
-never auto-assessed`"]
+    VET -->|"`travel *medical* subtype`"| EXP["`REFERRED_TO_EXPERT
+a human expert decides —
+never desk-reviewed, at any value`"]
     VET -->|"not covered"| REJ["REJECTED"]
     VET -->|"vetted"| CONV
     EXP --> CONV
@@ -355,12 +356,22 @@ TPA schedule or adjuster fee scale`"]
     style MODE stroke:#17966A,stroke-width:2.5px
     style DESK stroke:#17966A,stroke-width:2.5px
     style HANDBACK stroke:#5C7FCB,stroke-width:2.5px
-    style INFO stroke:#C77A2E,stroke-width:2.5px
+    style INFO stroke:#17966A,stroke-width:2.5px
     style EXP stroke:#C77A2E,stroke-width:2.5px
     style SITE stroke:#17966A,stroke-width:2.5px
     style REJ stroke:#C05A50,stroke-width:2.5px
         </pre></div>
         <p class="note">
+          <p class="note">
+            <strong>"Medical" here is a travel claim's subtype, not a line of business.</strong>
+            It means a claimant who fell ill or was injured <em>on a trip</em>, claiming under
+            travel cover — <code>TravelClaimType.MEDICAL</code>. Standalone Medical &amp; Health
+            insurance is out of scope entirely (§1 of the plan excludes it alongside motor and
+            Individual PA), so it never reaches this diagram at all. The subtype is refused a
+            desk review <em>before</em> the economic tests, so a small medical claim cannot slip
+            through on value: whether a condition was pre-existing, and whether treatment was
+            necessary, are clinical judgements no rule set should make.
+          </p>
           <strong>The firm recommends; the insurer decides.</strong> Nothing in this system
           settles a claim. Step 7 is a handback, and the adjuster report says so on its face.
         </p>
@@ -562,7 +573,7 @@ the policy?`"}
 reason recorded`"]
     Q4 -->|yes| CONVERT["`**convert to Claim**`"]
 
-    style REQ stroke:#C77A2E,stroke-width:2.5px
+    style REQ stroke:#17966A,stroke-width:2.5px
     style NOTIFY stroke:#17966A,stroke-width:2.5px
     style AMEND stroke:#17966A,stroke-width:2.5px
     style REMIND stroke:#17966A,stroke-width:2.5px
@@ -570,7 +581,7 @@ reason recorded`"]
     style EXPERT stroke:#C77A2E,stroke-width:2.5px
     style CONVERT stroke:#17966A,stroke-width:2.5px
     style REJECT stroke:#C05A50,stroke-width:2.5px
-    style PAYEE stroke:#C77A2E,stroke-width:2.5px
+    style PAYEE stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
           The loop <code>INFO_REQUESTED → SUBMITTED → UNDER_REVIEW</code> may run any number of
@@ -768,7 +779,7 @@ Corrections supersede`"]
     style BLOCK stroke:#C05A50,stroke-width:2.5px
     style REFUSE stroke:#C05A50,stroke-width:2.5px
     style REFUSE2 stroke:#C05A50,stroke-width:2.5px
-    style NOAN stroke:#C77A2E,stroke-width:2.5px
+    style NOAN stroke:#C05A50,stroke-width:2.5px
     style QUANT stroke:#17966A,stroke-width:2.5px
     style ISSUED stroke:#17966A,stroke-width:2.5px
         </pre></div>
@@ -885,7 +896,7 @@ from the mailbox`"]
 never deleted`"]
 
     style DUP stroke:#5C7FCB,stroke-width:2.5px
-    style REVIEW stroke:#C77A2E,stroke-width:2.5px
+    style REVIEW stroke:#17966A,stroke-width:2.5px
     style DONE stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -943,7 +954,7 @@ method the PWA calls`"]
 from the pinned flow`"]
 
     style DUP stroke:#5C7FCB,stroke-width:2.5px
-    style REF stroke:#C77A2E,stroke-width:2.5px
+    style REF stroke:#C05A50,stroke-width:2.5px
     style ASK stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -1099,7 +1110,7 @@ unreachable · missing system step"| NO["Refused"]
     PUB --> PIN["`Case pins the version
 at creation`"]
 
-    style NO stroke:#C77A2E,stroke-width:2.5px
+    style NO stroke:#C05A50,stroke-width:2.5px
     style PUB stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -1272,7 +1283,7 @@ legal holds`"]
     CO -->|"hold · compliance events"| CLAIM
     SA -->|"cross-tenant"| CLAIM
 
-    style CLM stroke:#C77A2E,stroke-width:2.5px
+    style CLM stroke:#5C7FCB,stroke-width:2.5px
     style SIU stroke:#5C7FCB,stroke-width:2.5px
     style CO stroke:#5C7FCB,stroke-width:2.5px
     style SR stroke:#5C7FCB,stroke-width:2.5px
