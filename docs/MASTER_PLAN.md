@@ -1800,6 +1800,45 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### Every diagram swept against the code — 18 August 2026
+
+Asked to fix all discrepancies, so each section's diagram was read beside the
+code that implements it rather than beside its own prose. Six found, all
+fixed; three of them were mine, made earlier the same day by shipping code and
+updating only the section I happened to be looking at.
+
+- **§8 knew nothing of two things built hours earlier** — the per-tenant
+  fast-track final-report profile, and CSP 10.13's exceptional-circumstance
+  relief. The clock diagram now shows both, with the relief drawn as the
+  guarded decision it is rather than an automatic escape.
+- **§7 sent a site visit straight to the evidence checklist**, as though the
+  findings record built on 17 Aug did not exist.
+- **§1 drew the PWA reaching the Case without binding.** It binds — a WEB_CHAT
+  `ConversationBinding`, proved by the login session rather than by a code —
+  so all four claimant doors now pass through one binding node whose label
+  names the three different proofs.
+- **§5 let an accepted appointment only complete.** `ACCEPTED → DECLINED` is
+  in the transition table with a comment explaining exactly why (a conflict
+  often surfaces once the parties are known), and the diagram omitted it.
+- **§9 omitted FAILED**, an operator-visible ingestion state the intake queue
+  filters on. A worker crash is not a silent drop, and the diagram now says so.
+- **The expert-referral record has no row in §12** and now does. Routing to an
+  expert works; what the expert was asked and what they answered is recorded
+  nowhere but a `reviewNote`, so a report citing an expert opinion has no
+  record of it. The same shape as the site-visit gap closed the day before,
+  and the same fix applies.
+
+Checked and correct, so left alone: §2 and §6 against their transition tables,
+§10's four fast-track conditions, §11's role map — including that a firm admin
+cannot sign a report, which holds because signing requires an Adjuster profile
+rather than a role.
+
+**The pattern worth naming:** three of the six were introduced by me on the
+same day I built the features, each time by updating the section in front of
+me and not the others that describe the same machinery. A diagram is not
+documentation of a feature; it is documentation of a *system*, and shipping
+into one part of a system dates every drawing of it.
+
 ### The audit's findings fixed, and PIAM checked rather than assumed — 18 August 2026
 
 **The router has ignition.** `convert()` now calls `AssessmentService.decide`

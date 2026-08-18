@@ -296,10 +296,10 @@ FNOL`"]
 portal`"]
     end
 
-    C1 --> CASE
-    C5 --> BIND["`Bind on the platform's
-verified contact —
-web chat proves by code`"]
+    C1 --> BIND
+    C5 --> BIND["`Bind the conversation to a Claimant
+platform vouches · code proves ·
+or the PWA login already did`"]
     C6 --> BIND
     C7 --> BIND
     BIND --> CASE
@@ -630,6 +630,7 @@ stateDiagram-v2
     ACKNOWLEDGED --> DECLINED
 
     ACCEPTED --> COMPLETED: closed out
+    ACCEPTED --> DECLINED: conflict surfaces late
 
     DECLINED --> [*]
     COMPLETED --> [*]
@@ -728,7 +729,9 @@ no authority, not unlimited`"]
     SCHED --> MODE{"Assessment mode"}
     MODE -->|desk review| DESK["Documents only"]
     MODE -->|video| VID["Daily.co room"]
-    MODE -->|site| SITE["Physical inspection"]
+    MODE -->|site| SITE["`Physical inspection —
+attendance, findings and
+limitations recorded`"]
 
     VID --> CONSENT{"`Biometric consent
 on record?`"}
@@ -819,7 +822,9 @@ flowchart LR
 per-insurer target`"]
         F["`FINAL_REPORT
 14 working days non-motor,
-from complete documents`"]
+from complete documents —
+or the insurer's own
+fast-track profile`"]
         S["`SUPPLEMENTARY_CLAIM
 5 working days`"]
         A --> P --> F
@@ -838,7 +843,13 @@ from complete documents`"]
     F --> D
 
     SWEEP["Sweep every 15 minutes"] --> BR{"Past due?"}
-    BR -->|yes| ESC["`BREACHED
+    BR -->|yes| EXC{"`CSP 10.13 ground
+recorded?`"}
+    EXC -->|"`complex · catastrophe ·
+suspected fraud`"| EXT["`Extended by the working days
+a person chose, with a reason.
+Never automatic, never twice`"]
+    EXC -->|no| ESC["`BREACHED
 level 1 → 2 at 2 working days
 → 3 at 5`"]
     ESC --> CE["`Level 3 raises a ComplianceEvent
@@ -848,7 +859,25 @@ PD 11.2 d — Board escalation`"]
     style D stroke:#5C7FCB,stroke-width:2.5px
     style Y stroke:#5C7FCB,stroke-width:2.5px
     style CE stroke:#17966A,stroke-width:2.5px
+    style EXT stroke:#17966A,stroke-width:2.5px
         </pre></div>
+        <p class="note">
+          <strong>CSP 10.13 has two limbs, and the second one matters most on the days that
+          matter most.</strong> The clause sets the fourteen-working-day non-motor window
+          <em>and</em> excuses it in exceptional circumstances — complex claims, catastrophe
+          and large-event losses, suspected fraud. Without machinery for the second, a Klang
+          Valley flood would have shown as mass firm failure: every clock breaching, every
+          claim escalating, and nothing on file to say the policy document permitted the
+          delay. That is wrong in the direction that costs a firm its panel.
+        </p>
+        <p class="note">
+          <strong>The relief is deliberately hard to claim.</strong> A named ground from the
+          PD's own list, a written reason, a bounded number of working days someone chose, an
+          attributable actor and an audit row — never automatic, and never twice on one clock,
+          because buying time in small increments is how a deadline quietly stops meaning
+          anything. A clock already breached against the old window returns to running: that
+          breach measured a deadline the PD did not require.
+        </p>
         <p class="note">
           <strong>The escalation now reaches a person.</strong> A firm-owned breach emails the
           operations address, deduplicated per clock and per level so a breach left open over
@@ -876,6 +905,9 @@ The database is the arbiter,
 not the worker`"]
     INS -->|"inserted"| PARSE["`Deterministic parse
 no LLM`"]
+    PARSE -->|"the worker itself errored"| FAILED["`**FAILED**
+same operator queue —
+a crash is not a silent drop`"]
 
     PARSE --> GAP{"`Claim type and
 mandatory facts found?`"}
@@ -893,6 +925,7 @@ matches?`"}
     FLAG --> ATT
     ATT --> DONE["`**PROCESSED** → Case in the funnel`"]
 
+    FAILED --> OPS
     REVIEW --> OPS{"Operator"}
     OPS -->|"fixed the cause"| RETRY["`Retry — re-reads the email
 from the mailbox`"]
@@ -902,6 +935,7 @@ never deleted`"]
 
     style DUP stroke:#5C7FCB,stroke-width:2.5px
     style REVIEW stroke:#17966A,stroke-width:2.5px
+    style FAILED stroke:#C05A50,stroke-width:2.5px
     style DONE stroke:#17966A,stroke-width:2.5px
         </pre></div>
         <p class="note">
@@ -1330,6 +1364,7 @@ legal holds`"]
             </thead>
             <tbody>
               <tr><td>Assessment-mode router wired into the journey</td><td><span class="chip pass">Built</span></td><td>The router was real and tested but unreachable — no gateway route, no screen, and <code>convert()</code> did not call it — so a converted claim carried <code>assessmentMode = null</code> and never routed, hidden by seeded claims whose modes the seed writes directly. <code>convert()</code> now routes the claim the moment it exists, fail-soft like the SLA transitions: a claim that cannot be routed is logged and stays unrouted rather than failing the insurer handback, and an unrouted claim is visible because it has no mode</td></tr>
+              <tr><td>Expert-referral instruction and outcome record</td><td><span class="chip fail">Not built</span></td><td>Routing works — a travel medical case is refused conversion until it has passed <code>REFERRED_TO_EXPERT</code>, and the router returns <code>EXPERT_REFERRAL</code> ahead of the economic tests. What is not recorded is what the expert was <em>asked</em> and what they <em>answered</em>: the referral carries a <code>reviewNote</code> and nothing else, so a report citing an expert opinion has no record of it on file. Exactly the shape of the site-visit findings gap closed on 17 Aug, and the same fix — an append-only record with an attributable author — applies</td></tr>
               <tr><td>Production deployment</td><td><span class="chip fail">Not built</span></td><td>Staging only — one EC2 in ap-southeast-5 running Compose. No Kubernetes, no Terraform, no CI deploy, and production data residency is a commitment rather than a property of the system</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
               <tr><td>Digital signatures</td><td><span class="chip plan">Stub</span></td><td><code>StubSignatureProvider</code>; the SigningCloud integration is a provider swap</td></tr>
