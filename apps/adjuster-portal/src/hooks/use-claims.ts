@@ -123,6 +123,55 @@ export function useClaim(claimId: string) {
   });
 }
 
+export interface SiteVisit {
+  id: string;
+  attendedAt: string;
+  findings: string;
+  locationNote: string | null;
+  limitations: string | null;
+  createdAt: string;
+  attendedBy: { id: string; fullName: string };
+}
+
+/** Every recorded attendance on a site-visit claim, newest first. */
+export function useSiteVisits(claimId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...claimKeys.detail(claimId), 'site-visits'] as const,
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<SiteVisit[]>>(
+        `/claims/${claimId}/site-visits`
+      );
+      return data.data;
+    },
+    enabled: (options?.enabled ?? true) && !!claimId,
+  });
+}
+
+/** Record what a visit found. Append-only — there is no edit or delete. */
+export function useRecordSiteVisit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      claimId,
+      ...body
+    }: {
+      claimId: string;
+      attendedAt: string;
+      findings: string;
+      locationNote?: string;
+      limitations?: string;
+    }) => {
+      const { data } = await apiClient.post<ApiResponse<SiteVisit>>(
+        `/claims/${claimId}/site-visits`,
+        body
+      );
+      return data.data;
+    },
+    onSuccess: (_data, vars) =>
+      queryClient.invalidateQueries({ queryKey: claimKeys.detail(vars.claimId) }),
+  });
+}
+
 // Fetch claim queue (adjuster's assigned claims)
 export function useClaimQueue() {
   return useQuery({

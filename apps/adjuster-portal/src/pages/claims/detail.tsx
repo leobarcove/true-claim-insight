@@ -76,6 +76,7 @@ import { FraudSignalsCard } from '@/components/claims/non-motor/fraud-signals-ca
 import { SlaPanel } from '@/components/claims/sla-panel';
 import { IdentityControl } from '@/components/claims/identity-control';
 import { ScheduleAssessment } from '@/components/claims/schedule-assessment';
+import { SiteVisitCard } from '@/components/claims/site-visit-card';
 import { FeeNotePanel } from '@/components/claims/fee-note-panel';
 import { SignatureControls } from '@/components/claims/non-motor/signature-controls';
 
@@ -1347,6 +1348,18 @@ export function ClaimDetailPage() {
                   </Card>
                 );
               })()}
+
+            {/* What the visit found — only on a claim routed to the ground. */}
+            {canManageSessions && claim.assessmentMode === AssessmentMode.SITE_VISIT && (
+              <SiteVisitCard
+                claimId={claimId || ''}
+                settled={
+                  claim.status === 'APPROVED' ||
+                  claim.status === 'REJECTED' ||
+                  claim.status === 'CLOSED'
+                }
+              />
+            )}
 
             {/* Claimant Info */}
             <Card>

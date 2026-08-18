@@ -69,6 +69,9 @@ export const MODEL_OWNERSHIP: Record<string, DataContext> = {
   quantumWorksheet: 'claims',
   // How a claim was examined and why — an adjusting decision, claims context.
   assessmentModeDecision: 'claims',
+  // What the visit found on the ground — the firm's inspection record, the
+  // evidence PD 12.6's facts section cites.
+  siteVisit: 'claims',
   // How long claim records live; platform-wide but written by case-service.
   retentionPolicy: 'claims',
   // Who may do which adjusting work — the people side of the claims context.

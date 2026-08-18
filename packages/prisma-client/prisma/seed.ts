@@ -618,6 +618,30 @@ async function main() {
 
   console.log('⏱️  SLA policies seeded (CSP defaults, Kuala Lumpur calendar).');
 
+  // The demo firm's fast-track promise: 3 working days to the final report on
+  // claims that took the §2.4 fast track — the worked example from the plan.
+  // A business decision recorded in the seed, deliberately not a platform
+  // default: a shorter turnaround is a commercial commitment per insurer, so
+  // resolvePolicy only ever honours a tenant's own fastTrack row.
+  const fastTrackPolicy = {
+    tenantId: adjusterTenant.id,
+    stage: 'FINAL_REPORT' as const,
+    workingDays: 3,
+    warnWorkingDaysBefore: 1,
+    calendarState: 'KUALA_LUMPUR',
+    fastTrack: true,
+  };
+  const existingFastTrack = await prisma.slaPolicy.findFirst({
+    where: { tenantId: adjusterTenant.id, stage: 'FINAL_REPORT', fastTrack: true },
+  });
+  if (existingFastTrack) {
+    await prisma.slaPolicy.update({ where: { id: existingFastTrack.id }, data: fastTrackPolicy });
+  } else {
+    await prisma.slaPolicy.create({ data: fastTrackPolicy });
+  }
+
+  console.log('⚡ Fast-track SLA profile seeded for the demo firm (final report: 3 working days).');
+
   // Approval authority (§4.3 A3). ADJUSTER is deliberately absent: an adjuster
   // assesses and recommends, and does not decide the outcome of their own work.
   // An absent row means no authority, not unlimited authority.

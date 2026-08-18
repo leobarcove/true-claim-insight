@@ -25,6 +25,7 @@ import { ClaimsService } from './claims.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { RecordSiteVisitDto } from './dto/record-site-visit.dto';
 import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
@@ -134,6 +135,26 @@ export class ClaimsController {
     @Tenant() tenantContext: TenantContext
   ) {
     return this.claimsService.scheduleAssessment(id, new Date(scheduledFor), tenantContext);
+  }
+
+  @Post(':id/site-visits')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Record what a site visit found (append-only, audited)' })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  recordSiteVisit(
+    @Param('id') id: string,
+    @Body() dto: RecordSiteVisitDto,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.claimsService.recordSiteVisit(id, dto, tenantContext);
+  }
+
+  @Get(':id/site-visits')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.SIU_INVESTIGATOR)
+  @ApiOperation({ summary: 'Every recorded attendance on this claim' })
+  @ApiParam({ name: 'id', description: 'Claim UUID' })
+  listSiteVisits(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    return this.claimsService.listSiteVisits(id, tenantContext);
   }
 
   @Patch(':id/status')

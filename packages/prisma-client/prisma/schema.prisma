@@ -36,6 +36,7 @@ model User {
   riskAssessments    RiskAssessment[]
   videoUploads       VideoUpload[]
   claimants          Claimant[]
+  siteVisits         SiteVisit[]
   otpCodes           OtpCode[]
   vehicleMakes       VehicleMake[]
   vehicleModels      VehicleModel[]
@@ -322,6 +323,7 @@ model Claim {
   assessmentModeDecisions AssessmentModeDecision[]
   slaClocks               SlaClock[]
   reports                 AdjusterReport[]
+  siteVisits              SiteVisit[]
   assignment              Assignment?
   conflictAttestations    ConflictAttestation[]
   documentsCompleteAt     DateTime?
@@ -337,6 +339,51 @@ model Claim {
   @@index([category])
   @@index([createdAt(sort: Desc)])
   @@map("claims")
+}
+
+/// What a site visit actually found — the record the user-flow site's §12
+/// listed as the missing half of the site-visit mode.
+///
+/// The appointment side was already live: `scheduledAssessmentTime`, the
+/// audit row and the claimant notification say a visit was *arranged*. But
+/// nothing recorded what happened on the ground, so an adjuster's report
+/// could cite an inspection the file held no evidence of — and PD 12.6's
+/// "facts, assumptions, methods" starts with the facts.
+///
+/// One row per attendance, append-only. A revisit is a second row, never an
+/// edit of the first: what was found on each date is evidence, the same
+/// superseding doctrine as case documents. `attendedAt` is when the adjuster
+/// actually stood there, deliberately distinct from the booking — visits run
+/// late, and the report cites the attendance, not the diary.
+model SiteVisit {
+  id       String @id @default(uuid())
+  claimId  String
+  tenantId String
+
+  /// When the adjuster actually attended — not the appointment slot.
+  attendedAt DateTime
+  /// Who stood on the ground. Attendance is a claims-handling act and must
+  /// be attributable to a person, not a firm.
+  attendedByUserId String
+
+  /// Where the inspection actually took place, as attended. Free text: the
+  /// booked address plus "access via rear lane" is a finding, not a geocode.
+  locationNote String?
+  /// What was found — the substance the report's facts section cites.
+  findings     String
+  /// What bounded the inspection: access refused to a floor, standing water,
+  /// light. Recording the limits is what makes the findings honest.
+  limitations  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claim      Claim @relation(fields: [claimId], references: [id])
+  attendedBy User  @relation(fields: [attendedByUserId], references: [id])
+
+  @@index([claimId])
+  @@index([tenantId])
+  @@map("site_visits")
 }
 
 // ============================================================================
@@ -1521,10 +1568,19 @@ model SlaPolicy {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  /// This row is the shorter promise for fast-tracked claims (§2.4's
+  /// fast-track SLA profile). Resolved only when the claim actually took the
+  /// fast track, and only from a tenant's own row — there is deliberately no
+  /// platform-wide fast-track default, because a shorter turnaround is a
+  /// commercial commitment made per insurer, not a property of the platform.
+  /// Absent rows mean the standard target applies, the same refuse-don't-
+  /// default posture as the fast track itself.
+  fastTrack Boolean @default(false)
+
   tenant Tenant?    @relation(fields: [tenantId], references: [id])
   clocks SlaClock[]
 
-  @@unique([tenantId, stage])
+  @@unique([tenantId, stage, fastTrack])
   @@index([stage])
   @@map("sla_policies")
 }

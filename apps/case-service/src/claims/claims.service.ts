@@ -997,6 +997,77 @@ export class ClaimsService {
     return updated;
   }
 
+  /**
+   * Record what a site visit found — the other half of the appointment.
+   *
+   * `scheduleAssessment` above says a visit was *arranged*; this says what
+   * happened when someone stood on the ground, which is the evidence the
+   * report's facts section cites (PD 12.6). Append-only: a revisit is a
+   * second row, and there is no update or delete — what was found on each
+   * date is a record, not a draft.
+   *
+   * Guarded to SITE_VISIT mode: recording ground findings on a desk review
+   * would fabricate an inspection that never happened, which is worse than
+   * refusing. `attendedAt` may not be in the future for the same reason in
+   * the other direction — findings cannot precede the visit they describe.
+   */
+  async recordSiteVisit(
+    id: string,
+    dto: { attendedAt: string; findings: string; locationNote?: string; limitations?: string },
+    tenantContext: TenantContext
+  ) {
+    const claim = await this.prisma.claim.findUnique({
+      where: { id },
+      select: { id: true, claimNumber: true, tenantId: true, assessmentMode: true },
+    });
+    if (!claim) throw new NotFoundException('Claim not found');
+    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('This claim does not belong to your organisation');
+    }
+    if (claim.assessmentMode !== 'SITE_VISIT') {
+      throw new BadRequestException(
+        'Findings can only be recorded on a claim in site-visit mode.'
+      );
+    }
+    const attendedAt = new Date(dto.attendedAt);
+    if (Number.isNaN(attendedAt.getTime()) || attendedAt.getTime() > Date.now()) {
+      throw new BadRequestException('The attendance must be a real, past date and time.');
+    }
+
+    const visit = await this.prisma.siteVisit.create({
+      data: {
+        claimId: id,
+        tenantId: claim.tenantId!,
+        attendedAt,
+        attendedByUserId: tenantContext.userId,
+        findings: dto.findings.trim(),
+        locationNote: dto.locationNote?.trim() || null,
+        limitations: dto.limitations?.trim() || null,
+      },
+      include: { attendedBy: { select: { id: true, fullName: true } } },
+    });
+
+    await this.createAuditTrail(id, 'SITE_VISIT_RECORDED', {
+      siteVisitId: visit.id,
+      attendedAt: attendedAt.toISOString(),
+      hasLimitations: Boolean(visit.limitations),
+    }, tenantContext);
+
+    return visit;
+  }
+
+  /** Every attendance on this claim, newest first. */
+  async listSiteVisits(id: string, tenantContext: TenantContext) {
+    // The same access rule as reading the claim itself: the findings are
+    // claim evidence and disclose no more than the claim's file does.
+    await this.tenantService.validateClaimAccess(id, tenantContext);
+    return this.prisma.siteVisit.findMany({
+      where: { claimId: id },
+      orderBy: { attendedAt: 'desc' },
+      include: { attendedBy: { select: { id: true, fullName: true } } },
+    });
+  }
+
   async getEvidenceChecklist(id: string, tenantContext?: TenantContext) {
     const claim = await this.findOne(id, tenantContext);
 

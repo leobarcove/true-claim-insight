@@ -54,8 +54,15 @@ export class SlaService {
    * Resolve the applicable policy: the insurer's own override if configured,
    * otherwise the platform default. This is what lets each panel insurer carry
    * different targets without a code change.
+   *
+   * `fastTracked` asks for the tenant's fast-track row (§2.4's shorter
+   * promise) — tenant rows only, never a platform default, because a shorter
+   * turnaround is a commercial commitment made per insurer. A tenant with no
+   * fast-track row falls back to its standard resolution: absent means "the
+   * ordinary target applies", the same refuse-don't-default posture as the
+   * fast track itself.
    */
-  async resolvePolicy(stage: SlaStage, tenantId?: string | null) {
+  async resolvePolicy(stage: SlaStage, tenantId?: string | null, fastTracked = false) {
     const candidates = await this.prisma.slaPolicy.findMany({
       where: {
         stage,
@@ -64,12 +71,43 @@ export class SlaService {
       },
     });
 
+    if (fastTracked && tenantId) {
+      const fastRow = candidates.find(
+        policy => policy.tenantId === tenantId && policy.fastTrack
+      );
+      if (fastRow) return fastRow;
+    }
+
     // A tenant-specific row always wins over the platform default.
+    const standard = candidates.filter(policy => !policy.fastTrack);
     return (
-      candidates.find(policy => tenantId && policy.tenantId === tenantId) ??
-      candidates.find(policy => policy.tenantId === null) ??
+      standard.find(policy => tenantId && policy.tenantId === tenantId) ??
+      standard.find(policy => policy.tenantId === null) ??
       null
     );
+  }
+
+  /**
+   * Did this claim take the small-claims fast track, and is it still on it?
+   *
+   * Both conditions matter. The decision row says the fast track *fired*; the
+   * claim's current mode says it *held* — a claim escalated off DESK_REVIEW
+   * mid-flight lost the fast track, and its shorter promise with it (§2.4:
+   * mode changes are the escape hatch, and an escalated claim needs the full
+   * window, not the discounted one).
+   */
+  private async isFastTracked(claimId: string): Promise<boolean> {
+    const claim = await this.prisma.claim.findUnique({
+      where: { id: claimId },
+      select: { assessmentMode: true },
+    });
+    if (claim?.assessmentMode !== 'DESK_REVIEW') return false;
+    const latest = await this.prisma.assessmentModeDecision.findFirst({
+      where: { claimId },
+      orderBy: { createdAt: 'desc' },
+      select: { fastTracked: true },
+    });
+    return Boolean(latest?.fastTracked);
   }
 
   private targetOf(policy: {
@@ -132,7 +170,15 @@ export class SlaService {
     if (existing) return existing;
 
     const label = subject.claimId ?? subject.assignmentId ?? 'unknown';
-    const policy = await this.resolvePolicy(stage, options.tenantId);
+    // The fast-track profile applies to the final-report promise alone — the
+    // ack and preliminary obligations are the CSP's, not the commercial deal's
+    // — and is resolved here rather than by callers, so no start site can
+    // forget to ask.
+    const fastTracked =
+      stage === SlaStage.FINAL_REPORT && subject.claimId
+        ? await this.isFastTracked(subject.claimId)
+        : false;
+    const policy = await this.resolvePolicy(stage, options.tenantId, fastTracked);
     if (!policy) {
       this.logger.warn(`No SLA policy for ${stage}; no clock started for ${label}`);
       return null;

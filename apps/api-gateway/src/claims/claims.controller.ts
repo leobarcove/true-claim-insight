@@ -301,6 +301,50 @@ export class ClaimsController {
       );
   }
 
+  @Post(':id/site-visits')
+  @ApiOperation({ summary: 'Record what a site visit found (append-only, audited)' })
+  recordSiteVisit(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .post(`${this.caseServiceUrl}/api/v1/claims/${id}/site-visits`, body, { headers })
+      .pipe(
+        map(response => unwrapEnvelope(response.data)),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to record the site visit',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
+  @Get(':id/site-visits')
+  @ApiOperation({ summary: 'Every recorded attendance on this claim' })
+  listSiteVisits(@Param('id') id: string, @Req() req: any) {
+    const headers = {
+      Authorization: req.headers.authorization,
+      'X-Tenant-Id': req.tenantContext?.tenantId || req.user?.currentTenantId || req.user?.tenantId,
+      'X-User-Id': req.user?.id,
+      'X-User-Role': req.tenantContext?.userRole || req.user?.role,
+    };
+    return this.httpService
+      .get(`${this.caseServiceUrl}/api/v1/claims/${id}/site-visits`, { headers })
+      .pipe(
+        map(response => unwrapEnvelope(response.data)),
+        catchError(e => {
+          throw new HttpException(
+            e.response?.data || 'Failed to fetch site visits',
+            e.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        })
+      );
+  }
+
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update claim status' })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateClaimStatusDto, @Req() req: any) {
