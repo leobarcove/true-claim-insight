@@ -730,6 +730,7 @@ export {
   parseTextDate,
   renderChoices,
   CHOICE_DISPLAY_MAX,
+  displayAnswer,
   formatDateAnswer,
   summariseAnswers,
   supportsAnswerType,

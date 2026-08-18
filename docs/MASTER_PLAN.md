@@ -2677,6 +2677,38 @@ read back to the claimant as "18 August 2026 at 10:00". 825 case-service tests,
 16 claimant-web, 117 gateway; 13 packages typecheck. Each new guarantee was
 mutation-tested — reverting `asStoredInstant` to a no-op fails five tests.
 
+### The codes reached the adjuster (18 August 2026)
+
+Caught by looking at the two screens side by side, which is the only way it was
+visible. The bot's review summary resolved a choice through the step's own
+`choices`, so a claimant read "Singapore" and "Batik Air Malaysia". The
+adjuster's case detail formatted answers itself and put the stored value through
+a title-caser, so staff read **"Sg"** and **"Od"**, with the payout panel showing
+a bare "CIMB".
+
+Worse than the problem it replaced. ISO 3166 and IATA codes were chosen as
+stored values precisely because they are unambiguous to *machines*; printing
+them raw put the abbreviation problem straight back in front of the people the
+lists exist to protect from it — and "Od" is not a guess an adjuster can make,
+where "MAS" at least was.
+
+The cause is one rule implemented twice. `displayAnswer(step, value)` now holds
+it, and `summariseAnswers` is built on the same function, so the claimant's
+review and the staff screen cannot say different things about the same answer.
+A choice with no matching entry falls back to the value verbatim rather than to
+a title-caser: `allowOther` means an answer can legitimately be off-list, and
+re-capitalising what someone typed is a second way of not showing it.
+
+`Case.bankName` keeps the stored slug and is resolved by the reader. It has to:
+promotion runs *before* the flow is known on create — the matched policy picks
+the tenant, which picks the flow — so the writer has nothing to resolve against.
+The schema already calls that column "not an identifier", and this is what makes
+that true on screen.
+
+Guarded by a test that reads `details.tsx` and fails if the case detail formats
+a choice itself again; mutation-tested by restoring the title-caser. 835
+case-service tests, 16 claimant-web, 117 gateway; 13 packages typecheck.
+
 ---
 
 ## 9. Feasibility check

@@ -50,7 +50,7 @@ import {
   TRAVEL_CLAIM_TYPE_LABELS,
   TravelClaimType,
   checkPayeeName,
-  formatDateAnswer,
+  displayAnswer,
   type FlowStep,
 } from '@tci/shared-types';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -135,6 +135,18 @@ export function CaseDetailPage() {
         value: String(value),
       }));
   }, [flow, caseData]);
+
+  /**
+   * The bank as the claimant chose it, for the payout panel.
+   *
+   * Falls back to the stored value, which covers a claim captured before the
+   * bank became a list and a claimant who typed a bank that is not on it.
+   */
+  const payoutBankName = useMemo(() => {
+    const step = flow?.steps.find(s => s.id === 'bank-name');
+    if (!step || !caseData?.bankName) return caseData?.bankName;
+    return displayAnswer(step, caseData.bankName);
+  }, [flow, caseData?.bankName]);
 
   /**
    * The name the claimant gave during intake.
@@ -513,7 +525,15 @@ export function CaseDetailPage() {
               <CardContent className="text-sm space-y-1">
                 {caseData.bankAccountLast4 ? (
                   <>
-                    <p className="font-medium">{caseData.bankName}</p>
+                    {/*
+                      Resolved through the flow, not printed raw. `Case.bankName`
+                      is promoted from the answer verbatim — and it must be,
+                      because promotion runs before the flow is known on create
+                      (the matched policy picks the tenant, which picks the
+                      flow). So the slug reaches this column, and resolving it
+                      is the reader's job.
+                    */}
+                    <p className="font-medium">{payoutBankName}</p>
                     <p className="font-mono">•••• {caseData.bankAccountLast4}</p>
                     <p className="text-muted-foreground">{caseData.bankAccountHolderName}</p>
                   </>
@@ -731,18 +751,18 @@ function AnswerRow({
     step.answerType !== 'confirm' &&
     !step.isReview;
 
-  const display =
-    step.answerType === 'document'
-      ? 'Uploaded'
-      : step.answerType === 'choice'
-        ? convertToTitleCase(value)
-        : step.answerType === 'date' || step.answerType === 'datetime'
-          ? /* The same formatter the bot's review summary uses, so the operator
-               reads the words the claimant confirmed — not the raw ISO string
-               this screen used to print. Null on an unparseable value falls
-               back to showing it verbatim. */
-            formatDateAnswer(String(value), step.answerType) ?? value
-          : value;
+  /*
+   * The same function the bot's review summary uses, so the operator reads
+   * exactly what the claimant confirmed.
+   *
+   * This screen used to format answers itself, and drifted: a choice went
+   * through a title-caser, so an adjuster saw "Sg" and "Od" where the claimant
+   * had read "Singapore" and "Batik Air Malaysia". Those are ISO and IATA
+   * codes — chosen as stored values precisely because they are unambiguous to
+   * machines — and printing them raw put the abbreviation problem back in
+   * front of the one person the lists were meant to protect from it.
+   */
+  const display = displayAnswer(step, value);
 
   const beginEdit = () => {
     // HTML date controls speak exactly the ISO prefix the stored value carries.

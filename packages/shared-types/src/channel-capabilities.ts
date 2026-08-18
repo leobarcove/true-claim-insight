@@ -573,6 +573,62 @@ export const formatDateAnswer = (
 };
 
 /**
+ * One stored answer, as a person should read it.
+ *
+ * Extracted because two screens disagreed. The bot's review summary resolved a
+ * choice through the step's own `choices`, so a claimant read "Singapore" and
+ * "Batik Air Malaysia"; the adjuster's case detail printed the stored value
+ * through a title-caser, so staff read "Sg" and "Od". The second is not merely
+ * uglier — "Od" is an IATA code no adjuster is expected to know, and the whole
+ * point of moving these questions onto lists was to stop ambiguous
+ * abbreviations reaching the people who work the claim.
+ *
+ * So the rule lives in one function that both call. A renderer that formats
+ * answers itself will drift from what the claimant confirmed, and the drift is
+ * invisible until someone compares two screens side by side — which is exactly
+ * how this was found.
+ */
+export const displayAnswer = (
+  step: {
+    label?: string;
+    answerType: AnswerType;
+    choices?: Array<{ value: string; label: string }>;
+  },
+  value: string | number | boolean
+): string => {
+  // A skipped optional step read back as the literal word: "Policy number:
+  // skip". The claimant is being asked to confirm a claim, and that line says
+  // nothing true about it.
+  if (typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
+    return 'not provided';
+  }
+
+  if (step.answerType === 'document') {
+    // The stored answer is a CaseDocument id, which means nothing to anyone
+    // reading it back. A deferred one has to read differently: on the review
+    // it is the summary a claimant confirms a submission against, and on the
+    // case detail it is the difference between evidence held and evidence
+    // still owed.
+    return typeof value === 'string' && value.trim().toLowerCase() === DEFER_VALUE
+      ? 'to be sent later'
+      : 'provided';
+  }
+
+  if (step.answerType === 'choice') {
+    // Falls back to the value itself, never to a title-caser. An answer that
+    // matches no choice is a typed one — `allowOther` — and "Bank of Bhutan"
+    // is what the claimant wrote, not something to re-capitalise.
+    return step.choices?.find(choice => choice.value === value)?.label ?? String(value);
+  }
+
+  if (step.answerType === 'date' || step.answerType === 'datetime') {
+    return formatDateAnswer(String(value), step.answerType) ?? String(value);
+  }
+
+  return String(value);
+};
+
+/**
  * Render the answers so far as a plain-text review summary.
  *
  * For channels with no summary panel: a confirm step that says "review your
@@ -602,31 +658,7 @@ export const summariseAnswers = (
     const value = answers[step.id];
     if (value === undefined || value === null || value === '') continue;
 
-    let display: string;
-    // A skipped optional step read back as the literal word: "Policy number:
-    // skip". The claimant is being asked to confirm a claim, and that line
-    // says nothing true about it.
-    if (typeof value === 'string' && value.trim().toLowerCase() === SKIP_VALUE) {
-      display = 'not provided';
-    } else if (step.answerType === 'document') {
-      // The stored answer is a CaseDocument id, which means nothing to a
-      // claimant reading it back. A deferred one has to read differently: this
-      // is the summary they confirm a submission against, and "provided" over
-      // a document they told us was still coming is the one line on the screen
-      // they would know to be untrue.
-      display =
-        typeof value === 'string' && value.trim().toLowerCase() === DEFER_VALUE
-          ? 'to be sent later'
-          : 'provided';
-    } else if (step.answerType === 'choice') {
-      display = step.choices?.find(choice => choice.value === value)?.label ?? String(value);
-    } else if (step.answerType === 'date' || step.answerType === 'datetime') {
-      display = formatDateAnswer(String(value), step.answerType) ?? String(value);
-    } else {
-      display = String(value);
-    }
-
-    lines.push(`• ${step.label}: ${display}`);
+    lines.push(`• ${step.label}: ${displayAnswer(step, value)}`);
   }
 
   return lines.join('\n');
