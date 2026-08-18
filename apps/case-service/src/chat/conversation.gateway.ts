@@ -31,6 +31,7 @@ import {
   SKIP_VALUE,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
+  RESUME_CASE_CALLBACK_PREFIX,
   REVIEW_STEP_ID,
   validateAnswer,
   whatYouWillNeed,
@@ -420,11 +421,44 @@ export class ConversationGateway implements OnModuleInit {
     if (binding.activeCaseId && binding.activeCaseId !== caseRow.id) return;
 
     const adapter = this.adapterFor(binding.channel);
-    await this.resumeReturnedCase(binding.id, caseRow, {
+    const speak = binding.mode === ConversationMode.BOT;
+    const reached = await this.resumeReturnedCase(binding.id, caseRow, {
       adapter,
       platformUserId: binding.platformUserId,
-      speak: binding.mode === ConversationMode.BOT,
+      speak,
     });
+
+    // The push said nothing because the platform would not carry it — on
+    // WhatsApp, a claimant silent for over 24 hours is outside the service
+    // window, and that is precisely the claimant an info request is for. An
+    // approved template is the only door left; if none is configured, the
+    // lazy resume on their next message still catches them.
+    if (speak && !reached && adapter?.sendTemplate) {
+      const templateName = this.config.get<string>('WHATSAPP_INFO_REQUEST_TEMPLATE') ?? '';
+      const sent = await adapter.sendTemplate(binding.platformUserId, {
+        name: templateName,
+        languageCode: this.config.get<string>('WHATSAPP_TEMPLATE_LOCALE') ?? 'en',
+        bodyParams: [caseRow.caseNumber, (caseRow.reviewNote ?? '').trim().slice(0, 300)],
+      });
+      if (sent) {
+        // Recorded like any other outbound word: the transcript is the
+        // evidence that the firm asked, and a template the claimant read is
+        // no less said for having been pre-approved.
+        await this.prisma.conversationMessage.create({
+          data: {
+            bindingId: binding.id,
+            channel: binding.channel,
+            direction: MessageDirection.OUTBOUND,
+            text:
+              `Our team needs one more thing on ${caseRow.caseNumber}` +
+              (caseRow.reviewNote ? `: ${caseRow.reviewNote}` : '.') +
+              ' (sent as an approved template — the conversation window had closed)',
+            status: ConversationMessageStatus.PROCESSED,
+            processedAt: new Date(),
+          },
+        });
+      }
+    }
   }
 
   /**
@@ -438,7 +472,7 @@ export class ConversationGateway implements OnModuleInit {
     bindingId: string,
     caseRow: { id: string; caseNumber: string; reviewNote: string | null; answers: unknown },
     options: { adapter?: ChannelAdapter; platformUserId: string; speak: boolean }
-  ): Promise<void> {
+  ): Promise<boolean> {
     const flow = await this.flows.forCase(caseRow as never);
     const answers = (caseRow.answers ?? {}) as CaseAnswers;
     const step =
@@ -456,7 +490,7 @@ export class ConversationGateway implements OnModuleInit {
       data: { activeCaseId: caseRow.id },
     });
 
-    if (!options.speak || !options.adapter) return;
+    if (!options.speak || !options.adapter) return false;
 
     const ask = caseRow.reviewNote?.trim();
     // The note message carries the ask alone; what to *do* about it belongs
@@ -464,13 +498,42 @@ export class ConversationGateway implements OnModuleInit {
     // where the controls are. Saying "type edit, then confirm" here and then
     // asking a review step that says it again read as the bot repeating
     // itself — which is exactly how it was reported.
-    await this.say(options.adapter, bindingId, options.platformUserId, {
-      text:
-        `Our team needs one more thing on ${caseRow.caseNumber}` +
-        (ask ? `:\n\n${ask}` : '.') +
-        (step && !step.isReview
-          ? '\n\nOnce it is in, review and confirm to resubmit.'
-          : ''),
+    // `say` swallows delivery failures by design (a message that will not
+    // send must not fail the turn), so the send is probed directly here: the
+    // caller needs to know whether the claimant was actually reached before
+    // deciding to spend an approved template on them.
+    try {
+      await options.adapter.send(options.platformUserId, {
+        text:
+          `Our team needs one more thing on ${caseRow.caseNumber}` +
+          (ask ? `:\n\n${ask}` : '.') +
+          (step && !step.isReview
+            ? '\n\nOnce it is in, review and confirm to resubmit.'
+            : ''),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Binding ${bindingId}: the info-request push did not reach ${caseRow.caseNumber} — ` +
+          `${error instanceof Error ? error.message : String(error)}`
+      );
+      return false;
+    }
+
+    // Delivered, so it belongs in the transcript.
+    await this.prisma.conversationMessage.create({
+      data: {
+        bindingId,
+        channel: options.adapter.channel,
+        direction: MessageDirection.OUTBOUND,
+        text:
+          `Our team needs one more thing on ${caseRow.caseNumber}` +
+          (ask ? `:\n\n${ask}` : '.') +
+          (step && !step.isReview
+            ? '\n\nOnce it is in, review and confirm to resubmit.'
+            : ''),
+        status: ConversationMessageStatus.PROCESSED,
+        processedAt: new Date(),
+      },
     });
     if (step) {
       if (step.isReview) {
@@ -504,6 +567,7 @@ export class ConversationGateway implements OnModuleInit {
         );
       }
     }
+    return true;
   }
 
   private adapterFor(channel: CaseChannel): ChannelAdapter | undefined {
@@ -1125,7 +1189,7 @@ export class ConversationGateway implements OnModuleInit {
       // while the one waiting on them stayed unreachable — the dead end the
       // 18 Aug audit found behind §1's "claimant amends" edge.
       if (binding.claimantId) {
-        const returned = await this.prisma.case.findFirst({
+        const returned = await this.prisma.case.findMany({
           where: {
             claimantId: binding.claimantId,
             status: CaseStatus.INFO_REQUESTED,
@@ -1133,7 +1197,15 @@ export class ConversationGateway implements OnModuleInit {
           },
           orderBy: { updatedAt: 'desc' },
         });
-        if (returned) {
+
+        // A tap on the chooser below names its case directly.
+        const chosen = payload.callbackValue?.startsWith(RESUME_CASE_CALLBACK_PREFIX)
+          ? returned.find(
+              row => row.id === payload.callbackValue!.slice(RESUME_CASE_CALLBACK_PREFIX.length)
+            )
+          : undefined;
+
+        if (chosen || returned.length === 1) {
           await this.prisma.conversationMessage.update({
             where: { id: messageId },
             data: {
@@ -1141,10 +1213,41 @@ export class ConversationGateway implements OnModuleInit {
               processedAt: new Date(),
             },
           });
-          await this.resumeReturnedCase(binding.id, returned, {
+          await this.resumeReturnedCase(binding.id, chosen ?? returned[0], {
             adapter,
             platformUserId: payload.platformUserId,
             speak: true,
+          });
+          return;
+        }
+
+        // More than one waiting: ask which, rather than guessing. Picking the
+        // most recent would have the claimant answer a question about a claim
+        // they were not thinking of, and the answer would be filed against
+        // the wrong one — worse than an extra tap.
+        if (returned.length > 1) {
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.PROCESSED,
+              processedAt: new Date(),
+            },
+          });
+          await this.say(adapter, binding.id, payload.platformUserId, {
+            text: 'You have more than one claim request waiting on you. Which shall we continue?',
+            step: {
+              id: '__resume-menu',
+              prompt: 'Which claim request would you like to continue?',
+              label: 'Claim request',
+              answerType: 'choice',
+              choices: returned.map(row => ({
+                value: `${RESUME_CASE_CALLBACK_PREFIX}${row.id}`,
+                label: `${row.caseNumber} — ${(row.reviewNote ?? 'more information needed').slice(0, 40)}`,
+                title: row.caseNumber,
+                description: (row.reviewNote ?? 'More information needed').slice(0, 72),
+              })),
+              next: { type: 'end' },
+            } as FlowStep,
           });
           return;
         }

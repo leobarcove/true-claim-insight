@@ -36,6 +36,13 @@ export const CONSENT_AGREED_VALUE = '__consent:agree';
 export const ANOTHER_CLAIM_YES = '__another:yes';
 export const ANOTHER_CLAIM_NO = '__another:no';
 
+/**
+ * "Which claim request would you like to continue?" — offered when more than
+ * one of a claimant's cases has been returned for information. Carries the
+ * case id; the case number the claimant read is on the button label.
+ */
+export const RESUME_CASE_CALLBACK_PREFIX = '__resume:';
+
 /** What a shared contact looks like in a transcript. */
 export const SHARED_PHONE_DESCRIPTION = 'Shared their phone number';
 
@@ -60,6 +67,10 @@ export function describeCallbackValue(
   if (value.startsWith(PAGE_CALLBACK_PREFIX)) return 'Asked for more options';
   if (value.startsWith(EDIT_CALLBACK_PREFIX)) {
     return `Chose to change "${value.slice(EDIT_CALLBACK_PREFIX.length)}"`;
+  }
+
+  if (value.startsWith(RESUME_CASE_CALLBACK_PREFIX)) {
+    return 'Chose which claim request to continue';
   }
 
   if (value === ANOTHER_CLAIM_YES) return 'Chose to start another claim';

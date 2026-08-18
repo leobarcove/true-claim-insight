@@ -157,6 +157,23 @@ export interface ChannelAdapter {
   send(platformUserId: string, prompt: OutboundPrompt): Promise<void>;
 
   /**
+   * Reach a claimant the ordinary `send` cannot — WhatsApp closes its
+   * free-form window 24 hours after the claimant's last message, and a
+   * business-initiated message after that needs a template Meta has
+   * approved.
+   *
+   * Optional: only WhatsApp has the concept. Returns false when it did not
+   * or could not send (unconfigured, no template named, platform refused),
+   * so the caller can record honestly rather than assume delivery. The
+   * gateway falls back to nothing — the lazy resume on the claimant's next
+   * message is what catches them then.
+   */
+  sendTemplate?(
+    platformUserId: string,
+    template: { name: string; languageCode: string; bodyParams: string[] }
+  ): Promise<boolean>;
+
+  /**
    * Tell the platform the tap was received, so the button stops spinning.
    *
    * Optional because not every channel has the concept. Where it does and this

@@ -83,9 +83,10 @@ describe('ConversationGateway', () => {
       },
       case: {
         findUnique: jest.fn(async () => over.caseRow ?? null),
-        // The lazy returned-case lookup. Null by default: no case is waiting
+        // The lazy returned-case lookup. Empty by default: no case is waiting
         // on the claimant, so every older test keeps its original path.
         findFirst: jest.fn(async () => null),
+        findMany: jest.fn(async () => []),
         update: jest.fn(async () => ({})),
       },
       transferRecord: { create: jest.fn(async () => ({ id: 'transfer-1' })) },
@@ -1768,7 +1769,7 @@ describe('ConversationGateway', () => {
 
     it('resumes the returned case instead of offering a new one', async () => {
       const { gateway, prisma, sent, consent } = boundIdle();
-      (prisma.case.findFirst as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.case.findMany as jest.Mock).mockResolvedValue([returnedCase]);
 
       await gateway.handleTurn(turn({ text: 'Hi' }));
 
@@ -1807,6 +1808,92 @@ describe('ConversationGateway', () => {
       expect(all).toMatch(/which airline/i);
     });
 
+    it('asks which, when more than one case is waiting', async () => {
+      const { gateway, prisma, sent, adapter } = boundIdle();
+      (prisma.case.findMany as jest.Mock).mockResolvedValue([
+        { ...returnedCase, id: 'case-7', caseNumber: 'CSE-2026-000042' },
+        {
+          ...returnedCase,
+          id: 'case-8',
+          caseNumber: 'CSE-2026-000043',
+          reviewNote: 'Please upload the police report.',
+        },
+      ]);
+
+      await gateway.handleTurn(turn({ text: 'Hi' }));
+
+      // No case is resumed on a guess — the claimant is asked.
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: 'case-7' }) })
+      );
+      const all = sent.map(message => message.text).join(' ');
+      expect(all).toMatch(/more than one claim request/i);
+      // The case numbers ride the choice buttons, which is where a claimant
+      // taps — asserted on the prompt the adapter received, not on its text.
+      const prompt = (adapter.send as jest.Mock).mock.calls.at(-1)?.[1];
+      const labels = (prompt?.step?.choices ?? []).map((c: { label: string }) => c.label).join(' ');
+      expect(labels).toMatch(/CSE-2026-000042/);
+      expect(labels).toMatch(/CSE-2026-000043/);
+      // Each button names its own case, so a tap cannot file against another.
+      const values = (prompt?.step?.choices ?? []).map((c: { value: string }) => c.value);
+      expect(values).toEqual(['__resume:case-7', '__resume:case-8']);
+    });
+
+    it('resumes the case the claimant taps', async () => {
+      const { gateway, prisma, sent } = boundIdle();
+      (prisma.case.findMany as jest.Mock).mockResolvedValue([
+        { ...returnedCase, id: 'case-7', caseNumber: 'CSE-2026-000042' },
+        { ...returnedCase, id: 'case-8', caseNumber: 'CSE-2026-000043' },
+      ]);
+
+      await gateway.handleTurn(turn({ callbackValue: '__resume:case-8' }));
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ activeCaseId: 'case-8' }) })
+      );
+      expect(sent.map(message => message.text).join(' ')).toMatch(/CSE-2026-000043/);
+    });
+
+    it('spends a template only when the ordinary push could not be delivered', async () => {
+      // Outside WhatsApp's 24-hour window Meta refuses free-form text. The
+      // send throwing is the only signal of that, and the template is the
+      // door left — but it must never be spent when the plain message went.
+      const { gateway, prisma, adapter, binding } = boundIdle();
+      const sendTemplate = jest.fn(async () => true);
+      (adapter as unknown as { sendTemplate: unknown }).sendTemplate = sendTemplate;
+      (adapter.send as jest.Mock).mockRejectedValue(new Error('131047 re-engagement message'));
+      (prisma.case.findUnique as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.conversationBinding.findFirst as jest.Mock).mockResolvedValue(binding);
+
+      await (gateway as never as { handleInfoRequested(id: string): Promise<void> })
+        .handleInfoRequested('case-7');
+
+      expect(sendTemplate).toHaveBeenCalledWith(
+        '55501',
+        expect.objectContaining({ bodyParams: expect.arrayContaining(['CSE-2026-000042']) })
+      );
+      // The template that did arrive is in the transcript: it is still the
+      // firm's word to the claimant.
+      expect(prisma.conversationMessage.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ text: expect.stringMatching(/approved template/i) }),
+        })
+      );
+    });
+
+    it('does not spend a template when the ordinary push landed', async () => {
+      const { gateway, prisma, adapter, binding } = boundIdle();
+      const sendTemplate = jest.fn(async () => true);
+      (adapter as unknown as { sendTemplate: unknown }).sendTemplate = sendTemplate;
+      (prisma.case.findUnique as jest.Mock).mockResolvedValue(returnedCase);
+      (prisma.conversationBinding.findFirst as jest.Mock).mockResolvedValue(binding);
+
+      await (gateway as never as { handleInfoRequested(id: string): Promise<void> })
+        .handleInfoRequested('case-7');
+
+      expect(sendTemplate).not.toHaveBeenCalled();
+    });
+
     it('re-asks a complete case as a correction, not the submission ceremony', async () => {
       // Everything is answered — the operator wants an answer *changed* — so
       // the cursor falls back to the review step. The re-ask must read as a
@@ -1836,10 +1923,9 @@ describe('ConversationGateway', () => {
           },
         ],
       });
-      (prisma.case.findFirst as jest.Mock).mockResolvedValue({
-        ...returnedCase,
-        answers: { airline: 'MAS' },
-      });
+      (prisma.case.findMany as jest.Mock).mockResolvedValue([
+        { ...returnedCase, answers: { airline: 'MAS' } },
+      ]);
 
       await gateway.handleTurn(turn({ text: 'Hi' }));
 

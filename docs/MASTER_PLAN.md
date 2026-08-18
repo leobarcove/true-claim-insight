@@ -1769,6 +1769,35 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
 
+### The loop's last three, and the claimant walk that proves it — 18 August 2026
+
+The three items left standing after the loop was built are closed:
+
+- **More than one returned case is asked about, not guessed at.** The lazy
+  resume used to take the most recent; now two or more waiting cases produce a
+  chooser naming each case number and its ask. Picking for the claimant would
+  have them answer a question about a claim they were not thinking of, and
+  file it against the wrong one — worse than an extra tap.
+- **WhatsApp's closed service window has a door.** `sendTemplate` on the
+  adapter (optional on the interface — only WhatsApp has the concept) sends an
+  approved utility template, and the gateway spends one **only when the
+  ordinary push was refused**, never when the free-form message went through.
+  A template that lands is written into the transcript like any other outbound
+  word. Inert until `WHATSAPP_INFO_REQUEST_TEMPLATE` names an approved
+  template; `docs/WHATSAPP_TEMPLATES.md` carries the exact body to submit,
+  why it is UTILITY not MARKETING, and the Malaysia-registration cost trap the
+  login-code template already documents.
+- **The claimant half walked live, as a claimant.** OTP login as the seeded
+  claimant, then through the real gateway: two returned cases → the chooser
+  arrived; tapped one → that case resumed with the cursor on its first missing
+  document; uploaded three documents and answered the payout steps → reached
+  the review; confirmed → **SUBMITTED**, ask and stamps cleared, audited
+  `resubmission: true`. The PWA session correctly used its own web-chat
+  binding rather than the WhatsApp one, which is the multi-channel behaviour
+  the binding model promises.
+
+757 tests pass. What remains on this edge is a Meta console task, not code.
+
 ### The info-requested loop, completed: reminder, exit, and the ask that clears — 18 August 2026
 
 Three gaps the loop still had, all closed, with the UX choices checked against

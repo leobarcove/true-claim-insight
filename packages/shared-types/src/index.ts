@@ -743,6 +743,7 @@ export {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
+  RESUME_CASE_CALLBACK_PREFIX,
   SHARED_PHONE_DESCRIPTION,
 } from './conversation-display';
 

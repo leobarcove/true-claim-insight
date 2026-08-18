@@ -232,6 +232,61 @@ export class WhatsAppAdapter implements ChannelAdapter {
   }
 
   /**
+   * Send an approved template — the only way to open a conversation Meta has
+   * closed.
+   *
+   * The 24-hour service window runs from the claimant's last message. Inside
+   * it, `send` above works and costs nothing; outside it, Meta refuses
+   * free-form text (error 131047) and only a template it has approved gets
+   * through. That is why the info-request push could not reach a claimant who
+   * had gone quiet overnight — which is exactly the claimant a reminder is
+   * for.
+   *
+   * Returns false rather than throwing on refusal: an undeliverable courtesy
+   * must not fail the operator's action, and the caller records the outcome.
+   * Inert until `WHATSAPP_INFO_REQUEST_TEMPLATE` names an approved template,
+   * so nothing changes on a deployment that has not submitted one.
+   */
+  async sendTemplate(
+    platformUserId: string,
+    template: { name: string; languageCode: string; bodyParams: string[] }
+  ): Promise<boolean> {
+    if (!this.isConfigured() || !template.name) return false;
+
+    try {
+      await this.post('messages', {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: platformUserId,
+        type: 'template',
+        template: {
+          name: template.name,
+          language: { code: template.languageCode },
+          components: template.bodyParams.length
+            ? [
+                {
+                  type: 'body',
+                  parameters: template.bodyParams.map(text => ({ type: 'text', text })),
+                },
+              ]
+            : [],
+        },
+      });
+      return true;
+    } catch (error) {
+      // A rejected template is a configuration fact — the name is wrong, or
+      // Meta has not approved it — so it is logged loudly and reported as
+      // undelivered rather than retried into the void.
+      this.logger.error(
+        `WhatsApp template "${template.name}" was not delivered: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return false;
+    }
+  }
+
+  /**
    * Fetch an attachment: resolve the media id to a URL, then download it.
    *
    * Two calls, as with Telegram, and the URL is short-lived — another reason

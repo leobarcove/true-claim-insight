@@ -1037,7 +1037,15 @@ sequenceDiagram
           <code>renderChoices</code> reserves a row for "More options".
           And a <strong>24-hour service window</strong> applies: replies inside it are free-form
           and free of charge, but a conversation left overnight cannot be reopened by us without
-          an approved template.
+          an approved template. That is not a dead end — it is why one exists.
+          <code>tci_claim_information_request</code> (UTILITY) carries the returned-case ask to a
+          claimant who has gone quiet, which is precisely the claimant such an ask is for. It is
+          spent <em>only</em> when the ordinary free-form push is refused, never when that lands,
+          and a template that arrives is written into the transcript like any other outbound
+          word — it is still the firm's word to the claimant. The claimant's reply reopens the
+          window, and the ordinary conversation resumes at no cost. See
+          <code>docs/WHATSAPP_TEMPLATES.md</code>; with no template configured the channel simply
+          waits for their next message.
         </p>
         <p class="note">
           <strong>Push, not poll.</strong> Meta delivers to a webhook, so there is no offset to
@@ -1311,7 +1319,7 @@ legal holds`"]
               <tr><td>Local-LLM document validation</td><td><span class="chip plan">Stub</span></td><td>In-country LLM hosting</td></tr>
               <tr><td>AMLA / CTF screening at payee registration</td><td><span class="chip fail">Not built</span></td><td><span class="chip gate">Gate G8</span></td></tr>
               <tr><td>Site-visit <em>findings</em> record</td><td><span class="chip pass">Built</span></td><td>Both halves now exist: <code>PATCH /claims/:id/appointment</code> books the visit and tells the claimant, and <code>POST /claims/:id/site-visits</code> records what was found — attendance time, attributable attendee, findings and the limitations that bounded the inspection. Append-only and audited: a revisit is a second row, and the report cites the record rather than an inspection the file cannot evidence</td></tr>
-              <tr><td>Claimant-side amend on info request</td><td><span class="chip pass">Built</span></td><td>Returning a case now tells the claimant in their own conversation and reattaches it: the bot says the <code>reviewNote</code>, sets the cursor at the first missing item (or the review step, where <code>edit</code> reaches any answer), and the existing confirm resubmits. Eager on the operator's action when the binding is idle; lazy on the claimant's next message otherwise — with no hijack of an intake mid-flight, and silence when an agent holds the conversation. The silence side is handled too: one reminder per return after the tenant's own quiet period (absent by default; demo firm at 3 working days), then a person decides — the operator's abandon action closes the case with a recorded reason, a confirmation dialog that states the consequence, a neutral closure notice to the claimant with the way back in, and the conversation released. Resubmission takes the ask off the case. One caveat stands: WhatsApp outside its 24-hour service window cannot receive the push without an approved template, so there the lazy path is the door</td></tr>
+              <tr><td>Claimant-side amend on info request</td><td><span class="chip pass">Built</span></td><td>Returning a case now tells the claimant in their own conversation and reattaches it: the bot says the <code>reviewNote</code>, sets the cursor at the first missing item (or the review step, where <code>edit</code> reaches any answer), and the existing confirm resubmits. Eager on the operator's action when the binding is idle; lazy on the claimant's next message otherwise — with no hijack of an intake mid-flight, and silence when an agent holds the conversation. The silence side is handled too: one reminder per return after the tenant's own quiet period (absent by default; demo firm at 3 working days), then a person decides — the operator's abandon action closes the case with a recorded reason, a confirmation dialog that states the consequence, a neutral closure notice to the claimant with the way back in, and the conversation released. Resubmission takes the ask off the case. More than one returned case is asked about rather than guessed at — a chooser naming each case number, because filing an answer against the wrong claim is worse than an extra tap. WhatsApp outside its 24-hour service window is handled by an approved <strong>utility template</strong>, spent only when the ordinary push was refused and written into the transcript when it lands (<code>WHATSAPP_INFO_REQUEST_TEMPLATE</code>, inert until Meta approves one — see <code>docs/WHATSAPP_TEMPLATES.md</code>); with none configured the lazy resume is still the door</td></tr>
             </tbody>
           </table>
         </div>
