@@ -1,127 +1,20 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '@/lib/api-client';
-import type { CaseFlow, CaseStatus, FlowStep, TravelClaimType } from '@tci/shared-types';
-
-export const caseKeys = {
-  all: ['cases'] as const,
-  mine: () => [...caseKeys.all, 'mine'] as const,
-  detail: (id: string) => [...caseKeys.all, 'detail', id] as const,
-  flow: (id: string) => [...caseKeys.all, 'flow', id] as const,
-};
-
-export interface ClaimantCase {
-  id: string;
-  caseNumber: string;
-  status: CaseStatus | string;
-  travelClaimType?: TravelClaimType | string | null;
-  answers: Record<string, string | number | boolean>;
-  currentStepId?: string | null;
-  currentStep?: FlowStep | null;
-  reviewNote?: string | null;
-  needsPolicyReview?: boolean;
-  submittedAt?: string | null;
-  createdAt: string;
-  documents?: Array<{ id: string; documentType: string; fileName: string; stepId?: string | null }>;
-}
-
-export interface PatchAnswerResult {
-  accepted: boolean;
-  error?: string;
-  case?: ClaimantCase;
-  nextStep?: FlowStep | null;
-  warnings?: string[];
-}
-
-export function useMyCases() {
-  return useQuery({
-    queryKey: caseKeys.mine(),
-    queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimantCase[]>>('/cases/mine');
-      return data.data;
-    },
-  });
-}
-
-export function useClaimantCase(caseId: string | undefined) {
-  return useQuery({
-    queryKey: caseKeys.detail(caseId || ''),
-    queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<ClaimantCase>>(`/cases/${caseId}`);
-      return data.data;
-    },
-    enabled: !!caseId,
-  });
-}
 
 /**
- * The flow this case is walking, as the server resolved it.
+ * What the claimant app still does to a Case directly: upload a document.
  *
- * Fetched rather than read from the bundled CASE_FLOWS because the server walks
- * the version pinned on the case. Once a flow is edited and republished, the
- * bundle and the pin diverge — and the claimant must see the conversation they
- * started, not the one that happens to be current.
+ * Everything else it used to do — create the case, patch each answer, fetch the
+ * pinned flow, submit — moved to `ConversationGateway` on 11 Aug 2026, and the
+ * hooks that did it here were left behind unreferenced. They are deleted rather
+ * than kept "in case": a second write path into intake is exactly the drift the
+ * one-engine change existed to remove, and an unused hook is an invitation to
+ * reintroduce it.
  *
- * A flow is immutable for the life of a case, so this never needs refetching.
+ * The upload stays a plain call, not a turn. Bytes never travel through the
+ * conversation: the file is stored and validated by the endpoint that owns
+ * documents, and only the resulting id is named on the next turn, which the
+ * server then checks belongs to this case.
  */
-export function useCaseFlow(caseId: string | undefined) {
-  return useQuery({
-    queryKey: caseKeys.flow(caseId || ''),
-    queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<CaseFlow>>(`/cases/${caseId}/flow`);
-      return data.data;
-    },
-    enabled: !!caseId,
-    staleTime: Infinity,
-  });
-}
-
-export function useCreateClaimantCase() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (travelClaimType: TravelClaimType | string) => {
-      const { data } = await apiClient.post<ApiResponse<ClaimantCase>>('/cases', {
-        travelClaimType,
-      });
-      return data.data;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: caseKeys.mine() }),
-  });
-}
-
-export function usePatchCaseAnswer() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      caseId,
-      stepId,
-      value,
-    }: {
-      caseId: string;
-      stepId: string;
-      value: string | number | boolean;
-    }) => {
-      const { data } = await apiClient.patch<ApiResponse<PatchAnswerResult>>(
-        `/cases/${caseId}/answers`,
-        { stepId, value }
-      );
-      return data.data;
-    },
-    onSuccess: (_result, variables) =>
-      queryClient.invalidateQueries({ queryKey: caseKeys.detail(variables.caseId) }),
-  });
-}
-
-export function useSubmitClaimantCase() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (caseId: string) => {
-      const { data } = await apiClient.post<ApiResponse<ClaimantCase>>(`/cases/${caseId}/submit`);
-      return data.data;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: caseKeys.all }),
-  });
-}
-
 export async function uploadCaseDocument(
   caseId: string,
   file: File,

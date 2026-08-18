@@ -189,7 +189,14 @@ response, so the inspection policy is an operator's decision rather than the
 seed's.)*
 
 The demo firm is configured with FIRE/FLOOD/BURGLARY/LIGHTNING/HOH at
-**RM20,000** and travel fast-tracked to **RM5,000**. Both are business decisions
+**RM20,000** and travel fast-tracked to **RM5,000**. *(18 Aug 2026: it was not,
+until this date. Every seeded tenant was created with `settings: {}`, and absent
+is refusal everywhere these are read — so no seeded environment could fast-track
+a claim, choose a site visit at an opening decision, or send the one reminder on
+a returned case, and the fast-track SLA row seeded beside them was unreachable
+for the same reason. Three documented behaviours that only the reader of this
+paragraph believed existed. Now written by the seed as an explicit update, so an
+existing database gains them too.)* Both are business decisions
 recorded in the seed, not properties of the platform — RM20,000 sends an adjuster
 to essentially every fire (the band opens at RM25,000) and to the larger floods
 and burglaries, while small contents losses stay on video. Set them per insurer
@@ -1799,6 +1806,45 @@ signatures, local-LLM validation and the policy feed await vendors or gates
 (G8/G9); production deployment is a funding decision; BM overlays are legal
 copy that must not be machine-fabricated (PDPA s.7 treats notice language as
 substantive); the data-ownership exception shrink is its own scoped work.
+
+### The audit that found the demo firm had no policy — 18 August 2026
+
+A pass over `docs/sites/user-flow/index.html` against the code, looking for
+drift. Five things:
+
+**The demo firm's settings were empty.** All three seeded tenants were created
+`settings: {}`. Every read of them treats absent as refusal — deliberately, and
+correctly — so the fast track never fired, no opening decision ever chose a site
+visit, and the one reminder on a returned case never sent. §2.4 of this plan
+stated the opposite in prose ("the demo firm is configured with…"), and the §12
+gaps table stated it too ("demo firm at 3 working days"). The seeded fast-track
+SLA row was unreachable by the same mechanism: it resolves only for a claim that
+took the fast track. This is the failure mode the "no phantom services" rule was
+written for, one layer down — the feature existed, the configuration that makes
+it reachable did not, and three documents asserted otherwise. Seeded now, as an
+explicit update so existing databases gain it.
+
+**The support desk was drawn vetting cases.** §11 granted `SUPPORT_DESK`
+"vet · request info". The code has never allowed it — `/cases` admits
+`ADJUSTER`, `FIRM_ADMIN`, `SUPER_ADMIN` — and should not: deciding whether a
+claim proceeds is adjusting work. Corrected to what the role actually reaches:
+the conversation queue, FNOL triage, and read access to assignments and the SLA
+board. A diagram is read as a specification by whoever writes the next guard.
+
+**The PWA no longer creates its own Case.** §3 still drew `POST /cases` and a
+`DRAFT` coming back, from before intake moved to the gateway. Redrawn as
+`POST /conversation/start`. The five hooks left behind in `claimant-web` —
+create, patch answer, submit, fetch flow, list mine — were unreferenced and are
+deleted rather than kept: a second write path into intake is the drift the
+one-engine change removed.
+
+**The escalation ladder has four triggers, not three.** `ADJUSTER_JUDGEMENT` is
+callable via `POST /assessment/escalate` and was drawn nowhere. Added.
+
+**A stale row title.** §12 still read "Six data-ownership exceptions" over a
+body saying five.
+
+773 tests pass.
 
 ### Two partials cleared: the session list, and the last identity write — 18 August 2026
 

@@ -618,6 +618,49 @@ async function main() {
 
   console.log('⏱️  SLA policies seeded (CSP defaults, Kuala Lumpur calendar).');
 
+  // The demo firm's operating decisions (MASTER_PLAN §2.4).
+  //
+  // These were described in the plan as "configured in the seed" and were not:
+  // every tenant was created with `settings: {}`, which is *absent*, and absent
+  // is refusal by design everywhere it is read. So the fast track never fired,
+  // no opening decision ever chose a site visit, and the one reminder on a
+  // returned case never sent — three documented behaviours that could not be
+  // exercised in any seeded environment, including the demo. The fast-track SLA
+  // row seeded just below was unreachable for the same reason: it resolves only
+  // for a claim that took the fast track.
+  //
+  // Written as an explicit update rather than in the tenant upsert's `create`,
+  // because an existing database would otherwise keep its empty settings.
+  // Business decisions, not platform defaults — an insurer panel gets its own.
+  await prisma.tenant.update({
+    where: { id: adjusterTenant.id },
+    data: {
+      settings: {
+        // Travel is the live line, desk-reviewed up to RM5,000.
+        fastTrackCategories: ['TRAVEL'],
+        fastTrackLimits: { TRAVEL: '5000.00' },
+        // Property lines the firm attends in person at or above RM20,000 —
+        // essentially every fire, the larger floods and burglaries, while small
+        // contents losses stay on video. Travel is absent: the loss happened
+        // overseas and has no risk address to attend.
+        siteVisitCategories: ['FIRE', 'FLOOD', 'BURGLARY', 'LIGHTNING', 'HOH'],
+        siteVisitThresholds: {
+          FIRE: '20000.00',
+          FLOOD: '20000.00',
+          BURGLARY: '20000.00',
+          LIGHTNING: '20000.00',
+          HOH: '20000.00',
+        },
+        // One reminder after three working days of silence on a returned case.
+        infoRequestReminderDays: 3,
+      },
+    },
+  });
+
+  console.log(
+    '🏷️  Demo firm settings seeded (travel fast track RM5,000, site visit RM20,000, 3-day reminder).'
+  );
+
   // The demo firm's fast-track promise: 3 working days to the final report on
   // claims that took the §2.4 fast track — the worked example from the plan.
   // A business decision recorded in the seed, deliberately not a platform

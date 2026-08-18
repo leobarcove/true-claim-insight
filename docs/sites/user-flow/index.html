@@ -475,8 +475,9 @@ sequenceDiagram
     CL->>PWA: Consent
     PWA->>CS: POST /consent — against approved wording v1
 
-    PWA->>CS: POST /cases with travelClaimType
-    CS-->>PWA: Case DRAFT + first step
+    PWA->>CS: POST /conversation/start
+    CS->>CS: open the thread, create the Case on the first answer
+    CS-->>PWA: transcript + the first question
 
     loop One step at a time
         PWA->>CL: Ask step prompt
@@ -988,8 +989,8 @@ inline keyboard`"]
     PICK --> NEW["`Case created
 channel TELEGRAM`"]
     NEW --> ASK
-    CASE -->|yes| ANS["`patchAnswer — the same
-method the PWA calls`"]
+    CASE -->|yes| ANS["`patchAnswer — the one
+method every channel reaches`"]
     ANS --> ASK["`Ask the next step
 from the pinned flow`"]
 
@@ -999,7 +1000,7 @@ from the pinned flow`"]
         </pre></div>
         <p class="note">
           The answer goes through <code>CasesService.patchAnswer</code> rather than a second
-          write path. That is what keeps the masking of the bank account number, the policy
+          write path — as does the browser's, since the PWA posts turns to this same gateway. That is what keeps the masking of the bank account number, the policy
           match and the deadline warnings — and it is why a Telegram sender
           provably cannot reach another claimant's case: the same <code>assertAccess</code>
           check runs as in the browser. Attribution differs by author:
@@ -1267,7 +1268,8 @@ short-form report`"]
     FAST --> TRIG{"`Escalation trigger
 mid-flight?`"}
     TRIG -->|"`fraud flag · amount revised up ·
-extraction inconsistency`"| UP["`Escalate one level:
+extraction inconsistency ·
+the adjuster's own judgement`"| UP["`Escalate one level:
 video → site → expert`"]
     TRIG -->|none| OUT["Complete on fast-track"]
     UP --> STD
@@ -1297,8 +1299,8 @@ own case only`"]
 
     subgraph FIRM["Adjusting firm"]
         SUP["`SUPPORT_DESK
-vet · request info
-no fraud or behavioural data`"]
+answer conversations · FNOL triage
+never vets a case · no fraud data`"]
         ADJ["`ADJUSTER
 assess · author reports`"]
         FA["`FIRM_ADMIN
@@ -1316,7 +1318,7 @@ legal holds`"]
     SA["SUPER_ADMIN"]
 
     CLM -->|"submit · amend · upload"| CASE["Case"]
-    SUP -->|"vet"| CASE
+    SUP -->|"answer · triage intake"| CONV["Conversation"]
     FA -->|"link policy · reveal payout"| CASE
     ADJ -->|"assess"| CLAIM["Claim"]
     SIU -->|"escalated only"| CLAIM
@@ -1330,6 +1332,17 @@ legal holds`"]
     style CASE stroke:#17966A,stroke-width:2.5px
     style CLAIM stroke:#17966A,stroke-width:2.5px
         </pre></div>
+        <p class="note">
+          <strong>The support desk answers; it does not vet.</strong> This diagram read
+          <em>"vet · request info"</em> against <code>SUPPORT_DESK</code> until 18 Aug 2026,
+          and the code has never allowed it: <code>/cases</code> admits only
+          <code>ADJUSTER</code>, <code>FIRM_ADMIN</code> and <code>SUPER_ADMIN</code>. What the
+          role can reach is the conversation queue — answering a claimant who asks for a
+          person — and the FNOL intake queue, plus read access to assignments and the SLA
+          board. That is the honest line: deciding whether a claim proceeds is adjusting work,
+          and a diagram that granted it to a support role would have been read as a
+          specification by whoever next wrote a guard.
+        </p>
         <p class="note">
           <strong>A record that is not yours reads as one that does not exist.</strong>
           Cases and claims both answer <strong>404</strong> to every blocked read — claimant
@@ -1376,7 +1389,7 @@ legal holds`"]
               <tr><td>Session recordings for assessments held</td><td><span class="chip pass">Built</span></td><td>The list is built from our own <code>Session</code> rows now, not from the provider's recordings, so an assessment that was held always appears — the recording is a property of the row with a reason when absent (<em>not held</em> versus <em>provider unreachable</em>, which are different facts to an operator chasing one). Previously the query filtered to rooms the provider still held a recording for, dropped rows whose link failed, returned nothing at all when the provider was down, and estimated the paging total by scaling the real count by how many rows survived — so a third party's retention policy could edit our history</td></tr>
               <tr><td>Per-channel and per-locale wording</td><td><span class="chip plan">Partial</span></td><td>The overlay resolver is wired as of 11 Aug and the consent notice follows the claimant's Telegram language. No overlays are authored yet, so every flow still reads in its base wording — the mechanism runs, the content does not exist</td></tr>
               <tr><td>Automated eKYC</td><td><span class="chip plan">Partial</span></td><td>The gate is built: <code>REPORT_PENDING</code>, <code>APPROVED</code> and <code>REJECTED</code> refuse on an unverified claimant in registered mode and record the advisory as a TPA. Verification is an audited manual act with a mandatory basis — no verification vendor integrated</td></tr>
-              <tr><td>Six data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td><strong>Five left, down from six.</strong> case-service no longer writes <code>claimant</code>: FNOL intake and staff capture both resolve identity through the gateway that owns it, and a phone arriving without an id is now refused rather than upserted. Remaining: video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>. The list only shrinks</td></tr>
+              <tr><td>Data-ownership exceptions</td><td><span class="chip plan">Partial</span></td><td><strong>Five left, down from six.</strong> case-service no longer writes <code>claimant</code>: FNOL intake and staff capture both resolve identity through the gateway that owns it, and a phone arriving without an id is now refused rather than upserted. Remaining: video-service writes <code>claim</code>, <code>document</code>, <code>user</code>; risk-engine writes <code>document</code>, <code>floodClaim</code>. The list only shrinks</td></tr>
               <tr><td>Purge of remaining non-document records</td><td><span class="chip plan">Partial</span></td><td>Those contexts gaining owners</td></tr>
               <tr><td>Insurer statement (aged fee notes)</td><td><span class="chip pass">Built</span></td><td>The CSP 11.16–11.18 evidence has its screen: outstanding notes aggregated per insurer, aged, past-due called out, restricted to <code>BILLING_MANAGE</code></td></tr>
               <tr><td>Fast-track SLA profile for desk reviews</td><td><span class="chip pass">Built</span></td><td>A tenant may hold a <code>fastTrack</code> final-report policy row beside its standard one; it is resolved only for a claim that took the §2.4 fast track <em>and is still on it</em> — an escalated claim gets the full window back. Deliberately no platform default: the shorter promise is a commercial commitment per insurer, and the demo firm's is seeded at 3 working days</td></tr>
