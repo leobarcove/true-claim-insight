@@ -15,6 +15,19 @@ import { TenantScope } from '../common/decorators/tenant.decorator';
 import { CasesService } from '../cases/cases.service';
 
 /**
+ * Who is talking.
+ *
+ * Three shapes, not two, since the Mini App: a logged-in claimant, an
+ * anonymous web visitor, and a claimant already bound on a messaging channel
+ * who has stepped onto that channel's richer surface. The third resolves to a
+ * binding that already exists rather than making one — see `bindingFor`.
+ */
+export type ConversationIdentity =
+  | TenantContext
+  | { sessionId: string }
+  | { channel: CaseChannel; platformUserId: string };
+
+/**
  * The claimant's own side of a web-chat conversation.
  *
  * Deliberately thin. Everything that decides anything — which question comes
@@ -55,7 +68,36 @@ export class ClaimantConversationService {
    * conversation to exist *before* an identity does, which is the whole point
    * of the public flow: no login page in front of the chat.
    */
-  async bindingFor(identity: TenantContext | { sessionId: string }) {
+  async bindingFor(identity: ConversationIdentity) {
+    // A claimant already talking on a messaging channel, who has opened the
+    // richer surface that channel offers — a Telegram Mini App today, a
+    // WhatsApp Flow next. Found, never created, and that is the security
+    // property: the binding exists because the platform already vouched for
+    // this person and they proved a number to the bot. Creating one here
+    // would mean an attested id alone could conjure a conversation, which is
+    // the opposite of what the attestation is for.
+    //
+    // The caller has verified the attestation before we get here. This method
+    // only refuses to invent what it cannot find.
+    if ('platformUserId' in identity) {
+      const binding = await this.prisma.conversationBinding.findUnique({
+        where: {
+          channel_platformUserId: {
+            channel: identity.channel,
+            platformUserId: identity.platformUserId,
+          },
+        },
+      });
+      if (!binding) {
+        throw new ForbiddenException('Start a claim in the chat before opening the form.');
+      }
+      await this.prisma.conversationBinding.update({
+        where: { id: binding.id },
+        data: { lastSeenAt: new Date() },
+      });
+      return binding;
+    }
+
     if ('sessionId' in identity) {
       return this.prisma.conversationBinding.upsert({
         where: {
@@ -110,7 +152,7 @@ export class ClaimantConversationService {
    * at all when a human has taken over.
    */
   async handleTurn(
-    identity: TenantContext | { sessionId: string },
+    identity: ConversationIdentity,
     turn: {
       clientMessageId: string;
       text?: string;
@@ -123,7 +165,12 @@ export class ClaimantConversationService {
     const binding = await this.bindingFor(identity);
 
     await this.gateway.handleTurn({
-      channel: CaseChannel.WEB_CHAT,
+      // The binding's own channel, not this class's. A Mini App turn arrives
+      // here but belongs to a TELEGRAM binding, and the reply has to reach the
+      // thread as well as the webview — the claimant may close the Mini App
+      // mid-question, and a conversation that continued only inside a window
+      // they shut is one they cannot get back to.
+      channel: binding.channel,
       platformUserId: binding.platformUserId,
       // Namespaced by binding so one claimant's client-side counter can never
       // collide with another's. The gateway dedupes on this, and a collision
@@ -160,7 +207,7 @@ export class ClaimantConversationService {
    * The context handed to CasesService is the claimant's own, so every
    * ownership check downstream runs exactly as it does for a logged-in one.
    */
-  async uploadDocument(identity: { sessionId: string }, file: unknown) {
+  async uploadDocument(identity: ConversationIdentity, file: unknown) {
     const binding = await this.bindingFor(identity);
 
     if (!binding.claimantId) {
@@ -187,7 +234,7 @@ export class ClaimantConversationService {
    * them staring at an unanswered question a human had in fact answered. The
    * handover *reason* is not: that is an internal note about their claim.
    */
-  async transcript(identity: TenantContext | { sessionId: string }) {
+  async transcript(identity: ConversationIdentity) {
     const binding = await this.bindingFor(identity);
 
     const messages = await this.prisma.conversationMessage.findMany({
@@ -323,7 +370,7 @@ export class ClaimantConversationService {
    * "Start a claim" has already said it by arriving. Without this the PWA
    * would render an empty thread and wait for someone who is waiting for it.
    */
-  async start(identity: TenantContext | { sessionId: string }, locale?: string) {
+  async start(identity: ConversationIdentity, locale?: string) {
     const binding = await this.bindingFor(identity);
 
     const alreadyTalking = await this.prisma.conversationMessage.count({

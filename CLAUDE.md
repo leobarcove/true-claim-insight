@@ -154,6 +154,21 @@ and Mailhog only.
 - Shared components in `packages/ui-components`
 - Co-locate tests with components
 
+**claimant-web has Vitest + Testing Library** (`vitest.config.ts` merges the
+app's own Vite config, so the `@` and `@tci/*` aliases are defined once).
+`src/test/setup.ts` clears `localStorage` between tests — the public session
+lives there and `isChannelSession()` reads it directly, so a leftover session
+would silently decide the next test.
+
+Test the network boundary by mocking `@/lib/api-client` and nothing else: the
+hooks, the query cache and the session helpers should run for real, or the test
+mocks the thing it is meant to be checking. Where a guard exists for a caller
+that does not exist yet, assert it against the source — the same pattern the
+services use — because no rendering test can reach it.
+
+adjuster-portal has no test setup yet. `pnpm lint` is broken repo-wide: no
+ESLint 9 flat config exists in any package.
+
 ## Important Rules
 
 1. **Do not run `php artisan migrate` on remote server**
@@ -285,8 +300,12 @@ pnpm prisma:generate
 # Start all services in dev mode
 pnpm dev
 
-# Run tests
+# Run tests (turbo; claimant-web runs Vitest, the services run Jest)
 pnpm test
+
+# One package only
+pnpm --filter @tci/claimant-web test
+pnpm --filter @tci/claimant-web test:watch
 
 # Build all packages (generates Prisma client)
 pnpm build
@@ -331,10 +350,25 @@ same in both.
 Nothing runs on 3303. `identity-service` and `document-service` do not exist —
 see the "Not built" note above.
 
-**Changing `CASE_SERVICE_PORT` requires one edit outside this repo:**
-`~/.cloudflared/tci-whatsapp.yml` tunnels `tci-wa.smitherytech.com` to it for
-Meta's WhatsApp webhook, and must be restarted after. The hostname is stable, so
-Meta's console never changes. A mismatch fails silently as a 502.
+**The Telegram Mini App needs a public HTTPS origin.** `CLAIMANT_WEB_URL` gates
+the bot's "Open the form" button — Telegram will only open an origin it can
+reach, so `localhost` cannot work and without it the button simply does not
+appear. It is also what `apps/claimant-web/vite.config.ts` derives
+`server.allowedHosts` from, so the hostname lives in exactly one place; Vite
+refuses an unrecognised `Host` header and a mismatch shows up as a button that
+opens a Vite error page.
+
+Locally it is `https://tci-app.smitherytech.com`, served by a **second ingress
+rule on the existing `tci-whatsapp` tunnel** (one tunnel, two hostnames — see
+below). Changing `CLAIMANT_WEB_PORT` therefore needs the same out-of-repo edit
+as `CASE_SERVICE_PORT`.
+
+**Changing `CASE_SERVICE_PORT` or `CLAIMANT_WEB_PORT` requires one edit outside
+this repo:** `~/.cloudflared/tci-whatsapp.yml` carries both hostnames on one
+tunnel — `tci-wa.smitherytech.com` → case-service for Meta's WhatsApp webhook,
+and `tci-app.smitherytech.com` → claimant-web for the Telegram Mini App. Restart
+the tunnel after editing. The hostnames are stable, so Meta's console and the
+bot's button never change. A mismatch fails silently as a 502.
 
 ## Test Credentials (Local Development)
 

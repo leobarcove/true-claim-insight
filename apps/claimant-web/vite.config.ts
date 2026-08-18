@@ -12,6 +12,27 @@ export default defineConfig(({ mode }) => {
   const devPort = Number(rootEnv.CLAIMANT_WEB_PORT || 4001);
   const gatewayPort = Number(rootEnv.API_GATEWAY_PORT || 3000);
 
+  /**
+   * Hosts the dev server will answer to besides localhost.
+   *
+   * Vite refuses an unrecognised `Host` header — a DNS-rebinding defence, and
+   * the right default. The Telegram Mini App needs a public HTTPS origin, so
+   * the tunnel hostname has to be named here or every request through it comes
+   * back 403 with nothing in the browser to explain why.
+   *
+   * Derived from `CLAIMANT_WEB_URL` rather than hardcoded, so the tunnel
+   * hostname lives in exactly one place: the same variable the bot builds its
+   * "Open the form" button from. A mismatch would otherwise show up as a
+   * button that opens a Vite error page.
+   */
+  const publicHost = (() => {
+    try {
+      return rootEnv.CLAIMANT_WEB_URL ? [new URL(rootEnv.CLAIMANT_WEB_URL).hostname] : [];
+    } catch {
+      return [];
+    }
+  })();
+
   return {
   plugins: [
     react(),
@@ -77,6 +98,7 @@ export default defineConfig(({ mode }) => {
     // that quietly moves is how a stale tunnel or CORS entry starts pointing
     // at the wrong app.
     strictPort: true,
+    allowedHosts: publicHost,
     fs: {
       allow: ['..', '../../packages'],
     },

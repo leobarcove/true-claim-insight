@@ -6,6 +6,7 @@ import {
   describeCallbackValue,
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
+  SHARED_MEDIA_DESCRIPTION,
   SHARED_PHONE_DESCRIPTION,
 } from '@tci/shared-types';
 
@@ -74,6 +75,20 @@ describe('the gateway records what a turn carried', () => {
   it('gives a tap and a shared contact readable text at insert', () => {
     expect(source).toContain('describeCallbackValue(payload.callbackValue)');
     expect(source).toContain('SHARED_PHONE_DESCRIPTION');
+  });
+
+  it('describes an upload as an upload, not as a shared contact', () => {
+    // WhatsApp puts `wa_id` on every inbound message, so `sharedPhone` is
+    // always set there. With media tested after it, three real document
+    // uploads on one claim were recorded as "Shared their phone number" — an
+    // operator reading that transcript sees evidence that never arrived.
+    // Telegram sets the field only on a genuine contact tap, so the channel
+    // where this mattered was the one where it was invisible.
+    const media = source.indexOf('payload.mediaRef ? SHARED_MEDIA_DESCRIPTION');
+    const phone = source.indexOf('payload.sharedPhone ? SHARED_PHONE_DESCRIPTION');
+    expect(media).toBeGreaterThan(-1);
+    expect(phone).toBeGreaterThan(-1);
+    expect(media).toBeLessThan(phone);
   });
 
   it('stores a marker for a shared contact rather than the number itself', () => {

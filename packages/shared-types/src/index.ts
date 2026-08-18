@@ -678,6 +678,9 @@ export interface RiskAssessmentResponse {
 export {
   CASE_FLOWS,
   TRAVEL_CLAIM_TYPE_LABELS,
+  AIRLINE_CHOICES,
+  BANK_CHOICES,
+  DESTINATION_CHOICES,
   NOTIFY_WITHIN_HOURS,
   CLAIM_WINDOW_DAYS,
   getFlow,
@@ -695,6 +698,9 @@ export {
   computeCompleteness,
   parseAmount,
   SKIP_VALUE,
+  DEFER_VALUE,
+  asStoredInstant,
+  parseStoredDate,
   SENSITIVE_ANSWER_STEPS,
   ANSWER_MASK_PREFIX,
   REVIEW_STEP_ID,
@@ -723,6 +729,8 @@ export {
   CHANNEL_LABELS,
   parseTextDate,
   renderChoices,
+  CHOICE_DISPLAY_MAX,
+  displayAnswer,
   formatDateAnswer,
   summariseAnswers,
   supportsAnswerType,
@@ -744,6 +752,7 @@ export {
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
   RESUME_CASE_CALLBACK_PREFIX,
+  SHARED_MEDIA_DESCRIPTION,
   SHARED_PHONE_DESCRIPTION,
 } from './conversation-display';
 

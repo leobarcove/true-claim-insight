@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
+import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
 import { SubmitClaimPage } from '@/pages/claims/submit';
@@ -77,6 +78,12 @@ function App() {
               {/* Public intake — no login. The web equivalent of messaging the
                   WhatsApp number: open the link and start talking. */}
               <Route path="/chat" element={<PublicChatPage />} />
+              {/*
+                Opened by Telegram, never navigated to. It establishes who the
+                claimant is from the launch payload and then renders the same
+                conversation as /chat — see TelegramMiniAppPage.
+              */}
+              <Route path="/tg" element={<TelegramMiniAppPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/otp" element={<VerifyOtpPage />} />
 

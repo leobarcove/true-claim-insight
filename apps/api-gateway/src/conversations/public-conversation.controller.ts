@@ -36,6 +36,20 @@ import { unwrapEnvelope } from '../common/unwrap-envelope';
  * that claimant. Signed only so a visitor cannot type someone else's session
  * id and read their thread.
  */
+/**
+ * Marks a session as naming a Telegram binding rather than a web thread.
+ * Signed as part of the payload, so it cannot be added to a token after issue.
+ */
+const TELEGRAM_SESSION_PREFIX = 'tg:';
+
+/**
+ * How long a Mini App session stays usable. Twelve hours covers a claim
+ * gathered across a day with interruptions; anything longer is a bearer token
+ * outliving the sitting that produced it.
+ */
+const CHANNEL_SESSION_TTL_SECONDS = 12 * 60 * 60;
+const CHANNEL_SESSION_SKEW_SECONDS = 60;
+
 @ApiTags('Public intake')
 @Controller('public/conversation')
 export class PublicConversationProxyController {
@@ -73,7 +87,7 @@ export class PublicConversationProxyController {
    * iterate on, so a leaky compare would let them recover a valid signature
    * byte by byte and read another visitor's thread.
    */
-  private sessionIdFrom(token: string | undefined): string | null {
+  private sessionIdFrom(token: string | undefined, now: Date = new Date()): string | null {
     if (!token) return null;
     const [id, signature] = token.split('.');
     if (!id || !signature) return null;
@@ -81,11 +95,66 @@ export class PublicConversationProxyController {
     const expected = this.sign(id);
     if (signature.length !== expected.length) return null;
     if (!timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) return null;
+
+    // A channel session ages out; a visitor session does not, and the
+    // difference is what each one is worth. A visitor token names a thread
+    // attached to nobody until a code is proved, so a stale one grants what it
+    // always granted: an empty conversation. A channel token names a binding
+    // that already has a claimant, a case and payout details behind it, and a
+    // bearer value like that should not sit in localStorage for ever.
+    //
+    // Nearly free to the claimant, because every Mini App launch mints a fresh
+    // one from `initData` — this only bites a window left open overnight, and
+    // the recovery is reopening it from the thread.
+    if (id.startsWith(TELEGRAM_SESSION_PREFIX)) {
+      const issuedAt = Number(id.split(':')[2]);
+      if (!Number.isFinite(issuedAt)) return null;
+      const ageSeconds = now.getTime() / 1000 - issuedAt;
+      if (ageSeconds < -CHANNEL_SESSION_SKEW_SECONDS || ageSeconds > CHANNEL_SESSION_TTL_SECONDS) {
+        return null;
+      }
+    }
     return id;
   }
 
-  private headers(sessionId: string) {
-    return { 'x-internal-key': this.internalKey, 'x-web-session-id': sessionId };
+  /**
+   * A session for a claimant already bound on a messaging channel.
+   *
+   * Same envelope as a visitor session and a different meaning inside it. A
+   * visitor's payload is a fresh uuid that names a thread nobody owns yet; this
+   * one names a binding that already exists, on a channel where the platform
+   * vouched for the person and a code proved their number.
+   *
+   * That is why it is only ever minted after an attestation has been verified
+   * downstream, and never from a value the browser supplied on its own.
+   */
+  private issueChannelSession(platformUserId: string, now: Date = new Date()): string {
+    const issuedAt = Math.floor(now.getTime() / 1000);
+    const payload = `${TELEGRAM_SESSION_PREFIX}${platformUserId}:${issuedAt}`;
+    return `${payload}.${this.sign(payload)}`;
+  }
+
+  /**
+   * Turn a verified payload into the internal headers case-service reads.
+   *
+   * The two shapes route to different identities there — a web session upserts
+   * a WEB_CHAT binding, a channel identity resolves an existing one — so this
+   * is the single place the distinction is made, rather than at each of the
+   * four call sites where one of them would eventually be forgotten.
+   */
+  private headers(payload: string) {
+    const base = { 'x-internal-key': this.internalKey };
+    if (payload.startsWith(TELEGRAM_SESSION_PREFIX)) {
+      return {
+        ...base,
+        'x-channel': 'TELEGRAM',
+        // `tg:<platformUserId>:<issuedAt>` — the id is the middle segment, and
+        // the timestamp is inside the signed payload rather than beside it so
+        // it cannot be extended by editing the token.
+        'x-channel-user-id': payload.split(':')[1],
+      };
+    }
+    return { ...base, 'x-web-session-id': payload };
   }
 
   /**
@@ -122,6 +191,38 @@ export class PublicConversationProxyController {
    * client stores explicitly is one it can also discard explicitly — "start
    * again" is then a client-side action rather than a server round trip.
    */
+  /**
+   * Open the Mini App: prove the launch is genuine, get a session for it.
+   *
+   * The claimant tapped a button inside Telegram, which opened our page and
+   * handed it `initData` — launch parameters Telegram signed with a key derived
+   * from the bot token. Verifying that signature is what makes this endpoint
+   * safe to leave public: the browser cannot forge one, so an attacker cannot
+   * name a Telegram user they are not.
+   *
+   * The verification itself happens in case-service, which owns the bot token.
+   * Splitting it that way keeps two secrets in two places — the bot token never
+   * reaches the edge, and the session-signing key never leaves it.
+   */
+  @Post('telegram/session')
+  @Public()
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Exchange a Telegram Mini App launch for a session' })
+  async telegramSession(@Body() body: { initData?: string }) {
+    const resolved = (await this.pass(
+      this.httpService.post(
+        this.base('/channel/telegram'),
+        { initData: body?.initData ?? '' },
+        { headers: { 'x-internal-key': this.internalKey } }
+      )
+    )) as { platformUserId: string };
+
+    // Nothing about the claim comes back here, deliberately — only the key to
+    // ask for it. The transcript is a separate, scoped request, so a bug in
+    // this route cannot leak a conversation.
+    return { session: this.issueChannelSession(String(resolved.platformUserId)) };
+  }
+
   @Post('start')
   @Public()
   @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 10, ttl: 60_000 } })
