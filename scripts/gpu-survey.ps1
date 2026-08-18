@@ -168,12 +168,16 @@ if ($exposed) {
 # ---------------------------------------------------------------------------
 Section "Probing for the inference service"
 $found = @()
-foreach ($port in 8000,8080,8888,5000,7860,3000,11434) {
+# 8002 was missing and is where a Surya OCR container actually landed. And the
+# probe must use 127.0.0.1, not localhost: on Windows `localhost` resolves to
+# ::1 first, while Docker publishes on IPv4 only -- so a running service answers
+# nothing and reads as absent.
+foreach ($port in 8000,8001,8002,8080,8888,5000,7860,3000,11434) {
     # Plain try/catch blocks rather than assigning from a try expression:
     # that form is accepted inconsistently across PowerShell versions, and
     # this script has to run on whatever the workstation happens to have.
     $root = $null
-    try { $root = Invoke-WebRequest "http://localhost:$port/" -TimeoutSec 2 -UseBasicParsing } catch { }
+    try { $root = Invoke-WebRequest "http://127.0.0.1:$port/" -TimeoutSec 2 -UseBasicParsing } catch { }
     if (-not $root) { continue }
 
     Write-Host ("port {0,-6} HTTP {1}" -f $port, $root.StatusCode)
@@ -181,9 +185,9 @@ foreach ($port in 8000,8080,8888,5000,7860,3000,11434) {
     # /v3/* is what OllamaGpuLlmProvider calls. A 405 or 422 here is a *good*
     # sign: the route exists and is refusing a GET, which is what a POST-only
     # endpoint should do.
-    foreach ($path in '/v3/ocr', '/v3/llm/generate', '/docs', '/api/tags') {
+    foreach ($path in '/v3/ocr', '/v3/llm/generate', '/docs', '/api/tags', '/health') {
         $r = $null
-        try   { $r = Invoke-WebRequest "http://localhost:$port$path" -TimeoutSec 2 -UseBasicParsing }
+        try   { $r = Invoke-WebRequest "http://127.0.0.1:$port$path" -TimeoutSec 2 -UseBasicParsing }
         catch { $r = $_.Exception.Response }
         if ($r -and $r.StatusCode) {
             Write-Host ("     {0,-20} {1}" -f $path, [int]$r.StatusCode)
