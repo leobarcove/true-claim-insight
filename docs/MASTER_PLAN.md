@@ -2759,10 +2759,69 @@ debt: `OllamaGpuLlmProvider.defaultModel` names `qwen2.5:7b`, which no longer
 exists on the host — left alone rather than patched, because the `/v3` rework
 above is the real fix. The repo has no `node_modules` and no `pnpm` on this
 machine, so **these edits are unverified by typecheck**.
+*(Both resolved the same day from a Mac — see the entry below. The model ids
+moved to configuration, and the edits typecheck and pass. Left standing rather
+than rewritten: what a step was promised to be and what it became are both part
+of the record.)*
 
 **Sovereignty is unchanged by all of this.** §3.4 stands: an office desktop on a
 tailnet is not controlled in-country infrastructure, and nothing here earns the
 claim.
+
+### What the host work broke, and what it taught (19 August 2026)
+
+Reviewed `feat/gpu-host-local-llm` from a Mac, where the toolchain the Windows
+host lacked is present. Two fixes, and one decision that reverses a
+recommendation this plan made.
+
+**risk-engine stopped booting.** Removing the dead Cloudflare default was right
+and overdue; putting the replacement check in the *constructor* was not.
+`LlmModule` lists `OllamaGpuLlmProvider` in `providers` and injects it into the
+factory that chooses between backends, so Nest instantiates it eagerly
+**whichever backend wins**. A machine with `GEMINI_API_KEY` set and no
+`GPU_SERVICE_URL` — every developer without a GPU, and staging — died at
+`Injector.instantiateClass` having reached only the fifth module. Reproduced
+before fixing, and fixed by moving the throw to first use: the loud failure
+stays, on the path that actually needs a GPU. Verified by booting the service,
+not only by test.
+
+The whole 991-test suite passed straight through that regression, because
+nothing in it instantiates the module. So the guard added is a plain
+construction — the thing that broke. Mutation-tested: returning the throw to the
+constructor fails six of seven.
+
+**Three model ids were constants that used to be true.** `qwen2.5:7b`,
+`qwen2.5vl:7b`, `deepseek-r1:14b` — and by the time the host was surveyed, not
+one was on it. Structurally the same failure as the hardcoded Cloudflare tunnel:
+true when written, silently false later, invisible to the code. They now come
+from `GPU_MODEL_TEXT`, `GPU_MODEL_VISION` and `GPU_MODEL_REASONING`, and are
+logged at construction so drift appears in a boot log rather than a support
+ticket. Defaults are defensible here where they were not for the tunnel: a wrong
+model id makes Ollama answer *model not found*, which is legible.
+
+**The vision default is `qwen3-vl:8b`, not NuExtract3, and that reverses
+`CASE_VERIFICATION_ENGINE.md` §8.** NuExtract3 is the better extraction model —
+given its own native template. Asked the way the provider asks, an instruction
+plus Ollama's `format` schema, it echoes the schema's type name into the answer
+(`{"flight_number": "string", "delay_hours": 6}`): schema-valid, wrong, and it
+passes a naive check. Defaulting to a model that returns confident nonsense
+under our own calling convention is worse than defaulting to a weaker one that
+is correct under it. Switch the day the provider learns NuExtract3's template —
+which is the `/v3` rework, because the calling convention is a property of the
+model and that class assumes there is only one.
+
+**§6.3 of the runbook is now run.** It was written on the Windows host and
+labelled unrun, every command derived from `package.json`. Executed here: Node
+24.9.0 and pnpm 9.15.0 match the pins, the risk-engine suite passes without
+Docker or a tailnet, and `setup:build && test && typecheck` completes — 17 test
+tasks, 13 typecheck tasks.
+
+**Not attempted, and this is the honest limit.** The `/v3` replacement. The
+provider cannot work against the host until it lands, but it cannot be verified
+from here either — no route to that tailnet — and an unverifiable network
+rewrite is the exact failure this branch has spent three commits undoing: a dead
+tunnel, a phantom API, unverified model tags. It is now the single blocker to
+any application code using this host.
 
 ---
 

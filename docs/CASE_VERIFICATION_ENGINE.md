@@ -358,13 +358,42 @@ sized against the host in `docs/GPU_HOST_SETUP.md` — an RTX 3090 with 24 GB.
 
 | Job | Model | Size | Input | Note |
 | --- | --- | --- | --- | --- |
-| **Structured extraction** | `numind/nuextract3:q4_k_m` (4B, Apache 2.0) | ~3 GB | Text, Image | Purpose-built: doc → JSON *and* doc → Markdown in one model, multilingual. Vendor-benchmarked only |
-| Vision escalation | `qwen3-vl:8b` | 6.1 GB | Text, Image | When NuExtract3 struggles. **Needs Ollama ≥ 0.12.7** |
+| **Structured extraction, today** | `qwen3-vl:8b` | 6.1 GB | Text, Image | What the provider defaults to, because it is correct under the convention that provider uses — see below |
+| Structured extraction, better | `numind/nuextract3:q4_k_m` (4B, Apache 2.0) | ~3 GB | Text, Image | Purpose-built: doc → JSON *and* doc → Markdown, multilingual. **Only with its native template.** Vendor-benchmarked only |
 | OCR | **Surya** | already running | Image | Discriminative, not generative — it *cannot* invent text that is not on the page |
 | Case-file summary | `gpt-oss:20b` (Apache 2.0) | 14 GB | **Text only** | Sees assertions, never raw document text — see §9 |
 
 Higher-precision extraction tags exist if quality disappoints:
 `numind/nuextract3:q6_k` (4.1 GB) and `:bf16` (9.3 GB).
+
+### 8.0 The calling convention decides the model, not the benchmark
+
+Found on the host, 19 August 2026, and it inverts the recommendation this
+section originally made.
+
+`OllamaGpuLlmProvider` asks with an **instruction plus Ollama's `format`
+schema**. Asked that way, NuExtract3 echoes the schema's *type name* into the
+answer:
+
+```json
+{"flight_number": "string", "delay_hours": 6}
+```
+
+Schema-valid. Wrong. And it passes a naive check — including the one this
+document's own runbook proposed as the verification step. Given its native
+template instead, the same model returns `MH168` correctly, from text and from
+an image.
+
+So the extraction default is `qwen3-vl:8b`, which is correct under the
+convention the code actually uses. **A model that returns confident nonsense the
+way we call it is worse than a weaker one that is right.** Switch the day the
+provider learns to send NuExtract3's template — which belongs with the `/v3`
+rework, because the calling convention is a property of the *model* and that
+class assumes there is only one.
+
+This is the warning further down this section, arriving as a live example rather
+than a caution: schema-valid is not semantically right, and constrained decoding
+makes that more dangerous because the output looks trustworthy.
 
 **Two traps found while verifying these.** NuExtract3 is namespaced — a bare
 `ollama pull nuextract3` risks resolving to `nuextract`, an unrelated and much
