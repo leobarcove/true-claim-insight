@@ -27,13 +27,61 @@ export class OllamaGpuLlmProvider implements LlmProvider {
   private readonly configuredUrl?: string;
 
   readonly name = 'OllamaGpu';
-  readonly defaultModel = 'qwen2.5:7b';
+
+  /**
+   * Model ids, from configuration rather than baked in.
+   *
+   * These were literals -- 'qwen2.5:7b', 'qwen2.5vl:7b', 'deepseek-r1:14b' --
+   * and by the time the host was surveyed not one of them was on it. That is
+   * the same bug as the Cloudflare quick-tunnel this class used to default to:
+   * a hardcoded value that was true when written and silently stopped being
+   * true, with nothing in the code able to notice.
+   *
+   * Defaults are the tags verified against the Ollama registry and pulled onto
+   * the host on 19 August 2026 (docs/GPU_HOST_SETUP.md). Unlike the tunnel,
+   * a wrong model id fails legibly -- Ollama answers "model not found" -- so a
+   * default is safe here in a way it was not there. The ids are logged at
+   * construction so drift is visible in a boot log rather than in a support
+   * ticket.
+   *
+   * VISION DEFAULTS TO qwen3-vl, NOT NuExtract3, and that is deliberate.
+   * NuExtract3 is the better extraction model and CASE_VERIFICATION_ENGINE.md
+   * section 8 recommends it -- but only when asked with its own native
+   * template. Asked the way this class asks, an instruction plus Ollama's
+   * `format` schema, it echoes the schema's type name into the answer:
+   * {"flight_number": "string", "delay_hours": 6}. That is schema-valid, wrong,
+   * and would pass a naive check. Defaulting to a model that returns confident
+   * nonsense under our own calling convention is worse than defaulting to a
+   * slightly weaker one that is correct under it.
+   *
+   * Switch the default the day this class learns to send NuExtract3's template
+   * -- which belongs with the /v3 rework in GPU_HOST_SETUP.md section 7, since
+   * the calling convention is a property of the model and this class currently
+   * assumes there is only one.
+   */
+  readonly defaultModel: string;
+  private readonly visionModel: string;
+  private readonly reasoningModel: string;
 
   constructor(private readonly configService: ConfigService) {
     this.configuredUrl = this.configService
       .get<string>('GPU_SERVICE_URL')
       ?.trim()
       .replace(/\/+$/, '');
+
+    this.defaultModel = this.model('GPU_MODEL_TEXT', 'gpt-oss:20b');
+    this.visionModel = this.model('GPU_MODEL_VISION', 'qwen3-vl:8b');
+    this.reasoningModel = this.model('GPU_MODEL_REASONING', this.defaultModel);
+
+    this.logger.log(
+      `Models: text=${this.defaultModel} vision=${this.visionModel} ` +
+        `reasoning=${this.reasoningModel}` +
+        (this.configuredUrl ? '' : ' (no GPU_SERVICE_URL; calls will fail)')
+    );
+  }
+
+  private model(key: string, fallback: string): string {
+    return this.configService.get<string>(key)?.trim() || fallback;
   }
 
   /**
@@ -88,7 +136,7 @@ export class OllamaGpuLlmProvider implements LlmProvider {
     prompt: string,
     fileBuffer: Buffer,
     filename: string,
-    model = 'qwen2.5vl:7b'
+    model = this.visionModel
   ): Promise<any> {
     const formData = new FormData();
     const blob = new Blob([fileBuffer]);
@@ -99,7 +147,7 @@ export class OllamaGpuLlmProvider implements LlmProvider {
     return this.post('/v3/llm/vision', formData);
   }
 
-  async reasoningJson(prompt: string, model = 'deepseek-r1:14b'): Promise<any> {
+  async reasoningJson(prompt: string, model = this.reasoningModel): Promise<any> {
     const formData = new FormData();
     formData.append('prompt', prompt);
     formData.append('model', model);

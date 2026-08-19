@@ -65,3 +65,51 @@ describe('a GPU endpoint that is configured', () => {
     expect(new OllamaGpuLlmProvider(config({ GPU_SERVICE_URL: '   ' })).isConfigured()).toBe(false);
   });
 });
+
+/**
+ * REGRESSION TEST — a model id must not be a constant that was true once.
+ *
+ * The three ids here were literals: 'qwen2.5:7b', 'qwen2.5vl:7b' and
+ * 'deepseek-r1:14b'. By the time the host was surveyed none of them was on it,
+ * and nothing in the code could notice. That is the same failure as the
+ * hardcoded Cloudflare quick-tunnel this class used to default to.
+ */
+describe('model ids come from configuration', () => {
+  it('uses the configured id for each job', () => {
+    const provider = new OllamaGpuLlmProvider(
+      config({
+        GPU_MODEL_TEXT: 'text-model',
+        GPU_MODEL_VISION: 'vision-model',
+        GPU_MODEL_REASONING: 'reasoning-model',
+      })
+    );
+    const internals = provider as unknown as { visionModel: string; reasoningModel: string };
+    expect(provider.defaultModel).toBe('text-model');
+    expect(internals.visionModel).toBe('vision-model');
+    expect(internals.reasoningModel).toBe('reasoning-model');
+  });
+
+  it('falls back to the tags actually pulled onto the host', () => {
+    const provider = new OllamaGpuLlmProvider(config());
+    const internals = provider as unknown as { visionModel: string };
+    expect(provider.defaultModel).toBe('gpt-oss:20b');
+    // Deliberately qwen3-vl and not the better NuExtract3: this class asks with
+    // an instruction plus a JSON schema, and under that convention NuExtract3
+    // returns the schema's type name as the value -- schema-valid and wrong.
+    expect(internals.visionModel).toBe('qwen3-vl:8b');
+  });
+
+  it('names no model that was removed from the host', () => {
+    const provider = new OllamaGpuLlmProvider(config());
+    const internals = provider as unknown as { visionModel: string; reasoningModel: string };
+    const stale = ['qwen2.5:7b', 'qwen2.5vl:7b', 'deepseek-r1:14b'];
+    for (const id of [provider.defaultModel, internals.visionModel, internals.reasoningModel]) {
+      expect(stale).not.toContain(id);
+    }
+  });
+
+  it('treats blank configuration as absent', () => {
+    const provider = new OllamaGpuLlmProvider(config({ GPU_MODEL_TEXT: '  ' }));
+    expect(provider.defaultModel).toBe('gpt-oss:20b');
+  });
+});
