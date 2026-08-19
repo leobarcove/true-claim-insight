@@ -6,6 +6,13 @@ to be executed by an agent (Claude Code) or a person, on the machine itself.
 **Read §0 before running anything.** This box already runs three unrelated
 systems, and the main risk in this plan is not failure — it is collateral damage.
 
+**Already configured, and you just want to call it from a laptop? Go straight
+to §6.2.** Executed 19 August 2026: the host runs Ollama 0.32.14 with all three
+models, reachable on the tailnet as `tci-gpu-host.<your-tailnet>.ts.net:11434`.
+**§3.1.1 is the one thing to read before writing a client** — NuExtract3 needs a
+template, not an instruction, and calling it wrongly returns plausible nonsense
+rather than an error.
+
 Companion documents: `docs/CASE_VERIFICATION_ENGINE.md` §8 (why these models),
 `scripts/gpu-survey.ps1` (the read-only survey this plan follows from).
 
@@ -236,6 +243,47 @@ continue. **If the shape is wrong,** the Ollama version is too old for
 schema-constrained `format`; note the version and stop, because everything
 downstream assumes it.
 
+#### 3.1.1 The test above is the WRONG call for NuExtract3 — verified 19 Aug 2026
+
+Run exactly as written, NuExtract3 returns:
+
+```json
+{"flight_number": "string", "delay_hours": 6}
+```
+
+It echoes the schema's *type name* into a required field. That is schema-valid,
+it satisfies the check above, and it is wrong — a live instance of the
+"schema-valid is not semantically right" trap in
+`docs/CASE_VERIFICATION_ENGINE.md` §8, produced by that document's own
+recommended model under this document's own recommended test.
+
+**NuExtract3 is a template-filling model, not an instruction-following one.**
+Give it a template and a context, and drop `format` entirely:
+
+```json
+{
+  "model": "numind/nuextract3:q4_k_m",
+  "messages": [
+    {
+      "role": "user",
+      "content": "# Template:\n{\"flight_number\": \"verbatim-string\", \"delay_hours\": \"number\"}\n# Context:\nFlight MH168 was scheduled 09:00 and departed 15:00."
+    }
+  ],
+  "stream": false,
+  "options": {
+    "temperature": 0,
+    "num_ctx": 8192
+  }
+}
+```
+
+→ `{"flight_number": "MH168", "delay_hours": 6}`, from text and from an image
+(pass the page in `images` and leave `# Context:` empty).
+
+`qwen3-vl:8b` has the opposite property: it is correct under instruction +
+`format` and got **both** fields right where NuExtract3 got one. Use `format`
+with `qwen3-vl` and `gpt-oss`; use templates with NuExtract3.
+
 ### 3.2 Vision
 
 Generate the test image rather than hunting for one, so the expected answer is
@@ -411,28 +459,29 @@ Every check so far ran *on* the GPU box, which proves the models work and proves
 nothing about the objective. The objective is that TCI can reach them. Run this
 from the developer machine, not the desktop:
 
+> **Run it from another machine, and mean it.** Curling the host's own
+> Tailscale name *from the host* passes without the packet ever leaving the box:
+> it proves DNS and the listener, not reachability. It is the same false pass as
+> testing a tunnel from inside the tunnel. Setup for a client machine is §6.2.
+
 ```bash
-GPU=http://<tailscale-name-or-ip>:11434
+GPU=http://tci-gpu-host.<your-tailnet>.ts.net:11434
 
 # All three models present?
 curl -s "$GPU/api/tags" | grep -o '"name":"[^"]*"'
 
-# The extraction model, over the network, schema-constrained. This is the call
-# the whole pipeline rests on; if only one thing is proved, prove this.
-curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{
-  "model": "numind/nuextract3:q4_k_m",
-  "messages": [{"role":"user","content":"Scheduled 09:00, departed 15:00. Return the delay."}],
-  "stream": false,
-  "options": {"temperature": 0},
-  "format": {"type":"object","properties":{"delay_hours":{"type":"number"}},"required":["delay_hours"]}
-}'
+# The extraction model, over the network, in TEMPLATE mode (see 3.1.1 - an
+# instruction plus `format` returns "string" here). This is the call the whole
+# pipeline rests on; if only one thing is proved, prove this.
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "numind/nuextract3:q4_k_m", "messages": [{"role": "user", "content": "# Template:\n{\"flight_number\": \"verbatim-string\", \"delay_hours\": \"number\"}\n# Context:\nFlight MH168 was scheduled 09:00 and departed 15:00."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}}'
 ```
 
 **Verify:** all three tags appear, and the second call returns
-`{"delay_hours":6}` or close to it.
+`{"flight_number": "MH168", "delay_hours": 6}`.
 
-Repeat the second call with `gpt-oss:20b` if you want the summariser path
-covered as well — but the extraction call is the one that matters.
+Repeat with `gpt-oss:20b` if you want the summariser path covered as well — that
+one takes `format`, not a template — but the extraction call is the one that
+matters.
 
 **If this fails while §3 passed,** the models are fine and the *link* is not —
 which is a §5 problem, not a model problem. Do not proceed to §6.1 until this
@@ -471,6 +520,116 @@ Then, in the repo (not on this machine):
    *not* done and why — a stop gate answered "no" is part of the record.
 
 ---
+
+
+### 6.2 Calling the host from a client machine (macOS)
+
+The host is configured; this is what a Mac needs. Nothing here runs on the
+desktop.
+
+**1 — Join the same tailnet.** The box is `tci-gpu-host` on `<your-tailnet>.ts.net`,
+owned by `smitherytechnology@`. **A different account is a different tailnet and
+will not see it** — this is the single most likely reason the steps below fail.
+
+```bash
+brew install --cask tailscale
+```
+
+Then open Tailscale and sign in as that account (or `sudo tailscale up`).
+
+**2 — Confirm the peer is visible, from the Mac:**
+
+```bash
+tailscale status | grep tci-gpu-host
+```
+
+**Verify:** a line showing `100.x.y.z  tci-gpu-host`. Until this prints,
+nothing below can work, and no amount of retrying curl will tell you why.
+
+**3 — Set the endpoint.**
+
+```bash
+export GPU=http://tci-gpu-host.<your-tailnet>.ts.net:11434
+```
+
+If MagicDNS is disabled on the tailnet, use `export GPU=http://100.x.y.z:11434`
+instead. That address is stable; the LAN one is DHCP and moves.
+
+> **The real tailnet name and IP are deliberately not written down here — this
+> repository is public.** They grant nothing without tailnet membership, but a
+> public repo should not name internal infrastructure. Get them from
+> `tci-gpu-config.txt` on the host's Desktop, or from `tailscale status` on any
+> machine already on the tailnet. Put the value in your local `.env` as
+> `GPU_SERVICE_URL`; `.env` is not committed.
+
+```bash
+curl -s "$GPU/api/tags" | grep -o '"name":"[^"]*"'
+```
+
+**Verify:** three names — `numind/nuextract3:q4_k_m`, `qwen3-vl:8b`,
+`gpt-oss:20b`.
+
+**4 — The calls, one per job.** Each model wants a different convention, and
+mixing them up produces confident nonsense rather than an error (3.1.1).
+
+*Extraction — NuExtract3, template mode, no `format`:*
+
+```bash
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "numind/nuextract3:q4_k_m", "messages": [{"role": "user", "content": "# Template:\n{\"flight_number\": \"verbatim-string\", \"delay_hours\": \"number\"}\n# Context:\nFlight MH168 was scheduled 09:00 and departed 15:00."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}}'
+```
+
+→ `{"flight_number": "MH168", "delay_hours": 6}`
+
+*Vision — same model and template, with the page image and an empty context.*
+Needs `jq` (`brew install jq`) to embed the base64 safely:
+
+```bash
+TMPL=$'# Template:\n{"flight_number": "verbatim-string", "delay_hours": "number"}\n# Context:'
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d "$(jq -n \
+  --arg t "$TMPL" --arg img "$(base64 -i boarding-pass.png)" \
+  '{model:"numind/nuextract3:q4_k_m",messages:[{role:"user",content:$t,images:[$img]}],stream:false,options:{temperature:0,num_ctx:8192}}')"
+```
+
+
+The request *shape* above is verified — it returns
+`{"flight_number": "MH168", "delay_hours": 6}` from a rendered test page. The
+`jq` invocation itself was not run on the host, which has no `jq`; if it
+misbehaves, build the same body in any language. The shape is what matters.
+
+*Vision escalation — qwen3-vl, which IS correct under instruction + `format`:*
+
+```bash
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "qwen3-vl:8b", "messages": [{"role": "user", "content": "Flight MH168 was scheduled 09:00 and departed 15:00. Return the delay."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}, "format": {"type": "object", "properties": {"flight_number": {"type": "string"}, "delay_hours": {"type": "number"}}, "required": ["flight_number", "delay_hours"]}}'
+```
+
+*Case-file summary — gpt-oss, text only, also takes `format`:*
+
+```bash
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "gpt-oss:20b", "messages": [{"role": "user", "content": "Summarise: flight MH168 delayed 6 hours; claimant seeks meal reimbursement."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}, "format": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"]}}'
+```
+
+**First call after an idle period is slow** — the model is being loaded onto the
+card. Only one or two of these fit in 24 GB at once (qwen3-vl + gpt-oss together
+leave ~2.4 GB), so alternating between them pays a reload each time.
+
+#### Troubleshooting
+
+| Symptom | What it means |
+| --- | --- |
+| `curl: (28)` timeout | The host was reached but nothing answered. Most likely Windows Firewall blocking inbound on the Tailscale interface — needs an elevated PowerShell **on the desktop**, not a client-side fix |
+| `curl: (7)` connection refused | Port not listening — the `finura-fi-ollama` container is down |
+| `Could not resolve host` | MagicDNS off, or the Mac is not on the tailnet. Use `http://100.x.y.z:11434` |
+| `tailscale status` omits the host | Wrong account/tailnet, or the desktop is asleep. Step 1 |
+| `{"flight_number": "string"}` | Instruction + `format` was used on NuExtract3. See 3.1.1 — this is not an error, it is the wrong calling convention |
+| `unknown model architecture` | The host was downgraded below Ollama 0.32.14. See 2.1 |
+
+#### Without Tailscale, over the office LAN
+
+Port `11434` is bound to `0.0.0.0`, so `http://192.168.0.71:11434` answers from
+the same WiFi today. **Prefer the tailnet.** That address is DHCP and moves, and
+the port is unauthenticated — the Ollama API permits *pulling and deleting*
+models, so anything on the office network can empty that model store (4). The
+exposure is a recorded accepted risk, not a feature to build on.
 
 ## 7. Deferred, and honest about it
 

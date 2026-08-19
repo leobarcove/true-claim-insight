@@ -6,12 +6,16 @@ import { LlmProvider } from './llm-provider.interface';
  * LlmProvider impl backed by the self-hosted Qwen / DeepSeek GPU service.
  *
  * DATA SOVEREIGNTY STATUS: not yet achieved. The intended benefit is keeping
- * claimant documents on Malaysian infrastructure, but the default endpoint
- * below is an ephemeral Cloudflare quick-tunnel, so traffic egresses through
- * Cloudflare and the host is not a stable in-country deployment. Provisioning
- * real local infrastructure and making this the default for PII documents is
- * Phase 2 of docs/MASTER_PLAN.md. Do not describe this path as PDPA-compliant
- * until GPU_SERVICE_URL points at controlled in-country infrastructure.
+ * claimant documents on Malaysian infrastructure. GPU_SERVICE_URL currently
+ * points at an office desktop reached over a private tailnet
+ * (docs/GPU_HOST_SETUP.md) — a machine somebody may reboot, not controlled
+ * in-country infrastructure. Do not describe this path as PDPA-compliant
+ * until it is; docs/MASTER_PLAN.md §3.4 is unchanged by the local-LLM work.
+ *
+ * GPU_SERVICE_URL is REQUIRED and has no default. It used to fall back to a
+ * hardcoded Cloudflare quick-tunnel which had long since expired, so a missing
+ * configuration silently addressed a dead host and surfaced as confusing
+ * downstream failures. Fail loudly instead; do not reintroduce a default.
  *
  * Refactored from the original GpuClientService — same network calls,
  * now behind the LlmProvider interface so it can be swapped via the
@@ -26,10 +30,14 @@ export class OllamaGpuLlmProvider implements LlmProvider {
   readonly defaultModel = 'qwen2.5:7b';
 
   constructor(private readonly configService: ConfigService) {
-    this.baseUrl = this.configService.get<string>(
-      'GPU_SERVICE_URL',
-      'https://begins-bottles-nicholas-resulted.trycloudflare.com'
-    );
+    const baseUrl = this.configService.get<string>('GPU_SERVICE_URL')?.trim();
+    if (!baseUrl) {
+      throw new Error(
+        'GPU_SERVICE_URL is not set. OllamaGpuLlmProvider has no default endpoint — ' +
+          'see .env.example and docs/GPU_HOST_SETUP.md.'
+      );
+    }
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   async ocr(fileBuffer: Buffer, filename: string): Promise<{ text: string }> {

@@ -9,9 +9,20 @@ import { DocumentType } from '@tci/shared-types';
  * This script reads hardcoded files from the 'test-files' directory.
  */
 
-// Configuration - adjust as needed
-const GPU_SERVICE_URL =
-  process.env.GPU_SERVICE_URL || 'https://thirty-clearly-pillow-considering.trycloudflare.com';
+// Configuration - adjust as needed.
+// GPU_SERVICE_URL is required: this used to fall back to a hardcoded Cloudflare
+// quick-tunnel that had long since expired, so running the script without
+// configuration produced network errors against a dead host rather than saying
+// what was actually wrong. See .env.example and docs/GPU_HOST_SETUP.md.
+const configuredGpuUrl = process.env.GPU_SERVICE_URL?.trim();
+if (!configuredGpuUrl) {
+  console.error(
+    'GPU_SERVICE_URL is not set. Export it before running this script — ' +
+      'there is no default endpoint. See docs/GPU_HOST_SETUP.md.'
+  );
+  process.exit(1);
+}
+const GPU_SERVICE_URL: string = configuredGpuUrl.replace(/\/+$/, '');
 const TEST_FILES_DIR = path.join(__dirname, 'test-files');
 const OUTPUT_DIR = path.join(__dirname, 'test-results');
 const PROCESSED_DIR = path.join(__dirname, 'test-processed');

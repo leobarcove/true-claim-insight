@@ -2709,6 +2709,61 @@ Guarded by a test that reads `details.tsx` and fails if the case detail formats
 a choice itself again; mutation-tested by restoring the title-caser. 835
 case-service tests, 16 claimant-web, 117 gateway; 13 packages typecheck.
 
+### The GPU host is real, and one model needed a newer runtime (19 August 2026)
+
+`docs/GPU_HOST_SETUP.md` executed on `DESKTOP-PQGPO49`. The three models in
+`CASE_VERIFICATION_ENGINE.md` §8 are pulled and verified on the card:
+`numind/nuextract3:q4_k_m`, `qwen3-vl:8b`, `gpt-oss:20b`. Reachable from the
+tailnet as `http://tci-gpu-host.<your-tailnet>.ts.net:11434`, with Surya on `:8002`
+(`/health`, `/ocr`, `/analyze` — its shape was undocumented until now).
+
+**NuExtract3 would not load at all**, and the reason matters more than the fix.
+Its GGUF is `qwen35`, and because it ships a vision projector Ollama routes it
+to the vendored llama.cpp runner rather than the Go engine — and that runner had
+no `qwen35`. Every tag is vision-language, so the `q6_k`/`bf16` fallbacks §8
+offers would have failed identically. The host was running Ollama **0.13.5**
+against a current **0.32.14**; 0.32.14 loads it, proved on a throwaway container
+against a read-only copy of the model store before anything was changed.
+`finura`'s compose is now pinned to `ollama/ollama:0.32.14` rather than
+`:latest`, so this cannot silently regress.
+
+**The more useful finding is the calling convention.** Asked with a chat
+instruction plus Ollama's `format` schema — exactly what the runbook's §3.1 test
+does — NuExtract3 returned `{"flight_number": "string", "delay_hours": 6}`. It
+echoed the schema's *type name* into a required field. That is schema-valid,
+passes the runbook's stated check, and is wrong. Given its native template
+(`# Template:` / `# Context:`) it returns `MH168` correctly, from text and from
+an image. §8's warning that *schema-valid is not semantically right* turns out
+to describe its own recommended model under its own recommended test. Any client
+must call NuExtract3 in template mode; `qwen3-vl:8b` is the one that behaves
+correctly under instruction + `format`, and it got both fields right.
+
+The `/v3` gateway §7 of the runbook calls nonexistent does exist: it is
+`finura`'s own backend (`loan-application/backend/routers/v3/inference.py`),
+which is why the provider addressed a tunnel. That project is halted, so TCI
+must not depend on it — §7's recommendation to call `/api/chat` and Surya
+directly stands, and is now the blocking item for using this host from code.
+
+Also done: the four `finura` models (28.7 GB) removed with the owner's
+agreement; Tailscale installed and joined; `GPU_SERVICE_URL` added to
+`.env.example`; **both** dead Cloudflare quick-tunnels removed — the runbook
+named one, there were two (`ollama-gpu-llm.provider.ts`, `test-extraction.ts`) —
+and each now fails loudly instead of addressing a dead host.
+
+**Not done, deliberately.** Port `11434` is still bound to `0.0.0.0` with no
+authentication, because closing it meant recreating a container and the decision
+was not to interrupt running services. Tailscale adds a private path; it does
+not remove the LAN exposure. **This is an accepted risk, not an oversight**, and
+firewall state could not be confirmed from an unelevated session. Still open as
+debt: `OllamaGpuLlmProvider.defaultModel` names `qwen2.5:7b`, which no longer
+exists on the host — left alone rather than patched, because the `/v3` rework
+above is the real fix. The repo has no `node_modules` and no `pnpm` on this
+machine, so **these edits are unverified by typecheck**.
+
+**Sovereignty is unchanged by all of this.** §3.4 stands: an office desktop on a
+tailnet is not controlled in-country infrastructure, and nothing here earns the
+claim.
+
 ---
 
 ## 9. Feasibility check
