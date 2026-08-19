@@ -16,18 +16,24 @@ Done, 19 August 2026: the host runs Ollama 0.32.14 with all three models; the
 API contract is recorded in `docs/gpu-api-contract.md`; and the repository's
 client was rewritten against that contract, so the code is ready.
 
-**Outstanding, and all of it on the desktop — §5.3.** risk-engine calls **two**
-services, and only one of them was ever made reachable:
+**Verified end-to-end from a Mac, 19 August 2026.** risk-engine calls **two**
+services and both answer from another machine on the office LAN:
 
 | Service | Port | Purpose | State |
 | --- | --- | --- | --- |
-| Ollama | `11434` | generation, text and vision | reachable on the tailnet |
-| **Surya** | **`8002`** | **OCR, and the source of every bounding box** | **never verified from another machine** |
+| Ollama | `11434` | generation, text and vision | reachable, all three models present |
+| Surya | `8002` | OCR, and the source of every bounding box | reachable, `/health` 200 in 0.05s |
 
-Surya was only ever tested as `http://127.0.0.1:8002` *from the host itself*,
-which proves nothing about reachability. If it is bound to loopback, the Mac
-cannot reach it and Tailscale alone will not change that. Until §5.3 is done,
-document OCR fails while every earlier check still passes.
+The real client — not `curl` — ran all three paths against the host: Surya
+returned `MH168 DELAY 6H` with `bbox [11,86,393,119]` and confidence 0.908,
+`gpt-oss:20b` and `qwen3-vl:8b` both answered `{"flight_number":"MH168",
+"delay_hours":6}`. **Surya was not loopback-bound and the firewall already
+allows it**, so the §5.3 work that looked outstanding turned out not to be
+needed. §5.3 stays as the procedure to follow if either port ever stops
+answering.
+
+**Nothing is required on the desktop for the Mac to call it.** One tuning
+question remains open — §5.4.
 
 **Where to go:** §5.3 to finish the desktop; §6.2 to verify from the Mac; §6.3
 to run the repository against it. **§3.1.1 before writing any client** —
@@ -583,11 +589,67 @@ tailscale status
 as online. A sleeping host is indistinguishable from a firewall problem at the
 Mac end, and people debug the wrong one for an hour.
 
-#### 5 — The only test that counts
+#### 5 — The only test that counts (measured 19 Aug 2026: both ports pass)
 
 Steps 1–4 are all verifiable from the desktop, and **none of them proves the
 objective.** Curling the host's own Tailscale name *from the host* passes
 without the packet leaving the box. Go to §6.2 and run the checks from the Mac.
+
+### 5.4 The one open tuning question — how long models stay resident
+
+Measured from the Mac, 19 August 2026, against the live host:
+
+| | Time |
+| --- | --- |
+| Warm call (`gpt-oss:20b`, model resident) | **0.6–0.8s** |
+| Cold call, or after a swap | **7–17s** |
+| Two concurrent warm calls | **both under 1s** — the card does not serialise them badly |
+
+Both models sit in VRAM together — `qwen3-vl:8b` at 6.5 GB plus `gpt-oss:20b` at
+12.9 GB is 19.4 GB of 24 GB — so alternating between them does **not** cost a
+reload while both are resident. That is better than
+`docs/gpu-api-contract.md` §7 assumed.
+
+**But `/api/ps` reports `expires_at` about five minutes ahead**, which is
+Ollama's default `OLLAMA_KEEP_ALIVE=5m`. After five idle minutes both models
+unload, and the next claim to arrive pays 7–17s of loading before any real work
+starts. For a claim carrying three or four documents that is the difference
+between a few seconds and most of a minute, which is what the per-claim COGS
+ceiling in `MASTER_PLAN.md` §2.5 cares about.
+
+**The decision, and it is not purely technical:** raising `OLLAMA_KEEP_ALIVE`
+(e.g. `24h`, or `-1` for never) pins 19.4 GB of a 24 GB card indefinitely. **This
+machine is shared** — `finura` owns the Ollama container — so that is taking the
+GPU away from another project, and §0.1 says this plan does not do that
+unilaterally.
+
+> **Ask before changing it.** If the answer is yes, it is an environment variable
+> on the `finura-fi-ollama` container, which means editing their compose file —
+> the same constraint as §4.1. If the answer is no, accept the cold-start cost
+> and record it, so the first-claim-of-the-morning latency is a known property
+> rather than a bug report.
+
+### 5.5 Two things worth confirming on the desktop
+
+Neither blocks the Mac today; both decide whether it *keeps* working.
+
+```powershell
+docker inspect finura-fi-ollama --format '{{ .HostConfig.RestartPolicy.Name }}'
+docker inspect finura-fi-surya  --format '{{ .HostConfig.RestartPolicy.Name }}'
+```
+
+**Verify:** `unless-stopped` or `always`. Anything else — `no`, or empty — means
+a reboot of that desktop silently takes the local LLM away, and the first anyone
+notices is a failed extraction.
+
+```powershell
+tailscale status
+```
+
+**Verify:** the host is online and listed. The Mac currently reaches it by LAN
+IP (`192.168.0.71`), which is a DHCP lease — it moves, and it does not work from
+outside the office. Tailscale on **both** machines is what makes the address
+stable; the desktop half is §5.1.
 
 ---
 
