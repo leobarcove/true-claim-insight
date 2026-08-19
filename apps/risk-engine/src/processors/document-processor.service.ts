@@ -100,7 +100,7 @@ export class DocumentProcessorService {
         // provider does not leave the machine, so only the offshore path is a
         // s.129 transfer. No consent gate here yet — the register records the
         // honest state: no basis established for this path (see §3.4).
-        if (this.gpu.name === 'Gemini') {
+        if (this.gpu.offshore) {
           await this.transfers.record({
             provider: 'GOOGLE_GEMINI',
             purpose: `Text extraction from a ${docType} document image`,

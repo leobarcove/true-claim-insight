@@ -39,6 +39,16 @@ export class OllamaGpuLlmProvider implements LlmProvider {
   readonly name = 'OllamaGpu';
 
   /**
+   * Nothing leaves the machine this points at, so no transfer is recorded.
+   *
+   * That is a statement about geography, not about compliance. The endpoint is
+   * an office desktop on a private tailnet — not controlled in-country
+   * infrastructure — so this earns no sovereignty claim on its own. See the
+   * class comment and MASTER_PLAN §3.4.
+   */
+  readonly offshore = false;
+
+  /**
    * Context window for every call.
    *
    * 8192 is the value the host was probed with throughout

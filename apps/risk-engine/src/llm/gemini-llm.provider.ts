@@ -12,12 +12,14 @@ import { LlmProvider, OcrResult } from './llm-provider.interface';
  *  - Routes document data (incl. MyKad images and NRIC values) through
  *    Google's API, outside Malaysia.
  *
- * ⚠️ THIS IS CURRENTLY THE LIVE DEFAULT whenever GEMINI_API_KEY is set — the
- * caveat below was written as a pre-condition but the default was flipped
- * anyway. Until Phase 2 of docs/MASTER_PLAN.md makes an in-country provider
- * the default for documents containing personal data, do not process real
- * claimant documents through this provider; a cross-border transfer basis
- * under PDPA has not been established.
+ * NOT SELECTED BY DEFAULT, as of 19 August 2026. It used to win automatically
+ * whenever GEMINI_API_KEY was set, so a key left in a .env file was enough to
+ * route claimant documents offshore without anyone choosing it. Reaching this
+ * provider now requires LLM_PROVIDER=gemini explicitly — see LlmModule.
+ *
+ * Do not process real claimant documents through it: a cross-border transfer
+ * basis under PDPA has not been established (docs/MASTER_PLAN.md §3.4). The
+ * platform runs on local models for now.
  *
  * One model handles all four LlmProvider methods (text, vision, OCR,
  * reasoning) — Gemini Flash is multimodal. Override per call site via
@@ -28,6 +30,9 @@ export class GeminiLlmProvider implements LlmProvider {
   private readonly logger = new Logger(GeminiLlmProvider.name);
   private readonly client: GoogleGenAI;
   readonly name = 'Gemini';
+
+  /** Every call crosses a border. Callers must record a TransferRecord. */
+  readonly offshore = true;
   readonly defaultModel: string;
 
   /**

@@ -6,15 +6,36 @@ to be executed by an agent (Claude Code) or a person, on the machine itself.
 **Read §0 before running anything.** This box already runs three unrelated
 systems, and the main risk in this plan is not failure — it is collateral damage.
 
-**Already configured?** To call the host from a laptop, go straight to §6.2;
-to run the repository against it from a Mac, §6.3. Executed 19 August 2026:
-the host runs Ollama 0.32.14 with all three models, reachable on the tailnet
-as `tci-gpu-host.<your-tailnet>.ts.net:11434`.
-**§3.1.1 is the one thing to read before writing a client** — NuExtract3 needs a
-template, not an instruction, and calling it wrongly returns plausible nonsense
-rather than an error.
+## The goal, and the one thing still in the way
 
-Companion documents: `docs/CASE_VERIFICATION_ENGINE.md` §8 (why these models),
+**The goal is that the Mac can call the models on this desktop.** Nothing else
+in this runbook counts until that works, and every check that runs *on* the
+desktop can pass while it does not.
+
+Done, 19 August 2026: the host runs Ollama 0.32.14 with all three models; the
+API contract is recorded in `docs/gpu-api-contract.md`; and the repository's
+client was rewritten against that contract, so the code is ready.
+
+**Outstanding, and all of it on the desktop — §5.3.** risk-engine calls **two**
+services, and only one of them was ever made reachable:
+
+| Service | Port | Purpose | State |
+| --- | --- | --- | --- |
+| Ollama | `11434` | generation, text and vision | reachable on the tailnet |
+| **Surya** | **`8002`** | **OCR, and the source of every bounding box** | **never verified from another machine** |
+
+Surya was only ever tested as `http://127.0.0.1:8002` *from the host itself*,
+which proves nothing about reachability. If it is bound to loopback, the Mac
+cannot reach it and Tailscale alone will not change that. Until §5.3 is done,
+document OCR fails while every earlier check still passes.
+
+**Where to go:** §5.3 to finish the desktop; §6.2 to verify from the Mac; §6.3
+to run the repository against it. **§3.1.1 before writing any client** —
+NuExtract3 needs a template, not an instruction, and calling it wrongly returns
+plausible nonsense rather than an error.
+
+Companion documents: `docs/gpu-api-contract.md` (what the host actually serves —
+the source of truth), `docs/CASE_VERIFICATION_ENGINE.md` §8 (why these models),
 `scripts/gpu-survey.ps1` (the read-only survey this plan follows from).
 
 ---
@@ -330,8 +351,18 @@ docker ps --filter name=finura-fi-surya --format "{{.Names}} {{.Ports}} {{.Statu
 Invoke-WebRequest http://127.0.0.1:8002/docs -UseBasicParsing | Select-Object StatusCode
 ```
 
-**Verify:** 200, and the page names the routes. Record them — TCI's client will
-call Surya directly, and nothing in this repo yet records its API shape.
+**Verify:** 200, and the page names the routes. *(Recorded — the API shape is in
+`docs/gpu-api-contract.md` §5, and the client is written against it.)*
+
+**Also record what it is bound to**, which matters more than that it answers:
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object LocalPort -eq 8002 |
+  Select-Object LocalAddress, LocalPort
+```
+
+`127.0.0.1` here answers this check and is still **unreachable from the Mac** —
+the check above talks to the host from the host. §5.3 is where that is settled.
 
 Surya stays in the design because it is a discriminative OCR engine rather than a
 generative model: **it cannot invent text that is not on the page.** On a
@@ -363,6 +394,14 @@ Anything on the office network can use that GPU, and the Ollama API permits
   §5; Tailscale narrows the exposure without breaking a caller you cannot see.
   Record that the port remains open, so it is a known accepted risk rather than
   an oversight.
+
+> **Rebinding to loopback and reaching the box over Tailscale are in tension,
+> and the tension is easy to miss.** A service bound to `127.0.0.1` does not
+> accept traffic arriving on the Tailscale interface either — the packet has the
+> tailnet address as its destination, not `127.0.0.1`. So §4.1 closes the LAN
+> door and the Mac's door in the same move. §5.3 shows how to have both: keep
+> the service on loopback and let Tailscale publish it, rather than choosing
+> between exposure and reachability.
 
 ### 4.1 Rebind to loopback
 
@@ -450,6 +489,106 @@ accept that the host is reachable only from the office LAN. Record that staging
 therefore cannot use it, so the local-LLM path stays development-only until the
 question is revisited.
 
+### 5.3 Both ports reachable from the Mac — **the remaining desktop-side job**
+
+Everything up to here proved the models work *on the desktop*. This is what
+makes them usable *from the Mac*, which is the actual goal. Nothing in this
+section changes a model or a container image.
+
+> **Two services now, not one.** When this runbook was written only Ollama
+> mattered. `OllamaGpuLlmProvider` was rewritten on 19 August 2026 and calls
+> **both**: Ollama on `11434` for generation, and **Surya on `8002` for OCR**.
+> Surya is where document grounding comes from — per-line `bbox` and
+> `confidence`, which `CASE_VERIFICATION_ENGINE.md` §8 makes non-negotiable and
+> which no language model may be asked to invent. **A host that answers on
+> 11434 only will fail every OCR call**, and the older acceptance tests in §6.0
+> and §6.2 would still pass while it did.
+
+#### 1 — Find out what each service is bound to
+
+This one command decides everything below:
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 11434,8002 |
+  Select-Object LocalAddress, LocalPort | Sort-Object LocalPort
+```
+
+| `LocalAddress` | Meaning | Reachable from the Mac? |
+| --- | --- | --- |
+| `0.0.0.0` | every interface | Yes, once the firewall allows it (step 3) |
+| `127.0.0.1` | loopback only | **No — and Tailscale alone cannot fix it** |
+
+Expect them to differ: the survey found `11434` on `0.0.0.0`, and `8002` was
+never checked this way. **If either shows `127.0.0.1`, step 2 is mandatory for
+that port.**
+
+#### 2 — Only for a loopback-bound port: publish it to the tailnet
+
+**Do not edit `finura`'s compose file to change a bind address.** That is
+another project's configuration, and §4.1 already treats editing it as a change
+this plan should not make lightly. Tailscale can publish a loopback service
+without touching the container at all:
+
+```powershell
+tailscale serve --help
+```
+
+Read that first — **the `serve` syntax has changed across Tailscale versions**,
+and this is exactly the kind of detail this project has been burned by guessing.
+On current versions the shape is a TCP forward per port, e.g.
+`tailscale serve --bg --tcp 8002 tcp://127.0.0.1:8002`. Confirm against the help
+output, then:
+
+```powershell
+tailscale serve status
+```
+
+**Verify:** both ports appear. If `serve` is unavailable or refused, the
+fallback is a DHCP reservation and office-LAN-only access (§5.2) — record that
+staging therefore cannot use the host.
+
+#### 3 — Let the traffic through Windows Firewall
+
+Needs an **elevated PowerShell on the desktop**; this cannot be fixed from the
+Mac, and it is the single most common cause of a `curl` that hangs rather than
+refuses. Confirm the adapter name first — it is not always `Tailscale`:
+
+```powershell
+Get-NetAdapter | Select-Object Name, InterfaceDescription, Status
+```
+
+Then, scoped to that interface so this does **not** widen LAN exposure:
+
+```powershell
+New-NetFirewallRule -DisplayName "TCI Ollama (Tailscale)" -Direction Inbound `
+  -Protocol TCP -LocalPort 11434 -Action Allow -InterfaceAlias "Tailscale"
+New-NetFirewallRule -DisplayName "TCI Surya (Tailscale)" -Direction Inbound `
+  -Protocol TCP -LocalPort 8002 -Action Allow -InterfaceAlias "Tailscale"
+```
+
+**Verify:**
+
+```powershell
+Get-NetFirewallRule -DisplayName "TCI *" | Select-Object DisplayName, Enabled, Direction
+```
+
+#### 4 — Confirm the box stays up
+
+```powershell
+powercfg /query SCHEME_CURRENT SUB_SLEEP | Select-String -Pattern "Standby|Hibernate"
+tailscale status
+```
+
+**Verify:** the machine does not sleep on mains, and `tailscale status` lists it
+as online. A sleeping host is indistinguishable from a firewall problem at the
+Mac end, and people debug the wrong one for an hour.
+
+#### 5 — The only test that counts
+
+Steps 1–4 are all verifiable from the desktop, and **none of them proves the
+objective.** Curling the host's own Tailscale name *from the host* passes
+without the packet leaving the box. Go to §6.2 and run the checks from the Mac.
+
 ---
 
 ## 6. Phase 5 — prove it, then record it
@@ -477,8 +616,23 @@ curl -s "$GPU/api/tags" | grep -o '"name":"[^"]*"'
 curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "numind/nuextract3:q4_k_m", "messages": [{"role": "user", "content": "# Template:\n{\"flight_number\": \"verbatim-string\", \"delay_hours\": \"number\"}\n# Context:\nFlight MH168 was scheduled 09:00 and departed 15:00."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}}'
 ```
 
-**Verify:** all three tags appear, and the second call returns
-`{"flight_number": "MH168", "delay_hours": 6}`.
+Then the OCR service, which is a **separate service on a separate port** and is
+where document grounding comes from:
+
+```bash
+SURYA=http://tci-gpu-host.<your-tailnet>.ts.net:8002
+
+curl -s "$SURYA/health"
+curl -s -X POST "$SURYA/ocr" -F "file=@page.png"
+```
+
+**Verify:** all three tags appear, the extraction call returns
+`{"flight_number": "MH168", "delay_hours": 6}`, and `/ocr` returns
+`pages[].text_lines[]` with `text`, `confidence` and `bbox`.
+
+**Both must pass.** risk-engine calls Ollama *and* Surya, and a host that
+answers on `11434` only will fail every OCR call while looking healthy in every
+check above this one.
 
 Repeat with `gpt-oss:20b` if you want the summariser path covered as well — that
 one takes `format`, not a template — but the extraction call is the one that
@@ -551,10 +705,16 @@ nothing below can work, and no amount of retrying curl will tell you why.
 
 ```bash
 export GPU=http://tci-gpu-host.<your-tailnet>.ts.net:11434
+export SURYA=http://tci-gpu-host.<your-tailnet>.ts.net:8002
 ```
 
-If MagicDNS is disabled on the tailnet, use `export GPU=http://100.x.y.z:11434`
-instead. That address is stable; the LAN one is DHCP and moves.
+**Two of them, and both are required.** Ollama generates; Surya does OCR. They
+are different services on different ports, and one URL was never going to front
+both — assuming it did was the defect that made the whole client unusable.
+
+If MagicDNS is disabled on the tailnet, use `http://100.x.y.z:11434` and
+`http://100.x.y.z:8002` instead. That address is stable; the LAN one is DHCP and
+moves.
 
 > **The real tailnet name and IP are deliberately not written down here — this
 > repository is public.** They grant nothing without tailnet membership, but a
@@ -565,10 +725,13 @@ instead. That address is stable; the LAN one is DHCP and moves.
 
 ```bash
 curl -s "$GPU/api/tags" | grep -o '"name":"[^"]*"'
+curl -s "$SURYA/health"
 ```
 
 **Verify:** three names — `numind/nuextract3:q4_k_m`, `qwen3-vl:8b`,
-`gpt-oss:20b`.
+`gpt-oss:20b` — and a healthy answer from Surya. If the models list but Surya
+does not answer, the problem is §5.3: `8002` is loopback-bound, or the firewall
+has no rule for it.
 
 **4 — The calls, one per job.** Each model wants a different convention, and
 mixing them up produces confident nonsense rather than an error (3.1.1).
@@ -603,6 +766,18 @@ misbehaves, build the same body in any language. The shape is what matters.
 curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{"model": "qwen3-vl:8b", "messages": [{"role": "user", "content": "Flight MH168 was scheduled 09:00 and departed 15:00. Return the delay."}], "stream": false, "options": {"temperature": 0, "num_ctx": 8192}, "format": {"type": "object", "properties": {"flight_number": {"type": "string"}, "delay_hours": {"type": "number"}}, "required": ["flight_number", "delay_hours"]}}'
 ```
 
+*OCR — Surya, multipart, one part named `file`. This is the grounding source:*
+
+```bash
+curl -s -X POST "$SURYA/ocr" -F "file=@boarding-pass.png"
+```
+
+→ `{"status":"success","pages":[{"page":1,"text_lines":[{"text":"...","confidence":0.95,"bbox":[x0,y0,x1,y1]}],...}]}`
+
+Do **not** call `/analyze`: it takes the identical request and answers with
+`finura`'s bank-statement fields. There is no `/predict`
+(`docs/gpu-api-contract.md` §5).
+
 *Case-file summary — gpt-oss, text only, also takes `format`:*
 
 ```bash
@@ -621,6 +796,8 @@ leave ~2.4 GB), so alternating between them pays a reload each time.
 | `curl: (7)` connection refused | Port not listening — the `finura-fi-ollama` container is down |
 | `Could not resolve host` | MagicDNS off, or the Mac is not on the tailnet. Use `http://100.x.y.z:11434` |
 | `tailscale status` omits the host | Wrong account/tailnet, or the desktop is asleep. Step 1 |
+| Ollama answers but Surya does not | `8002` is loopback-bound or has no firewall rule — §5.3, and it must be fixed **on the desktop** |
+| OCR returns bank-statement fields | `/analyze` was called instead of `/ocr` |
 | `{"flight_number": "string"}` | Instruction + `format` was used on NuExtract3. See 3.1.1 — this is not an error, it is the wrong calling convention |
 | `unknown model architecture` | The host was downgraded below Ollama 0.32.14. See 2.1 |
 
@@ -671,8 +848,18 @@ git fetch origin && git checkout feat/gpu-host-local-llm && pnpm install
 cp -n .env.example .env
 ```
 
-Then set `GPU_SERVICE_URL` in `.env` to the value from §6.2 — the real tailnet
-name is not in this repo, which is public. Leave `GPU_MODEL_TEXT`,
+Then set **both** endpoints in `.env` from §6.2 — the real tailnet name is not
+in this repo, which is public:
+
+```bash
+GPU_SERVICE_URL=http://tci-gpu-host.<your-tailnet>.ts.net:11434   # Ollama
+SURYA_SERVICE_URL=http://tci-gpu-host.<your-tailnet>.ts.net:8002  # Surya OCR
+```
+
+Neither has a default and both throw when unset, so a missing one fails by
+saying which variable is missing rather than by addressing a host that is not
+there. Leave `LLM_PROVIDER` unset — local is the default, and setting it to
+`gemini` sends claimant data to Google. Leave `GPU_MODEL_TEXT`,
 `GPU_MODEL_VISION` and `GPU_MODEL_REASONING` unset unless the host's models
 have changed; their defaults are the tags actually pulled onto it, and
 risk-engine logs whichever ids are in force at startup.

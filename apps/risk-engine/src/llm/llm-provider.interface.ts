@@ -54,6 +54,20 @@ export interface LlmProvider {
   /** Stable provider identifier persisted on Document.analysis.modelUsed. */
   readonly name: string;
 
+  /**
+   * Whether a call to this provider sends personal data outside Malaysia.
+   *
+   * This drives the TransferRecord obligation under PDPA s.129, so it is a
+   * property of the provider rather than something each call site works out.
+   * It replaced `provider.name === 'Gemini'` checks, which were both easy to
+   * forget — the intake normaliser recorded a Google transfer unconditionally,
+   * including on runs where nothing left the machine — and wrong the moment a
+   * second offshore backend appears.
+   *
+   * A register that says the wrong thing is worse than a thin one.
+   */
+  readonly offshore: boolean;
+
   /** Default model id used when no override is passed. */
   readonly defaultModel: string;
 
