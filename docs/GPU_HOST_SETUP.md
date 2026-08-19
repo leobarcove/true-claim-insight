@@ -702,25 +702,75 @@ Only the **full application** needs Postgres, Redis and Mailhog — `pnpm setup`
 does that and expects Docker Desktop running locally. It is not required for
 any of the above.
 
-#### 5. What is still blocked, and it is not configuration
+#### 5. The job: replace the /v3 client
+
+**This was blocked and is not any more.** It needed information only the GPU
+host could supply, and `docs/gpu-api-contract.md` now records it — captured on
+the host on 19 August 2026, not guessed.
 
 `OllamaGpuLlmProvider` calls `/v3/ocr`, `/v3/llm/generate` and `/v3/llm/vision`.
 **That API is not Ollama's.** It belonged to the `finura` project's backend on
 the same desktop, which is halted — and it is why this class ever pointed at a
-Cloudflare tunnel. Ollama serves `/api/chat`; Surya serves `/ocr` on `:8002`.
+Cloudflare tunnel. So a correctly configured `GPU_SERVICE_URL` still fails on
+every call, and will until this is done. `curl` from §6.2 is the only working
+path today.
 
-So a correctly configured `GPU_SERVICE_URL` still fails on every call, and
-that is expected until §7 is done. Nothing in the application can use this host
-before then; `curl` from §6.2 is the only working path today. When the rework
-lands, revisit `GPU_MODEL_VISION`: it defaults to `qwen3-vl:8b` only because
-this class asks with an instruction plus a JSON schema, which is the convention
-NuExtract3 answers wrongly (§3.1.1).
+`LlmProvider` keeps its four methods. Only the implementation changes:
 
+| Method | Today (broken) | Rewrite to |
+| --- | --- | --- |
+| `ocr()` | `POST /v3/ocr` | Surya `POST /ocr` — multipart, one part named `file` |
+| `generateJson()` | `POST /v3/llm/generate` | `POST /api/chat`, `format` = schema, `temperature` 0 |
+| `visionJson()` | `POST /v3/llm/vision` | `POST /api/chat` with `images: [base64]` |
+| `reasoningJson()` | `POST /v3/llm/generate` | `POST /api/chat` on the text model — no third model |
+
+Five things the contract settles, each of which would otherwise be a guess:
+
+1. **Surya needs its own base URL, and the variable does not exist yet.** Only
+   `GPU_SERVICE_URL` is in `.env.example`, and it is assumed to front both
+   services. It does not — Surya is a separate service on a separate port. Add
+   one, and make a missing value fail loudly rather than default, for the same
+   reason `GPU_SERVICE_URL` has no default.
+2. **Grounding comes from Surya, not from a model.** `/ocr` returns per line
+   `text`, `confidence` and `bbox` as `[x0, y0, x1, y1]`. That satisfies the
+   page-and-bounding-box rule in `CASE_VERIFICATION_ENGINE.md` §8 from a
+   discriminative engine, which cannot invent text that is not on the page. No
+   LLM should be asked for coordinates.
+3. **Call `/ocr` only.** `/analyze` takes the same request but returns
+   bank-statement fields — `bank_name`, `transactions`, `opening_balance` —
+   from the `finura` loan domain. There is no `/predict`.
+4. **Model ids stay configuration.** `GPU_MODEL_TEXT`, `GPU_MODEL_VISION` and
+   `GPU_MODEL_REASONING` exist and are logged at startup. A fourth hardcoded
+   literal would reintroduce the bug this branch removed.
+5. **`temperature: 0`, and record the model id on the result.** Re-running a
+   case six months later must not silently produce a different answer
+   (`CASE_VERIFICATION_ENGINE.md` §9).
+
+**Run `pnpm --filter @tci/risk-engine test` before starting.** It needs no
+Docker, no GPU and no tailnet, it covers the boot regression this provider
+already caused once, and it has never actually been run — the Windows host has
+no `pnpm`.
+
+#### 6. Two known-wrong things to fix while you are here
+
+Both are recorded rather than silently corrected, because each is a claim this
+repository currently makes and would keep making.
+
+- `scripts/gpu-api-probe.ps1` never captured Surya. `Invoke-RestMethod -Form`
+  is PowerShell 6+ and the host runs 5.1, so all three round trips failed in 0s
+  with a parameter-binding error that reads like a service result. Use
+  `curl.exe -F`, and treat a 0s round trip as a script failure.
+- The NuExtract3 rationale in `ollama-gpu-llm.provider.ts` and `.env.example`
+  is **too broad**. It is not that the model answers wrongly under instruction
+  plus schema — it is correct when the prompt names every required field, and
+  emits the schema's own type name for any required field the prompt does not
+  name (`docs/gpu-api-contract.md` §3). The `qwen3-vl` default is still right;
+  the reason given for it is not.
 ## 7. Deferred, and honest about it
 
-> The `/v3` replacement below is the blocking item, and it needs information
-> only this host can supply. `docs/GPU_HOST_INTEGRATION.md` is the exchange:
-> run `scripts/gpu-api-probe.ps1` and send the report back.
+> The `/v3` replacement below is the blocking item, and it is **no longer
+> blocked**: the host was probed on 19 August 2026 and the result is recorded
+> in `docs/gpu-api-contract.md`. The work itself is specified in §6.3 step 5.
 
 
 **A separate TCI Ollama container.** Correct if §1.2 was answered "no", or when

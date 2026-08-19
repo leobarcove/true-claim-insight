@@ -8,12 +8,22 @@ travel between them.
 Companion documents: `docs/GPU_HOST_SETUP.md` (configuring the host — done),
 `docs/CASE_VERIFICATION_ENGINE.md` §8 (why these models).
 
-> **Status: the integration is blocked, and not on configuration.** `GPU_SERVICE_URL`
-> can be perfectly set and every call still fails. See §1.
+> **Status: the handshake is complete.** The host was probed on 19 August 2026
+> and the contract is recorded in `docs/gpu-api-contract.md` — including two
+> corrections to the probe itself, one of which means Surya had to be captured
+> a second way. **Nothing further is needed from the GPU host.** The remaining
+> work is the rewrite, specified in `GPU_HOST_SETUP.md` §6.3 step 5.
+>
+> Until that lands, `GPU_SERVICE_URL` can be perfectly set and every call still
+> fails. See §1.
 
 ---
 
-## If you are on the GPU desktop, this is the job
+## If you are on the GPU desktop, this is the job — **done, 19 August 2026**
+
+**Already run; the result is `docs/gpu-api-contract.md`. Do not re-run it**
+unless the host changes, and if you do, fix the `-Form` bug first (§4 of the
+contract) — it silently failed to capture Surya at all.
 
 One command, read-only, roughly ten minutes depending on model load times:
 
