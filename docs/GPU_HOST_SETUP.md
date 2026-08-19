@@ -414,10 +414,13 @@ from the developer machine, not the desktop:
 ```bash
 GPU=http://<tailscale-name-or-ip>:11434
 
-curl -s "$GPU/api/tags" | head -c 400
+# All three models present?
+curl -s "$GPU/api/tags" | grep -o '"name":"[^"]*"'
 
+# The extraction model, over the network, schema-constrained. This is the call
+# the whole pipeline rests on; if only one thing is proved, prove this.
 curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{
-  "model": "gpt-oss:20b",
+  "model": "numind/nuextract3:q4_k_m",
   "messages": [{"role":"user","content":"Scheduled 09:00, departed 15:00. Return the delay."}],
   "stream": false,
   "options": {"temperature": 0},
@@ -425,8 +428,11 @@ curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{
 }'
 ```
 
-**Verify:** the model list returns, and the second call returns
+**Verify:** all three tags appear, and the second call returns
 `{"delay_hours":6}` or close to it.
+
+Repeat the second call with `gpt-oss:20b` if you want the summariser path
+covered as well — but the extraction call is the one that matters.
 
 **If this fails while §3 passed,** the models are fine and the *link* is not —
 which is a §5 problem, not a model problem. Do not proceed to §6.1 until this

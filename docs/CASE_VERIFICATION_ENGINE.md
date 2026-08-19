@@ -353,12 +353,29 @@ then (`docs/MASTER_PLAN.md` §3.4).
 Everything below is open-weight and self-hostable. `LLM_PROVIDER` already exists
 as a DI token, so swapping is a configuration change rather than a refactor.
 
-| Job | Candidate | Note |
-| --- | --- | --- |
-| Structured extraction | **NuExtract3** (4B, Apache 2.0) | Purpose-built for document → JSON; ~9 GB, single consumer GPU. Vendor-benchmarked only — validate on our own documents before trusting it |
-| OCR / layout | **PaddleOCR-VL**, **dots.ocr** | PaddleOCR reports 96.3 OmniDocBench v1.6, 109 languages (vendor figure) |
-| Reasoning over documents | **Qwen3-VL** | When a document needs interpretation rather than reading |
-| Summarising the case file | Any of the above at low temperature | Sees assertions, never raw document text — see §9 |
+Tags below were verified against the Ollama registry on **19 August 2026** and
+sized against the host in `docs/GPU_HOST_SETUP.md` — an RTX 3090 with 24 GB.
+
+| Job | Model | Size | Input | Note |
+| --- | --- | --- | --- | --- |
+| **Structured extraction** | `numind/nuextract3:q4_k_m` (4B, Apache 2.0) | ~3 GB | Text, Image | Purpose-built: doc → JSON *and* doc → Markdown in one model, multilingual. Vendor-benchmarked only |
+| Vision escalation | `qwen3-vl:8b` | 6.1 GB | Text, Image | When NuExtract3 struggles. **Needs Ollama ≥ 0.12.7** |
+| OCR | **Surya** | already running | Image | Discriminative, not generative — it *cannot* invent text that is not on the page |
+| Case-file summary | `gpt-oss:20b` (Apache 2.0) | 14 GB | **Text only** | Sees assertions, never raw document text — see §9 |
+
+Higher-precision extraction tags exist if quality disappoints:
+`numind/nuextract3:q6_k` (4.1 GB) and `:bf16` (9.3 GB).
+
+**Two traps found while verifying these.** NuExtract3 is namespaced — a bare
+`ollama pull nuextract3` risks resolving to `nuextract`, an unrelated and much
+older phi-3-mini fine-tune that would look like success. And NuExtract3's default
+Modelfile sets a **131,072-token context**: the weights are ~3 GB, but the KV
+cache for that context is what would put a 24 GB card over. Claim documents are
+a page or two, so `num_ctx` is capped rather than inherited.
+
+**No reasoning model.** `deepseek-r1:14b` appears in the current provider and has
+no role here: the design has no step where a model holds a verdict (§8.1), so
+carrying one is 9 GB and a temptation.
 
 Three non-negotiables for Layer 2, all from current practice:
 
