@@ -24,20 +24,47 @@ import { LlmProvider } from './llm-provider.interface';
 @Injectable()
 export class OllamaGpuLlmProvider implements LlmProvider {
   private readonly logger = new Logger(OllamaGpuLlmProvider.name);
-  private readonly baseUrl: string;
+  private readonly configuredUrl?: string;
 
   readonly name = 'OllamaGpu';
   readonly defaultModel = 'qwen2.5:7b';
 
   constructor(private readonly configService: ConfigService) {
-    const baseUrl = this.configService.get<string>('GPU_SERVICE_URL')?.trim();
-    if (!baseUrl) {
+    this.configuredUrl = this.configService
+      .get<string>('GPU_SERVICE_URL')
+      ?.trim()
+      .replace(/\/+$/, '');
+  }
+
+  /**
+   * The endpoint, or a loud failure — resolved per call rather than in the
+   * constructor.
+   *
+   * Both halves of that matter. Throwing is right: the missing default used to
+   * be a hardcoded Cloudflare quick-tunnel that had long since expired, so an
+   * unconfigured service silently addressed a dead host and surfaced as
+   * confusing failures much further downstream.
+   *
+   * Throwing *here* rather than in the constructor is the other half. `LlmModule`
+   * lists this class in `providers` and injects it into the factory that picks
+   * between backends, so Nest instantiates it eagerly whichever backend wins —
+   * and a constructor throw took down the whole of risk-engine at boot for
+   * anyone running Gemini, or running neither. Failing on first use keeps the
+   * loud failure and confines it to the path that actually needs a GPU.
+   */
+  private endpoint(): string {
+    if (!this.configuredUrl) {
       throw new Error(
         'GPU_SERVICE_URL is not set. OllamaGpuLlmProvider has no default endpoint — ' +
           'see .env.example and docs/GPU_HOST_SETUP.md.'
       );
     }
-    this.baseUrl = baseUrl.replace(/\/+$/, '');
+    return this.configuredUrl;
+  }
+
+  /** Whether this provider can serve a request at all. */
+  isConfigured(): boolean {
+    return Boolean(this.configuredUrl);
   }
 
   async ocr(fileBuffer: Buffer, filename: string): Promise<{ text: string }> {
@@ -82,8 +109,13 @@ export class OllamaGpuLlmProvider implements LlmProvider {
   }
 
   private async post(endpoint: string, body: FormData): Promise<any> {
+    // Resolved before the try, so a missing GPU_SERVICE_URL is reported as the
+    // configuration error it is rather than being logged as "GPU Call Failed" —
+    // which would send whoever reads it looking at the network.
+    const base = this.endpoint();
+
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetch(`${base}${endpoint}`, {
         method: 'POST',
         body: body as any,
       });
