@@ -29,7 +29,8 @@ container left in an odd state may be "repaired" into a worse one later.
 
 ### 0.2 Stop gates
 
-Four steps in this plan change something another system might depend on. Each is
+Four steps in this plan change something another system might depend on --
+§1.2, §2.1, §4 and §5. Each is
 marked **STOP** and must be confirmed by a human before proceeding. An agent
 executing this file must halt and ask; it must not infer consent from the
 absence of an objection.
@@ -113,58 +114,73 @@ a small specialist for extraction, a vision model as the escalation, and a
 general model to write the case file. **No reasoning model** — the design has no
 step where an LLM holds a verdict, so `deepseek-r1:14b` has no job here.
 
-### 2.1 Pull the models
+### 2.1 Precondition — Ollama version — **STOP** if too old
 
-The tags below come from community write-ups rather than a registry lookup, so
-**treat a failed pull as information, not an error to work around.** Roughly
-21 GB in total; over office WiFi that is not a fast step.
+Qwen3-VL requires **Ollama 0.12.7 or newer**. Check before pulling anything, not
+after a confusing failure:
 
 ```powershell
-docker exec finura-fi-ollama ollama pull gpt-oss:20b
+docker exec finura-fi-ollama ollama --version
+```
+
+If it is older, **STOP**. Upgrading `finura-fi`'s container is a change to
+another team's service and needs their agreement (§1.2 covered sharing, not
+upgrading). NuExtract3 and gpt-oss can still be pulled; Qwen3-VL cannot.
+
+### 2.2 Pull the models
+
+All three tags below were verified against the Ollama registry on 19 August 2026.
+Roughly 23 GB in total, and over office WiFi that is not a fast step.
+
+```powershell
+docker exec finura-fi-ollama ollama pull numind/nuextract3:q4_k_m
 docker exec finura-fi-ollama ollama pull qwen3-vl:8b
+docker exec finura-fi-ollama ollama pull gpt-oss:20b
 ```
 
-If a tag does not resolve, list what the registry actually offers before
-substituting anything, and record the substitution -- a different tag can mean a
-different quantisation, and that changes both VRAM and accuracy:
+| Tag | Download | Context | Input | Role |
+| --- | --- | --- | --- | --- |
+| `numind/nuextract3:q4_k_m` | ~3 GB | 256K | Text, Image | **Extraction** — doc to JSON, and doc to Markdown |
+| `qwen3-vl:8b` | 6.1 GB | 256K | Text, Image | Vision escalation when NuExtract3 struggles |
+| `gpt-oss:20b` | 14 GB | 128K | **Text only** | Case-file summary. Not a vision model |
 
-```powershell
-docker exec finura-fi-ollama ollama list
-```
+**The namespace matters.** NuExtract3 is published under `numind/`, not in the
+root library. A bare `ollama pull nuextract3` risks resolving to `nuextract` —
+an unrelated and much older phi-3-mini fine-tune — which would look like success
+and behave nothing like the model this design assumes.
+
+Higher-precision NuExtract3 tags exist if extraction quality disappoints:
+`numind/nuextract3:q6_k` (4.1 GB) and `numind/nuextract3:bf16` (9.3 GB). Start at
+Q4_K_M, which is NuMind's own recommended default.
 
 **Verify:**
 
 ```powershell
 docker exec finura-fi-ollama ollama list
-```
-
-Both must appear. Expect roughly 7 GB and 14 GB on disk. Re-check free space
-afterwards, since this disk is shared with `finura-fi` and `paybrix`:
-
-```powershell
 "{0:N0} GB free on C:" -f ((Get-PSDrive C).Free/1GB)
 ```
 
-**Rollback:** `docker exec finura-fi-ollama ollama rm qwen3-vl:8b` (and likewise
-for `gpt-oss:20b`) — but only for models absent from
+All three must appear, and free space must still be comfortable — this disk is
+shared with `finura-fi` and `paybrix`.
+
+**Rollback:** `ollama rm <tag>`, but only for tags absent from
 `$base\ollama-models-before.txt`.
 
-### 2.2 NuExtract3 — availability is unverified
+### 2.2.1 Cap the context, or the KV cache eats the card
 
-NuExtract3 is the recommended extraction model, but it is published on Hugging
-Face (`numind/NuExtract3`) and **may not exist in the Ollama registry**. Try it,
-and branch honestly rather than forcing it:
+NuExtract3's default Modelfile sets a **131,072-token context**, and NuMind
+warn that a context that large needs substantial memory for the KV cache. The
+weights are only ~3 GB; the cache is what would put this over 24 GB.
+
+Claim documents are a page or two, not a book. Cap it when serving:
 
 ```powershell
-docker exec finura-fi-ollama ollama pull nuextract3
+docker exec finura-fi-ollama sh -c "echo 'OLLAMA_KV_CACHE_TYPE=q8_0'"
 ```
 
-- **Succeeds** → continue to §3.
-- **Fails with a not-found error** → do not improvise a GGUF conversion inside
-  another team's container. Record the failure and proceed to §3 using
-  `qwen3-vl:8b` for extraction as well. Getting NuExtract3 running is then its
-  own task, and the honest position until it is done is that extraction runs on
-  a generalist, which the benchmark in §8 suggests is materially worse at this.
+and set `num_ctx` per request (8192 is generous for a boarding pass) rather than
+inheriting the default. **Verify** during §3 that `nvidia-smi` shows headroom
+left, not a card at 23 GB.
 
 ### 2.3 What is deliberately not pulled
 
@@ -186,7 +202,7 @@ to a JSON schema cannot be used, however well it reads a document.
 ```powershell
 $body = @'
 {
-  "model": "gpt-oss:20b",
+  "model": "numind/nuextract3:q4_k_m",
   "messages": [{"role":"user","content":"Flight MH168 was scheduled 09:00 and departed 15:00 on 18 August 2026. Return the delay."}],
   "stream": false,
   "options": {"temperature": 0},
@@ -242,7 +258,7 @@ $bmp.Dispose()
 ```powershell
 $img = [Convert]::ToBase64String([IO.File]::ReadAllBytes($testImage))
 $body = @{
-  model = "qwen3-vl:8b"
+  model = "numind/nuextract3:q4_k_m"   # repeat with qwen3-vl:8b to compare
   messages = @(@{ role = "user"; content = "Transcribe any text in this image."; images = @($img) })
   stream = $false
   options = @{ temperature = 0 }
