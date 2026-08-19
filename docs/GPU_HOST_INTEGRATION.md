@@ -63,8 +63,8 @@ POST /v3/llm/generate
 POST /v3/llm/vision
 ```
 
-**That API is not Ollama's.** It belonged to the `finura` project's backend on
-the same desktop, which is halted — and it is why this class ever addressed a
+**That API is not Ollama's.** It belonged to a halted backend from an unrelated
+project that shares the same desktop — and it is why this class ever addressed a
 Cloudflare tunnel. What actually runs on the host is:
 
 | Service | Port | API |

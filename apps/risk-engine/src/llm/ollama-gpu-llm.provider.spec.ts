@@ -118,8 +118,8 @@ describe('model ids come from configuration', () => {
  * THE REWRITE — this class must speak the API that actually runs on the host.
  *
  * It used to call /v3/ocr, /v3/llm/generate and /v3/llm/vision. That API was
- * never Ollama's: it belonged to the halted `finura` backend on the same
- * desktop, so a perfectly configured GPU_SERVICE_URL still failed on every
+ * never Ollama's: it belonged to a halted backend from an unrelated project on
+ * the same desktop, so a perfectly configured GPU_SERVICE_URL still failed on every
  * call. What runs there was probed on 19 August 2026 and recorded in
  * docs/gpu-api-contract.md; these tests hold the client to that record.
  *
@@ -294,7 +294,7 @@ describe('OCR goes to Surya, which is a different service', () => {
 
   it('never calls /analyze', async () => {
     // /analyze takes the identical request but answers with bank_name,
-    // transactions and opening_balance -- finura's loan domain, not claims.
+    // transactions and opening_balance -- a loan system's domain, not claims.
     const calls = captureFetch(suryaReply);
     await configured().ocr(Buffer.from('img'), 'page.png');
     expect(calls[0].url).not.toContain('/analyze');

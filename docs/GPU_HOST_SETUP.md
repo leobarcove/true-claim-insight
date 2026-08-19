@@ -54,7 +54,7 @@ The survey found three unrelated workloads already running:
 
 | Owner | Containers | Notes |
 | --- | --- | --- |
-| `finura-fi-*` | ollama, surya, postgres, redis | **Holds the GPU.** Up 8 days |
+| the other stack | ollama, surya, postgres, redis | **Holds the GPU.** Up 8 days |
 | `paybrix-*` | agent, alloy, watchtower | Up 8 days; watchtower auto-updates images |
 | `appium-*` | six device runners | Up 4-7 days; bound to ports 4735-4756 |
 
@@ -93,11 +93,20 @@ $base  = "$env:USERPROFILE\tci-baseline-$stamp"
 New-Item -ItemType Directory -Path $base | Out-Null
 
 docker ps -a --format "{{.Names}}|{{.Image}}|{{.Ports}}|{{.Status}}" | Out-File "$base\containers.txt"
-docker inspect finura-fi-ollama | Out-File "$base\ollama-inspect.json"
-docker exec finura-fi-ollama ollama list | Out-File "$base\ollama-models-before.txt"
+# The inference containers belong to THE OTHER STACK on this box -- an unrelated
+# Docker project that happens to own Ollama and the OCR service. Their names are
+# not ours to assume, so discover them once and reuse the variables below. If a
+# later step reports an empty name, you are in a new shell: re-run these two
+# lines. (Recorded 19 Aug 2026: they carry a common vendor prefix.)
+$OLLAMA_CTR = (docker ps --format "{{.Names}}" | Select-String -Pattern "ollama" | Select-Object -First 1).ToString().Trim()
+$SURYA_CTR  = (docker ps --format "{{.Names}}" | Select-String -Pattern "surya"  | Select-Object -First 1).ToString().Trim()
+"containers: $OLLAMA_CTR / $SURYA_CTR"
+
+docker inspect $OLLAMA_CTR | Out-File "$base\ollama-inspect.json"
+docker exec $OLLAMA_CTR ollama list | Out-File "$base\ollama-models-before.txt"
 nvidia-smi | Out-File "$base\nvidia-before.txt"
 Get-NetTCPConnection -State Listen | Select-Object LocalAddress,LocalPort | Out-File "$base\ports-before.txt"
-docker exec finura-fi-ollama ollama --version | Out-File "$base\ollama-version.txt"
+docker exec $OLLAMA_CTR ollama --version | Out-File "$base\ollama-version.txt"
 $base | Out-File "$env:USERPROFILE\.tci-baseline-path" -Encoding ascii
 "Baseline written to $base"
 ```
@@ -115,13 +124,13 @@ another project's.
 
 ### 1.2 Confirm ownership — **STOP**
 
-The inference containers carry a `finura-fi-` prefix and belong to a different
+The inference containers belong to the other stack — a different
 product.
 
-> **Ask before continuing:** is `finura-fi` a system you own and are content for
+> **Ask before continuing:** is the other stack a system you own and are content for
 > TCI to share a GPU and an Ollama instance with?
 
-- **Yes** → continue; TCI reuses the running `finura-fi-ollama`.
+- **Yes** → continue; TCI reuses the Ollama container that is already running.
 - **No / unsure** → stop. TCI needs its own container (§7, deferred), and
   sharing another team's model store is not a decision to make by default.
 
@@ -138,7 +147,7 @@ models, is the correct shape.
 **Verify:** at least 60 GB free. The three models below total roughly 30 GB, and
 Ollama needs working room. The survey reported 876 GB, so this should pass
 trivially — it is here because a pull that fills a shared disk would take out
-`finura-fi` and `paybrix` with it.
+the other stack with it.
 
 ---
 
@@ -155,10 +164,10 @@ Qwen3-VL requires **Ollama 0.12.7 or newer**. Check before pulling anything, not
 after a confusing failure:
 
 ```powershell
-docker exec finura-fi-ollama ollama --version
+docker exec $OLLAMA_CTR ollama --version
 ```
 
-If it is older, **STOP**. Upgrading `finura-fi`'s container is a change to
+If it is older, **STOP**. Upgrading the other stack's container is a change to
 another team's service and needs their agreement (§1.2 covered sharing, not
 upgrading). NuExtract3 and gpt-oss can still be pulled; Qwen3-VL cannot.
 
@@ -168,9 +177,9 @@ All three tags below were verified against the Ollama registry on 19 August 2026
 Roughly 23 GB in total, and over office WiFi that is not a fast step.
 
 ```powershell
-docker exec finura-fi-ollama ollama pull numind/nuextract3:q4_k_m
-docker exec finura-fi-ollama ollama pull qwen3-vl:8b
-docker exec finura-fi-ollama ollama pull gpt-oss:20b
+docker exec $OLLAMA_CTR ollama pull numind/nuextract3:q4_k_m
+docker exec $OLLAMA_CTR ollama pull qwen3-vl:8b
+docker exec $OLLAMA_CTR ollama pull gpt-oss:20b
 ```
 
 | Tag | Download | Context | Input | Role |
@@ -191,12 +200,12 @@ Q4_K_M, which is NuMind's own recommended default.
 **Verify:**
 
 ```powershell
-docker exec finura-fi-ollama ollama list
+docker exec $OLLAMA_CTR ollama list
 "{0:N0} GB free on C:" -f ((Get-PSDrive C).Free/1GB)
 ```
 
 All three must appear, and free space must still be comfortable — this disk is
-shared with `finura-fi` and `paybrix`.
+shared with the other systems on this box.
 
 **Rollback:** `ollama rm <tag>`, but only for tags absent from
 `$base\ollama-models-before.txt`.
@@ -210,7 +219,7 @@ weights are only ~3 GB; the cache is what would put this over 24 GB.
 Claim documents are a page or two, not a book. Cap it when serving:
 
 ```powershell
-docker exec finura-fi-ollama sh -c "echo 'OLLAMA_KV_CACHE_TYPE=q8_0'"
+docker exec $OLLAMA_CTR sh -c "echo 'OLLAMA_KV_CACHE_TYPE=q8_0'"
 ```
 
 and set `num_ctx` per request (8192 is generous for a boarding pass) rather than
@@ -262,7 +271,7 @@ If this fails, capture the version before diagnosing anything else --
 schema-constrained `format` is a relatively recent Ollama feature:
 
 ```powershell
-docker exec finura-fi-ollama ollama --version
+docker exec $OLLAMA_CTR ollama --version
 ```
 
 **If the shape is right but the number is wrong,** that is the expected failure
@@ -353,7 +362,7 @@ escalation path or only a curiosity.
 ### 3.3 Surya
 
 ```powershell
-docker ps --filter name=finura-fi-surya --format "{{.Names}} {{.Ports}} {{.Status}}"
+docker ps --filter name=$SURYA_CTR --format "{{.Names}} {{.Ports}} {{.Status}}"
 Invoke-WebRequest http://127.0.0.1:8002/docs -UseBasicParsing | Select-Object StatusCode
 ```
 
@@ -393,7 +402,7 @@ Anything on the office network can use that GPU, and the Ollama API permits
 *pulling and deleting models*, not only inference.
 
 > **Ask before continuing:** does anything outside this machine currently reach
-> Ollama on `11434`? `finura-fi` may depend on it from another host.
+> Ollama on `11434`? The other stack may depend on it from another host.
 
 - **Nothing external depends on it** → rebind to loopback (§4.1).
 - **Something does, or it is unknown** → **do not rebind.** Leave it and go to
@@ -411,13 +420,14 @@ Anything on the office network can use that GPU, and the Ollama API permits
 
 ### 4.1 Rebind to loopback
 
-Requires editing the compose file that owns `finura-fi-ollama` — which belongs to
+Requires editing the compose file that owns the Ollama container — which belongs to
 another project, so this is a change to their configuration. Find it first;
 Compose records its own provenance on the container:
 
 ```powershell
-docker inspect finura-fi-ollama --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
-docker inspect finura-fi-ollama --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}'
+# $OLLAMA_CTR comes from §1.1; re-run that discovery block in a fresh shell.
+docker inspect $OLLAMA_CTR --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker inspect $OLLAMA_CTR --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}'
 ```
 
 If those labels come back empty the container was started with `docker run`
@@ -433,7 +443,7 @@ ports: ["127.0.0.1:11434:11434"]
 ```
 
 ```powershell
-docker compose -f <their-compose-file> up -d finura-fi-ollama
+docker compose -f <their-compose-file> up -d <ollama-service-name>
 ```
 
 **Verify:**
@@ -530,7 +540,7 @@ that port.**
 
 #### 2 — Only for a loopback-bound port: publish it to the tailnet
 
-**Do not edit `finura`'s compose file to change a bind address.** That is
+**Do not edit the other stack's compose file to change a bind address.** That is
 another project's configuration, and §4.1 already treats editing it as a change
 this plan should not make lightly. Tailscale can publish a loopback service
 without touching the container at all:
@@ -619,12 +629,12 @@ ceiling in `MASTER_PLAN.md` §2.5 cares about.
 
 **The decision, and it is not purely technical:** raising `OLLAMA_KEEP_ALIVE`
 (e.g. `24h`, or `-1` for never) pins 19.4 GB of a 24 GB card indefinitely. **This
-machine is shared** — `finura` owns the Ollama container — so that is taking the
+machine is shared** — the other stack owns the Ollama container — so that is taking the
 GPU away from another project, and §0.1 says this plan does not do that
 unilaterally.
 
 > **Ask before changing it.** If the answer is yes, it is an environment variable
-> on the `finura-fi-ollama` container, which means editing their compose file —
+> on the Ollama container, which means editing their compose file —
 > the same constraint as §4.1. If the answer is no, accept the cold-start cost
 > and record it, so the first-claim-of-the-morning latency is a known property
 > rather than a bug report.
@@ -634,8 +644,10 @@ unilaterally.
 Neither blocks the Mac today; both decide whether it *keeps* working.
 
 ```powershell
-docker inspect finura-fi-ollama --format '{{ .HostConfig.RestartPolicy.Name }}'
-docker inspect finura-fi-surya  --format '{{ .HostConfig.RestartPolicy.Name }}'
+# $OLLAMA_CTR / $SURYA_CTR come from the discovery block in §1.1 -- re-run those
+# two lines first if this is a fresh shell, or the names will be empty.
+docker inspect $OLLAMA_CTR --format '{{ .HostConfig.RestartPolicy.Name }}'
+docker inspect $SURYA_CTR  --format '{{ .HostConfig.RestartPolicy.Name }}'
 ```
 
 **Verify:** `unless-stopped` or `always`. Anything else — `no`, or empty — means
@@ -715,7 +727,7 @@ Capture and hand back:
 ```powershell
 $out = "$env:USERPROFILE\Desktop\tci-gpu-config.txt"
 "=== models ==="            | Out-File $out
-docker exec finura-fi-ollama ollama list | Out-File $out -Append
+docker exec $OLLAMA_CTR ollama list | Out-File $out -Append
 "=== endpoint ==="          | Out-File $out -Append
 (Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 11434,8002 |
   Select-Object LocalAddress,LocalPort | Out-String) | Out-File $out -Append
@@ -837,7 +849,7 @@ curl -s -X POST "$SURYA/ocr" -F "file=@boarding-pass.png"
 → `{"status":"success","pages":[{"page":1,"text_lines":[{"text":"...","confidence":0.95,"bbox":[x0,y0,x1,y1]}],...}]}`
 
 Do **not** call `/analyze`: it takes the identical request and answers with
-`finura`'s bank-statement fields. There is no `/predict`
+a loan-application system's bank-statement fields. There is no `/predict`
 (`docs/gpu-api-contract.md` §5).
 
 *Case-file summary — gpt-oss, text only, also takes `format`:*
@@ -855,7 +867,7 @@ leave ~2.4 GB), so alternating between them pays a reload each time.
 | Symptom | What it means |
 | --- | --- |
 | `curl: (28)` timeout | The host was reached but nothing answered. Most likely Windows Firewall blocking inbound on the Tailscale interface — needs an elevated PowerShell **on the desktop**, not a client-side fix |
-| `curl: (7)` connection refused | Port not listening — the `finura-fi-ollama` container is down |
+| `curl: (7)` connection refused | Port not listening — the Ollama container is down |
 | `Could not resolve host` | MagicDNS off, or the Mac is not on the tailnet. Use `http://100.x.y.z:11434` |
 | `tailscale status` omits the host | Wrong account/tailnet, or the desktop is asleep. Step 1 |
 | Ollama answers but Surya does not | `8002` is loopback-bound or has no firewall rule — §5.3, and it must be fixed **on the desktop** |
@@ -959,7 +971,7 @@ it, and `OllamaGpuLlmProvider` was rewritten against that record. `/v3` appears
 nowhere in the client, and a test asserts that across all four methods.
 
 `OllamaGpuLlmProvider` used to call `/v3/ocr`, `/v3/llm/generate` and
-`/v3/llm/vision`. **That API is not Ollama's.** It belonged to the `finura`
+`/v3/llm/vision`. **That API is not Ollama's.** It belonged to a halted
 project's backend on the same desktop, which is halted — and it is why this
 class ever pointed at a Cloudflare tunnel. A correctly configured
 `GPU_SERVICE_URL` failed on every call until this landed.
@@ -991,7 +1003,7 @@ guess, and each now held by a test:
    LLM should be asked for coordinates.
 3. **Call `/ocr` only.** `/analyze` takes the same request but returns
    bank-statement fields — `bank_name`, `transactions`, `opening_balance` —
-   from the `finura` loan domain. There is no `/predict`.
+   from a loan-application domain. There is no `/predict`.
 4. **Model ids stay configuration.** `GPU_MODEL_TEXT`, `GPU_MODEL_VISION` and
    `GPU_MODEL_REASONING` exist and are logged at startup. A fourth hardcoded
    literal would reintroduce the bug this branch removed.

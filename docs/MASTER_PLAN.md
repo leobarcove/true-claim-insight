@@ -2724,7 +2724,7 @@ no `qwen35`. Every tag is vision-language, so the `q6_k`/`bf16` fallbacks §8
 offers would have failed identically. The host was running Ollama **0.13.5**
 against a current **0.32.14**; 0.32.14 loads it, proved on a throwaway container
 against a read-only copy of the model store before anything was changed.
-`finura`'s compose is now pinned to `ollama/ollama:0.32.14` rather than
+The other stack's compose is now pinned to `ollama/ollama:0.32.14` rather than
 `:latest`, so this cannot silently regress.
 
 **The more useful finding is the calling convention.** Asked with a chat
@@ -2739,12 +2739,12 @@ must call NuExtract3 in template mode; `qwen3-vl:8b` is the one that behaves
 correctly under instruction + `format`, and it got both fields right.
 
 The `/v3` gateway §7 of the runbook calls nonexistent does exist: it is
-`finura`'s own backend (`loan-application/backend/routers/v3/inference.py`),
+an unrelated project's own backend (`loan-application/backend/routers/v3/inference.py`),
 which is why the provider addressed a tunnel. That project is halted, so TCI
 must not depend on it — §7's recommendation to call `/api/chat` and Surya
 directly stands, and is now the blocking item for using this host from code.
 
-Also done: the four `finura` models (28.7 GB) removed with the owner's
+Also done: the other stack's four models (28.7 GB) removed with the owner's
 agreement; Tailscale installed and joined; `GPU_SERVICE_URL` added to
 `.env.example`; **both** dead Cloudflare quick-tunnels removed — the runbook
 named one, there were two (`ollama-gpu-llm.provider.ts`, `test-extraction.ts`) —
@@ -2835,7 +2835,7 @@ rewrite was written against that record.
   geometry here would have made the page-and-bounding-box evidence required by
   `CASE_VERIFICATION_ENGINE.md` §8 unrecoverable downstream, and no LLM should
   ever be asked for coordinates. Only `/ocr` is called: `/analyze` takes the
-  identical request and answers with `finura`'s bank-statement fields.
+  identical request and answers with a loan system's bank-statement fields.
 - **`temperature: 0` everywhere**, replacing the 0.3 the reasoning path sampled
   at, so re-running a case cannot silently produce a different answer (§9 of the
   engine plan). Reasoning routes to the text model rather than loading a third —

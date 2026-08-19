@@ -7,8 +7,8 @@ import { LlmProvider, OcrLine, OcrPage, OcrResult } from './llm-provider.interfa
  *
  * TWO SERVICES, TWO URLS. This class used to call `/v3/ocr`, `/v3/llm/generate`
  * and `/v3/llm/vision` on a single host. That API was never Ollama's — it
- * belonged to the `finura` project's backend on the same desktop, which is
- * halted, and it is why this class once addressed a Cloudflare tunnel. What
+ * belonged to a halted backend from an unrelated project on the same desktop,
+ * which is and it is why this class once addressed a Cloudflare tunnel. What
  * actually runs there, recorded in docs/gpu-api-contract.md on 19 August 2026:
  *
  *   Ollama   :11434  POST /api/chat            generation, text and vision
@@ -169,7 +169,7 @@ export class OllamaGpuLlmProvider implements LlmProvider {
    *
    * Only `/ocr` is called. `/analyze` accepts the identical request but returns
    * bank-statement fields — bank_name, transactions, opening_balance — because
-   * it belongs to the `finura` loan-application domain, not to claims. There is
+   * it belongs to an unrelated loan-application system, not to claims. There is
    * no `/predict`, despite what an earlier draft of the probe assumed
    * (docs/gpu-api-contract.md §5).
    */

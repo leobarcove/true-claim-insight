@@ -13,8 +13,8 @@
 
     WHY THIS EXISTS
     OllamaGpuLlmProvider calls /v3/ocr, /v3/llm/generate and /v3/llm/vision.
-    That API is not Ollama's -- it belonged to the finura project's backend on
-    the same desktop, which is halted. Ollama serves /api/chat; Surya serves its
+    That API is not Ollama's -- it belonged to a halted backend from an
+    unrelated project sharing the same desktop. Ollama serves /api/chat; Surya serves its
     own routes on :8002. Until the provider is rewritten against what actually
     runs, no application code can use this host.
 
@@ -200,7 +200,7 @@ Say "Whatever the spec says, this is what it actually accepts and returns."
 #
 # /predict is not probed -- it does not exist (docs/gpu-api-contract.md 5).
 # /analyze does, and is recorded to show why the client must NOT call it: it
-# takes the identical request and answers with finura's bank-statement fields.
+# takes the identical request and answers with a loan system's bank-statement fields.
 foreach ($route in '/ocr', '/analyze') {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $out = (& curl.exe -s -S -X POST "$SURYA$route" -F "file=@$testImage" 2>&1) -join "`n"

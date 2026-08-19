@@ -131,7 +131,7 @@ bank-statement fields:
 {"status":"success","raw_text":"MH168 DELAY 6H\n","parsed":{"bank_name":null,"account_holder":null,"account_number":null,"statement_period":null,"transactions":[],"opening_balance":null,"closing_balance":null}}
 ```
 
-That schema belongs to the `finura` loan-application domain, not to claims.
+That schema belongs to a loan-application system, not to claims.
 **The rewrite calls `/ocr` only** and ignores `/analyze`; a test asserts it.
 
 ## 6. Corrections to the probe itself
