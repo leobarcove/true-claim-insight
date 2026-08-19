@@ -6,9 +6,10 @@ to be executed by an agent (Claude Code) or a person, on the machine itself.
 **Read §0 before running anything.** This box already runs three unrelated
 systems, and the main risk in this plan is not failure — it is collateral damage.
 
-**Already configured, and you just want to call it from a laptop? Go straight
-to §6.2.** Executed 19 August 2026: the host runs Ollama 0.32.14 with all three
-models, reachable on the tailnet as `tci-gpu-host.<your-tailnet>.ts.net:11434`.
+**Already configured?** To call the host from a laptop, go straight to §6.2;
+to run the repository against it from a Mac, §6.3. Executed 19 August 2026:
+the host runs Ollama 0.32.14 with all three models, reachable on the tailnet
+as `tci-gpu-host.<your-tailnet>.ts.net:11434`.
 **§3.1.1 is the one thing to read before writing a client** — NuExtract3 needs a
 template, not an instruction, and calling it wrongly returns plausible nonsense
 rather than an error.
@@ -630,6 +631,90 @@ the same WiFi today. **Prefer the tailnet.** That address is DHCP and moves, and
 the port is unauthenticated — the Ollama API permits *pulling and deleting*
 models, so anything on the office network can empty that model store (4). The
 exposure is a recorded accepted risk, not a feature to build on.
+
+
+### 6.3 Running TCI itself from the Mac
+
+§6.2 proves the host answers `curl`. This is what the repository needs before
+it can talk to that host — and what is still blocked afterwards.
+
+**Nothing here has been run on a Mac.** It was written on the Windows host,
+which has no `pnpm` and no `node_modules`, so every command below is derived
+from `package.json` rather than executed. Treat a failure as a bug in this
+section, not as your mistake.
+
+#### 1. Toolchain
+
+The repo pins `pnpm@9.15.0` via `packageManager` and needs Node >= 22.
+Corepack ships with Node, so do not `npm i -g pnpm`:
+
+```bash
+corepack enable
+```
+
+```bash
+corepack prepare pnpm@9.15.0 --activate
+```
+
+**Verify:** `node -v` >= 22, and `pnpm -v` prints `9.15.0`. A different pnpm
+major will resolve the lockfile differently.
+
+#### 2. The branch, and dependencies
+
+```bash
+git fetch origin && git checkout feat/gpu-host-local-llm && pnpm install
+```
+
+#### 3. Point it at the host
+
+```bash
+cp -n .env.example .env
+```
+
+Then set `GPU_SERVICE_URL` in `.env` to the value from §6.2 — the real tailnet
+name is not in this repo, which is public. Leave `GPU_MODEL_TEXT`,
+`GPU_MODEL_VISION` and `GPU_MODEL_REASONING` unset unless the host's models
+have changed; their defaults are the tags actually pulled onto it, and
+risk-engine logs whichever ids are in force at startup.
+
+#### 4. Run the tests that cover this work
+
+**No Docker and no GPU needed** — the suite constructs the provider against a
+stub `ConfigService` and never opens a socket. It is also runnable before your
+Mac joins the tailnet:
+
+```bash
+pnpm --filter @tci/risk-engine test
+```
+
+**Verify:** `ollama-gpu-llm.provider.spec.ts` passes — construction without
+`GPU_SERVICE_URL` does not throw, a call without it does, and no model id names
+anything removed from the host.
+
+For the whole repo (`turbo run test`, and the shared packages must be built
+first, which `setup:build` does):
+
+```bash
+pnpm run setup:build && pnpm test && pnpm typecheck
+```
+
+Only the **full application** needs Postgres, Redis and Mailhog — `pnpm setup`
+does that and expects Docker Desktop running locally. It is not required for
+any of the above.
+
+#### 5. What is still blocked, and it is not configuration
+
+`OllamaGpuLlmProvider` calls `/v3/ocr`, `/v3/llm/generate` and `/v3/llm/vision`.
+**That API is not Ollama's.** It belonged to the `finura` project's backend on
+the same desktop, which is halted — and it is why this class ever pointed at a
+Cloudflare tunnel. Ollama serves `/api/chat`; Surya serves `/ocr` on `:8002`.
+
+So a correctly configured `GPU_SERVICE_URL` still fails on every call, and
+that is expected until §7 is done. Nothing in the application can use this host
+before then; `curl` from §6.2 is the only working path today. When the rework
+lands, revisit `GPU_MODEL_VISION`: it defaults to `qwen3-vl:8b` only because
+this class asks with an instruction plus a JSON schema, which is the convention
+NuExtract3 answers wrongly (§3.1.1).
 
 ## 7. Deferred, and honest about it
 
