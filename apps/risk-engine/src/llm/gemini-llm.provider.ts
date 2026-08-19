@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { LlmProvider } from './llm-provider.interface';
+import { LlmProvider, OcrResult } from './llm-provider.interface';
 
 /**
  * LlmProvider impl backed by Google Gemini via @google/genai.
@@ -29,6 +29,15 @@ export class GeminiLlmProvider implements LlmProvider {
   private readonly client: GoogleGenAI;
   readonly name = 'Gemini';
   readonly defaultModel: string;
+
+  /**
+   * Gemini Flash is multimodal, so one model serves text and vision alike and
+   * this is deliberately the same id. The interface separates them because the
+   * Ollama path splits the jobs across different models.
+   */
+  get visionModel(): string {
+    return this.defaultModel;
+  }
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -103,10 +112,17 @@ export class GeminiLlmProvider implements LlmProvider {
 
   /**
    * "Pure OCR" path — Ollama uses Surya; Gemini just asks the vision
-   * model to return text. Returns the same {text} shape so consumers
-   * don't care which provider answered.
+   * model to return text. Returns the same shape so consumers don't care which
+   * provider answered.
+   *
+   * No `pages`, and that is not an omission to be filled in later. Grounding
+   * has to come from an engine that cannot invent text which is not on the
+   * page; asking a generative model for bounding boxes would produce
+   * plausible coordinates with nothing holding them to the document. A caller
+   * that needs the page-and-bbox evidence required by
+   * CASE_VERIFICATION_ENGINE.md §8 must use the Surya path and check for it.
    */
-  async ocr(fileBuffer: Buffer, filename: string): Promise<{ text: string }> {
+  async ocr(fileBuffer: Buffer, filename: string): Promise<OcrResult> {
     const response = await this.client.models.generateContent({
       model: this.defaultModel,
       contents: [

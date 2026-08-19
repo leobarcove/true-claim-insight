@@ -702,29 +702,33 @@ Only the **full application** needs Postgres, Redis and Mailhog — `pnpm setup`
 does that and expects Docker Desktop running locally. It is not required for
 any of the above.
 
-#### 5. The job: replace the /v3 client
+#### 5. The job: replace the /v3 client — **done, 19 August 2026**
 
-**This was blocked and is not any more.** It needed information only the GPU
-host could supply, and `docs/gpu-api-contract.md` now records it — captured on
-the host on 19 August 2026, not guessed.
+**This was blocked, then it was not, and now it is finished.** It needed
+information only the GPU host could supply; `docs/gpu-api-contract.md` recorded
+it, and `OllamaGpuLlmProvider` was rewritten against that record. `/v3` appears
+nowhere in the client, and a test asserts that across all four methods.
 
-`OllamaGpuLlmProvider` calls `/v3/ocr`, `/v3/llm/generate` and `/v3/llm/vision`.
-**That API is not Ollama's.** It belonged to the `finura` project's backend on
-the same desktop, which is halted — and it is why this class ever pointed at a
-Cloudflare tunnel. So a correctly configured `GPU_SERVICE_URL` still fails on
-every call, and will until this is done. `curl` from §6.2 is the only working
-path today.
+`OllamaGpuLlmProvider` used to call `/v3/ocr`, `/v3/llm/generate` and
+`/v3/llm/vision`. **That API is not Ollama's.** It belonged to the `finura`
+project's backend on the same desktop, which is halted — and it is why this
+class ever pointed at a Cloudflare tunnel. A correctly configured
+`GPU_SERVICE_URL` failed on every call until this landed.
 
-`LlmProvider` keeps its four methods. Only the implementation changes:
+`LlmProvider` kept its four methods. Only the implementation changed:
 
-| Method | Today (broken) | Rewrite to |
+| Method | Was (broken) | Now |
 | --- | --- | --- |
 | `ocr()` | `POST /v3/ocr` | Surya `POST /ocr` — multipart, one part named `file` |
-| `generateJson()` | `POST /v3/llm/generate` | `POST /api/chat`, `format` = schema, `temperature` 0 |
+| `generateJson()` | `POST /v3/llm/generate` | `POST /api/chat`, `format: 'json'`, `temperature` 0 |
 | `visionJson()` | `POST /v3/llm/vision` | `POST /api/chat` with `images: [base64]` |
 | `reasoningJson()` | `POST /v3/llm/generate` | `POST /api/chat` on the text model — no third model |
 
-Five things the contract settles, each of which would otherwise be a guess:
+**`SURYA_SERVICE_URL` is new and must be set** for OCR to work; §3 above tells
+you the port. It has no default, exactly like `GPU_SERVICE_URL`.
+
+Five things the contract settled, each of which would otherwise have been a
+guess, and each now held by a test:
 
 1. **Surya needs its own base URL, and the variable does not exist yet.** Only
    `GPU_SERVICE_URL` is in `.env.example`, and it is assumed to front both
@@ -746,31 +750,38 @@ Five things the contract settles, each of which would otherwise be a guess:
    case six months later must not silently produce a different answer
    (`CASE_VERIFICATION_ENGINE.md` §9).
 
-**Run `pnpm --filter @tci/risk-engine test` before starting.** It needs no
-Docker, no GPU and no tailnet, it covers the boot regression this provider
-already caused once, and it has never actually been run — the Windows host has
-no `pnpm`.
+**`pnpm --filter @tci/risk-engine test` covers all of it.** No Docker, no GPU
+and no tailnet — `fetch` is replaced, so the tests assert the *request shape*,
+which is the half that was wrong before and that running the old code would
+never have revealed. 37 tests, and every one of the five points above fails the
+suite when reverted (checked by breaking each in turn).
 
-#### 6. Two known-wrong things to fix while you are here
+**Everything in §6.3 has now been executed on a Mac** — the toolchain steps, the
+install and the tests all work as written. The section was drafted on the
+Windows host, which has no `pnpm`, so this is the first time that was true.
 
-Both are recorded rather than silently corrected, because each is a claim this
-repository currently makes and would keep making.
+#### 6. Two known-wrong things — **both fixed, 19 August 2026**
+
+Both were recorded rather than silently corrected, because each was a claim this
+repository was making and would have kept making.
 
 - `scripts/gpu-api-probe.ps1` never captured Surya. `Invoke-RestMethod -Form`
   is PowerShell 6+ and the host runs 5.1, so all three round trips failed in 0s
-  with a parameter-binding error that reads like a service result. Use
-  `curl.exe -F`, and treat a 0s round trip as a script failure.
+  with a parameter-binding error that reads like a service result. **Now uses
+  `curl.exe -F`, treats a sub-0.05s round trip as a script failure rather than a
+  fast service, and no longer probes `/predict`, which does not exist.**
 - The NuExtract3 rationale in `ollama-gpu-llm.provider.ts` and `.env.example`
-  is **too broad**. It is not that the model answers wrongly under instruction
+  was **too broad**. It is not that the model answers wrongly under instruction
   plus schema — it is correct when the prompt names every required field, and
   emits the schema's own type name for any required field the prompt does not
-  name (`docs/gpu-api-contract.md` §3). The `qwen3-vl` default is still right;
-  the reason given for it is not.
+  name (`docs/gpu-api-contract.md` §3). **Both now say the narrower thing.** The
+  `qwen3-vl` default was always right; the reason given for it was not.
 ## 7. Deferred, and honest about it
 
-> The `/v3` replacement below is the blocking item, and it is **no longer
-> blocked**: the host was probed on 19 August 2026 and the result is recorded
-> in `docs/gpu-api-contract.md`. The work itself is specified in §6.3 step 5.
+> The `/v3` replacement below is **done** — 19 August 2026, against the recorded
+> contract in `docs/gpu-api-contract.md`. It is described in §6.3 step 5 and
+> kept here only as the record of what was wrong. Nothing in this section is
+> outstanding except the two genuinely deferred items.
 
 
 **A separate TCI Ollama container.** Correct if §1.2 was answered "no", or when
@@ -778,13 +789,11 @@ TCI's usage grows enough that sharing becomes contention. Two Ollama servers on
 one 24 GB card will thrash, so this needs VRAM budgeting rather than just a
 second compose file.
 
-**The `/v3` gateway.** `OllamaGpuLlmProvider` calls `/v3/ocr`,
-`/v3/llm/generate` and `/v3/llm/vision`. **That service does not exist on this
-machine** and nothing in the repo says where it ever did. The recommendation is
-to delete the abstraction and have the provider call Ollama's native
-`/api/chat` and Surya directly — fewer moving parts, and one less bespoke
-service to keep alive. That is repo work, not host work, and it is the change
-that makes this box usable.
+**The `/v3` gateway — resolved, not deferred.** `OllamaGpuLlmProvider` called
+`/v3/ocr`, `/v3/llm/generate` and `/v3/llm/vision`, and **that service does not
+exist on this machine**. The recommendation was to delete the abstraction and
+call Ollama's native `/api/chat` and Surya directly — fewer moving parts, one
+less bespoke service to keep alive. That is what was done.
 
 **Production.** This is a desktop in an office. It never sleeps on mains, which
 makes it a credible *staging* dependency over a private network — but production

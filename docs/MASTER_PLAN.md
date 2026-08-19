@@ -2801,14 +2801,15 @@ model id makes Ollama answer *model not found*, which is legible.
 
 **The vision default is `qwen3-vl:8b`, not NuExtract3, and that reverses
 `CASE_VERIFICATION_ENGINE.md` §8.** NuExtract3 is the better extraction model —
-given its own native template. Asked the way the provider asks, an instruction
-plus Ollama's `format` schema, it echoes the schema's type name into the answer
-(`{"flight_number": "string", "delay_hours": 6}`): schema-valid, wrong, and it
-passes a naive check. Defaulting to a model that returns confident nonsense
-under our own calling convention is worse than defaulting to a weaker one that
-is correct under it. Switch the day the provider learns NuExtract3's template —
-which is the `/v3` rework, because the calling convention is a property of the
-model and that class assumes there is only one.
+given its own native template. The conclusion held, but measurement on the host
+narrowed the reason (`docs/gpu-api-contract.md` §3): NuExtract3 is *correct*
+under instruction-plus-schema when the prompt names every required field. What
+it does is return the schema's own type name — the literal `"string"` — for any
+required field the prompt does not name. That is the normal case for a real
+schema rather than an edge case, it is schema-valid so constrained decoding
+cannot catch it, and it is the inverse of the §8 abstention rule: a guess that
+looks deliberate where absence was required. The over-broad version of this
+claim has been corrected in the provider, `.env.example` and the engine plan.
 
 **§6.3 of the runbook is now run.** It was written on the Windows host and
 labelled unrun, every command derived from `package.json`. Executed here: Node
@@ -2816,12 +2817,41 @@ labelled unrun, every command derived from `package.json`. Executed here: Node
 Docker or a tailnet, and `setup:build && test && typecheck` completes — 17 test
 tasks, 13 typecheck tasks.
 
-**Not attempted, and this is the honest limit.** The `/v3` replacement. The
-provider cannot work against the host until it lands, but it cannot be verified
-from here either — no route to that tailnet — and an unverifiable network
-rewrite is the exact failure this branch has spent three commits undoing: a dead
-tunnel, a phantom API, unverified model tags. It is now the single blocker to
-any application code using this host.
+**The `/v3` replacement — done, 19 August 2026.** `OllamaGpuLlmProvider` no
+longer calls an API that does not exist. It was previously the single blocker to
+any application code using this host, and was deliberately not attempted until
+the host's contract was recorded: an unverifiable network rewrite is the exact
+failure this branch spent three commits undoing — a dead tunnel, a phantom API,
+unverified model tags. `docs/gpu-api-contract.md` removed the guesswork, and the
+rewrite was written against that record.
+
+- **Two services, two URLs.** `SURYA_SERVICE_URL` is new. One base URL was
+  assumed to front both Ollama (`:11434`) and Surya (`:8002`); it never did.
+  Missing, it throws rather than silently falling back to the Ollama endpoint —
+  the same rule `GPU_SERVICE_URL` earned by spending months defaulting to a dead
+  Cloudflare tunnel.
+- **Grounding now survives the provider.** `ocr()` returns Surya's per-line
+  `text`, `confidence` and `bbox` alongside the flattened text. Discarding the
+  geometry here would have made the page-and-bounding-box evidence required by
+  `CASE_VERIFICATION_ENGINE.md` §8 unrecoverable downstream, and no LLM should
+  ever be asked for coordinates. Only `/ocr` is called: `/analyze` takes the
+  identical request and answers with `finura`'s bank-statement fields.
+- **`temperature: 0` everywhere**, replacing the 0.3 the reasoning path sampled
+  at, so re-running a case cannot silently produce a different answer (§9 of the
+  engine plan). Reasoning routes to the text model rather than loading a third —
+  only one or two models fit in 24 GB.
+- **A vision extraction now records the vision model.** It recorded
+  `defaultModel`, naming a model that never saw the document.
+- **37 tests, none of which open a socket.** They assert the *request shape* —
+  the half that was wrong before, and the half that running the old code would
+  never have revealed. Each of the five points above was reverted in turn to
+  confirm the suite fails.
+
+**Still unverified against the live host**, and worth saying plainly: this Mac
+has no route to that tailnet, so the rewrite is proven against the recorded
+contract, not against the machine. The contract was captured from the machine,
+which is a materially stronger position than the guesswork it replaced — but a
+first live call is still a first live call.
 
 ---
 

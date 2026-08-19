@@ -118,7 +118,11 @@ export class DocumentProcessorService {
           const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename);
           visionData = resp.output || resp;
           resultData = this.extractionService.normalize(docType, visionData);
-          modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
+          // The vision model, not the text one. These are different models on
+          // the Ollama path, so recording defaultModel here named a model that
+          // never saw the document -- which is precisely the provenance
+          // CASE_VERIFICATION_ENGINE.md §9 needs to re-run a case later.
+          modelUsed = `${this.gpu.name}:${this.gpu.visionModel}`;
         } else {
           const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
           rawText = ocrResp.text || '';

@@ -8,14 +8,12 @@ travel between them.
 Companion documents: `docs/GPU_HOST_SETUP.md` (configuring the host — done),
 `docs/CASE_VERIFICATION_ENGINE.md` §8 (why these models).
 
-> **Status: the handshake is complete.** The host was probed on 19 August 2026
-> and the contract is recorded in `docs/gpu-api-contract.md` — including two
-> corrections to the probe itself, one of which means Surya had to be captured
-> a second way. **Nothing further is needed from the GPU host.** The remaining
-> work is the rewrite, specified in `GPU_HOST_SETUP.md` §6.3 step 5.
->
-> Until that lands, `GPU_SERVICE_URL` can be perfectly set and every call still
-> fails. See §1.
+> **Status: done, both ends.** The host was probed on 19 August 2026 and the
+> contract is recorded in `docs/gpu-api-contract.md`. `OllamaGpuLlmProvider` was
+> rewritten against it on 19 August 2026 and no longer calls `/v3` at all.
+> **Nothing further is needed from the GPU host**, and nothing here is
+> outstanding — this document is kept as the record of how the two sides agreed,
+> not as a task list. §1 explains what was wrong; §3 records what was built.
 
 ---
 
@@ -51,9 +49,13 @@ host needs changing; `GPU_HOST_SETUP.md` is done.
 
 ---
 
-## 1. Why this is blocked
+## 1. Why this was blocked
 
-`OllamaGpuLlmProvider` calls three endpoints:
+**Resolved 19 August 2026.** Kept because the failure is the reason several
+rules in this repository exist, and a fixed bug with no record invites its own
+return.
+
+`OllamaGpuLlmProvider` used to call three endpoints:
 
 ```
 POST /v3/ocr
@@ -70,10 +72,11 @@ Cloudflare tunnel. What actually runs on the host is:
 | Ollama | 11434 | `/api/chat`, `/api/tags`, `/api/version` |
 | Surya OCR | 8002 | **unrecorded** — see §2 |
 
-So the provider must be rewritten against what runs. Nobody on the repository
-side can write that, because nobody there can reach these services;
+So the provider had to be rewritten against what runs. Nobody on the repository
+side could write that, because nobody there could reach these services;
 `GPU_HOST_SETUP.md` §3.3 asked for Surya's routes to be recorded and they never
-were. That single gap is the blocker.
+were. That single gap was the blocker, and closing it was the whole point of
+this exchange.
 
 **This is deliberately not being guessed at.** Every previous guess about this
 host has been wrong — a Cloudflare tunnel that had expired, a `/v3` API that
@@ -128,26 +131,31 @@ provider assumes away.
 
 ---
 
-## 3. What the repository will build against it
+## 3. What the repository built against it
 
-So the host side knows what to expect, and can say *"that will not work"* before
-the code is written rather than after.
+**Done, 19 August 2026.** `LlmProvider`
+(`apps/risk-engine/src/llm/llm-provider.interface.ts`) kept its four methods;
+only the implementation changed:
 
-`LlmProvider` (`apps/risk-engine/src/llm/llm-provider.interface.ts`) keeps its
-four methods. Only the implementation changes:
-
-| Interface method | Today (broken) | After the rewrite |
+| Interface method | Was (broken) | Now |
 | --- | --- | --- |
-| `ocr(buffer, filename)` | `POST /v3/ocr` | Surya on `:8002` — **route and body from §2** |
-| `generateJson(prompt, model?)` | `POST /v3/llm/generate` | `POST /api/chat`, `format` = JSON schema, `temperature` 0 |
+| `ocr(buffer, filename)` | `POST /v3/ocr` | Surya `POST /ocr` on its own base URL — multipart, one part named `file` |
+| `generateJson(prompt, model?)` | `POST /v3/llm/generate` | `POST /api/chat`, `format: 'json'`, `temperature` 0 |
 | `visionJson(prompt, buffer, ...)` | `POST /v3/llm/vision` | `POST /api/chat` with `images: [base64]` |
-| `reasoningJson(prompt, model?)` | `POST /v3/llm/generate` | `POST /api/chat`; no separate reasoning model — see below |
+| `reasoningJson(prompt, model?)` | `POST /v3/llm/generate` | `POST /api/chat` on the text model — no third model |
 
-Four things the rewrite will hold to, so the host side can check them:
+`ocr()` now returns per-line `text`, `confidence` and `bbox` alongside the
+flattened text, because discarding Surya's geometry in the provider would make
+the grounding required by `CASE_VERIFICATION_ENGINE.md` §8 unrecoverable
+downstream. The Gemini path returns no geometry and says why.
 
-1. **One base URL for Ollama, a second for Surya.** Today one `GPU_SERVICE_URL`
-   is assumed to front both. It does not. Surya needs its own configured
-   endpoint, and a missing one must fail loudly rather than default.
+Four things the rewrite holds to, each covered by a test that fails when the
+behaviour is reverted:
+
+1. **One base URL for Ollama, a second for Surya.** `GPU_SERVICE_URL` was
+   assumed to front both. It does not. `SURYA_SERVICE_URL` now exists, has no
+   default, and fails loudly when unset — it does not quietly fall back to the
+   Ollama endpoint.
 2. **Model ids stay configuration.** `GPU_MODEL_TEXT`, `GPU_MODEL_VISION`,
    `GPU_MODEL_REASONING` already exist and are logged at startup. Adding a
    fourth hardcoded literal would repeat the bug this branch just removed.

@@ -2,7 +2,9 @@
 
 Captured on the GPU desktop, 19 August 2026, by `scripts/gpu-api-probe.ps1`
 plus two follow-up experiments described below. This is the recorded contract
-the `/v3` rewrite (`docs/GPU_HOST_INTEGRATION.md` §3) should be written against.
+the `/v3` rewrite was written against — that rewrite landed on 19 August 2026
+(`docs/GPU_HOST_INTEGRATION.md` §3). Treat this file as the source of truth for
+what the host does, rather than inferring anything about it.
 
 Contains no address, hostname or real data. Test inputs are synthetic.
 
@@ -78,9 +80,9 @@ Template mode works (`GPU_HOST_SETUP.md` §3.1.1) for the same underlying reason
 the template names every field. It is a special case of Prompt B, not a
 different mechanism.
 
-**Consequence for the rewrite:** `GPU_MODEL_VISION` should stay `qwen3-vl:8b`.
-The conclusion is unchanged; the stated reason in
-`ollama-gpu-llm.provider.ts` and `.env.example` is too broad and should be
+**Consequence for the rewrite — applied 19 August 2026.** `GPU_MODEL_VISION`
+stays `qwen3-vl:8b`. The conclusion was unchanged; the stated reason in
+`ollama-gpu-llm.provider.ts` and `.env.example` was too broad and has been
 narrowed to the sentence in bold above. Any future use of NuExtract3 must
 either name every field in the prompt or send its native template, and should
 treat a returned type name as an extraction failure rather than a value.
@@ -130,7 +132,7 @@ bank-statement fields:
 ```
 
 That schema belongs to the `finura` loan-application domain, not to claims.
-**The rewrite should call `/ocr` only** and ignore `/analyze`.
+**The rewrite calls `/ocr` only** and ignores `/analyze`; a test asserts it.
 
 ## 6. Corrections to the probe itself
 
@@ -141,9 +143,9 @@ with `A parameter cannot be found that matches parameter name 'Form'`.
 and was not one. §5 above was captured with `curl` instead, which is present on
 the host.
 
-If the script is kept, replace the `-Form` block with `curl.exe -F` or a
-hand-built multipart body, and treat a 0s round trip as a script failure rather
-than a fast service.
+**Fixed 19 August 2026.** The script now uses `curl.exe -F`, treats a sub-0.05s
+round trip as a script failure rather than a fast service, and no longer probes
+`/predict`.
 
 **The probe's calling-convention result contradicted the finding it was built to
 confirm** — NuExtract3 answered correctly under instruction + schema, because

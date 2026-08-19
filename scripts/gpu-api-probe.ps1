@@ -24,6 +24,10 @@
     the two things that turn out to matter more than the routes: what each model
     actually returns under a JSON schema, and how long a call takes.
 
+    NO Invoke-RestMethod -Form ANYWHERE. It is PowerShell 6+ and this host runs
+    5.1, so it fails instantly with a parameter-binding error that lands in the
+    report looking like a service response. Use curl.exe -F for multipart.
+
     OUTPUT
     Writes a redacted report to the Desktop. Read it before sharing -- this
     repository is public and the report must name no tailnet address, no
@@ -180,15 +184,38 @@ if ($spec) {
 
 Head "Surya: a real round trip"
 Say "Whatever the spec says, this is what it actually accepts and returns."
-foreach ($route in '/ocr', '/analyze', '/predict') {
-    $form = @{ file = Get-Item $testImage }
+
+# curl.exe, not Invoke-RestMethod -Form.
+#
+# The first version of this script used -Form, which is PowerShell 6+ only.
+# This host runs Windows PowerShell 5.1, so every call failed instantly with
+# "A parameter cannot be found that matches parameter name 'Form'" -- and the
+# error was captured into the report where a Surya response should have been.
+# It read like a service result. Surya, the one genuine unknown this script
+# exists to capture, was not captured at all.
+#
+# Hence also the 0s guard below: a multipart OCR round trip cannot complete in
+# no time, so a 0s result is the script failing, not the service being quick.
+# curl.exe ships with Windows 10 1803 and later.
+#
+# /predict is not probed -- it does not exist (docs/gpu-api-contract.md 5).
+# /analyze does, and is recorded to show why the client must NOT call it: it
+# takes the identical request and answers with finura's bank-statement fields.
+foreach ($route in '/ocr', '/analyze') {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $r  = try { Invoke-RestMethod "$SURYA$route" -Method Post -Form $form -TimeoutSec 120 } catch { $_.Exception.Message }
+    $out = (& curl.exe -s -S -X POST "$SURYA$route" -F "file=@$testImage" 2>&1) -join "`n"
     $sw.Stop()
-    $out = ($r | ConvertTo-Json -Depth 6)
+    $secs = $sw.Elapsed.TotalSeconds
+
+    if ($secs -lt 0.05 -or [string]::IsNullOrWhiteSpace($out)) {
+        $out = "SCRIPT FAILURE, not a service result -- returned in ${secs}s with: $out"
+        Write-Host ("{0,-12} FAILED (see report)" -f $route) -ForegroundColor Red
+    } else {
+        Write-Host ("{0,-12} {1,4}s" -f $route, [int]$secs)
+    }
+
     if ($out.Length -gt 1500) { $out = $out.Substring(0, 1500) + "`n... truncated" }
-    Write-Host ("{0,-12} {1,4}s" -f $route, [int]$sw.Elapsed.TotalSeconds)
-    Say "`n**POST $route** -- $([int]$sw.Elapsed.TotalSeconds)s"
+    Say "`n**POST $route** -- $([int]$secs)s"
     Fence $out
 }
 

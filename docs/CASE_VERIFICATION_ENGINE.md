@@ -386,10 +386,16 @@ an image.
 
 So the extraction default is `qwen3-vl:8b`, which is correct under the
 convention the code actually uses. **A model that returns confident nonsense the
-way we call it is worse than a weaker one that is right.** Switch the day the
-provider learns to send NuExtract3's template — which belongs with the `/v3`
-rework, because the calling convention is a property of the *model* and that
-class assumes there is only one.
+way we call it is worse than a weaker one that is right.**
+
+Measurement since narrowed the finding (`docs/gpu-api-contract.md` §3): the
+failure is not instruction-plus-schema as such. NuExtract3 is correct when the
+prompt names every required field, and returns the schema's own type name for
+any required field the prompt does not name — which is the *normal* case for a
+real schema, and schema-valid, so constrained decoding cannot catch it. Switch
+the default the day the provider either sends NuExtract3's native template or
+names every field, and treats a returned type name as an extraction failure
+rather than a value.
 
 This is the warning further down this section, arriving as a live example rather
 than a caution: schema-valid is not semantically right, and constrained decoding
