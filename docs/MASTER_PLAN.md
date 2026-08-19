@@ -2847,6 +2847,38 @@ rewrite was written against that record.
   never have revealed. Each of the five points above was reverted in turn to
   confirm the suite fails.
 
+**Document text is no longer stored in the clear — 19 August 2026.**
+`DocumentAnalysis.rawText` held the full OCR text of every analysed document. For
+a MyKad or NRIC that is the identification number in plaintext, in a column with
+neither envelope encryption nor a `SENSITIVE_FIELD_OMIT` entry — while the same
+number on `Claimant` and `Claim` has both (standing decisions 4 and 5). The
+schema-scanning test did not catch it because the column is not named
+`*Encrypted` or `*Hash`.
+
+It was also leaving the server. `GET documents/:documentId/analysis` returned the
+whole row with `modelUsed` destructured off, so the response stripped the model
+id — provenance, harmless — and published the OCR text.
+
+- **The column is dropped, not encrypted.** Nothing read it back: the extraction
+  prompt is built from the OCR result in memory before the row is written. Data
+  minimisation is a cheaper control than encryption for data nobody consumes,
+  and it removes the key-management question rather than answering it.
+- **The endpoint is now an allowlist** (`public-document-analysis.ts`). The
+  denylist made every column public by default and would have published grounding
+  — per-line text and bounding boxes, document text again — on the day it lands.
+  Five tests, one of which adds a `grounding` field to the row and asserts it
+  does not appear in the response.
+- **Not yet done:** `extractedData` and `visionData` hold the same class of data
+  (a MyKad extraction contains the NRIC as a structured field) and are read by
+  the portal and the Trinity report, so they need encryption with a decrypt path
+  rather than removal. That is the next compliance item, and it is larger.
+
+**Grounding is deliberately not built yet, and §8's second non-negotiable is
+currently satisfied nowhere.** Images go to the VLM and never reach Surya, so
+they have no bounding boxes; the PDF path calls Surya but `document-processor`
+takes only `.text` and drops the geometry. Building it before the containment
+above would have added a third plaintext copy of the same personal data.
+
 **Still unverified against the live host**, and worth saying plainly: this Mac
 has no route to that tailnet, so the rewrite is proven against the recorded
 contract, not against the machine. The contract was captured from the machine,

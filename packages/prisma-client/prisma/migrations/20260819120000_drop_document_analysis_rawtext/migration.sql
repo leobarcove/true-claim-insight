@@ -1,0 +1,16 @@
+-- Drop DocumentAnalysis.rawText.
+--
+-- It held the full OCR text of every analysed document. For a MyKad or NRIC
+-- that is the identification number in plaintext -- the same value that is
+-- encrypted under a KeyProvider on Claimant and Claim, and omitted from query
+-- results by SENSITIVE_FIELD_OMIT. This column had neither protection.
+--
+-- It was also being served: GET documents/:documentId/analysis returned the
+-- whole row minus modelUsed, so the plaintext left the server on request.
+--
+-- Nothing read the column back. The prompt is built from the OCR result in
+-- memory before this is written, so removing it changes no behaviour -- and
+-- data minimisation is a cheaper control than encryption for data nobody uses.
+--
+-- Destructive by design: the rows being dropped are the exposure.
+ALTER TABLE "document_analyses" DROP COLUMN IF EXISTS "rawText";

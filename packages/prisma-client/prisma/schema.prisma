@@ -1146,7 +1146,13 @@ enum SignatureStatus {
 model DocumentAnalysis {
   id             String   @id @default(uuid())
   documentId     String   @unique
-  rawText        String? // OCR text
+  // rawText (the full OCR text) was removed 19 Aug 2026. It was written on
+  // every analysis, never read back by anything, and served to clients by the
+  // analysis endpoint -- so a MyKad's NRIC sat in plaintext here and went over
+  // the wire, while the same NRIC on Claimant is encrypted under a KeyProvider.
+  // The cheapest compliant fix for data nothing consumes is not to keep it.
+  // Anything reinstated here holds document text and must be encrypted and
+  // added to SENSITIVE_FIELD_OMIT first.
   extractedData  Json? // Normalized data from LLM
   visionData     Json? // Vision analysis result from VLM
   modelUsed      String?

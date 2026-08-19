@@ -134,13 +134,18 @@ export class DocumentProcessorService {
           modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
         }
 
+        // rawText is deliberately not persisted. It is the full OCR text, which
+        // for a MyKad is the NRIC in plaintext -- the same value encrypted under
+        // a KeyProvider on Claimant. Nothing read it back, and the analysis
+        // endpoint served it, so the column was dropped rather than encrypted:
+        // the cheapest control for data nobody consumes is not keeping it. It
+        // still exists as a local above, which is all the prompt needs.
         await this.prisma.documentAnalysis.upsert({
           where: { documentId: doc.id },
           create: {
             documentId: doc.id,
             tenantId: doc.tenantId,
             userId: doc.userId,
-            rawText: rawText,
             extractedData: resultData,
             visionData: visionData,
             modelUsed: modelUsed,
@@ -148,7 +153,6 @@ export class DocumentProcessorService {
             processingTime: Date.now() - startTime,
           },
           update: {
-            rawText: rawText,
             extractedData: resultData,
             visionData: visionData,
             modelUsed: modelUsed,
