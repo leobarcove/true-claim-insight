@@ -13,6 +13,34 @@ Companion documents: `docs/GPU_HOST_SETUP.md` (configuring the host — done),
 
 ---
 
+## If you are on the GPU desktop, this is the job
+
+One command, read-only, roughly ten minutes depending on model load times:
+
+```powershell
+git pull
+powershell -NoExit -ExecutionPolicy Bypass -File .\scripts\gpu-api-probe.ps1
+```
+
+If the repository is not cloned on that machine, fetch the one file instead —
+it needs nothing else from the tree:
+
+```powershell
+iwr -UseBasicParsing -OutFile "$env:USERPROFILE\Desktop\gpu-api-probe.ps1" `
+  "https://raw.githubusercontent.com/leobarcove/true-claim-insight/feat/gpu-host-local-llm/scripts/gpu-api-probe.ps1"
+powershell -NoExit -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\gpu-api-probe.ps1"
+```
+
+Then read `gpu-api-contract.md` on the Desktop, redact any address or hostname
+(§4), and send it back — commit it to `docs/gpu-api-contract.md` on this branch,
+or paste it into the pull request.
+
+That is the whole ask. Everything below explains why each captured item is
+needed, and what the repository will build once it arrives. Nothing else on the
+host needs changing; `GPU_HOST_SETUP.md` is done.
+
+---
+
 ## 1. Why this is blocked
 
 `OllamaGpuLlmProvider` calls three endpoints:
