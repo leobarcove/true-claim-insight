@@ -61,10 +61,18 @@ docker inspect finura-fi-ollama | Out-File "$base\ollama-inspect.json"
 docker exec finura-fi-ollama ollama list | Out-File "$base\ollama-models-before.txt"
 nvidia-smi | Out-File "$base\nvidia-before.txt"
 Get-NetTCPConnection -State Listen | Select-Object LocalAddress,LocalPort | Out-File "$base\ports-before.txt"
+docker exec finura-fi-ollama ollama --version | Out-File "$base\ollama-version.txt"
+$base | Out-File "$env:USERPROFILE\.tci-baseline-path" -Encoding ascii
 "Baseline written to $base"
 ```
 
-**Verify:** all five files exist and are non-empty.
+Later phases run in new shells, where `$base` no longer exists. Recover it with:
+
+```powershell
+$base = Get-Content "$env:USERPROFILE\.tci-baseline-path"
+```
+
+**Verify:** six files exist and are non-empty, and `.tci-baseline-path` resolves.
 **Why:** `ollama-models-before.txt` is the only record of which models were
 already pulled. Without it, a later cleanup cannot tell TCI's models from
 another project's.
@@ -105,11 +113,23 @@ a small specialist for extraction, a vision model as the escalation, and a
 general model to write the case file. **No reasoning model** — the design has no
 step where an LLM holds a verdict, so `deepseek-r1:14b` has no job here.
 
-### 2.1 Pull the two known-available models
+### 2.1 Pull the models
+
+The tags below come from community write-ups rather than a registry lookup, so
+**treat a failed pull as information, not an error to work around.** Roughly
+21 GB in total; over office WiFi that is not a fast step.
 
 ```powershell
-docker exec finura-fi-ollama ollama pull qwen3-vl:8b
 docker exec finura-fi-ollama ollama pull gpt-oss:20b
+docker exec finura-fi-ollama ollama pull qwen3-vl:8b
+```
+
+If a tag does not resolve, list what the registry actually offers before
+substituting anything, and record the substitution -- a different tag can mean a
+different quantisation, and that changes both VRAM and accuracy:
+
+```powershell
+docker exec finura-fi-ollama ollama list
 ```
 
 **Verify:**
@@ -118,7 +138,12 @@ docker exec finura-fi-ollama ollama pull gpt-oss:20b
 docker exec finura-fi-ollama ollama list
 ```
 
-Both must appear. Expect roughly 7 GB and 14 GB on disk.
+Both must appear. Expect roughly 7 GB and 14 GB on disk. Re-check free space
+afterwards, since this disk is shared with `finura-fi` and `paybrix`:
+
+```powershell
+"{0:N0} GB free on C:" -f ((Get-PSDrive C).Free/1GB)
+```
 
 **Rollback:** `docker exec finura-fi-ollama ollama rm qwen3-vl:8b` (and likewise
 for `gpt-oss:20b`) — but only for models absent from
@@ -182,6 +207,13 @@ Invoke-RestMethod -Uri http://127.0.0.1:11434/api/chat -Method Post -ContentType
 **Verify:** the response parses as JSON, contains exactly those two keys, and
 `delay_hours` is `6`.
 
+If this fails, capture the version before diagnosing anything else --
+schema-constrained `format` is a relatively recent Ollama feature:
+
+```powershell
+docker exec finura-fi-ollama ollama --version
+```
+
 **If the shape is right but the number is wrong,** that is the expected failure
 mode and the reason the design never lets a model hold a verdict — record it and
 continue. **If the shape is wrong,** the Ollama version is too old for
@@ -190,10 +222,25 @@ downstream assumes it.
 
 ### 3.2 Vision
 
-Any image will do; a screenshot is fine.
+Generate the test image rather than hunting for one, so the expected answer is
+known and the check is a real assertion instead of a judgement call:
 
 ```powershell
-$img = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\Pictures\test.png"))
+Add-Type -AssemblyName System.Drawing
+$bmp  = New-Object System.Drawing.Bitmap 640,200
+$g    = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::White)
+$font = New-Object System.Drawing.Font('Consolas', 32)
+$g.DrawString("MH168 DELAY 6H", $font, [System.Drawing.Brushes]::Black, 20, 70)
+$g.Dispose()
+$testImage = "$env:TEMP\tci-ocr-test.png"
+$bmp.Save($testImage, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+"Test image at $testImage"
+```
+
+```powershell
+$img = [Convert]::ToBase64String([IO.File]::ReadAllBytes($testImage))
 $body = @{
   model = "qwen3-vl:8b"
   messages = @(@{ role = "user"; content = "Transcribe any text in this image."; images = @($img) })
@@ -204,7 +251,8 @@ Invoke-RestMethod -Uri http://127.0.0.1:11434/api/chat -Method Post -ContentType
   Select-Object -ExpandProperty message | Select-Object -ExpandProperty content
 ```
 
-**Verify:** text comes back and roughly matches the image.
+**Verify:** the response contains `MH168` and `6H`. Anything less is a fail, not
+a near miss -- this is the easiest document the model will ever be given.
 **Watch for:** a response that never terminates, or one that degenerates into
 repeated characters. A hands-on report has Qwen3-VL doing exactly that on a
 dense form. If it happens, note it — it decides whether this model can be the
@@ -311,6 +359,15 @@ file** — it is another system's configuration.
 
 ### 5.1 Install and join
 
+The survey did not check for `winget`, so confirm it before relying on it:
+
+```powershell
+winget --version
+```
+
+If that fails, install Tailscale from `https://tailscale.com/download/windows`
+by hand rather than trying to repair App Installer on a shared machine.
+
 ```powershell
 winget install --id Tailscale.Tailscale --accept-source-agreements --accept-package-agreements
 tailscale up
@@ -330,7 +387,37 @@ question is revisited.
 
 ---
 
-## 6. Phase 5 — record what was built
+## 6. Phase 5 — prove it, then record it
+
+### 6.0 Acceptance test — run this from the machine that runs TCI
+
+Every check so far ran *on* the GPU box, which proves the models work and proves
+nothing about the objective. The objective is that TCI can reach them. Run this
+from the developer machine, not the desktop:
+
+```bash
+GPU=http://<tailscale-name-or-ip>:11434
+
+curl -s "$GPU/api/tags" | head -c 400
+
+curl -s "$GPU/api/chat" -H 'Content-Type: application/json' -d '{
+  "model": "gpt-oss:20b",
+  "messages": [{"role":"user","content":"Scheduled 09:00, departed 15:00. Return the delay."}],
+  "stream": false,
+  "options": {"temperature": 0},
+  "format": {"type":"object","properties":{"delay_hours":{"type":"number"}},"required":["delay_hours"]}
+}'
+```
+
+**Verify:** the model list returns, and the second call returns
+`{"delay_hours":6}` or close to it.
+
+**If this fails while §3 passed,** the models are fine and the *link* is not —
+which is a §5 problem, not a model problem. Do not proceed to §6.1 until this
+passes, because recording an endpoint nobody can reach is how the dead
+Cloudflare tunnel got into the codebase in the first place.
+
+### 6.1 Record what was built
 
 Nothing here is real to the repo until it is written down. The dead Cloudflare
 quick tunnel in `ollama-gpu-llm.provider.ts` is what happens otherwise.
