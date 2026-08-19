@@ -718,6 +718,11 @@ NuExtract3 answers wrongly (§3.1.1).
 
 ## 7. Deferred, and honest about it
 
+> The `/v3` replacement below is the blocking item, and it needs information
+> only this host can supply. `docs/GPU_HOST_INTEGRATION.md` is the exchange:
+> run `scripts/gpu-api-probe.ps1` and send the report back.
+
+
 **A separate TCI Ollama container.** Correct if §1.2 was answered "no", or when
 TCI's usage grows enough that sharing becomes contention. Two Ollama servers on
 one 24 GB card will thrash, so this needs VRAM budgeting rather than just a
