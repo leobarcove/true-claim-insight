@@ -9,6 +9,7 @@ import {
   DocumentType,
   PolicySource,
   FlowStatus,
+  FeeBasis,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CSP_ADJUSTING_WORKING_DAYS, CSP_SUPPLEMENTARY_WORKING_DAYS } from '@tci/shared-types';
@@ -528,6 +529,33 @@ async function main() {
   }
 
   console.log('🏢 MSIG tenant + sample travel policies created.');
+
+  // Illustrative SCALE from the CSP fee arithmetic tests — not any insurer's
+  // real terms. Without a row, drafting a fee note refuses: rates are tenant
+  // configuration. Pacific is included because a chat case converted without a
+  // linked policy bills the handling firm as insurerTenantId.
+  const demoFeeBands = [
+    { upTo: 10_000, pct: 0.1 },
+    { upTo: 50_000, pct: 0.05 },
+    { upTo: null, pct: 0.02 },
+  ];
+  for (const tenantId of [PACIFIC_ID, ALLIANZ_ID, msigTenant.id]) {
+    const existingScale = await prisma.feeScale.findFirst({
+      where: { tenantId, isActive: true },
+    });
+    if (existingScale) continue;
+    await prisma.feeScale.create({
+      data: {
+        tenantId,
+        basis: FeeBasis.SCALE,
+        bands: demoFeeBands,
+        sstRate: 0.08,
+        paymentTermsDays: 30,
+        isActive: true,
+      },
+    });
+  }
+  console.log('💷 Demo fee scales seeded (SCALE, 8% SST) for Pacific, Allianz and MSIG.');
 
   // 8. Travel evidence requirements — global defaults (tenantId null), one
   // checklist per travel claim subtype. Upsert-by-delete because the compound
