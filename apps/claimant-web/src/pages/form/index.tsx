@@ -262,8 +262,18 @@ function PhoneStage({ state }: { state: FormState }) {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <Button size="lg" disabled={busy || !phone.trim()} onClick={send}>
+          <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+            {/*
+              Full width on a phone, as everywhere else in the form: it is the
+              only action on the screen, and a pill hugging two words is a small
+              target sitting in a lot of empty space.
+            */}
+            <Button
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={busy || !phone.trim()}
+              onClick={send}
+            >
               {busy ? t('sending') : t('sendCode')}
             </Button>
             {/*
@@ -297,7 +307,15 @@ function PhoneStage({ state }: { state: FormState }) {
           <h2 className="text-sm font-semibold">{t('haveTheseReady')}</h2>
           {READY.map(item => (
             <div key={item} className="flex items-start gap-2.5 text-sm">
-              <span className="mt-0.5 shrink-0 text-primary" aria-hidden="true">
+              {/*
+                A filled circle rather than a bare tick, as the design has it.
+                A row of loose ✓ marks reads as five things already done; a
+                marker reads as a list to check against, which is what this is.
+              */}
+              <span
+                className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary"
+                aria-hidden="true"
+              >
                 ✓
               </span>
               {item}
