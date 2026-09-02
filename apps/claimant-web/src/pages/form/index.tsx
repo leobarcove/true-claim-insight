@@ -8,6 +8,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { useStrayDropGuard } from '@/hooks/use-stray-drop-guard';
+import { isRateLimited } from '@/lib/http-errors';
 import { cn } from '@/lib/utils';
 import {
   clearFormSession,
@@ -22,6 +23,7 @@ import {
 } from '@/hooks/use-form-conversation';
 import { FieldControl } from './field-control';
 import { FormShell, PreClaimLayout, SectionLayout } from './layout';
+import { CodeBoxes, RESEND_SECONDS } from './code-entry';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
 import { rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
@@ -284,78 +286,6 @@ function PhoneStage({ state }: { state: FormState }) {
     </div>
   );
 }
-
-/**
- * Six boxes, one digit each.
- *
- * A single wide input with letter-spacing looks similar and behaves worse: on a
- * phone it gives no sense of how many digits are left, a mistyped digit means
- * re-reading the whole string, and autofill lands the code somewhere the eye
- * has to hunt for. Six boxes make position visible.
- *
- * Paste has to work on the *first* box, because that is where a claimant pastes
- * a code copied from WhatsApp — and WhatsApp's own copy button puts the whole
- * six digits on the clipboard at once.
- */
-function CodeBoxes({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
-
-  const setAt = (index: number, digit: string) => {
-    const next = (value.padEnd(6, ' ').split('') as string[]);
-    next[index] = digit || ' ';
-    const joined = next.join('').replace(/ /g, ' ').trimEnd();
-    const cleaned = joined.replace(/ /g, '');
-    onChange(cleaned);
-    if (digit && index < 5) refs.current[index + 1]?.focus();
-  };
-
-  return (
-    <div className="flex gap-2.5" role="group" aria-label="6-digit code">
-      {[0, 1, 2, 3, 4, 5].map(index => (
-        <input
-          key={index}
-          ref={element => {
-            refs.current[index] = element;
-          }}
-          id={index === 0 ? 'code' : undefined}
-          inputMode="numeric"
-          autoComplete={index === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
-          disabled={disabled}
-          aria-label={`Digit ${index + 1}`}
-          value={value[index] ?? ''}
-          onChange={event => setAt(index, event.target.value.replace(/\D/g, '').slice(-1))}
-          onKeyDown={event => {
-            // Backspace on an empty box steps back, which is what everyone
-            // expects and what makes correcting a mistyped digit bearable.
-            if (event.key === 'Backspace' && !value[index] && index > 0) {
-              refs.current[index - 1]?.focus();
-            }
-          }}
-          onPaste={event => {
-            const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-            if (!pasted) return;
-            event.preventDefault();
-            onChange(pasted);
-            refs.current[Math.min(pasted.length, 5)]?.focus();
-          }}
-          className="h-[72px] w-[62px] rounded-xl border-2 border-input bg-background text-center text-2xl font-semibold focus:border-primary focus:outline-none disabled:opacity-60"
-        />
-      ))}
-    </div>
-  );
-}
-
-/** How long before "Send again" becomes available. */
-const RESEND_SECONDS = 60;
 
 function CodeStage({ state }: { state: FormState }) {
   const [code, setCode] = useState('');
@@ -707,7 +637,55 @@ function SubmittedStage({ state }: { state: FormState }) {
         Anything to add or change? Our team will contact you on <strong>WhatsApp</strong>, on the
         number you verified — this page will not update.
       </p>
+
+      {/*
+        A second claim, which until now there was no way to make.
+
+        This page is where the form ends, and it ended for good: the browser
+        holds a session pointing at the submitted claim, so returning to /form
+        showed this screen again for ever. Somebody whose luggage was lost on
+        the way home from the trip they had just claimed a delay on had nowhere
+        to go.
+
+        It is a *fresh start*, not a second claim on this thread — the same rule
+        the rest of the form follows. The number is verified again, which is the
+        honest cost of it and is said on the button's own line rather than
+        discovered afterwards. The submitted claim is untouched: it lives on the
+        server under its reference, and only this browser's pointer to it goes.
+      */}
+      <StartAnother caseNumber={state.case?.caseNumber} />
     </PreClaimLayout>
+  );
+}
+
+/**
+ * Begin a new claim request after one has been submitted.
+ *
+ * Guarded by the same `isFormChannelSession()` check as `StartAgain`, and for
+ * the same reason: inside the Telegram Mini App the session names a messaging
+ * binding this page does not own, and clearing it would strand a conversation
+ * that lives somewhere else.
+ */
+function StartAnother({ caseNumber }: { caseNumber?: string | null }) {
+  if (isFormChannelSession()) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t pt-5">
+      <Button
+        variant="outline"
+        className="self-start"
+        onClick={() => {
+          clearFormSession();
+          window.location.reload();
+        }}
+      >
+        Make another claim request
+      </Button>
+      <span className="text-xs text-muted-foreground">
+        Starts a new request — we will send a code to your number again.
+        {caseNumber ? ` Claim ${caseNumber} is not affected.` : ''}
+      </span>
+    </div>
   );
 }
 
@@ -750,8 +728,7 @@ function FlowStage({ state }: { state: FormState }) {
     wait: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
     // The edge throttle answers 429 and axios throws it. Recognised here rather
     // than in the engine, which has no business knowing about HTTP.
-    isRateLimitError: (error: unknown) =>
-      (error as { response?: { status?: number } })?.response?.status === 429,
+    isRateLimitError: isRateLimited,
   };
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
