@@ -215,18 +215,29 @@ const GREETING_WORDS = new Set([
 ]);
 
 /**
- * Inbound turns one chat may send per minute before we stop answering.
+ * Inbound turns one conversation may send per minute before we stop answering.
  *
  * The realistic attack on an open bot is not impersonation — the platform
  * vouches for the number and the channel discloses nothing back — it is
  * volume: junk intakes filling the vetting queue, or a script driving cost
- * through the analyser and the model. That is a throughput problem and wants
- * a throughput control.
+ * through the analyser and the model. That is a throughput problem and wants a
+ * throughput control.
  *
- * Set well above a real conversation. A claimant answering briskly sends a
- * message every few seconds; twenty a minute is someone or something else.
+ * **Raised from 20 on 2 September 2026, because the web form crossed it
+ * legitimately.** Twenty was sized for a claimant typing one message at a time,
+ * which is what every channel did when it was written. A form sends a whole
+ * section at once, and each field that is not where the server's cursor sits
+ * costs *two* turns — a move and an answer. A flight-delay claim is about
+ * thirty turns end to end, so an ordinary claimant filling the form in briskly
+ * met a limiter built for a flood. That is the worst kind of control: one that
+ * only ever fires at the people it was not aimed at.
+ *
+ * Sixty still bounds the damage, and it is not the burst defence anyway — the
+ * edge throttle (3 requests a second, in the gateway) is, and it is untouched.
+ * This one exists to stop a *sustained* flood, where a threefold rise changes
+ * nothing about whether it is stopped.
  */
-const MAX_TURNS_PER_MINUTE = 20;
+const MAX_TURNS_PER_MINUTE = 60;
 
 /**
  * How long a channel binding stands before the claimant re-confirms.

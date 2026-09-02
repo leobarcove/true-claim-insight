@@ -20,6 +20,8 @@ import {
 } from '@/hooks/use-form-conversation';
 import { FieldControl } from './field-control';
 import { FormShell, PreClaimLayout, SectionLayout } from './layout';
+import { ReviewStage, type ReviewRow } from './review';
+import { SECTIONS } from './sections';
 import { rowsFor, sectionsFor, type ResolvedSection } from './sections';
 import { submitSection, type TurnOutcome } from './submit-engine';
 
@@ -39,6 +41,14 @@ import { submitSection, type TurnOutcome } from './submit-engine';
 
 const newTurnId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const browserLocale = (): string | undefined => navigator.language?.split('-')[0];
+
+/**
+ * The claim-type question is asked before any flow exists, so it has no step in
+ * `flow.steps` — but it is still the form's first section, and its wording
+ * belongs beside the other five rather than inline here where the two would
+ * drift.
+ */
+const CLAIM_TYPE_SECTION = SECTIONS.find(section => section.id === 'claim-type')!;
 
 export function ClaimFormPage() {
   const { data: state, isLoading } = useFormState();
@@ -316,7 +326,10 @@ function ClaimTypeStage({ state }: { state: FormState }) {
   const { busy, submit } = useSimpleTurn();
 
   return (
-    <PreClaimLayout title="What has happened?" subtitle="Choose the option that fits best.">
+    <PreClaimLayout
+      title={CLAIM_TYPE_SECTION.heading}
+      subtitle={CLAIM_TYPE_SECTION.subtitle}
+    >
       <div className="grid gap-2.5 sm:grid-cols-2">
         {(state.claimTypes ?? []).map(choice => (
           <button
@@ -366,13 +379,49 @@ function FlowStage({ state }: { state: FormState }) {
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  /**
+   * The transport the engine sends through. One object, shared by Continue,
+   * Change and Submit, so all three pace identically and read a refusal the
+   * same way — three copies would drift, and the drift would show up as one
+   * button handling a rate limit and another blaming a field.
+   */
+  const deps = {
+    send: async (turn: Parameters<typeof send.mutateAsync>[0]) => {
+      const conversation = (await send.mutateAsync(turn)) as {
+        currentStep?: { id: string } | null;
+        messages?: Array<{ direction: string; text: string | null }>;
+      };
+      const outbound = (conversation.messages ?? []).filter(m => m.direction === 'OUTBOUND');
+      const outcome: TurnOutcome = {
+        currentStepId: conversation.currentStep?.id ?? null,
+        lastReply: outbound.length ? (outbound[outbound.length - 1].text ?? null) : null,
+      };
+      return outcome;
+    },
+    newId: newTurnId,
+    wait: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
+    // The edge throttle answers 429 and axios throws it. Recognised here rather
+    // than in the engine, which has no business knowing about HTTP.
+    isRateLimitError: (error: unknown) =>
+      (error as { response?: { status?: number } })?.response?.status === 429,
+  };
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
-  // Where a returning claimant lands: the first section that is not finished.
+  // Where a returning claimant lands: the first section that is not finished,
+  // or Review once nothing is outstanding.
+  //
+  // `firstIncomplete` deliberately never names Review — it is finished by
+  // submitting, not by answering — so without the last fallback a claimant who
+  // completed every section would meet a blank page instead of the thing they
+  // came to do.
   const active: ResolvedSection | null =
-    view?.sections.find(section => section.id === activeId) ?? view?.firstIncomplete ?? null;
+    view?.sections.find(section => section.id === activeId) ??
+    view?.firstIncomplete ??
+    view?.sections.find(section => section.id === 'review') ??
+    null;
 
   if (!view || !active || !state.case) return null;
 
@@ -391,6 +440,106 @@ function FlowStage({ state }: { state: FormState }) {
       .map(step => [step.label, displayAnswer(step, answers[step.id])] as [string, string]),
   ];
 
+  /** One answer, moved to and sent — the Change link's whole job. */
+  const changeOne = async (step: FlowStep, value: string) => {
+    setBusy(true);
+    setErrors({});
+    try {
+      const result = await submitSection(
+        {
+          currentStepId: state.case!.currentStepId,
+          values: { [step.id]: value },
+          answers,
+          steps: [step],
+        },
+        deps
+      );
+      if (!result.ok && result.error) {
+        setErrors({ [result.error.stepId]: result.error.message });
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Submit. The review step is a `confirm`, and 'true' is what the server
+   * reads as "yes, send it" — the same value the chat sends when a claimant
+   * taps the button at the end of the thread.
+   */
+  const onSubmit = async () => {
+    const reviewStep = view.sections.find(section => section.id === 'review')?.steps[0];
+    if (!reviewStep) return;
+
+    setBusy(true);
+    setErrors({});
+    try {
+      // Sent directly rather than through `submitSection`, because the engine's
+      // test for "was that accepted?" is "did the cursor move off this step" —
+      // and there is nowhere for it to move to. This is the last question. The
+      // honest test is the stage the server reports afterwards, so the reply is
+      // read for a refusal and the rest is left to `/state`.
+      const outcome = await deps.send({
+        clientMessageId: newTurnId(),
+        callbackValue: 'true',
+        callbackStepId: reviewStep.id,
+        locale: browserLocale(),
+      });
+
+      await refresh();
+
+      // Still on the review step with something to say means it was refused —
+      // a missing required document, most often.
+      if (outcome.currentStepId === reviewStep.id && outcome.lastReply) {
+        setErrors({ __submit: outcome.lastReply });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * How each answer reads on the review page.
+   *
+   * Documents show their filename rather than "provided": at the point of
+   * submitting, "did I attach the right one?" is the question being asked, and
+   * "provided" does not answer it.
+   */
+  const reviewRowsFor = (section: ResolvedSection): ReviewRow[] => {
+    // The claim type is a real answer with no step in `flow.steps` — the server
+    // asked it before a flow existed. Without this the review page opens on
+    // "You & your trip" and never shows the one choice that decided everything
+    // below it, which is exactly the answer somebody is most likely to want to
+    // change.
+    if (section.id === 'claim-type') {
+      return claimTypeLabel
+        ? [
+            {
+              step: { id: '__claim-type', label: 'Type of claim', answerType: 'text' } as FlowStep,
+              label: 'Type of claim',
+              value: claimTypeLabel,
+              editable: false,
+            },
+          ]
+        : [];
+    }
+
+    return section.steps
+      .filter(step => step.answerType !== 'confirm')
+      .filter(step => answers[step.id] !== undefined)
+      .map(step => ({
+        step,
+        label: step.label,
+        value:
+          step.answerType === 'document'
+            ? (state.case!.documents.find(document => document.stepId === step.id)?.fileName ??
+              'Provided')
+            : displayAnswer(step, answers[step.id]),
+      }));
+  };
+
   const onContinue = async () => {
     setBusy(true);
     setErrors({});
@@ -402,26 +551,7 @@ function FlowStage({ state }: { state: FormState }) {
           answers,
           steps: active.steps.filter(step => step.answerType !== 'confirm'),
         },
-        {
-          send: async turn => {
-            const conversation = (await send.mutateAsync(turn)) as {
-              currentStep?: { id: string } | null;
-              messages?: Array<{ direction: string; text: string | null }>;
-            };
-            const outbound = (conversation.messages ?? []).filter(m => m.direction === 'OUTBOUND');
-            const outcome: TurnOutcome = {
-              currentStepId: conversation.currentStep?.id ?? null,
-              lastReply: outbound.length ? (outbound[outbound.length - 1].text ?? null) : null,
-            };
-            return outcome;
-          },
-          newId: newTurnId,
-          wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
-          // The edge throttle answers 429 and axios throws it. Recognised here
-          // rather than in the engine, which has no business knowing about HTTP.
-          isRateLimitError: error =>
-            (error as { response?: { status?: number } })?.response?.status === 429,
-        }
+        deps
       );
 
       if (!result.ok && result.error) {
@@ -448,23 +578,38 @@ function FlowStage({ state }: { state: FormState }) {
       subtitle={active.subtitle}
       summary={summary}
       actions={
-        <>
-          {/*
-            Back moves between *sections* of the form, not through the server's
-            cursor. Everything answered is already saved, so this is navigation
-            rather than an undo — and there is nothing to warn about.
-          */}
-          {previous && (
-            <Button variant="outline" disabled={busy} onClick={() => setActiveId(previous.id)}>
-              Back
+        active.id === 'review' ? null : (
+          <>
+            {/*
+              Back moves between *sections* of the form, not through the
+              server's cursor. Everything answered is already saved, so this is
+              navigation rather than an undo — nothing to warn about.
+            */}
+            {previous && (
+              <Button variant="outline" disabled={busy} onClick={() => setActiveId(previous.id)}>
+                Back
+              </Button>
+            )}
+            <Button disabled={busy} onClick={() => void onContinue()}>
+              {busy ? 'Saving…' : 'Continue'}
             </Button>
-          )}
-          <Button disabled={busy} onClick={() => void onContinue()}>
-            {busy ? 'Saving…' : 'Continue'}
-          </Button>
-        </>
+          </>
+        )
       }
     >
+      {active.id === 'review' ? (
+        <ReviewStage
+          sections={view.sections}
+          answers={answers}
+          documents={state.case.documents}
+          rowsFor={reviewRowsFor}
+          busy={busy}
+          error={Object.values(errors)[0] ?? null}
+          onChange={changeOne}
+          onSubmit={onSubmit}
+          onBack={() => previous && setActiveId(previous.id)}
+        />
+      ) : (
       <div className="flex flex-col gap-5 rounded-xl border bg-background p-5">
         {rowsFor(active.steps).map(row => (
           <div
@@ -495,6 +640,7 @@ function FlowStage({ state }: { state: FormState }) {
           </div>
         ))}
       </div>
+      )}
 
       <StartAgain />
     </SectionLayout>

@@ -4,6 +4,7 @@ import type { FlowStep } from '@tci/shared-types';
 import {
   changedSteps,
   isRateLimited,
+  stepsToSend,
   submitSection,
   turnsFor,
   type SubmitContext,
@@ -102,6 +103,63 @@ describe('which fields get sent', () => {
     );
 
     expect(changed.map(s => s.id)).toEqual(['doc-boarding-pass']);
+  });
+});
+
+describe('optional fields left blank', () => {
+  const OPTIONAL = step('policy-number', { optional: true });
+  const context = (over: Partial<SubmitContext> = {}): SubmitContext => ({
+    currentStepId: 'claimant-name',
+    values: {},
+    answers: {},
+    steps: [NAME, OPTIONAL],
+    ...over,
+  });
+
+  /**
+   * The bug this exists to prevent, and it was invisible until the form was
+   * driven end to end: the server does not read *unanswered* as *skipped*. An
+   * optional question with no answer is still open, so the cursor returns to it
+   * — and a form that only sends what the claimant touched leaves it open for
+   * ever. The claim never reaches Review and Submit appears to do nothing.
+   */
+  it('sends "skip", so the flow can move past them', () => {
+    const sending = stepsToSend(context({ values: { 'claimant-name': 'Nur' } }));
+
+    expect(sending).toEqual([
+      { step: NAME, value: 'Nur' },
+      { step: OPTIONAL, value: 'skip' },
+    ]);
+  });
+
+  it('sends the answer, not a skip, when one was typed', () => {
+    const sending = stepsToSend(context({ values: { 'policy-number': 'TC-8827' } }));
+
+    expect(sending).toEqual([{ step: OPTIONAL, value: 'TC-8827' }]);
+  });
+
+  it('does not re-skip one the server already has an answer for', () => {
+    const sending = stepsToSend(context({ answers: { 'policy-number': 'TC-8827' } }));
+
+    expect(sending).toEqual([]);
+  });
+
+  /**
+   * A required field is never skipped. The server would refuse it, and the
+   * refusal belongs under the field as "this is needed" — not sent on the
+   * claimant's behalf as though they had declined to answer.
+   */
+  it('never skips a required field', () => {
+    const sending = stepsToSend(context({ values: {} }));
+
+    expect(sending.map(entry => entry.step.id)).toEqual(['policy-number']);
+  });
+
+  it('sends a skip as text, whatever the step would otherwise take', () => {
+    const date = step('trip-start', { answerType: 'date', optional: true });
+    const [turn] = turnsFor(date, 'skip', 'trip-start', ids());
+
+    expect(turn).toEqual({ clientMessageId: 'turn-1', text: 'skip', callbackStepId: 'trip-start' });
   });
 });
 

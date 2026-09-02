@@ -77,6 +77,9 @@ export interface SubmitResult {
   accepted: string[];
 }
 
+/** The literal the server reads as "I am not answering this one". */
+export const SKIP = 'skip';
+
 /** A step the claimant has changed, or answered for the first time. */
 export function changedSteps(context: SubmitContext): FlowStep[] {
   return context.steps.filter(step => {
@@ -90,6 +93,42 @@ export function changedSteps(context: SubmitContext): FlowStep[] {
 
     return String(entered) !== String(existing ?? '');
   });
+}
+
+/**
+ * What to send for each step in the section, in flow order.
+ *
+ * The subtlety is optional steps, and it cost a whole afternoon to see: the
+ * server does not treat *unanswered* as *skipped*. An optional question with no
+ * answer is still an open question, so the cursor returns to it — and a form
+ * that only sends what the claimant touched leaves it open for ever. The claim
+ * silently never reaches Review, and the symptom is a Submit button that
+ * appears to do nothing.
+ *
+ * The chat has no such problem because it asks the question and the claimant
+ * types "skip". A form has no such moment: leaving a box empty *is* the skip,
+ * and this is where that gets said out loud.
+ *
+ * Only for steps the claimant has genuinely left alone — a field with an
+ * existing answer is not re-skipped, and a required one is never skipped at
+ * all, because the server would refuse it and the refusal belongs on the field.
+ */
+export function stepsToSend(context: SubmitContext): Array<{ step: FlowStep; value: string }> {
+  const changed = new Set(changedSteps(context).map(step => step.id));
+
+  return context.steps
+    .map(step => {
+      if (changed.has(step.id)) return { step, value: context.values[step.id] };
+
+      const untouched = (context.values[step.id] ?? '') === '';
+      const unanswered =
+        context.answers[step.id] === undefined || context.answers[step.id] === '';
+
+      if (step.optional && untouched && unanswered) return { step, value: SKIP };
+
+      return null;
+    })
+    .filter((entry): entry is { step: FlowStep; value: string } => entry !== null);
 }
 
 /**
@@ -109,6 +148,13 @@ export function turnsFor(
 
   if (currentStepId !== step.id) {
     turns.push({ clientMessageId: newId(), callbackValue: `__edit:${step.id}` });
+  }
+
+  // A skip is always text, whatever the step would otherwise take: the server
+  // reads the literal, not a value of that step's type.
+  if (value === SKIP) {
+    turns.push({ clientMessageId: newId(), text: SKIP, callbackStepId: step.id });
+    return turns;
   }
 
   if (step.answerType === 'document') {
@@ -196,8 +242,7 @@ export async function submitSection(
     }
   };
 
-  for (const step of changedSteps(context)) {
-    const value = context.values[step.id];
+  for (const { step, value } of stepsToSend(context)) {
     const turns = turnsFor(step, value, cursor, deps.newId);
     let lastReply: string | null = null;
 

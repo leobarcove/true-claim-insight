@@ -594,7 +594,14 @@ The agent path uses the existing per-case endpoints (§1.4), signed in as staff 
 | Skip an optional document | text `'skip'` |
 | Add a document later | text `'later'` |
 
-**Limits:** 50 MB per file · 20 turns per minute per conversation · `start` 2/sec and 10/min · `turn` 3/sec and 40/10 sec · `upload` 2/sec and 20/min.
+**Limits:** 50 MB per file · **60** turns per minute per conversation · `start` 2/sec and 10/min · `turn` 3/sec and 40/10 sec · `upload` 2/sec and 20/min.
+
+Raised from 20 on 2 September 2026, after a claimant filling the form in at
+ordinary speed crossed it. Trap 1 predicted this and under-counted: a
+flight-delay claim is about **thirty** turns, not twenty, because each field the
+server's cursor is not already on costs two — a move and an answer. The edge
+throttle (3/sec) is the burst control and is untouched; this one stops a
+sustained flood, where threefold changes nothing about whether it is stopped.
 
 ---
 
