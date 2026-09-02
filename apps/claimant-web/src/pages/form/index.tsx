@@ -7,6 +7,7 @@ import {
 } from '@tci/shared-types';
 
 import { Button } from '@/components/ui/button';
+import { useStrayDropGuard } from '@/hooks/use-stray-drop-guard';
 import { cn } from '@/lib/utils';
 import {
   clearFormSession,
@@ -712,6 +713,7 @@ function SubmittedStage({ state }: { state: FormState }) {
 
 /** The six sections. Everything from here is driven by the flow. */
 function FlowStage({ state }: { state: FormState }) {
+  useStrayDropGuard();
   const send = useSendFormTurn();
   const refresh = useRefreshFormState();
 
@@ -1025,8 +1027,15 @@ function FlowStage({ state }: { state: FormState }) {
               they cannot follow, and it is the screen where somebody most
               needs to know what the button is about to open.
             */}
+            {/*
+              "Onto the row", not "here". A drop is only unambiguous on the row
+              it lands on: a file dropped on the card would have to be guessed
+              into one of three document types, and a boarding pass filed as an
+              airline delay letter is a wrong answer nobody sees until an
+              adjuster opens it.
+            */}
             <p className="hidden text-xs text-muted-foreground sm:block">
-              Or drag files here — JPG, PNG, HEIC or PDF, up to 50 MB.
+              Or drag a file onto the row it belongs to — JPG, PNG, HEIC or PDF, up to 50 MB.
             </p>
             <p className="text-xs text-muted-foreground sm:hidden">
               On a phone, “Add” opens your camera or photo library.

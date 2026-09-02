@@ -17,6 +17,8 @@ import {
   useSubmitAssistedCase,
   type ResolvedClaimant,
 } from '@/hooks/use-agent-intake';
+import { useStrayDropGuard } from '@/hooks/use-stray-drop-guard';
+
 import { FieldControl } from '../form/field-control';
 import { FormShell, SectionLayout } from '../form/layout';
 import { ReviewStage, type ReviewRow } from '../form/review';
@@ -104,6 +106,7 @@ function AssistedSections({
   consent: { attestedAt: string; noticeVersion: number } | null;
   onStartAnother: () => void;
 }) {
+  useStrayDropGuard();
   const { data, isLoading } = useAssistedCase(caseId);
   const saveAnswer = useSaveAssistedAnswer();
   const submit = useSubmitAssistedCase();
