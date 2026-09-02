@@ -45,6 +45,7 @@ import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
 import { isInlineRenderable, resolveMimeType } from './document-media';
+import { assertAllowedUpload } from './upload-allowlist';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ClaimsService } from '../claims/claims.service';
@@ -227,7 +228,11 @@ export class CasesService {
     // default. So the tenant has to be known before the flow can be chosen,
     // which is why promotion runs ahead of answer validation rather than after.
     const promoted = await this.promoteAnswers(answers);
-    const tenantId = await this.resolveCaseTenant(tenantContext, promoted.policyId as string | null);
+    const tenantId = await this.resolveCaseTenant(
+      tenantContext,
+      promoted.policyId as string | null,
+      dto.routeAsClaimant === true
+    );
 
     // Chosen once, here, and pinned onto the row below. Every later turn reads
     // the pin instead of re-selecting.
@@ -621,6 +626,9 @@ export class CasesService {
     // application/octet-stream — which serves back as a download prompt
     // instead of the photo an operator is trying to look at.
     const mimeType = resolveMimeType(file.filename, file.mimetype);
+    // Checked against the bytes, not the name or the header — both of which the
+    // uploader controls. Before storage, so nothing we refuse is ever written.
+    assertAllowedUpload(buffer, file.filename, mimeType);
     const storagePath = await this.storageService.uploadFile(
       buffer,
       file.filename,
@@ -1311,7 +1319,12 @@ export class CasesService {
    * binding and needs exactly this.
    */
   assertAccess(
-    caseRow: { tenantId: string; claimantId: string | null },
+    caseRow: {
+      tenantId: string;
+      claimantId: string | null;
+      status?: CaseStatus;
+      createdByUserId?: string | null;
+    },
     tenantContext: TenantContext
   ) {
     if (tenantContext.userRole === 'SUPER_ADMIN') return;
@@ -1322,6 +1335,31 @@ export class CasesService {
       return;
     }
     if (caseRow.tenantId !== tenantContext.tenantId) {
+      // A staff member may finish the request they are in the middle of
+      // filling in, even though it belongs to another tenant.
+      //
+      // Not an exception to tenant isolation so much as the consequence of
+      // routing. An assisted claim is routed to the handling adjusting firm at
+      // the moment it is created (WEB_FORM_MICROSITE_PLAN §1.4, Routing), so an
+      // insurer's agent typing one in loses access at the *second section* —
+      // not after submitting. Without this the feature cannot work at all: the
+      // agent creates a case and is then locked out of the claim they are on
+      // the phone about.
+      //
+      // Narrow on purpose, and each clause is load-bearing:
+      //  - `createdByUserId` — this one person, not their colleagues and not
+      //    their tenant. Nobody gains sight of another firm's queue.
+      //  - `DRAFT`/`IN_PROGRESS` — it lapses the moment the request is
+      //    submitted, which is the handover the confirmation screen describes.
+      //    An agent cannot read back a case the handling firm is working.
+      // Everything else about cross-tenant access is unchanged.
+      const isOwnUnsubmittedDraft =
+        caseRow.createdByUserId != null &&
+        caseRow.createdByUserId === tenantContext.userId &&
+        (caseRow.status === CaseStatus.DRAFT || caseRow.status === CaseStatus.IN_PROGRESS);
+
+      if (isOwnUnsubmittedDraft) return;
+
       // Defence-in-depth: cross-tenant reads must look like a 404.
       throw new NotFoundException('Case not found');
     }
@@ -1492,9 +1530,23 @@ export class CasesService {
    */
   private async resolveCaseTenant(
     tenantContext: TenantContext,
-    policyId?: string | null
+    policyId?: string | null,
+    /**
+     * Set by the agent-assisted form. A staff member filling a claim in on a
+     * claimant's behalf is not opening one of their own organisation's cases:
+     * it is the claimant's claim, and it belongs in the handling adjusting
+     * firm's queue exactly as if they had used the form themselves.
+     *
+     * Read as intent, not as permission. The claimant arm below still refuses
+     * anything that is not an adjusting firm, so this cannot route a case
+     * somewhere it could not otherwise go — it only stops the *typist's*
+     * organisation deciding where the work lands.
+     */
+    routeAsClaimant = false
   ): Promise<string> {
-    if (tenantContext.userRole !== 'CLAIMANT') return tenantContext.tenantId;
+    if (tenantContext.userRole !== 'CLAIMANT' && !routeAsClaimant) {
+      return tenantContext.tenantId;
+    }
 
     // 1. Panel routing: the insurer that issued the policy nominates the
     //    handling firm via its tenant settings.

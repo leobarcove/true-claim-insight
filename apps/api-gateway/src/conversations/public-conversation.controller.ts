@@ -43,6 +43,23 @@ import { unwrapEnvelope } from '../common/unwrap-envelope';
 const TELEGRAM_SESSION_PREFIX = 'tg:';
 
 /**
+ * Marks a session as belonging to the web *form* rather than the web chat.
+ *
+ * Same trick as the Telegram prefix and for the same reason: it is inside the
+ * signed payload, so a visitor cannot add it, remove it, or move their chat
+ * thread onto the form by editing a token. The two surfaces are separate
+ * channels — a visitor who starts on the form and opens the chat gets a fresh
+ * conversation and a fresh claim request (WEB_FORM_MICROSITE_PLAN D1) — and
+ * this prefix is the only thing that tells them apart, because both are an
+ * anonymous browser on the same origin.
+ *
+ * Not a security boundary: both surfaces are public and both prove a number
+ * with a code, so nothing is gained by forging one. It is a routing fact, kept
+ * unforgeable because a claimant landing in the wrong thread is a support call.
+ */
+const WEB_FORM_SESSION_PREFIX = 'wf:';
+
+/**
  * How long a Mini App session stays usable. Twelve hours covers a claim
  * gathered across a day with interruptions; anything longer is a bearer token
  * outliving the sitting that produced it.
@@ -71,8 +88,8 @@ export class PublicConversationProxyController {
    * server-side session store to expire or replicate. A JWT would carry claims
    * this has no use for; the only claim is "this is a conversation id".
    */
-  private issueSession(): string {
-    const id = randomUUID();
+  private issueSession(surface: 'chat' | 'form' = 'chat'): string {
+    const id = surface === 'form' ? `${WEB_FORM_SESSION_PREFIX}${randomUUID()}` : randomUUID();
     return `${id}.${this.sign(id)}`;
   }
 
@@ -154,6 +171,12 @@ export class PublicConversationProxyController {
         'x-channel-user-id': payload.split(':')[1],
       };
     }
+    // A form session names a WEB_FORM binding; anything else is web chat. The
+    // channel is derived from the verified payload, never from a header the
+    // browser sent, so the two threads cannot be crossed by editing a request.
+    if (payload.startsWith(WEB_FORM_SESSION_PREFIX)) {
+      return { ...base, 'x-web-session-id': payload, 'x-web-channel': 'WEB_FORM' };
+    }
     return { ...base, 'x-web-session-id': payload };
   }
 
@@ -229,10 +252,15 @@ export class PublicConversationProxyController {
   @ApiOperation({ summary: 'Open or resume a public intake conversation' })
   async start(
     @Headers('x-web-session') token: string | undefined,
-    @Query('locale') locale?: string
+    @Query('locale') locale?: string,
+    @Query('surface') surface?: string
   ) {
     const existing = this.sessionIdFrom(token);
-    const session = existing ? token! : this.issueSession();
+    // `surface` decides only which channel a *new* conversation opens on. An
+    // existing token keeps whatever it was issued as, so a form session cannot
+    // be walked onto the chat channel by calling start again with a different
+    // query string.
+    const session = existing ? token! : this.issueSession(surface === 'form' ? 'form' : 'chat');
     const sessionId = existing ?? session.split('.')[0];
 
     const conversation = await this.pass(
@@ -258,6 +286,29 @@ export class PublicConversationProxyController {
       this.httpService
         .get(this.base(), { headers: this.headers(sessionId) })
       );
+  }
+
+  /**
+   * Everything the form needs to draw itself, in one read.
+   *
+   * The chat renders from the transcript, because one question at a time means
+   * the last bubble is the state. A form shows a section at once and needs the
+   * answers, the flow and which stage it is at.
+   *
+   * A missing session answers `phone` rather than erroring: an unopened or
+   * cleared browser is the ordinary first visit, and the first screen it should
+   * draw is the one asking for a number.
+   */
+  @Get('state')
+  @Public()
+  @ApiOperation({ summary: 'Everything the form needs to render, for this session' })
+  async state(@Headers('x-web-session') token: string | undefined) {
+    const sessionId = this.sessionIdFrom(token);
+    if (!sessionId) return { stage: 'phone', locale: 'en', lastReply: null };
+
+    return this.pass(
+      this.httpService.get(this.base('/state'), { headers: this.headers(sessionId) })
+    );
   }
 
   /**

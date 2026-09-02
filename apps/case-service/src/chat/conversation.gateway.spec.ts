@@ -1054,6 +1054,23 @@ describe('ConversationGateway', () => {
       );
       expect(sent.map(message => message.text).join(' ')).toMatch(/which answer|change/i);
     });
+
+    it('returns to the unchanged review when the edit menu is cancelled', async () => {
+      const { gateway, adapter, cases, flows, sent } = setup({
+        binding: verified,
+        caseRow: reviewCase,
+      });
+      (flows.forCase as jest.Mock).mockResolvedValue(reviewFlow);
+
+      await gateway.handleTurn(
+        turn({ callbackValue: '__edit-cancel', callbackStepId: '__edit-menu' })
+      );
+
+      expect(cases.patchAnswer).not.toHaveBeenCalled();
+      expect(cases.submit).not.toHaveBeenCalled();
+      expect(sent.map(message => message.text).join(' ')).toMatch(/no changes made/i);
+      expect((adapter.send as jest.Mock).mock.calls.at(-1)?.[1].step.id).toBe('review');
+    });
   });
 
   describe('correcting a mistake', () => {

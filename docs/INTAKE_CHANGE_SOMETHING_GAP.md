@@ -1,6 +1,6 @@
 # Gap: “Change something” shows no options and no typing
 
-**Status:** open  
+**Status:** closed (2 September 2026)  
 **Found:** 28 August 2026, local `/chat` review step  
 **Screenshot:** [gaps.html](./gaps.html#g2) · [standalone page](./intake-change-something-gap.html)
 
@@ -25,3 +25,12 @@ The PWA therefore keeps `AnswerControl` on `confirm`: two buttons, no typed inpu
 ## Close when
 
 After **Change something**, web chat `currentStep` is `__edit-menu` (or equivalent) with the field choices, **or** a text box is shown so the claimant can name a field. Review buttons must not remain the only composer.
+
+## Resolution
+
+`ClaimantConversationService.openQuestion` now checks the most recent outbound
+question when it differs from the Case cursor. For `__edit-menu`, it passes the
+pinned flow and current answers to `ConversationGateway.synthesiseStep`, which
+rebuilds the same choices used by push channels. The web transcript therefore
+returns `currentStep.id === '__edit-menu'`, and the PWA renders a choice control
+instead of the review buttons.

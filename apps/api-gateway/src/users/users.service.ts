@@ -76,6 +76,27 @@ export class UsersService {
     });
   }
 
+  /**
+   * A staff member by the number they sign in with.
+   *
+   * Unique in the schema, so this can return one row or none — which is the
+   * whole reason the constraint exists. Two accounts on one number would make
+   * the lookup pick, and a wrong pick attributes a claimant's data to the wrong
+   * person. Used only by the agent-assisted form's sign-in, where there is no
+   * password and the number *is* the identifier.
+   */
+  async findByPhoneNumber(phoneNumber: string) {
+    return this.prisma.user.findUnique({
+      where: { phoneNumber },
+      include: {
+        tenant: true,
+        currentTenant: true,
+        adjuster: true,
+        userTenants: true,
+      },
+    });
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },

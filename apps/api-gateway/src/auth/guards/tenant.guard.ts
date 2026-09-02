@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 
 /**
@@ -7,7 +8,10 @@ import { Reflector } from '@nestjs/core';
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private config: ConfigService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Check if route is marked as not requiring tenant validation
@@ -25,7 +29,12 @@ export class TenantGuard implements CanActivate {
 
     // Get tenant ID from header or user object
     const headerTenantId = request.headers['x-tenant-id'];
-    const currentTenantId = headerTenantId || user.currentTenantId || user.tenantId;
+    const claimantHandlingTenant =
+      user.role === 'CLAIMANT' && !headerTenantId && !user.currentTenantId && !user.tenantId
+        ? this.config.get<string>('HANDLING_FIRM_TENANT_ID')
+        : undefined;
+    const currentTenantId =
+      headerTenantId || user.currentTenantId || user.tenantId || claimantHandlingTenant;
 
     if (!currentTenantId && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('No tenant context available. Please select a tenant.');
@@ -36,6 +45,11 @@ export class TenantGuard implements CanActivate {
     const hasAccess =
       user.role === 'SUPER_ADMIN' ||
       user.tenantId === currentTenantId ||
+      // A first-time claimant has no claim from which authentication can
+      // derive an insurer tenant. Self-service intake is owned by the handling
+      // firm configured for exactly that case. This is not a client-selected
+      // tenant: the fallback is used only when the token and header name none.
+      claimantHandlingTenant === currentTenantId ||
       (user.tenantIds && user.tenantIds.includes(currentTenantId));
 
     if (!hasAccess) {

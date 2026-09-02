@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  ForbiddenException,
   NotFoundException,
   Param,
   Post,
@@ -110,10 +111,31 @@ export class ConsentController {
   @ApiOperation({ summary: 'Record consent against the approved notice' })
   grant(
     @Param('claimantId') claimantId: string,
-    @Body() body: { purpose: ConsentPurpose; locale?: string; capturedVia?: ConsentChannel },
+    @Body()
+    body: {
+      purpose: ConsentPurpose;
+      locale?: string;
+      capturedVia?: ConsentChannel;
+      attestation?: {
+        interactionChannel: 'PHONE' | 'IN_PERSON' | 'VIDEO' | 'OTHER';
+        interactionReference?: string;
+      };
+    },
     @Tenant() tenantContext: TenantContext
   ) {
     this.assertOwnRecord(claimantId, tenantContext);
+
+    // A claimant cannot attest on their own behalf — the whole meaning of an
+    // attestation is that somebody else vouches for a conversation. Refused
+    // rather than ignored: a request that asked for one and silently got a
+    // self-served record would be worse than an error.
+    if (
+      tenantContext.userRole === 'CLAIMANT' &&
+      body.capturedVia === ConsentChannel.VERBAL_AGENT_ATTESTED
+    ) {
+      throw new ForbiddenException('Only a staff member can attest a verbal consent.');
+    }
+
     return this.service.grant({
       claimantId,
       purpose: body.purpose,
@@ -123,6 +145,11 @@ export class ConsentController {
       // Recording them as capturedByUserId would read as staff-captured.
       capturedByUserId:
         tenantContext.userRole === 'CLAIMANT' ? null : tenantContext.userId,
+      // The attesting firm, from the caller's own context rather than the body:
+      // it is a fact about who acted, not a value they get to assert.
+      attestation: body.attestation
+        ? { ...body.attestation, attestedByTenantId: tenantContext.tenantId }
+        : undefined,
     });
   }
 

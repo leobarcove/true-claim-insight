@@ -23,7 +23,21 @@ export class ResolveChannelClaimantDto {
   })
   phoneNumber!: string;
 
-  @ApiProperty({ example: 'TELEGRAM', enum: ['TELEGRAM', 'WHATSAPP', 'MESSENGER', 'WEB_CHAT'] })
-  @IsIn(['TELEGRAM', 'WHATSAPP', 'MESSENGER', 'WEB_CHAT'])
+  /**
+   * An allow-list, not a mirror of `CaseChannel`. Only the channels that can
+   * actually vouch for a number belong here — `STAFF` and `EMAIL` must never
+   * reach this route, because neither proves possession of the handset and this
+   * route creates a Claimant.
+   *
+   * `WEB_FORM` was the omission that made the form's whole verification path
+   * fail: the code was sent, the claimant typed it, it verified — and then this
+   * DTO rejected the channel with a 400 the gateway logged and the claimant
+   * never saw. The form simply stopped, with the code screen still on it.
+   */
+  @ApiProperty({
+    example: 'TELEGRAM',
+    enum: ['TELEGRAM', 'WHATSAPP', 'MESSENGER', 'WEB_CHAT', 'WEB_FORM'],
+  })
+  @IsIn(['TELEGRAM', 'WHATSAPP', 'MESSENGER', 'WEB_CHAT', 'WEB_FORM'])
   channel!: string;
 }

@@ -12,7 +12,12 @@ model User {
   email              String              @unique
   password           String
   fullName           String
-  phoneNumber        String
+  /// Unique because it is a credential: staff sign in to the agent-assisted
+  /// form with their own number and a WhatsApp code, and a number shared by
+  /// two accounts would make "who is signing in?" unanswerable — the lookup
+  /// would have to pick one, and the wrong pick attributes a claimant's data
+  /// to the wrong person (WEB_FORM_MICROSITE_PLAN §1.4).
+  phoneNumber        String              @unique
   role               UserRole
   licenseNumber      String?
   avatarUrl          String?
@@ -1296,6 +1301,12 @@ enum CaseChannel {
   WHATSAPP
   TELEGRAM
   MESSENGER
+  /// The web form at /form. Its own channel, not a surface on WEB_CHAT: a
+  /// visitor who starts on the form and moves to the chat gets a fresh
+  /// conversation and a fresh claim request, nothing carried over. The
+  /// separation is the (channel, platformUserId) binding key and nothing else,
+  /// so this value is what enforces it (WEB_FORM_MICROSITE_PLAN D1, §1.2).
+  WEB_FORM
 }
 
 /// Publication state of a FlowDefinition. DRAFT is editable and unusable;
@@ -1887,6 +1898,15 @@ enum ConsentChannel {
   WEB_FORM
   VIDEO_SESSION
   STAFF_CAPTURED
+  /// Read out loud by a staff member on a call, and agreed to verbally.
+  ///
+  /// Its own value rather than STAFF_CAPTURED, which reads equally as "staff
+  /// typed it while the claimant watched the screen" — a materially different
+  /// record. This one rests entirely on an agent's attestation, and that has to
+  /// be visible in the data rather than inferred from who captured it. The
+  /// attesting user, their firm and how they spoke are on the row and in its
+  /// metadata (WEB_FORM_MICROSITE_PLAN §1.4).
+  VERBAL_AGENT_ATTESTED
   IMPORTED
   /// Agreed in a messaging thread (Telegram today; WhatsApp/Messenger later).
   /// Its own value rather than WEB_FORM: the record has to say where consent

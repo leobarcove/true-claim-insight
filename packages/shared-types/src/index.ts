@@ -81,6 +81,8 @@ export enum CaseChannel {
   WHATSAPP = 'WHATSAPP',
   TELEGRAM = 'TELEGRAM',
   MESSENGER = 'MESSENGER',
+  /** The web form at /form — its own conversation, never the chat's. */
+  WEB_FORM = 'WEB_FORM',
 }
 
 export enum CaseInitiator {
@@ -749,6 +751,7 @@ export {
   ANOTHER_CLAIM_YES,
   ANOTHER_CLAIM_NO,
   describeCallbackValue,
+  EDIT_CANCEL_VALUE,
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
   RESUME_CASE_CALLBACK_PREFIX,

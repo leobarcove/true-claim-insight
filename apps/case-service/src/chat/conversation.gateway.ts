@@ -19,6 +19,7 @@ import {
   describeCallbackValue,
   ANOTHER_CLAIM_YES,
   ANOTHER_CLAIM_NO,
+  EDIT_CANCEL_VALUE,
   EDIT_CALLBACK_PREFIX,
   getStep,
   formatDateAnswer,
@@ -135,15 +136,43 @@ function normalisePhone(text: string): string | null {
  * because they typed a word containing "ok".
  */
 const CONFIRM_WORDS = new Set([
-  'yes', 'y', 'confirm', 'confirmed', 'submit', 'ok', 'okay', 'okey',
-  'correct', 'agree', 'yep', 'yeah', 'sure', 'proceed', 'done',
-  'ya', 'yer', 'betul', 'setuju', 'sah', 'hantar', 'ok ok',
+  'yes',
+  'y',
+  'confirm',
+  'confirmed',
+  'submit',
+  'ok',
+  'okay',
+  'okey',
+  'correct',
+  'agree',
+  'yep',
+  'yeah',
+  'sure',
+  'proceed',
+  'done',
+  'ya',
+  'yer',
+  'betul',
+  'setuju',
+  'sah',
+  'hantar',
+  'ok ok',
 ]);
 
 /** Refusal at a confirm step — routes to the "change something" branch. */
 const DECLINE_WORDS = new Set([
-  'no', 'n', 'nope', 'wrong', 'incorrect', 'change', 'not correct',
-  'tidak', 'tak', 'salah', 'bukan',
+  'no',
+  'n',
+  'nope',
+  'wrong',
+  'incorrect',
+  'change',
+  'not correct',
+  'tidak',
+  'tak',
+  'salah',
+  'bukan',
 ]);
 
 /**
@@ -159,10 +188,30 @@ const DECLINE_WORDS = new Set([
  * fell on 16 June" is an answer and must reach the parser intact.
  */
 const GREETING_WORDS = new Set([
-  'hi', 'hello', 'hey', 'helo', 'yo', 'hai', 'halo',
-  'good morning', 'good afternoon', 'good evening', 'morning',
-  'salam', 'assalamualaikum', 'selamat pagi', 'selamat petang', 'apa khabar',
-  'ok', 'okay', 'okey', 'baik', 'thanks', 'thank you', 'terima kasih', 'tq',
+  'hi',
+  'hello',
+  'hey',
+  'helo',
+  'yo',
+  'hai',
+  'halo',
+  'good morning',
+  'good afternoon',
+  'good evening',
+  'morning',
+  'salam',
+  'assalamualaikum',
+  'selamat pagi',
+  'selamat petang',
+  'apa khabar',
+  'ok',
+  'okay',
+  'okey',
+  'baik',
+  'thanks',
+  'thank you',
+  'terima kasih',
+  'tq',
 ]);
 
 /**
@@ -214,6 +263,16 @@ const CONSENT_DECLINED = '__consent:decline';
  */
 const CONSENT_STEP_ID = '__consent';
 const CLAIM_TYPE_STEP_ID = '__claim-type';
+/**
+ * The "which detail would you like to change?" menu.
+ *
+ * Synthetic like the two above, and stranding for the same reason: it belongs
+ * to no flow, so a pull channel that only sees persisted text had a bot message
+ * asking a question and no controls to answer it. Unlike the two above it needs
+ * the case to rebuild, because its choices *are* the answers.
+ */
+const EDIT_MENU_STEP_ID = '__edit-menu';
+const EDIT_MENU_PROMPT = 'Which detail would you like to change?';
 
 /**
  * "Would you like to start another claim?" — asked, and then actually waited on.
@@ -326,7 +385,9 @@ const outstanding = (flow: CaseFlow, answers: CaseAnswers): string => {
   const deferred = flow.steps.filter(
     step =>
       step.answerType === 'document' &&
-      String(answers[step.id] ?? '').trim().toLowerCase() === DEFER_VALUE
+      String(answers[step.id] ?? '')
+        .trim()
+        .toLowerCase() === DEFER_VALUE
   );
   if (deferred.length === 0) return '';
 
@@ -376,7 +437,12 @@ export class ConversationGateway implements OnModuleInit {
   private offshoreProviderFor(channel: CaseChannel): OffshoreProviderKey | null {
     // Channels we host ourselves cross no border. Recording one would fill the
     // register with non-events and make the real rows harder to find.
-    const inCountry: CaseChannel[] = [CaseChannel.WEB_CHAT, CaseChannel.STAFF, CaseChannel.EMAIL];
+    const inCountry: CaseChannel[] = [
+      CaseChannel.WEB_CHAT,
+      CaseChannel.WEB_FORM,
+      CaseChannel.STAFF,
+      CaseChannel.EMAIL,
+    ];
     if (inCountry.includes(channel)) return null;
 
     const byChannel: Partial<Record<CaseChannel, OffshoreProviderKey>> = {
@@ -528,9 +594,7 @@ export class ConversationGateway implements OnModuleInit {
         text:
           `Our team needs one more thing on ${caseRow.caseNumber}` +
           (ask ? `:\n\n${ask}` : '.') +
-          (step && !step.isReview
-            ? '\n\nOnce it is in, review and confirm to resubmit.'
-            : ''),
+          (step && !step.isReview ? '\n\nOnce it is in, review and confirm to resubmit.' : ''),
       });
     } catch (error) {
       this.logger.warn(
@@ -549,9 +613,7 @@ export class ConversationGateway implements OnModuleInit {
         text:
           `Our team needs one more thing on ${caseRow.caseNumber}` +
           (ask ? `:\n\n${ask}` : '.') +
-          (step && !step.isReview
-            ? '\n\nOnce it is in, review and confirm to resubmit.'
-            : ''),
+          (step && !step.isReview ? '\n\nOnce it is in, review and confirm to resubmit.' : ''),
         status: ConversationMessageStatus.PROCESSED,
         processedAt: new Date(),
       },
@@ -640,10 +702,7 @@ export class ConversationGateway implements OnModuleInit {
       });
       messageId = message.id;
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         this.logger.debug(`Turn ${payload.platformMessageId} already seen; skipping.`);
         return;
       }
@@ -792,7 +851,11 @@ export class ConversationGateway implements OnModuleInit {
     if (recentTurns > MAX_TURNS_PER_MINUTE) {
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
-        data: { status: ConversationMessageStatus.FAILED, error: 'Rate limited', processedAt: new Date() },
+        data: {
+          status: ConversationMessageStatus.FAILED,
+          error: 'Rate limited',
+          processedAt: new Date(),
+        },
       });
       if (recentTurns === MAX_TURNS_PER_MINUTE + 1) {
         this.logger.warn(`Binding ${binding.id} exceeded ${MAX_TURNS_PER_MINUTE} turns/minute.`);
@@ -881,7 +944,9 @@ export class ConversationGateway implements OnModuleInit {
     // 4. Nothing about a claim is served to an unverified sender — including
     //    one whose confirmation has simply gone stale.
     if (binding.verifiedAt && this.bindingExpired(binding.verifiedAt)) {
-      this.logger.log(`Binding ${binding.id} verified over ${BINDING_MAX_AGE_DAYS} days ago; re-confirming.`);
+      this.logger.log(
+        `Binding ${binding.id} verified over ${BINDING_MAX_AGE_DAYS} days ago; re-confirming.`
+      );
       await this.prisma.conversationBinding.update({
         where: { id: binding.id },
         // The claimant link is kept: re-confirming the same number resolves to
@@ -997,12 +1062,11 @@ export class ConversationGateway implements OnModuleInit {
         where: { id: binding.id },
         data: { pendingPhone: null, otpAttempts: 0 },
       });
-      await this.runPhoneVerification(
-        messageId,
-        payload,
-        adapter,
-        { id: binding.id, pendingPhone: null, otpAttempts: 0 }
-      );
+      await this.runPhoneVerification(messageId, payload, adapter, {
+        id: binding.id,
+        pendingPhone: null,
+        otpAttempts: 0,
+      });
       return;
     }
 
@@ -1339,7 +1403,10 @@ export class ConversationGateway implements OnModuleInit {
     // claimant who withdrew in the PWA carried on being asked questions here
     // and having the answers stored — contrary to the withdrawal the consent
     // service had faithfully recorded.
-    if (binding.claimantId && !(await this.consent.hasConsent(binding.claimantId, ConsentPurpose.CLAIM_PROCESSING))) {
+    if (
+      binding.claimantId &&
+      !(await this.consent.hasConsent(binding.claimantId, ConsentPurpose.CLAIM_PROCESSING))
+    ) {
       this.logger.warn(`Binding ${binding.id}: consent withdrawn; collection stops here.`);
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
@@ -1387,7 +1454,16 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: 'Sorry — our last message may not have reached you. Here it is again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
@@ -1417,7 +1493,11 @@ export class ConversationGateway implements OnModuleInit {
       const page = Number(payload.callbackValue.slice(PAGE_CALLBACK_PREFIX.length)) || 0;
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
-        data: { status: ConversationMessageStatus.PROCESSED, stepId: step.id, processedAt: new Date() },
+        data: {
+          status: ConversationMessageStatus.PROCESSED,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
       });
       await this.ask(adapter, binding.id, payload.platformUserId, step, page);
       return;
@@ -1458,12 +1538,31 @@ export class ConversationGateway implements OnModuleInit {
             ? 'You already have a claim in progress — here is where we were.'
             : 'Sorry, we do not recognise that command. Here is the question again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
     if (BACK_WORDS.has(word)) {
-      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, step.id, true);
+      await this.reopenStep(
+        messageId,
+        payload,
+        adapter,
+        binding,
+        caseRow,
+        flow,
+        answers,
+        step.id,
+        true
+      );
       return;
     }
 
@@ -1489,7 +1588,16 @@ export class ConversationGateway implements OnModuleInit {
           'That looks like a question rather than an answer. If you are unsure, type "human" ' +
           'and one of our team will help — otherwise here is the question again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
@@ -1511,13 +1619,29 @@ export class ConversationGateway implements OnModuleInit {
           '"edit" to change any of them, or "human" to speak to one of our team. ' +
           'Here is the question again.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
     // Asking for a person, at any point. Nothing about intake should trap
     // someone who wants to speak to somebody.
-    if (HUMAN_WORDS.has(word)) {
+    //
+    // Except on the web form, which has no thread for a person to answer in.
+    // Handing over there would stand the bot down and leave the claimant on a
+    // form that has stopped responding — and the trigger is a bare word, so
+    // "agent" typed into a free-text field would do it by accident. The word
+    // falls through to ordinary validation instead, and the way to reach a
+    // person on that surface is the phone number in the footer.
+    if (HUMAN_WORDS.has(word) && payload.channel !== CaseChannel.WEB_FORM) {
       await this.handOverToAgent(
         messageId,
         payload,
@@ -1529,9 +1653,49 @@ export class ConversationGateway implements OnModuleInit {
       return;
     }
 
+    // The edit menu is synthetic, while the persisted Case cursor deliberately
+    // stays on review. Cancelling therefore means acknowledging the menu tap
+    // and asking that unchanged review step again. Without an explicit escape,
+    // an accidental "Change something" tap traps the claimant in a list where
+    // every possible action mutates an answer.
+    if (raw === EDIT_CANCEL_VALUE) {
+      await this.prisma.conversationMessage.update({
+        where: { id: messageId },
+        data: {
+          status: ConversationMessageStatus.PROCESSED,
+          stepId: EDIT_MENU_STEP_ID,
+          processedAt: new Date(),
+        },
+      });
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'No changes made. Please review your details again.',
+      });
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
+      return;
+    }
+
     if (typeof raw === 'string' && raw.startsWith(EDIT_CALLBACK_PREFIX)) {
       const target = raw.slice(EDIT_CALLBACK_PREFIX.length);
-      await this.reopenStep(messageId, payload, adapter, binding, caseRow, flow, answers, target, false);
+      await this.reopenStep(
+        messageId,
+        payload,
+        adapter,
+        binding,
+        caseRow,
+        flow,
+        answers,
+        target,
+        false
+      );
       return;
     }
 
@@ -1595,7 +1759,16 @@ export class ConversationGateway implements OnModuleInit {
       });
       // Re-ask rather than apologise: from the claimant's side they tapped a
       // button twice and the conversation simply moved on, which is correct.
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
@@ -1666,64 +1839,76 @@ export class ConversationGateway implements OnModuleInit {
       } else if (!payload.mediaRef) {
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
-          data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
+          data: {
+            status: ConversationMessageStatus.UNPARSEABLE,
+            stepId: step.id,
+            processedAt: new Date(),
+          },
         });
         await this.say(adapter, binding.id, payload.platformUserId, {
           text: await this.withEscapeHatch(binding, step, [
             'Please send the document as a photo or a file.',
           ]),
         });
-        await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+        await this.ask(
+          adapter,
+          binding.id,
+          payload.platformUserId,
+          step,
+          0,
+          undefined,
+          undefined,
+          flow
+        );
         return;
       } else {
-
-      // Fetched only now — a claimant sending unrelated pictures earlier cost
-      // nothing, because media is carried as a reference until a step wants it.
-      let media: { buffer: Buffer; filename: string; mimeType: string };
-      try {
-        media = await adapter.fetchMedia(payload.mediaRef);
-      } catch (error) {
-        // A file the platform will not serve is the claimant's problem to
-        // solve and ours to explain. "Something went wrong on our side" was
-        // both untrue and un-actionable: they would send the same file again.
-        if ((error as Error).name === 'MediaTooLargeError') {
-          await this.prisma.conversationMessage.update({
-            where: { id: messageId },
-            data: {
-              status: ConversationMessageStatus.UNPARSEABLE,
-              stepId: step.id,
-              error: (error as Error).message,
-              processedAt: new Date(),
-            },
-          });
-          await this.say(adapter, binding.id, payload.platformUserId, {
-            text:
-              'That file is too large for us to receive (the limit is 20 MB). Please send a ' +
-              'smaller version — a photo of the document usually works.',
-          });
-          return;
+        // Fetched only now — a claimant sending unrelated pictures earlier cost
+        // nothing, because media is carried as a reference until a step wants it.
+        let media: { buffer: Buffer; filename: string; mimeType: string };
+        try {
+          media = await adapter.fetchMedia(payload.mediaRef);
+        } catch (error) {
+          // A file the platform will not serve is the claimant's problem to
+          // solve and ours to explain. "Something went wrong on our side" was
+          // both untrue and un-actionable: they would send the same file again.
+          if ((error as Error).name === 'MediaTooLargeError') {
+            await this.prisma.conversationMessage.update({
+              where: { id: messageId },
+              data: {
+                status: ConversationMessageStatus.UNPARSEABLE,
+                stepId: step.id,
+                error: (error as Error).message,
+                processedAt: new Date(),
+              },
+            });
+            await this.say(adapter, binding.id, payload.platformUserId, {
+              text:
+                'That file is too large for us to receive (the limit is 20 MB). Please send a ' +
+                'smaller version — a photo of the document usually works.',
+            });
+            return;
+          }
+          throw error;
         }
-        throw error;
-      }
-      const document = await this.cases.uploadDocument(
-        caseRow.id,
-        {
-          toBuffer: async () => media.buffer,
-          filename: media.filename,
-          mimetype: media.mimeType,
-          // Mirrors the multipart field shape the PWA posts.
-          fields: {
-            type: { value: step.documentType },
-            stepId: { value: step.id },
+        const document = await this.cases.uploadDocument(
+          caseRow.id,
+          {
+            toBuffer: async () => media.buffer,
+            filename: media.filename,
+            mimetype: media.mimeType,
+            // Mirrors the multipart field shape the PWA posts.
+            fields: {
+              type: { value: step.documentType },
+              stepId: { value: step.id },
+            },
           },
-        },
-        this.claimantContext(binding)
-      );
-      value = document.id;
+          this.claimantContext(binding)
+        );
+        value = document.id;
 
-      // Tie the turn to the file it produced, so the transcript can show the
-      // photo rather than the word "Attachment". Recorded here because this is
-      // the only moment both are in hand.
+        // Tie the turn to the file it produced, so the transcript can show the
+        // photo rather than the word "Attachment". Recorded here because this is
+        // the only moment both are in hand.
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
           data: { caseDocumentId: document.id },
@@ -1733,9 +1918,22 @@ export class ConversationGateway implements OnModuleInit {
       if (raw === undefined) {
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
-          data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
+          data: {
+            status: ConversationMessageStatus.UNPARSEABLE,
+            stepId: step.id,
+            processedAt: new Date(),
+          },
         });
-        await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+        await this.ask(
+          adapter,
+          binding.id,
+          payload.platformUserId,
+          step,
+          0,
+          undefined,
+          undefined,
+          flow
+        );
         return;
       }
       if (step.answerType === 'date' || step.answerType === 'datetime') {
@@ -1856,14 +2054,27 @@ export class ConversationGateway implements OnModuleInit {
     if (!result.accepted) {
       await this.prisma.conversationMessage.update({
         where: { id: messageId },
-        data: { status: ConversationMessageStatus.UNPARSEABLE, stepId: step.id, processedAt: new Date() },
+        data: {
+          status: ConversationMessageStatus.UNPARSEABLE,
+          stepId: step.id,
+          processedAt: new Date(),
+        },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: await this.withEscapeHatch(binding, step, [
           result.error ?? 'Sorry, that does not look right.',
         ]),
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, step, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        step,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
@@ -2039,7 +2250,10 @@ export class ConversationGateway implements OnModuleInit {
    * A claimant identity for the binding, so channel turns reuse the PWA's
    * access checks rather than a second, weaker set.
    */
-  private claimantContext(binding: { claimantId: string | null; tenantId: string | null }): TenantContext {
+  private claimantContext(binding: {
+    claimantId: string | null;
+    tenantId: string | null;
+  }): TenantContext {
     return {
       tenantId: binding.tenantId ?? '',
       userId: binding.claimantId ?? '',
@@ -2066,7 +2280,12 @@ export class ConversationGateway implements OnModuleInit {
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; claimantId: string | null; tenantId: string | null; locale?: string | null }
+    binding: {
+      id: string;
+      claimantId: string | null;
+      tenantId: string | null;
+      locale?: string | null;
+    }
   ): Promise<void> {
     if (!binding.claimantId) {
       this.logger.error(`Binding ${binding.id} is verified but has no claimant; cannot proceed.`);
@@ -2083,7 +2302,15 @@ export class ConversationGateway implements OnModuleInit {
       await this.consent.grant({
         claimantId: binding.claimantId,
         purpose: ConsentPurpose.CLAIM_PROCESSING,
-        capturedVia: ConsentChannel.MESSAGING,
+        // Where consent was actually given, which the record has to say. Every
+        // channel used to be filed as MESSAGING — true of Telegram and
+        // WhatsApp, and plainly untrue of somebody ticking a box on a web form.
+        // Read off the binding rather than a value the client sent, so a
+        // mislabelled consent cannot be produced by editing a request.
+        capturedVia:
+          payload.channel === CaseChannel.WEB_FORM
+            ? ConsentChannel.WEB_FORM
+            : ConsentChannel.MESSAGING,
         // Tied to the wording they were actually shown. A consent recorded
         // against a version the claimant never read is unprovable later,
         // which is the whole reason notices are versioned and immutable.
@@ -2198,9 +2425,23 @@ export class ConversationGateway implements OnModuleInit {
    * no alternative route. Returning the ids rather than duplicating the steps
    * keeps a single definition of each.
    */
-  async synthesiseStep(stepId: string, locale: string | null): Promise<FlowStep | null> {
+  async synthesiseStep(
+    stepId: string,
+    locale: string | null,
+    /**
+     * The case the menu is about, for `__edit-menu` only.
+     *
+     * Optional because the pre-claim steps have no case to be about — asking
+     * for one would make every caller pass null. Absent it, the edit menu
+     * cannot be rebuilt and null is the honest answer.
+     */
+    context?: { flow: CaseFlow; answers: CaseAnswers }
+  ): Promise<FlowStep | null> {
     if (stepId === CLAIM_TYPE_STEP_ID) return this.claimTypeMenu();
     if (stepId === ANOTHER_CLAIM_STEP_ID) return this.anotherClaimMenu();
+    if (stepId === EDIT_MENU_STEP_ID) {
+      return context ? this.editMenuStep(context.flow, context.answers) : null;
+    }
     if (stepId === CONSENT_STEP_ID) {
       const notice = await this.consent.currentNotice(
         ConsentPurpose.CLAIM_PROCESSING,
@@ -2223,7 +2464,12 @@ export class ConversationGateway implements OnModuleInit {
     messageId: string,
     payload: InboundTurnPayload,
     adapter: ChannelAdapter,
-    binding: { id: string; claimantId: string | null; tenantId: string | null; locale?: string | null }
+    binding: {
+      id: string;
+      claimantId: string | null;
+      tenantId: string | null;
+      locale?: string | null;
+    }
   ): Promise<void> {
     const chosen =
       payload.callbackValue && payload.callbackValue in TRAVEL_CLAIM_TYPE_LABELS
@@ -2309,7 +2555,16 @@ export class ConversationGateway implements OnModuleInit {
 
     // create() returns the resolved current step, so no second lookup.
     if (created.currentStep) {
-      await this.ask(adapter, binding.id, payload.platformUserId, created.currentStep, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        created.currentStep,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
     }
   }
 
@@ -2391,7 +2646,16 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text: 'This is the first question, so there is nothing before it to change.',
       });
-      await this.ask(adapter, binding.id, payload.platformUserId, target, 0, undefined, undefined, flow);
+      await this.ask(
+        adapter,
+        binding.id,
+        payload.platformUserId,
+        target,
+        0,
+        undefined,
+        undefined,
+        flow
+      );
       return;
     }
 
@@ -2440,7 +2704,16 @@ export class ConversationGateway implements OnModuleInit {
     await this.say(adapter, binding.id, payload.platformUserId, {
       text: `Let us redo "${stepToRedo.label}".`,
     });
-    await this.ask(adapter, binding.id, payload.platformUserId, stepToRedo, 0, undefined, undefined, flow);
+    await this.ask(
+      adapter,
+      binding.id,
+      payload.platformUserId,
+      stepToRedo,
+      0,
+      undefined,
+      undefined,
+      flow
+    );
   }
 
   /**
@@ -2483,6 +2756,37 @@ export class ConversationGateway implements OnModuleInit {
     flow: CaseFlow,
     answers: CaseAnswers
   ): Promise<void> {
+    const step = this.editMenuStep(flow, answers);
+    const choices = step?.choices ?? [];
+
+    await this.prisma.conversationMessage.update({
+      where: { id: messageId },
+      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+    });
+
+    if (choices.length === 0) {
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text: 'You have not answered anything yet, so there is nothing to change.',
+      });
+      return;
+    }
+
+    await this.say(adapter, binding.id, payload.platformUserId, {
+      text: EDIT_MENU_PROMPT,
+      step: step!,
+    });
+  }
+
+  /**
+   * The edit menu as a step, or null when there is nothing to change yet.
+   *
+   * One definition, used twice: `offerEditMenu` sends it on a push channel, and
+   * `synthesiseStep` rebuilds it for a pull channel that has only the persisted
+   * transcript. Two copies would drift, and the way that failure shows up is a
+   * claimant on the PWA tapping a button that names a step the server no longer
+   * offers.
+   */
+  private editMenuStep(flow: CaseFlow, answers: CaseAnswers): FlowStep | null {
     const choices = flow.steps
       .filter(step => step.answerType !== 'confirm' && answers[step.id] !== undefined)
       .map(step => {
@@ -2508,29 +2812,26 @@ export class ConversationGateway implements OnModuleInit {
         };
       });
 
-    await this.prisma.conversationMessage.update({
-      where: { id: messageId },
-      data: { status: ConversationMessageStatus.PROCESSED, processedAt: new Date() },
+    if (choices.length === 0) return null;
+
+    // Escape first, not after every answered field. On a phone the list can be
+    // taller than the viewport; putting cancellation at the bottom recreates
+    // the trap for anyone who cannot yet discover that the menu scrolls.
+    choices.unshift({
+      value: EDIT_CANCEL_VALUE,
+      label: 'Cancel — back to review',
+      title: 'Cancel',
+      description: 'Return to review without changing anything',
     });
 
-    if (choices.length === 0) {
-      await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'You have not answered anything yet, so there is nothing to change.',
-      });
-      return;
-    }
-
-    await this.say(adapter, binding.id, payload.platformUserId, {
-      text: 'Which detail would you like to change?',
-      step: {
-        id: '__edit-menu',
-        prompt: 'Which detail would you like to change?',
-        label: 'Change a detail',
-        answerType: 'choice',
-        choices,
-        next: { type: 'end' },
-      },
-    });
+    return {
+      id: EDIT_MENU_STEP_ID,
+      prompt: EDIT_MENU_PROMPT,
+      label: 'Change a detail',
+      answerType: 'choice',
+      choices,
+      next: { type: 'end' },
+    };
   }
 
   /**
@@ -2717,9 +3018,7 @@ export class ConversationGateway implements OnModuleInit {
     // A greeting is not a failed answer, so it never earns the escape line —
     // otherwise saying hello three times would offer someone a way out of a
     // question they have not tried to answer.
-    const text = greeted
-      ? lines.join('\n\n')
-      : await this.withEscapeHatch(binding, step, lines);
+    const text = greeted ? lines.join('\n\n') : await this.withEscapeHatch(binding, step, lines);
 
     await this.say(adapter, binding.id, platformUserId, { text });
     await this.ask(adapter, binding.id, platformUserId, step, 0, undefined, undefined, flow);
@@ -2905,6 +3204,4 @@ export class ConversationGateway implements OnModuleInit {
       this.logger.error(`Could not notify ${platformUserId}: ${(error as Error).message}`);
     }
   }
-
-
 }
