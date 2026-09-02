@@ -34,6 +34,7 @@ import {
   ATTACHED_VALUE,
   SKIP_VALUE,
   summariseAnswers,
+  TRAVEL_CLAIM_TYPE_DESCRIPTIONS,
   TRAVEL_CLAIM_TYPE_LABELS,
   RESUME_CASE_CALLBACK_PREFIX,
   REVIEW_STEP_ID,
@@ -2671,9 +2672,13 @@ export class ConversationGateway implements OnModuleInit {
       prompt: 'What has happened?',
       label: 'Claim type',
       answerType: 'choice',
+      // The description rides along with the label, so every channel that
+      // renders this menu can say what each type covers. A claimant picking
+      // between "luggage damage" and "luggage loss" is the reason it exists.
       choices: Object.entries(TRAVEL_CLAIM_TYPE_LABELS).map(([value, label]) => ({
         value,
         label,
+        description: TRAVEL_CLAIM_TYPE_DESCRIPTIONS[value as TravelClaimType],
       })),
       next: { type: 'end' },
     };

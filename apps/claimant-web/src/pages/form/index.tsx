@@ -585,6 +585,8 @@ function ConsentStage({ state }: { state: FormState }) {
  */
 function ClaimTypeStage({ state }: { state: FormState }) {
   const { busy, submit } = useSimpleTurn();
+  const [chosen, setChosen] = useState<string | null>(null);
+  const t = copyFor(state.locale);
 
   const sections: ResolvedSection[] = SECTIONS.map(section => ({
     ...section,
@@ -604,7 +606,23 @@ function ClaimTypeStage({ state }: { state: FormState }) {
       // drawn, because a column that appears once the first answer lands would
       // shift the whole page sideways at the worst moment.
       summary={[]}
-      actions={null}
+      /*
+        Chosen, then confirmed — rather than advancing on the tap itself.
+
+        This is the one answer that cannot be changed afterwards: it pins the
+        flow to the case and decides every question that follows, and there is
+        no turn that re-pins it, so a mis-tap costs the whole claim request and
+        Start again is the only way back. On a phone, where these are stacked
+        and thumb-sized, that is a real risk rather than a theoretical one.
+      */
+      actions={
+        <Button
+          disabled={busy || !chosen}
+          onClick={() => chosen && void submit({ callbackValue: chosen })}
+        >
+          {busy ? t('saving') : t('continue')}
+        </Button>
+      }
     >
       <div className="grid gap-2.5 sm:grid-cols-2">
         {(state.claimTypes ?? []).map(choice => (
@@ -612,10 +630,24 @@ function ClaimTypeStage({ state }: { state: FormState }) {
             key={choice.value}
             type="button"
             disabled={busy}
-            onClick={() => void submit({ callbackValue: choice.value })}
-            className="flex min-h-[56px] items-center rounded-xl border border-input bg-background px-4 py-3 text-left text-sm font-medium hover:border-primary/40 disabled:opacity-60"
+            aria-pressed={chosen === choice.value}
+            onClick={() => setChosen(choice.value)}
+            className={cn(
+              'flex min-h-[56px] flex-col justify-center gap-0.5 rounded-xl border px-4 py-3 text-left',
+              chosen === choice.value
+                ? 'border-primary bg-primary/5'
+                : 'border-input bg-background hover:border-primary/40',
+              busy && 'opacity-60'
+            )}
           >
-            {choice.label}
+            <span className="text-sm font-medium">{choice.label}</span>
+            {/*
+              What the type covers, from the flow rather than written here, so
+              the same help appears wherever this question is asked.
+            */}
+            {choice.description && (
+              <span className="text-xs text-muted-foreground">{choice.description}</span>
+            )}
           </button>
         ))}
       </div>

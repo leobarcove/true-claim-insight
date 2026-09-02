@@ -679,6 +679,7 @@ export interface RiskAssessmentResponse {
 // tsc's __exportStar helper, but does detect explicit re-export bindings.
 export {
   CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_DESCRIPTIONS,
   TRAVEL_CLAIM_TYPE_LABELS,
   AIRLINE_CHOICES,
   BANK_CHOICES,

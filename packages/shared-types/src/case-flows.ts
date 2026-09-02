@@ -220,6 +220,27 @@ export const TRAVEL_CLAIM_TYPE_LABELS: Record<TravelClaimType, string> = {
   [TravelType.MEDICAL]: 'Medical expenses',
 };
 
+/**
+ * What each claim type covers, in the claimant's words.
+ *
+ * A label alone makes somebody guess: a missed connection is not obviously a
+ * "flight delay", and a bag the airline never returned is not obviously
+ * "luggage loss" rather than damage. Choosing wrong is expensive here — the
+ * type pins the flow to the case and every question after it, and there is no
+ * turn that re-pins it.
+ *
+ * Kept beside the labels, and put on the choice itself, so the help arrives on
+ * every channel that asks the question rather than only the one it was written
+ * for.
+ */
+export const TRAVEL_CLAIM_TYPE_DESCRIPTIONS: Record<TravelClaimType, string> = {
+  [TravelType.FLIGHT_DELAY]: 'Delayed, cancelled or missed connection',
+  [TravelType.LUGGAGE_DAMAGE]: 'Bag or contents damaged in transit',
+  [TravelType.LUGGAGE_LOSS]: 'Bag not returned by the airline',
+  [TravelType.TRIP_CANCELLATION]: 'Illness, bereavement, disaster or other reason',
+  [TravelType.MEDICAL]: 'Hospital or clinic bills abroad',
+};
+
 /** Notification deadlines mirrored from typical Malaysian travel policy terms. */
 export const NOTIFY_WITHIN_HOURS = 24;
 export const CLAIM_WINDOW_DAYS = 30;
