@@ -418,9 +418,17 @@ export class CasesService {
     this.assertAccess(caseRow, tenantContext);
 
     // Operator opening a freshly submitted case moves it into vetting.
+    //
+    // Not the person who submitted it, though. An agent who fills a claim in on
+    // a claimant's behalf reads the case back the moment they submit — and
+    // without this guard that read moved it straight to UNDER_REVIEW, so every
+    // assisted claim arrived in the handling firm's queue already marked as
+    // being looked at when nobody had looked at it. Opening a case you created
+    // is not the same act as picking one out of a queue.
     if (
       caseRow.status === CaseStatus.SUBMITTED &&
-      tenantContext.userRole !== 'CLAIMANT'
+      tenantContext.userRole !== 'CLAIMANT' &&
+      caseRow.createdByUserId !== tenantContext.userId
     ) {
       await this.prisma.case.update({
         where: { id },

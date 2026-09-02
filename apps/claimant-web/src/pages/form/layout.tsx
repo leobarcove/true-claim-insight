@@ -143,6 +143,7 @@ export function SectionLayout({
   actions,
   summary,
   locale = 'en',
+  assisted = false,
 }: {
   sections: ResolvedSection[];
   activeId: string;
@@ -152,6 +153,13 @@ export function SectionLayout({
   actions: ReactNode;
   summary: Array<[string, string]>;
   locale?: Locale;
+  /**
+   * True on the agent surface. Two pieces of copy here are addressed to the
+   * claimant and are wrong — sometimes untrue — when an agent is reading them,
+   * and copy that speaks to the wrong person is how a colleague ends up telling
+   * a claimant something the system does not do.
+   */
+  assisted?: boolean;
 }) {
   const activeIndex = sections.findIndex(section => section.id === activeId);
   const t = copyFor(locale);
@@ -225,7 +233,11 @@ export function SectionLayout({
             gives up on a form is halfway down it — and a claimant who leaves
             for WhatsApp starts a fresh request there, which is worth them
             knowing before they go.
+
+            Never shown to an agent: they are on the phone to the claimant, and
+            offering *them* WhatsApp is an instruction meant for somebody else.
           */}
+          {!assisted && (
           <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-dashed p-3 text-xs leading-snug text-muted-foreground">
             <span aria-hidden="true">💬</span>
             <span>
@@ -236,6 +248,7 @@ export function SectionLayout({
               . Starting there begins a new request.
             </span>
           </div>
+          )}
         </nav>
 
         <main className="flex flex-col gap-5 lg:col-span-6">
@@ -265,8 +278,14 @@ export function SectionLayout({
               <span className="text-[13px] font-medium">{value}</span>
             </div>
           ))}
+          {/*
+            Untrue on the agent surface. A claimant's progress is tied to the
+            browser session; an agent's claim is a case on the server that any
+            of their colleagues could be shown. Saying "on this device" to them
+            would be a promise the system does not make.
+          */}
           <p className="mt-2.5 text-xs leading-snug text-muted-foreground">
-            {t('savedOnDevice')}
+            {assisted ? 'Saved to the claim request after each step.' : t('savedOnDevice')}
           </p>
         </aside>
       </div>

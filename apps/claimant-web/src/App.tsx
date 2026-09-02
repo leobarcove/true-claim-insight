@@ -3,6 +3,8 @@ import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
 import { ClaimFormPage } from '@/pages/form';
+import { AgentFormPage } from '@/pages/agent';
+import { currentSurface } from '@/lib/surface';
 import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
@@ -85,11 +87,31 @@ function App() {
           adding a `layout` flag threaded through the shell: one route that
           needs a different frame is a route, not a configuration system.
         */}
-        <Route path="/form" element={<ClaimFormPage />} />
+        <Route path="/form" element={<SurfaceRoute />} />
+        {/*
+          Local development only. From staging onwards the agent surface is its
+          own hostname pointing at this same build, and `/agent` is never
+          navigated to — `surfaceFor` ignores the path on any host a claimant
+          can reach, so this route cannot be used to slip onto the agent screens
+          in a real deployment.
+        */}
+        <Route path="/agent" element={<SurfaceRoute />} />
         <Route path="*" element={<FramedRoutes />} />
       </Routes>
     </BrowserRouter>
   );
+}
+
+/**
+ * Which form to draw, decided by where this was served from.
+ *
+ * One build, two surfaces. The claimant's form asks for a mobile number and
+ * proves it with a code; the agent's asks the agent to sign in and then who
+ * they are filling in for. Nothing the browser sends chooses between them —
+ * see `surfaceFor`.
+ */
+function SurfaceRoute() {
+  return currentSurface() === 'agent' ? <AgentFormPage /> : <ClaimFormPage />;
 }
 
 /** Everything that belongs inside the phone column. */

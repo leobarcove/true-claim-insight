@@ -8,10 +8,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../config/prisma.service';
 import { ClaimantsService } from './claimants.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
 
 const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/g, '0') || '';
@@ -26,6 +29,55 @@ export class ClaimantsController {
     private readonly prisma: PrismaService,
     private readonly claimantsService: ClaimantsService
   ) {}
+
+  /**
+   * Find or create the claimant an agent is filling a form in for.
+   *
+   * **Not a new capability.** `POST /cases` already does exactly this for staff
+   * — it resolves a claimant from `claimantPhone` before proxying — so the
+   * ability to turn a phone number into a claimant record is one staff have
+   * had all along. What is new is doing it as its own step, because the
+   * agent-assisted form needs the id *before* the case exists: consent has to
+   * be recorded against a claimant, and `CasesService.create` refuses to open
+   * a case without it.
+   *
+   * It does tell an authenticated staff member whether a number is already
+   * known, which is why `existing` is returned deliberately rather than
+   * leaking through a timing difference — the agent needs to see "we have this
+   * person" so they do not re-key a name that is already on file. Staff-only,
+   * tenant-scoped, and the same role list that may create a case.
+   */
+  @Post('resolve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
+  @SkipTenantCheck()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Resolve the claimant an assisted claim is being filled in for' })
+  async resolve(
+    @Body() body: { phoneNumber: string; fullName?: string; nric?: string }
+  ) {
+    if (!body?.phoneNumber?.trim()) {
+      throw new HttpException('A mobile number is required.', HttpStatus.BAD_REQUEST);
+    }
+
+    const before = await this.claimantsService.findByPhone(body.phoneNumber);
+    const claimant = await this.claimantsService.findOrCreate({
+      phoneNumber: body.phoneNumber,
+      fullName: body.fullName,
+      nric: body.nric,
+    });
+
+    return {
+      id: claimant.id,
+      phoneNumber: claimant.phoneNumber,
+      fullName: claimant.fullName ?? null,
+      // The tail only. The full value comes from the audited reveal endpoint,
+      // and an agent confirming they have the right person does not need it.
+      nricLast4: (claimant as { nricLast4?: string | null }).nricLast4 ?? null,
+      existing: before !== null,
+    };
+  }
 
   @Post('verify-nric')
   // Deliberately unauthenticated: the claimant proves identity here as part of

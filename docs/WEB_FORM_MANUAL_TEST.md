@@ -118,6 +118,42 @@ Repeat the golden path at 390px.
 
 ---
 
+## The agent-assisted path
+
+Open the agent surface — `http://localhost:4301/agent` locally, `AGENT_HOST` from staging
+onwards — and sign in as `adjuster@pacific.com` (`+60100000002`).
+
+| # | Do | Expect |
+|---|---|---|
+| 1 | The first screen | **Sign in with your mobile.** It says the number is *yours, not the claimant's* — the next screen asks for theirs |
+| 2 | Send the code, enter it | **Keep me signed in for 30 days** is offered and ticked |
+| 3 | **Who are you filling this in for?** — a new mobile and a name | A card confirms *New record created*. A note says nothing about the claim is saved yet |
+| 4 | Continue | The declaration. The amber band says **Consent not yet recorded — no claim details can be entered** |
+| 5 | Try to continue without ticking | The button is disabled |
+| 6 | Tick, pick how you spoke, choose a claim type, record | *You and your trip*. The band now reads **Verbal consent attested by you at HH:MM · notice v1** |
+| 7 | Fill in the five sections as for a claimant | Identical fields, identical behaviour — it is the same components |
+| 8 | Review | A final amber note names the claimant and the time consent was recorded |
+| 9 | Submit | *Claim request … submitted*, naming who entered it and that consent was agent-attested |
+| 10 | Portal, as `adjuster@pacific.com` | The case is in **Submitted** — not Under review — routed to **Pacific**, `channel: STAFF` |
+
+**Step 10 matters.** An assisted claim used to arrive already marked Under review, because
+the agent's own read after submitting tripped the auto-transition meant for an operator
+picking a case out of a queue. It arrived on the wrong tab with nobody having looked at it.
+
+**Things that must be true throughout**
+
+- The **amber band is on every assisted screen** and on no claimant screen.
+- The claimant's "Prefer to chat? … WhatsApp" card is **not** shown to an agent — they are
+  on the phone to that person already.
+- The rail says *Saved to the claim request after each step*, never "on this device": an
+  agent's claim is a case on the server, not a browser session.
+- Signing out and back in starts a fresh assisted claim; it does not resume the last one.
+- Consent in the database reads `VERBAL_AGENT_ATTESTED` with a `capturedByUserId` and the
+  interaction channel in `metadata` — never `STAFF_CAPTURED`, and never a claimant
+  digital acceptance.
+
+---
+
 ## What is deliberately not here
 
 - **No handover screen.** The form is submit-only: take-over is refused on a

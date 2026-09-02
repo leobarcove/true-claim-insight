@@ -611,7 +611,7 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
-### Web-form microsite — claimant path complete, agent UI outstanding, 2 September 2026 (`1ec6198`, `5db71b6`, `3fa61d5`, `f1e03a8`)
+### Web-form microsite — complete, 2 September 2026 (`1ec6198`, `5db71b6`, `3fa61d5`, `f1e03a8`)
 
 A fourth way to lodge a claim: a form at `/form` on claimant-web, alongside the
 web chat, WhatsApp and Telegram. Plan and decisions in
@@ -647,13 +647,25 @@ Review; and a turn cap of 20/minute sized for a claimant typing one message at
 a time, which an ordinary claimant filling a ~30-turn form crossed. The cap is
 now 60 — the burst defence is the edge throttle and is untouched.
 
-**Still outstanding — the agent-assisted path has a backend and no interface.**
-Sign-in, routing, the creator-access rule and the consent record are built and
-tested; the six approved agent screens are not, so no agent can use it yet.
-With them go the `AGENT_HOST` Caddy block and DNS record, the amber band, agent
-provenance on the review screen, and the assisted scenarios in the manual test
-script. The portal's existing staff capture page also still captures no consent,
-so it cannot open a case for a new claimant — a separate, smaller fix.
+**The agent-assisted path is built and driven end to end.** An agent signs in
+with their own mobile, finds or creates the claimant, attests the verbal
+consent, fills in the same five sections and submits — landing in Pacific's
+queue as `SUBMITTED`, `channel: STAFF`, with the consent recorded as
+`VERBAL_AGENT_ATTESTED` naming who attested and how they spoke. It is the
+claimant's own form: two screens swapped at the front, an amber band across the
+top, and the six sections reused unchanged. The surface is chosen by the
+**host** (`AGENT_HOST`, one more Caddy block over the same build), never by
+anything the browser sends.
+
+Two more defects found by running it: an uploaded document was attached to the
+case but never recorded as the *answer*, so the section would not advance with
+the file plainly on screen; and an assisted claim arrived already marked
+`UNDER_REVIEW`, because the agent's own read after submitting tripped the
+auto-transition meant for an operator picking a case out of a queue.
+
+**Still outstanding:** the portal's existing staff capture page captures no
+consent, so it cannot open a case for a new claimant — a separate, smaller fix,
+and unrelated to the agent form.
 
 **Not done, deliberately:** no Malay wording for the questions (D5 — the switch
 works and carries the language; the flow copy is untranslated), no claimant
