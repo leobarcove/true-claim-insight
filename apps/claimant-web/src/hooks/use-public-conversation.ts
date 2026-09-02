@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '@/lib/api-client';
+import { createSessionStore } from '@/lib/public-session';
 import type { Conversation } from './use-conversation';
 
 /**
@@ -16,16 +17,11 @@ import type { Conversation } from './use-conversation';
  * conversation and grants nothing: until a code is verified the thread behind
  * it is attached to no claimant and can see no claim.
  */
-const SESSION_KEY = 'tci.webchat.session';
+const session = createSessionStore('tci.webchat.session');
 
 export const publicConversationKey = ['public-conversation'] as const;
 
-const readSession = () => localStorage.getItem(SESSION_KEY) ?? undefined;
-
-const sessionHeaders = () => {
-  const session = readSession();
-  return session ? { 'X-Web-Session': session } : {};
-};
+const sessionHeaders = () => session.headers();
 
 export function usePublicConversation(enabled = true) {
   return useQuery({
@@ -57,7 +53,7 @@ export function useStartPublicConversation() {
       // Stored before the transcript is published to the cache, so the very
       // next request already carries it. The other order loses the first turn
       // of a brand-new conversation.
-      if (payload?.session) localStorage.setItem(SESSION_KEY, payload.session);
+      if (payload?.session) session.write(payload.session);
       return payload?.conversation as Conversation;
     },
     onSuccess: conversation => queryClient.setQueryData(publicConversationKey, conversation),
@@ -73,6 +69,16 @@ export function useSendPublicTurn() {
       callbackValue?: string;
       callbackStepId?: string;
       storedDocumentId?: string;
+      /**
+       * Sent on every turn, not only at `start`.
+       *
+       * One language setting lives on the conversation, and `start` is the only
+       * place it was ever written — so switching to Malay mid-claim changed the
+       * button and nothing else: every question after it came back in English,
+       * because the server was never told. Carrying it on each turn makes the
+       * last thing the claimant chose the thing that wins.
+       */
+      locale?: string;
     }) => {
       const { data } = await apiClient.post<{ data: Conversation }>(
         '/public/conversation/turn',
@@ -117,7 +123,7 @@ export async function uploadPublicDocument(file: File, documentType: string, ste
  * set. Reading the truth means any page rendering the chat is safe by default.
  */
 export function isChannelSession(): boolean {
-  return (readSession() ?? '').startsWith('tg:');
+  return session.isChannelSession();
 }
 
 /**
@@ -130,10 +136,10 @@ export function isChannelSession(): boolean {
  * uploads — then works unchanged, which is the point: the Mini App is not a
  * second client, it is this one with its identity established differently.
  */
-export function adoptPublicSession(session: string) {
-  localStorage.setItem(SESSION_KEY, session);
+export function adoptPublicSession(token: string) {
+  session.write(token);
 }
 
 export function clearPublicSession() {
-  localStorage.removeItem(SESSION_KEY);
+  session.clear();
 }

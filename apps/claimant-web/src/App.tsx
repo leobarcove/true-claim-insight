@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
+import { ClaimFormPage } from '@/pages/form';
 import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
@@ -69,6 +70,31 @@ function App() {
         Only from `sm:` up. On a real phone the app IS the device; a bezel
         drawn around a screen that is already a screen just eats it.
       */}
+      <Routes>
+        {/*
+          The form is a website, not an app-in-a-frame.
+
+          Every other page renders inside the 430px phone column above, because
+          every other page *is* a phone app. The form is desktop-first — six
+          fields at once, a section list beside them, a summary rail — and
+          drawing that inside a phone bezel would be a website pretending to be
+          an app pretending to be a website. So it sits outside the frame and
+          brings its own full-width shell.
+
+          Declared before the framed routes and outside them, rather than
+          adding a `layout` flag threaded through the shell: one route that
+          needs a different frame is a route, not a configuration system.
+        */}
+        <Route path="/form" element={<ClaimFormPage />} />
+        <Route path="*" element={<FramedRoutes />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+/** Everything that belongs inside the phone column. */
+function FramedRoutes() {
+  return (
       <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:py-8">
         <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
           <div className="flex min-h-0 flex-1 flex-col safe-area-top safe-area-bottom">
@@ -153,7 +179,6 @@ function App() {
           </div>
         </div>
       </div>
-    </BrowserRouter>
   );
 }
 

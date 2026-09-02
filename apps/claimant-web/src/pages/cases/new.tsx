@@ -31,7 +31,12 @@ import { cn } from '@/lib/utils';
 export function CaseIntakePage() {
   const navigate = useNavigate();
 
-  const { data: conversation, isLoading } = useConversation();
+  const {
+    data: conversation,
+    isLoading,
+    isError: conversationFailed,
+    refetch: retryConversation,
+  } = useConversation();
   const start = useStartConversation();
   const sendTurn = useSendTurn();
 
@@ -106,6 +111,36 @@ export function CaseIntakePage() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (conversationFailed || start.isError) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
+        <PageHeader onBack={() => navigate('/tracker')} title="Make a claim" />
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div className="max-w-sm space-y-4 text-center">
+            <p className="font-semibold text-foreground">We could not open your claim form.</p>
+            <p className="text-sm text-muted-foreground">
+              Check your connection and try again. If this keeps happening, return to your cases and
+              contact our team.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (conversationFailed) {
+                  void retryConversation();
+                } else {
+                  start.mutate(navigator.language?.split('-')[0]);
+                }
+              }}
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -248,17 +283,22 @@ export function AnswerControl({
 
     return (
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {options?.map(choice => (
-            <button
-              key={choice.value}
-              disabled={busy}
-              onClick={() => onChoose(choice.value)}
-              className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
-            >
-              {choice.label}
-            </button>
-          ))}
+        <div
+          aria-label="Answer choices"
+          className="max-h-[45dvh] overflow-y-auto overscroll-contain pr-1"
+        >
+          <div className="flex flex-wrap gap-2">
+            {options?.map(choice => (
+              <button
+                key={choice.value}
+                disabled={busy}
+                onClick={() => onChoose(choice.value)}
+                className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {step.allowOther && (

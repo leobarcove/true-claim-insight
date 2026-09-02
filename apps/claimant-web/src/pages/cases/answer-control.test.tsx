@@ -81,6 +81,12 @@ describe('a choice step that cannot list every answer', () => {
 });
 
 describe('a choice step whose list is the complete set of answers', () => {
+  it('keeps a long closed list scrollable inside the phone frame', () => {
+    renderControl(step({ choices: choices(20) }));
+
+    expect(screen.getByLabelText('Answer choices')).toHaveClass('overflow-y-auto');
+  });
+
   it('shows every option and offers no box', () => {
     // A closed list — a cancellation reason, say — is every value the step will
     // accept. Hiding one would be a dead end with nothing to type instead, and
