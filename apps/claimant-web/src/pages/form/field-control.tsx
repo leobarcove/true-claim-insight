@@ -322,9 +322,24 @@ function DocumentField({
           to go and find needs to know which of these they can leave — and
           "(optional)" tucked into a label is the first thing the eye skips.
         */}
-        <span className="text-xs text-muted-foreground">
+        {/*
+          An arrived file is green with a tick; everything still outstanding
+          stays grey. The same signal the section list uses for a finished step,
+          so "done" looks the same wherever a claimant meets it — and on a page
+          of near-identical rows, colour is what carries the difference at a
+          glance, before any of the words are read.
+        */}
+        <span
+          className={cn(
+            'flex items-center gap-1 text-xs',
+            attached ? 'font-medium text-primary' : 'text-muted-foreground'
+          )}
+        >
           {attached ? (
-            <>Uploaded — {attached.fileName}</>
+            <>
+              <span aria-hidden="true">✓</span>
+              <span className="min-w-0 truncate">Uploaded — {attached.fileName}</span>
+            </>
           ) : step.optional ? (
             'Optional'
           ) : (

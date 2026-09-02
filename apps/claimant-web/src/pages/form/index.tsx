@@ -995,6 +995,15 @@ function FlowStage({ state }: { state: FormState }) {
                     step.id
                   );
                   setValues(current => ({ ...current, [step.id]: stored.id }));
+                  /*
+                    The row reads "Uploaded — filename" from the *case*, not
+                    from this component's state, because that is the copy that
+                    survives a reload. So the upload has to be followed by a
+                    re-read or the file lands on the server and the screen goes
+                    on saying "Required" — which reads as a failed upload and
+                    invites the claimant to send it again.
+                  */
+                  await refresh();
                 }}
               />
             ))}
