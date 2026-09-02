@@ -172,7 +172,16 @@ export function SectionLayout({
           <span className="font-semibold text-primary">
             Step {activeIndex + 1} of {sections.length} · {sections[activeIndex]?.title}
           </span>
-          {activeIndex < sections.length - 1 && <span>Next: {sections[activeIndex + 1].title}</span>}
+          {/*
+            Where a claimant is going, or that they have arrived. The right-hand
+            slot is never empty: a bar that shows "Next: …" for five screens and
+            then nothing reads as a step that failed to load.
+          */}
+          <span>
+            {activeIndex < sections.length - 1
+              ? `Next: ${sections[activeIndex + 1].title}`
+              : 'Last step'}
+          </span>
         </div>
         <div className="mt-2 flex gap-1">
           {sections.map((section, index) => (

@@ -425,6 +425,12 @@ function AssistedSubmitted({
 }
 
 function displayAnswer(step: FlowStep, value: unknown): string {
+  // Same reasoning as the claimant form: "skip" is how a question is closed,
+  // not something to read back.
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'skip') return 'Not provided';
+  if (raw === 'later') return 'To follow';
+
   if (step.answerType === 'document') return 'provided';
   if (step.answerType === 'choice') {
     return step.choices?.find(choice => choice.value === value)?.label ?? String(value);

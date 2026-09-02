@@ -641,22 +641,71 @@ function ClaimTypeStage({ state }: { state: FormState }) {
   );
 }
 
+/**
+ * What happens next, in the order it happens.
+ *
+ * Three numbered stages rather than three sentences, because the question this
+ * page answers is "how long, and what will you do?" — and a list a claimant can
+ * count is the difference between waiting and wondering. Each says roughly when
+ * and what would interrupt it.
+ *
+ * Two departures from the approved design, both because the design predates
+ * decisions taken since. It said "come back to this site with the same number":
+ * progress is per-device now (D1), so that would be a promise the system does
+ * not keep. And it offered "Message our team" — the form is submit-only and has
+ * no thread for a reply to arrive in, so pointing at one would be a door that
+ * opens onto nothing.
+ */
 function SubmittedStage({ state }: { state: FormState }) {
   const t = copyFor(state.locale);
+  const answers = (state.case?.answers ?? {}) as Record<string, unknown>;
+  const bank = state.flow?.steps
+    .find(step => step.id === 'bank-name')
+    ?.choices?.find(choice => choice.value === answers['bank-name'])?.label;
+
+  const stages: Array<[string, string]> = [
+    [
+      'Documents checked',
+      'Usually within one working day. We message you on WhatsApp if anything is unclear.',
+    ],
+    [
+      'Assessment',
+      'An adjuster reviews the claim. Some claims need a short video call — we book it with you.',
+    ],
+    [
+      'Decision and payout',
+      bank
+        ? `Paid to ${bank}. You are told the outcome and the reasons either way.`
+        : 'You are told the outcome and the reasons either way.',
+    ],
+  ];
 
   return (
-    <PreClaimLayout
-      title={t('submittedTitle')}
-      subtitle={`Reference ${state.case?.caseNumber ?? ''}`}
-    >
-      <div className="flex flex-col gap-3 rounded-xl border bg-background p-5 text-sm leading-relaxed">
-        <p>A member of our team will check what you have sent.</p>
-        <p>
-          If anything is missing they will contact you on <strong>WhatsApp</strong>, on the number
-          you verified.
-        </p>
-        <p>Keep the reference above — it is how we find your claim request.</p>
-      </div>
+    <PreClaimLayout title={t('submittedTitle')}>
+      <p className="text-[15px] leading-relaxed text-muted-foreground">
+        Reference{' '}
+        <strong className="font-semibold text-foreground">{state.case?.caseNumber}</strong>. Keep
+        it — it is how we find your claim request.
+      </p>
+
+      <ol className="flex flex-col gap-0 rounded-xl border bg-background">
+        {stages.map(([title, detail], index) => (
+          <li key={title} className="flex gap-3.5 border-b p-5 last:border-0">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+              {index + 1}
+            </span>
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-semibold">{title}</span>
+              <span className="text-sm leading-relaxed text-muted-foreground">{detail}</span>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        Anything to add or change? Our team will contact you on <strong>WhatsApp</strong>, on the
+        number you verified — this page will not update.
+      </p>
     </PreClaimLayout>
   );
 }
@@ -816,6 +865,15 @@ function FlowStage({ state }: { state: FormState }) {
               step: { id: '__claim-type', label: 'Type of claim', answerType: 'text' } as FlowStep,
               label: 'Type of claim',
               value: claimTypeLabel,
+              /*
+                Shown, but not editable — the one place this page departs from
+                the design. The claim type chose the flow, and the flow is
+                pinned to the case: changing it would invalidate every answer
+                below, and the server has no turn that does it. A Change link
+                that cannot change anything is worse than none, so somebody who
+                picked the wrong type takes Start again, which is honest about
+                what it costs.
+              */
               editable: false,
             },
           ]
@@ -871,8 +929,12 @@ function FlowStage({ state }: { state: FormState }) {
     <SectionLayout
       sections={view.sections}
       activeId={active.id}
-      title={active.heading}
-      subtitle={active.subtitle}
+      title={
+        active.id === 'evidence'
+          ? `Evidence for a ${claimTypeLabel?.toLowerCase() ?? 'claim'}`
+          : active.heading
+      }
+      subtitle={active.id === 'what-happened' ? claimTypeLabel ?? undefined : active.subtitle}
       summary={summary}
       locale={state.locale}
       actions={
@@ -938,6 +1000,42 @@ function FlowStage({ state }: { state: FormState }) {
             ))}
           </div>
         ))}
+
+        {/*
+          Said on the screen where documents are actually handed over, not only
+          in the footer. MASTER_PLAN §6 is explicit that AI is disclosed rather
+          than downplayed, and "an extractor reads this" is a different, more
+          concrete claim than "parts of the assessment use AI" — this is the
+          moment a claimant can decide whether they are comfortable with it.
+        */}
+        {active.id === 'evidence' && (
+          <>
+            {/*
+              Two hints, one per device, because they describe two different
+              gestures. Telling a phone user to drag a file is an instruction
+              they cannot follow, and it is the screen where somebody most
+              needs to know what the button is about to open.
+            */}
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              Or drag files here — JPG, PNG, HEIC or PDF, up to 50 MB.
+            </p>
+            <p className="text-xs text-muted-foreground sm:hidden">
+              On a phone, “Add” opens your camera or photo library.
+            </p>
+            <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+              Documents are read by an automated extractor to pre-fill your claim. An adjuster
+              checks the result.
+            </p>
+          </>
+        )}
+
+        {/*
+          The design puts a name-mismatch warning here. It is not repeated,
+          because the flow's own hint on `bank-account-holder` already says it —
+          "if the account is in someone else's name, give their name here" — and
+          that copy belongs to the server, versioned with the flow. A second
+          copy on this surface would be the one that goes stale.
+        */}
       </div>
       )}
 
@@ -977,6 +1075,13 @@ function StartAgain() {
 }
 
 function displayAnswer(step: FlowStep, value: unknown): string {
+  // "skip" and "later" are how the engine closes a question nobody answered.
+  // They are the right thing to send and the wrong thing to show: a summary
+  // reading "Policy number — skip" looks like somebody typed the word.
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'skip') return 'Not provided';
+  if (raw === 'later') return 'To follow';
+
   if (step.answerType === 'document') return 'provided';
   if (step.answerType === 'choice') {
     return step.choices?.find(choice => choice.value === value)?.label ?? String(value);

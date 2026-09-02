@@ -38,12 +38,20 @@ export interface SectionDefinition {
 export const SECTIONS: readonly SectionDefinition[] = [
   { id: 'claim-type', title: 'Claim type', heading: 'What do you want to claim for?', subtitle: 'We only ask the questions this type of claim needs.' },
   { id: 'you-trip', title: 'You & your trip', heading: 'You and your trip' },
-  { id: 'what-happened', title: 'What happened', heading: 'What happened?' },
+  {
+    id: 'what-happened',
+    title: 'What happened',
+    heading: 'What happened?',
+    subtitle: 'Questions for this type of claim only.',
+  },
   {
     id: 'evidence',
     title: 'Evidence',
+    // Named for the claim type at render time — "Evidence for a flight delay"
+    // rather than "Evidence", because what counts as evidence is the whole
+    // question and the answer depends on which claim this is.
     heading: 'Evidence',
-    subtitle: 'Photos are fine. You can add the rest later — come back to this site on this device.',
+    subtitle: 'Photos are fine. You can add the rest later — come back on this device.',
   },
   { id: 'payout', title: 'Payout', heading: 'Where should we pay?' },
   { id: 'review', title: 'Review', heading: 'Check and submit', subtitle: 'Use Change on anything that is wrong.' },

@@ -72,11 +72,20 @@ export function FieldControl({
    */
   const ownsHint = step.answerType === 'choice' && usesChips(step);
 
+  /**
+   * A document row carries its own name and status, so the label above it would
+   * be the same words twice — which is how "Boarding pass / Boarding pass /
+   * Required" ends up on screen.
+   */
+  const ownsLabel = step.answerType === 'document';
+
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={step.id} className="text-sm font-semibold">
-        {labelFor(step)}
-      </label>
+      {!ownsLabel && (
+        <label htmlFor={step.id} className="text-sm font-semibold">
+          {labelFor(step)}
+        </label>
+      )}
 
       <FieldInput
         step={step}
@@ -277,6 +286,7 @@ function DocumentField({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const handle = async (file: File | undefined) => {
     if (!file || !onUpload) return;
@@ -289,30 +299,56 @@ function DocumentField({
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      onDragOver={event => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={event => {
+        event.preventDefault();
+        setDragging(false);
+        void handle(event.dataTransfer.files?.[0]);
+      }}
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-xl border p-3.5',
+        dragging ? 'border-primary bg-primary/5' : invalid ? 'border-destructive' : 'border-input'
+      )}
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-sm font-semibold">{step.label}</span>
+        {/*
+          Required or optional, said on the row itself. A claimant deciding what
+          to go and find needs to know which of these they can leave — and
+          "(optional)" tucked into a label is the first thing the eye skips.
+        */}
+        <span className="text-xs text-muted-foreground">
+          {attached ? (
+            <>Uploaded — {attached.fileName}</>
+          ) : step.optional ? (
+            'Optional'
+          ) : (
+            'Required'
+          )}
+        </span>
+      </div>
+
       <button
         type="button"
         disabled={disabled || busy}
         onClick={() => inputRef.current?.click()}
         aria-describedby={describedBy}
-        className={cn(
-          'flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm',
-          invalid ? 'border-destructive' : 'border-input hover:border-primary/40'
-        )}
+        className="min-h-[38px] shrink-0 rounded-full border border-input px-4 text-sm font-medium hover:border-primary/40 disabled:opacity-60"
       >
-        {busy ? 'Uploading…' : attached ? `Replace ${attached.fileName}` : 'Add a photo or PDF'}
+        {busy ? 'Uploading…' : attached ? 'Replace' : 'Add'}
       </button>
-
-      {attached && (
-        <p className="text-xs text-muted-foreground">Attached: {attached.fileName}</p>
-      )}
 
       {step.optional && !attached && (
         <button
           type="button"
           disabled={disabled}
           onClick={onSkip}
-          className="self-start text-xs text-muted-foreground underline"
+          className="shrink-0 text-xs text-muted-foreground underline"
         >
           I do not have this
         </button>
