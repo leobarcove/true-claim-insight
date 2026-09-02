@@ -168,6 +168,7 @@ const READY = [
 
 function PhoneStage({ state }: { state: FormState }) {
   const [phone, setPhone] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
 
@@ -175,7 +176,9 @@ function PhoneStage({ state }: { state: FormState }) {
   // types a country code into a form on their own phone.
   const send = () => {
     const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
-    if (digits) void submit({ text: `+60${digits}` });
+    if (!digits) return;
+    setAttempted(true);
+    void submit({ text: `+60${digits}` });
   };
 
   return (
@@ -223,7 +226,15 @@ function PhoneStage({ state }: { state: FormState }) {
               We send a 6-digit code to this number on <strong>WhatsApp</strong>. Started already?
               Enter the same number on this device and we pick up where you left off.
             </p>
-            {state.lastReply && (
+            {/*
+              `lastReply` is only an error once the claimant has tried
+              something. On a conversation that has just opened it is the bot's
+              *greeting* — "Hello, we handle insurance claims…" — and rendering
+              that in red as a `role="alert"` told everyone arriving at the form
+              that something had already gone wrong, before they had touched it.
+              A message is a failure only if it is a reply to an attempt.
+            */}
+            {attempted && state.lastReply && (
               <p role="alert" className="text-xs text-destructive">
                 {state.lastReply}
               </p>

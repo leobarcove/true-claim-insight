@@ -1026,11 +1026,24 @@ export class ConversationGateway implements OnModuleInit {
     if (!binding.pendingPhone) {
       const phone = normalisePhone(typed);
       if (!phone) {
+        // Two different things were said with one sentence: the greeting, and
+        // "that is not a number". In a thread the repetition reads as the bot
+        // starting over; on the form, which shows the bot's last message as the
+        // field's error, a claimant who mistyped their number was told
+        // "Hello — we handle insurance claims" in red.
+        //
+        // The synthetic opener is identified the same way the transcript filter
+        // identifies it, so a claimant who genuinely types "start" gets the
+        // correction rather than the greeting.
+        const isOpening = payload.platformMessageId?.endsWith(':start') ?? false;
+
         await this.say(adapter, binding.id, payload.platformUserId, {
-          text:
-            'Hello — we handle insurance claims, and we can start yours here.\n\n' +
-            'What is your mobile number? Please include the country code, for example ' +
-            '+60 12 345 6789.',
+          text: isOpening
+            ? 'Hello — we handle insurance claims, and we can start yours here.\n\n' +
+              'What is your mobile number? Please include the country code, for example ' +
+              '+60 12 345 6789.'
+            : 'That does not look like a mobile number. Please include the country code, ' +
+              'for example +60 12 345 6789.',
         });
         return;
       }

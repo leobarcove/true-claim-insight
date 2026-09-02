@@ -154,6 +154,32 @@ picking a case out of a queue. It arrived on the wrong tab with nobody having lo
 
 ---
 
+## The portal's staff capture form
+
+`adjuster-portal` has **no test harness at all**, so this page is covered by nothing but
+this walk. Portal → Cases → **New Case**, as `adjuster@pacific.com`.
+
+| # | Do | Expect |
+|---|---|---|
+| 1 | Look at the page | A **Consent** card sits between *Claimant* and the claim details. **Create case** is disabled |
+| 2 | Enter a mobile number, **Check consent** | A card naming the claimant — *existing claimant* or *new record* |
+| 3 | With source **Phone call / walk-in** and no consent on file | The verbal declaration appears: the tick, how you spoke, an optional reference. Create is still disabled |
+| 4 | Tick it | Create becomes available |
+| 5 | Fill the claim in and create | The case is created and you land on its detail page |
+| 6 | Check the record | `SELECT "capturedVia" FROM consents ORDER BY "grantedAt" DESC LIMIT 1;` reads **VERBAL_AGENT_ATTESTED** with a `capturedByUserId` |
+| 7 | Start again, choose **Log an email (FNOL inbox)**, check a number with no consent | **No declaration is offered.** It explains that an email is not a conversation, and Create stays disabled |
+| 8 | Edit the phone number after checking | The resolved claimant clears and the tick resets — the attestation must not stay attached to a different person |
+
+**Step 7 is the point of the whole card.** A verbal declaration on an emailed FNOL would be
+recording something that did not happen, in the one part of the system whose purpose is to
+be evidence later. The form offers no way to do it.
+
+Before this existed, capturing a claim for anyone without prior consent failed with an
+opaque 400 on the Create button — the gate was right and the form simply did not
+participate in it.
+
+---
+
 ## What is deliberately not here
 
 - **No handover screen.** The form is submit-only: take-over is refused on a
