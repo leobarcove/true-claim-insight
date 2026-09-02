@@ -77,8 +77,21 @@ export interface SubmitContext {
 export interface TurnOutcome {
   /** The server's cursor after the turn. */
   currentStepId: string | null;
-  /** The bot's reply, which is the reason when the cursor did not move. */
+  /** The bot's *last* reply. What the rate limiter is recognised by. */
   lastReply: string | null;
+  /**
+   * The bot's *first* reply, which is the reason when an answer is refused.
+   *
+   * A refusal is two messages: why, and then the question again. On a chat that
+   * reads correctly — the correction, then the re-ask. A form has the question
+   * on screen already, so showing the last message put the prompt itself under
+   * the field as though it were an error: "(4 of 16) And when does your trip
+   * end?" beneath the trip-end box the claimant had just filled in, complete
+   * with the chat's question numbering and its instructions for typing "skip".
+   *
+   * The reason is the first of the two, and it is the one worth reading.
+   */
+  reason?: string | null;
 }
 
 export interface SubmitResult {
@@ -166,6 +179,37 @@ export function stepsToSend(context: SubmitContext): Array<{ step: FlowStep; val
       return null;
     })
     .filter((entry): entry is { step: FlowStep; value: string } => entry !== null);
+}
+
+/**
+ * Required questions in this section with no answer anywhere.
+ *
+ * A form lets somebody press Continue having filled in nothing, and the engine
+ * had nothing to send for that — an empty required field is not a *changed*
+ * field, and only optional ones are skipped. So no turn went out, no refusal
+ * came back, and Continue did nothing at all, in silence. Which is the same
+ * failure as the document that would not attach: the form was right to refuse
+ * and wrong to say nothing about it.
+ *
+ * Answered on the server counts, so returning to a completed section and
+ * pressing Continue passes straight through. A document counts as answered
+ * once it is attached, whether or not its answer has been recorded yet.
+ */
+export function missingRequired(context: SubmitContext): FlowStep[] {
+  return context.steps.filter(step => {
+    if (step.optional) return false;
+
+    const entered = (context.values[step.id] ?? '').trim();
+    if (entered !== '') return false;
+
+    const existing = context.answers[step.id];
+    if (existing !== undefined && String(existing).trim() !== '') return false;
+
+    if (step.answerType === 'document') {
+      return !context.documents?.some(document => document.stepId === step.id);
+    }
+    return true;
+  });
 }
 
 /**
@@ -282,6 +326,7 @@ export async function submitSection(
   for (const { step, value } of stepsToSend(context)) {
     const turns = turnsFor(step, value, cursor, deps.newId);
     let lastReply: string | null = null;
+    let reason: string | null = null;
 
     for (const turn of turns) {
       if (sentAny) await deps.wait(PACE_MS);
@@ -300,6 +345,7 @@ export async function submitSection(
 
       cursor = outcome.currentStepId;
       lastReply = outcome.lastReply;
+      reason = outcome.reason ?? outcome.lastReply;
 
       if (isRateLimited(outcome.lastReply)) {
         // Out of retries. Reported against the section, not the field: the
@@ -327,7 +373,7 @@ export async function submitSection(
         // description of a rule the server already stated well.
         error: {
           stepId: step.id,
-          message: lastReply ?? 'That answer was not accepted. Please check it.',
+          message: reason ?? lastReply ?? 'That answer was not accepted. Please check it.',
         },
       };
     }

@@ -22,12 +22,13 @@ import {
   type FormState,
 } from '@/hooks/use-form-conversation';
 import { FieldControl } from './field-control';
-import { FormShell, PreClaimLayout, SectionLayout } from './layout';
+import { FormShell, PreClaimLayout, SectionLayout, SHOW_CHAT_ALTERNATIVE } from './layout';
 import { CodeBoxes, RESEND_SECONDS } from './code-entry';
+import { keepDigits } from './digits-only';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
 import { rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
-import { submitSection, type TurnOutcome } from './submit-engine';
+import { missingRequired, submitSection, type TurnOutcome } from './submit-engine';
 
 /**
  * The claim form — a fourth way to lodge a claim, beside the chat, WhatsApp and
@@ -144,6 +145,15 @@ function StageRouter({ state }: { state: FormState }) {
 }
 
 /** Send one turn and re-read the state. Used by every pre-claim screen. */
+/**
+ * How the conversation marks a question: `(4 of 16) And when does your trip…`.
+ *
+ * Only questions are numbered, which makes this the way to tell a re-ask from
+ * the reason for it — see `deps.send`, where a refusal has to be reported under
+ * the field that caused it.
+ */
+const NUMBERED_QUESTION = /^\(\d+ of \d+\)/;
+
 function useSimpleTurn() {
   const send = useSendFormTurn();
   const refresh = useRefreshFormState();
@@ -214,7 +224,15 @@ function PhoneStage({ state }: { state: FormState }) {
                 inputMode="tel"
                 placeholder="12 345 6789"
                 value={phone}
-                onChange={event => setPhone(event.target.value)}
+                /*
+                  Digits only. A mobile number has no letters in it, and the
+                  server strips everything else before sending anyway — so a
+                  claimant who typed one could press Send, wait, and be told
+                  nothing was wrong with a number they can see is wrong.
+                  Spaces and dashes go the same way, because people type them:
+                  "012-345 6789" is how the number is written down.
+                */
+                onChange={event => setPhone(keepDigits(event.target.value))}
                 onKeyDown={event => event.key === 'Enter' && send()}
                 className="w-full bg-transparent py-3 text-base focus:outline-none"
               />
@@ -248,17 +266,25 @@ function PhoneStage({ state }: { state: FormState }) {
             <Button size="lg" disabled={busy || !phone.trim()} onClick={send}>
               {busy ? t('sending') : t('sendCode')}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Or message us on{' '}
-              <a href="#" className="text-primary underline">
-                WhatsApp
-              </a>{' '}
-              or{' '}
-              <a href="#" className="text-primary underline">
-                Telegram
-              </a>{' '}
-              — same questions, same team.
-            </p>
+            {/*
+              Hidden with the sidebar card, and for the same reason: both links
+              go to "#". Offering two other ways in and landing the claimant
+              back on this page is worse than offering none — and this one sits
+              beside the button they are meant to press.
+            */}
+            {SHOW_CHAT_ALTERNATIVE && (
+              <p className="text-sm text-muted-foreground">
+                Or message us on{' '}
+                <a href="#" className="text-primary underline">
+                  WhatsApp
+                </a>{' '}
+                or{' '}
+                <a href="#" className="text-primary underline">
+                  Telegram
+                </a>{' '}
+                — same questions, same team.
+              </p>
+            )}
           </div>
         </main>
 
@@ -292,6 +318,7 @@ function CodeStage({ state }: { state: FormState }) {
   const [changingNumber, setChangingNumber] = useState(false);
   const [newNumber, setNewNumber] = useState('');
   const [remaining, setRemaining] = useState(RESEND_SECONDS);
+  const [attempted, setAttempted] = useState(false);
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
 
@@ -304,8 +331,25 @@ function CodeStage({ state }: { state: FormState }) {
     return () => clearTimeout(timer);
   }, [remaining]);
 
-  const confirm = () => {
-    if (code.length === 6) void submit({ text: code });
+  /**
+   * Send the code, and be honest about a refusal.
+   *
+   * The screen said nothing when a code was wrong: the digits stayed in the
+   * boxes, the button un-pressed itself, and that was all. Somebody who
+   * mistyped one digit could not tell whether they had got it wrong, the
+   * message had not arrived, or the site was broken — and the boxes were still
+   * full, so trying again meant clearing six digits by hand first.
+   *
+   * The server's own words are shown rather than a message written here,
+   * because it distinguishes a case this screen cannot see: the fifth wrong
+   * code drops the pending number entirely, and the claimant has to send their
+   * number again rather than keep guessing at a code that no longer exists.
+   */
+  const confirm = async () => {
+    if (code.length !== 6) return;
+    await submit({ text: code });
+    setAttempted(true);
+    setCode('');
   };
 
   /**
@@ -318,6 +362,7 @@ function CodeStage({ state }: { state: FormState }) {
   const sendDifferentNumber = () => {
     const digits = newNumber.replace(/\D/g, '').replace(/^0+/, '');
     if (!digits) return;
+    setAttempted(false);
     setCode('');
     setChangingNumber(false);
     void submit({ text: `+60${digits}` });
@@ -376,7 +421,12 @@ function CodeStage({ state }: { state: FormState }) {
               disabled={busy}
               className="underline underline-offset-2"
               onClick={() => {
+                // A new code means the old refusal no longer describes
+                // anything. Left standing, it reads as though the code that has
+                // just been sent was already rejected.
                 setRemaining(RESEND_SECONDS);
+                setAttempted(false);
+                setCode('');
                 if (state.pendingPhone) void submit({ text: state.pendingPhone });
               }}
             >
@@ -386,12 +436,19 @@ function CodeStage({ state }: { state: FormState }) {
         </p>
 
         {/*
-          Only a rejected code is an error. The screen's own instruction — "we
-          have sent a code" — is the bot's most recent message the moment this
-          page opens, and showing it in red would greet everybody with a
-          failure they have not had.
+          Shown only after a code has actually been sent and refused.
+
+          Still being on this screen is the refusal: a code the server accepted
+          moves the whole page on, so anything the bot says while we are still
+          here is the reason we are. It was previously gated on the boxes being
+          *empty*, which they never are straight after a failed attempt — so the
+          message existed and nobody ever saw it.
+
+          Not shown before an attempt: the bot's most recent line on arrival is
+          "we have sent you a code", and painting that red would greet everybody
+          with a failure they have not had.
         */}
-        {code.length === 0 && state.lastReply?.toLowerCase().includes('did not match') && (
+        {attempted && !busy && state.lastReply && (
           <p role="alert" className="text-sm text-destructive">
             {state.lastReply}
           </p>
@@ -721,6 +778,23 @@ function FlowStage({ state }: { state: FormState }) {
       const outcome: TurnOutcome = {
         currentStepId: conversation.currentStep?.id ?? null,
         lastReply: outbound.length ? (outbound[outbound.length - 1].text ?? null) : null,
+        /*
+          A refusal arrives as two messages: the reason, then the question
+          again. The form already shows the question — so what belongs under
+          the field is the other one.
+
+          A turn returns the *whole* transcript rather than only what it
+          produced, so "the first message" is the greeting from ten minutes
+          ago. The re-ask is recognisable instead: the conversation numbers its
+          questions, `(4 of 16)`, and nothing else it says is numbered. So the
+          reason is the most recent thing said that is not a question being put
+          again.
+        */
+        reason:
+          [...outbound]
+            .reverse()
+            .map(message => message.text ?? '')
+            .find(text => text && !NUMBERED_QUESTION.test(text)) ?? null,
       };
       return outcome;
     },
@@ -877,16 +951,43 @@ function FlowStage({ state }: { state: FormState }) {
     setBusy(true);
     setErrors({});
     try {
-      const result = await submitSection(
-        {
-          currentStepId: state.case!.currentStepId,
-          values,
-          answers,
-          steps: active.steps.filter(step => step.answerType !== 'confirm'),
-          documents: state.case!.documents,
-        },
-        deps
-      );
+      const context = {
+        currentStepId: state.case!.currentStepId,
+        values,
+        answers,
+        steps: active.steps.filter(step => step.answerType !== 'confirm'),
+        documents: state.case!.documents,
+      };
+
+      /*
+        Say what is missing before sending anything.
+
+        An empty required field produces no turn — it is not a changed answer
+        and only optional questions are skipped — so the server never sees it
+        and never objects. Pressing Continue on an untouched section therefore
+        did nothing whatsoever: no movement, no message, nothing to act on.
+
+        Checked here rather than left to the server because the server can only
+        ever object to one question at a time, and a claimant who has filled in
+        none of six would be walked through them one refusal at a time.
+      */
+      const missing = missingRequired(context);
+      if (missing.length > 0) {
+        setErrors(
+          Object.fromEntries(
+            missing.map(step => [
+              step.id,
+              step.answerType === 'document'
+                ? 'Please add this document before continuing.'
+                : 'Please fill this in before continuing.',
+            ])
+          )
+        );
+        focusField(missing[0].id);
+        return;
+      }
+
+      const result = await submitSection(context, deps);
 
       if (!result.ok && result.error) {
         setErrors({ [result.error.stepId]: result.error.message });

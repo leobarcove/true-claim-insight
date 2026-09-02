@@ -5,6 +5,14 @@ import { copyFor, type Locale } from './form-copy';
 import type { ResolvedSection } from './sections';
 
 /**
+ * Whether to offer WhatsApp as an alternative to the form.
+ *
+ * Off until there is a number to send people to. The card it controls is in the
+ * design and its copy is agreed; only the destination is missing.
+ */
+export const SHOW_CHAT_ALTERNATIVE = false;
+
+/**
  * The frame every form page renders inside.
  *
  * Built once because all nine pages carry it. On a desktop: the section list on
@@ -237,16 +245,16 @@ export function SectionLayout({
           </ol>
 
           {/*
-            The same questions, on a channel some people simply prefer. Said
-            here rather than only at the start, because the moment somebody
-            gives up on a form is halfway down it — and a claimant who leaves
-            for WhatsApp starts a fresh request there, which is worth them
-            knowing before they go.
+            Hidden for now. The link has nowhere to go — there is no WhatsApp
+            entry point wired up on this site yet — and an invitation that lands
+            on the same page is worse than no invitation, particularly on the
+            screen where somebody is deciding whether to keep going.
 
-            Never shown to an agent: they are on the phone to the claimant, and
-            offering *them* WhatsApp is an instruction meant for somebody else.
+            Kept rather than deleted because the copy is settled and the
+            placement is in the design: flip the flag when the WhatsApp number
+            is live, and fill in the href.
           */}
-          {!assisted && (
+          {SHOW_CHAT_ALTERNATIVE && (
           <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-dashed p-3 text-xs leading-snug text-muted-foreground">
             <span aria-hidden="true">💬</span>
             <span>
@@ -254,10 +262,11 @@ export function SectionLayout({
               <a href="#" className="text-primary underline">
                 WhatsApp
               </a>
-              . Starting there begins a new request.
+              {assisted ? '.' : '. Starting there begins a new request.'}
             </span>
           </div>
           )}
+
         </nav>
 
         <main className="flex flex-col gap-5 lg:col-span-6">

@@ -4,6 +4,7 @@ import type { FlowStep } from '@tci/shared-types';
 import {
   ATTACHED,
   changedSteps,
+  missingRequired,
   isRateLimited,
   stepsToSend,
   submitSection,
@@ -587,5 +588,60 @@ describe('a document that arrived before the answer did', () => {
     expect(stepsToSend({ ...context, steps: [documentStep('optional-one', true)] })).toEqual([
       { step: expect.objectContaining({ id: 'optional-one' }), value: 'skip' },
     ]);
+  });
+});
+
+/**
+ * Pressing Continue on a section that has not been filled in.
+ *
+ * The engine has nothing to send for an empty required field, so nothing went
+ * out, nothing came back, and the button did nothing at all — no movement and
+ * no message. The same silence as the document that would not attach.
+ */
+describe('what is still missing from a section', () => {
+  const text = (id: string, optional = false): FlowStep =>
+    ({ id, label: id, answerType: 'text', optional }) as FlowStep;
+  const doc = (id: string): FlowStep =>
+    ({ id, label: id, answerType: 'document', documentType: 'OTHER_DOCUMENT' }) as FlowStep;
+
+  const base = { currentStepId: null, values: {}, answers: {}, documents: [] };
+
+  it('names every required question left blank, not just the first', () => {
+    const missing = missingRequired({ ...base, steps: [text('a'), text('b'), text('c')] });
+
+    expect(missing.map(step => step.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('leaves optional questions alone', () => {
+    const missing = missingRequired({ ...base, steps: [text('a'), text('opt', true)] });
+
+    expect(missing.map(step => step.id)).toEqual(['a']);
+  });
+
+  it('counts what has just been typed', () => {
+    const missing = missingRequired({ ...base, values: { a: 'Nur' }, steps: [text('a')] });
+
+    expect(missing).toEqual([]);
+  });
+
+  /** Coming back to a finished section must not be blocked by it. */
+  it('counts what the server already holds', () => {
+    const missing = missingRequired({ ...base, answers: { a: 'Nur' }, steps: [text('a')] });
+
+    expect(missing).toEqual([]);
+  });
+
+  it('does not accept whitespace as an answer', () => {
+    const missing = missingRequired({ ...base, values: { a: '   ' }, steps: [text('a')] });
+
+    expect(missing.map(step => step.id)).toEqual(['a']);
+  });
+
+  /** A file that has arrived is an answer, even before the turn naming it. */
+  it('counts an attached document', () => {
+    expect(missingRequired({ ...base, steps: [doc('d')] }).map(s => s.id)).toEqual(['d']);
+    expect(
+      missingRequired({ ...base, steps: [doc('d')], documents: [{ stepId: 'd' }] })
+    ).toEqual([]);
   });
 });
