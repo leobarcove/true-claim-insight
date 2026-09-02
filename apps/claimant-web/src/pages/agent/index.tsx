@@ -24,6 +24,7 @@ import { FormShell, SectionLayout } from '../form/layout';
 import { ReviewStage, type ReviewRow } from '../form/review';
 import { rowsFor, sectionsFor, type ResolvedSection } from '../form/sections';
 import { AgentBand } from './band';
+import { asDateAndTime, asTime } from './when';
 import { AgentSignInPage } from './sign-in';
 import { AgentStartClaim } from './start-claim';
 
@@ -288,7 +289,16 @@ function AssistedSections({
         sections={view.sections}
         activeId={active.id}
         title={active.heading}
-        subtitle={active.subtitle}
+        /*
+          The agent's own instruction, in place of the section's.
+
+          Every subtitle in the flow is addressed to the claimant — "photos are
+          fine", "come back on this device" — and an agent reading those is
+          being told things about somebody else's situation. This says what to
+          do with the screen in front of them, which is the same thing the
+          claimant's subtitle does for the claimant.
+        */
+        subtitle="Ask them each of these. Anything you are unsure of can be left and corrected at the review."
         summary={summary}
         assisted
         actions={
@@ -337,7 +347,7 @@ function AssistedSections({
             <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
               You are submitting this claim request on behalf of{' '}
               <strong>{claimant?.fullName ?? 'the claimant'}</strong>, on the verbal agreement you
-              recorded at {consent?.attestedAt ?? 'the start of this claim'}.
+              recorded at {consent ? asTime(consent.attestedAt) : 'the start of this claim'}.
             </p>
           </>
         ) : (
@@ -345,7 +355,14 @@ function AssistedSections({
             {rowsFor(active.steps).map(row => (
               <div
                 key={row.map(step => step.id).join('+')}
-                className={row.length === 2 ? 'grid gap-4 sm:grid-cols-2' : undefined}
+                /*
+                  A pair stays a pair on a phone. Trip start and trip end are
+                  one question asked twice, and a date box is narrow enough for
+                  two to fit at 390px — stacking them puts a scroll between two
+                  halves that are read together, and that is where a return
+                  date gets typed into the start box.
+                */
+                className={row.length === 2 ? 'grid grid-cols-2 gap-3 sm:gap-4' : undefined}
               >
                 {row.map(step => (
                   <FieldControl
@@ -424,7 +441,17 @@ function AssistedSubmitted({
 
         <dl className="m-0 w-full rounded-xl border bg-background p-5 text-left">
           {[
-            ['Entered by', `${agent?.fullName ?? 'you'}${agent?.tenantName ? ` · ${agent.tenantName}` : ''}`],
+            /*
+              The design also names the firm the request went to. It is not
+              shown, because this surface is never told which one that is —
+              routing happens on the server, and printing a firm name the client
+              guessed at would be a claim about where somebody's claim went.
+            */
+            [
+              'Entered by',
+              `${agent?.fullName ?? 'you'}${agent?.tenantName ? ` · ${agent.tenantName}` : ''}` +
+                (consent ? ` · ${asDateAndTime(consent.attestedAt)}` : ''),
+            ],
             ['Consent', `Agent attested verbal${consent ? ` · notice v${consent.noticeVersion}` : ''}`],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between gap-4 border-b py-2.5 last:border-0">

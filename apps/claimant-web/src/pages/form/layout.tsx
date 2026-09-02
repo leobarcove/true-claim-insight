@@ -24,6 +24,25 @@ export const SHOW_CHAT_ALTERNATIVE = false;
  * the server has not chosen a flow and there is nothing to list or summarise.
  */
 
+/**
+ * The row Back and Continue sit in.
+ *
+ * On a desktop it closes the column, right-aligned under the fields. On a phone
+ * it pins to the bottom of the viewport and Continue takes the width that is
+ * left — because these pages are long enough to scroll, and an action that
+ * scrolls away is one a claimant has to go looking for, on the screen where
+ * they have just finished answering and want to move on.
+ *
+ * `-mx-4` cancels the page padding so the bar reaches both edges, and the last
+ * button grows: the primary action is always last, and on a phone it is the
+ * only one worth making easy to hit.
+ */
+const ACTION_BAR = cn(
+  'flex gap-2.5 border-t bg-background pt-5',
+  'sticky bottom-0 -mx-4 px-4 pb-4 sm:static sm:mx-0 sm:px-0 sm:pb-0',
+  '[&>button:last-child]:flex-1 sm:[&>button:last-child]:flex-none sm:justify-end'
+);
+
 export function FormShell({
   reference,
   locale = 'en',
@@ -102,14 +121,17 @@ export function FormShell({
 /** The centred column the three pre-claim pages use. No sections, no rail. */
 export function PreClaimLayout({
   eyebrow,
+  icon,
   title,
   subtitle,
   children,
   actions,
 }: {
   eyebrow?: string;
+  /** Shown above the heading. Only the submitted page uses one. */
+  icon?: ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
 }) {
@@ -117,6 +139,7 @@ export function PreClaimLayout({
     <div className="flex flex-1 justify-center px-4 py-10 sm:px-16 sm:py-16">
       <main className="flex w-full max-w-[640px] flex-col gap-5">
         <div className="flex flex-col gap-1.5">
+          {icon}
           {eyebrow && (
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
               {eyebrow}
@@ -128,9 +151,7 @@ export function PreClaimLayout({
 
         {children}
 
-        {actions && (
-          <div className="flex justify-end gap-2.5 border-t pt-5">{actions}</div>
-        )}
+        {actions && <div className={ACTION_BAR}>{actions}</div>}
       </main>
     </div>
   );
@@ -156,7 +177,7 @@ export function SectionLayout({
   sections: ResolvedSection[];
   activeId: string;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   children: ReactNode;
   actions: ReactNode;
   summary: Array<[string, string]>;
@@ -284,9 +305,7 @@ export function SectionLayout({
             screen advances on the choice itself, and an empty bordered strip
             under it reads as a button that failed to render.
           */}
-          {actions && (
-            <div className="flex justify-end gap-2.5 border-t pt-5">{actions}</div>
-          )}
+          {actions && <div className={ACTION_BAR}>{actions}</div>}
         </main>
 
         {/*

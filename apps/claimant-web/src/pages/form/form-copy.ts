@@ -53,7 +53,7 @@ const EN = {
   noDocument: 'I do not have this',
   attached: 'Attached',
 
-  submittedTitle: 'Your claim request is in',
+  submittedTitle: 'Your claim request is submitted',
   submittedChecking: 'A member of our team will check what you have sent.',
   submittedContact:
     'If anything is missing they will contact you on WhatsApp, on the number you verified.',

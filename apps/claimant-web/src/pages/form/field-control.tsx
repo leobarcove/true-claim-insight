@@ -328,6 +328,22 @@ function DocumentField({
         dragging ? 'border-primary bg-primary/5' : invalid ? 'border-destructive' : 'border-input'
       )}
     >
+      {/*
+        A tile that says at a glance whether this one has arrived: a tick where
+        it has, the upload mark where it has not. On a phone the three rows are
+        otherwise near-identical blocks of text, and the claimant is scanning
+        for what is left rather than reading them.
+      */}
+      <span
+        className={cn(
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm',
+          attached ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+        )}
+        aria-hidden="true"
+      >
+        {attached ? '✓' : '⬆'}
+      </span>
+
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm font-semibold">{step.label}</span>
         {/*

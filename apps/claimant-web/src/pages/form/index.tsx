@@ -633,13 +633,31 @@ function ClaimTypeStage({ state }: { state: FormState }) {
             aria-pressed={chosen === choice.value}
             onClick={() => setChosen(choice.value)}
             className={cn(
-              'flex min-h-[56px] flex-col justify-center gap-0.5 rounded-xl border px-4 py-3 text-left',
+              'flex min-h-[56px] items-center gap-3 rounded-xl border px-4 py-3 text-left',
               chosen === choice.value
                 ? 'border-primary bg-primary/5'
                 : 'border-input bg-background hover:border-primary/40',
               busy && 'opacity-60'
             )}
           >
+            {/*
+              A filled circle, like the consent screen's. These are five
+              options where exactly one is picked and then confirmed, so they
+              have to look like a choice being held rather than a button that
+              did not fire — which is what a bare tile reads as once the tap no
+              longer moves the page.
+            */}
+            <span
+              className={cn(
+                'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2',
+                chosen === choice.value
+                  ? 'border-primary bg-primary text-[10px] text-primary-foreground'
+                  : 'border-muted-foreground'
+              )}
+            >
+              {chosen === choice.value ? '✓' : ''}
+            </span>
+            <span className="flex min-w-0 flex-col gap-0.5">
             <span className="text-sm font-medium">{choice.label}</span>
             {/*
               What the type covers, from the flow rather than written here, so
@@ -648,6 +666,7 @@ function ClaimTypeStage({ state }: { state: FormState }) {
             {choice.description && (
               <span className="text-xs text-muted-foreground">{choice.description}</span>
             )}
+            </span>
           </button>
         ))}
       </div>
@@ -701,7 +720,20 @@ function SubmittedStage({ state }: { state: FormState }) {
   ];
 
   return (
-    <PreClaimLayout title={t('submittedTitle')}>
+    <PreClaimLayout
+      title={t('submittedTitle')}
+      /*
+        A tick above the heading, as the design has it. This is the only page
+        in the form that reports an outcome rather than asking for something,
+        and after sixteen questions the first thing a claimant wants is to know
+        it worked — before reading a word of it.
+      */
+      icon={
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
+          ✓
+        </span>
+      }
+    >
       <p className="text-[15px] leading-relaxed text-muted-foreground">
         Reference{' '}
         <strong className="font-semibold text-foreground">{state.case?.caseNumber}</strong>. Keep
@@ -1047,7 +1079,26 @@ function FlowStage({ state }: { state: FormState }) {
           ? `Evidence for a ${claimTypeLabel?.toLowerCase() ?? 'claim'}`
           : active.heading
       }
-      subtitle={active.id === 'what-happened' ? claimTypeLabel ?? undefined : active.subtitle}
+      /*
+        The claim type as a chip beside the line rather than as the subtitle,
+        matching the design: it labels what follows instead of describing it,
+        and five screens in it answers "which claim is this again?" without
+        being read as an instruction.
+      */
+      subtitle={
+        active.id === 'what-happened' ? (
+          <span className="flex flex-wrap items-center gap-2">
+            {claimTypeLabel && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {claimTypeLabel}
+              </span>
+            )}
+            <span>{active.subtitle}</span>
+          </span>
+        ) : (
+          active.subtitle
+        )
+      }
       summary={summary}
       locale={state.locale}
       actions={
@@ -1088,7 +1139,14 @@ function FlowStage({ state }: { state: FormState }) {
         {rowsFor(active.steps).map(row => (
           <div
             key={row.map(step => step.id).join('+')}
-            className={row.length === 2 ? 'grid gap-4 sm:grid-cols-2' : undefined}
+            /*
+                  A pair stays a pair on a phone. Trip start and trip end are
+                  one question asked twice, and a date box is narrow enough for
+                  two to fit at 390px — stacking them puts a scroll between two
+                  halves that are read together, and that is where a return
+                  date gets typed into the start box.
+                */
+                className={row.length === 2 ? 'grid grid-cols-2 gap-3 sm:gap-4' : undefined}
           >
             {row.map(step => (
               <FieldControl
