@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FlowStep } from '@tci/shared-types';
 
 import { cn } from '@/lib/utils';
+import { acceptsDigitsOnly, keepDigits } from './digits-only';
 
 /**
  * One field of the form.
@@ -236,6 +237,18 @@ function FieldInput({
     );
   }
 
+  /*
+    A field whose rule is "digits, nothing else" refuses everything else as it
+    is typed, and strips a paste down to its digits rather than rejecting it —
+    an account number copied off a statement arrives full of spaces, and making
+    somebody retype it by hand is how a digit gets transposed.
+
+    Kept out of `type="number"`, which brings a spinner, scroll-wheel edits and
+    exponent notation to a field that is not a quantity, and drops leading
+    zeros — of which Malaysian account numbers have plenty.
+  */
+  const digitsOnly = acceptsDigitsOnly(step);
+
   return (
     <input
       id={step.id}
@@ -248,13 +261,13 @@ function FieldInput({
               ? 'tel'
               : 'text'
       }
-      inputMode={step.answerType === 'phone' ? 'tel' : undefined}
+      inputMode={step.answerType === 'phone' ? 'tel' : digitsOnly ? 'numeric' : undefined}
       className={base}
       value={value}
       disabled={disabled}
       aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
-      onChange={event => onChange(event.target.value)}
+      onChange={event => onChange(digitsOnly ? keepDigits(event.target.value) : event.target.value)}
     />
   );
 }
