@@ -43,7 +43,9 @@ export default defineConfig(({ mode }) => {
         name: 'True Claim Insight',
         short_name: 'TCI',
         description: 'Submit insurance claims and complete remote assessments',
-        theme_color: '#2563eb',
+        // Matches the <meta name="theme-color"> in index.html. They disagreed, so
+        // the browser chrome changed colour once the manifest loaded.
+        theme_color: '#0b754e',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
