@@ -239,9 +239,9 @@ export async function uploadAssistedDocument(
   stepId: string
 ) {
   const formData = new FormData();
-  formData.append('file', file);
   formData.append('type', documentType);
   formData.append('stepId', stepId);
+  formData.append('file', file);
   const { data } = await apiClient.post<{ data: { id: string } }>(
     `/cases/${caseId}/documents/upload`,
     formData,

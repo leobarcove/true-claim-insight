@@ -29,6 +29,8 @@ export interface FormState {
   locale: 'en' | 'ms';
   /** The bot's last message — the form's error text. */
   lastReply: string | null;
+  /** `stage === 'code'`: the number the code was sent to. */
+  pendingPhone?: string;
   consent?: { title: string; body: string; version: number };
   claimTypes?: FlowStep['choices'];
   case?: {
@@ -114,11 +116,9 @@ export function useStartFormConversation() {
 export function useSendFormTurn() {
   return useMutation({
     mutationFn: async (turn: FormTurn) => {
-      const { data } = await apiClient.post<{ data: unknown }>(
-        '/public/conversation/turn',
-        turn,
-        { headers: session.headers() }
-      );
+      const { data } = await apiClient.post<{ data: unknown }>('/public/conversation/turn', turn, {
+        headers: session.headers(),
+      });
       return (data as any).data ?? data;
     },
   });
@@ -126,9 +126,9 @@ export function useSendFormTurn() {
 
 export async function uploadFormDocument(file: File, documentType: string, stepId: string) {
   const formData = new FormData();
-  formData.append('file', file);
   formData.append('type', documentType);
   formData.append('stepId', stepId);
+  formData.append('file', file);
   const { data } = await apiClient.post<{ data: { id: string } }>(
     '/public/conversation/upload',
     formData,

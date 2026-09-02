@@ -51,6 +51,16 @@ export interface PublicConversationState {
   locale: 'en' | 'ms';
   /** The bot's most recent message — the form's error text. */
   lastReply: string | null;
+  /**
+   * `stage === 'code'`: the number a code was sent to, so the form can say
+   * where to look for it.
+   *
+   * Returned in full rather than masked. It is the claimant's own number, which
+   * they typed into this same session moments ago — masking it would hide the
+   * one thing that lets them notice a typo, which is exactly what this screen
+   * is for. Nothing else about them is said until a code is proved.
+   */
+  pendingPhone?: string;
   /** `stage === 'consent'`: the approved notice, shown exactly as returned. */
   consent?: { title: string; body: string; version: number };
   /** `stage === 'claim-type'`: the choices for the pre-claim question. */
@@ -509,7 +519,9 @@ export class ClaimantConversationService {
     // is said. These two stages are the whole of what an unverified visitor can
     // learn from this endpoint.
     if (!binding.claimantId) {
-      return { ...base, stage: binding.pendingPhone ? 'code' : 'phone' };
+      return binding.pendingPhone
+        ? { ...base, stage: 'code', pendingPhone: binding.pendingPhone }
+        : { ...base, stage: 'phone' };
     }
 
     if (!binding.activeCaseId) {

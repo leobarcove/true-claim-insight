@@ -44,7 +44,9 @@ export function useStartPublicConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (locale?: string) => {
-      const { data } = await apiClient.post<{ data: { session: string; conversation: Conversation } }>(
+      const { data } = await apiClient.post<{
+        data: { session: string; conversation: Conversation };
+      }>(
         '/public/conversation/start',
         {},
         { params: locale ? { locale } : undefined, headers: sessionHeaders() }
@@ -101,9 +103,9 @@ export function useSendPublicTurn() {
  */
 export async function uploadPublicDocument(file: File, documentType: string, stepId: string) {
   const formData = new FormData();
-  formData.append('file', file);
   formData.append('type', documentType);
   formData.append('stepId', stepId);
+  formData.append('file', file);
   const { data } = await apiClient.post<{ data: { id: string } }>(
     '/public/conversation/upload',
     formData,

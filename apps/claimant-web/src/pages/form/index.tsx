@@ -7,6 +7,7 @@ import {
 } from '@tci/shared-types';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   clearFormSession,
   hasFormSession,
@@ -22,8 +23,7 @@ import { FieldControl } from './field-control';
 import { FormShell, PreClaimLayout, SectionLayout } from './layout';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
-import { SECTIONS } from './sections';
-import { rowsFor, sectionsFor, type ResolvedSection } from './sections';
+import { rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
 import { submitSection, type TurnOutcome } from './submit-engine';
 
 /**
@@ -284,35 +284,216 @@ function PhoneStage({ state }: { state: FormState }) {
   );
 }
 
+/**
+ * Six boxes, one digit each.
+ *
+ * A single wide input with letter-spacing looks similar and behaves worse: on a
+ * phone it gives no sense of how many digits are left, a mistyped digit means
+ * re-reading the whole string, and autofill lands the code somewhere the eye
+ * has to hunt for. Six boxes make position visible.
+ *
+ * Paste has to work on the *first* box, because that is where a claimant pastes
+ * a code copied from WhatsApp — and WhatsApp's own copy button puts the whole
+ * six digits on the clipboard at once.
+ */
+function CodeBoxes({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const refs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const setAt = (index: number, digit: string) => {
+    const next = (value.padEnd(6, ' ').split('') as string[]);
+    next[index] = digit || ' ';
+    const joined = next.join('').replace(/ /g, ' ').trimEnd();
+    const cleaned = joined.replace(/ /g, '');
+    onChange(cleaned);
+    if (digit && index < 5) refs.current[index + 1]?.focus();
+  };
+
+  return (
+    <div className="flex gap-2.5" role="group" aria-label="6-digit code">
+      {[0, 1, 2, 3, 4, 5].map(index => (
+        <input
+          key={index}
+          ref={element => {
+            refs.current[index] = element;
+          }}
+          id={index === 0 ? 'code' : undefined}
+          inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          maxLength={1}
+          disabled={disabled}
+          aria-label={`Digit ${index + 1}`}
+          value={value[index] ?? ''}
+          onChange={event => setAt(index, event.target.value.replace(/\D/g, '').slice(-1))}
+          onKeyDown={event => {
+            // Backspace on an empty box steps back, which is what everyone
+            // expects and what makes correcting a mistyped digit bearable.
+            if (event.key === 'Backspace' && !value[index] && index > 0) {
+              refs.current[index - 1]?.focus();
+            }
+          }}
+          onPaste={event => {
+            const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+            if (!pasted) return;
+            event.preventDefault();
+            onChange(pasted);
+            refs.current[Math.min(pasted.length, 5)]?.focus();
+          }}
+          className="h-[72px] w-[62px] rounded-xl border-2 border-input bg-background text-center text-2xl font-semibold focus:border-primary focus:outline-none disabled:opacity-60"
+        />
+      ))}
+    </div>
+  );
+}
+
+/** How long before "Send again" becomes available. */
+const RESEND_SECONDS = 60;
+
 function CodeStage({ state }: { state: FormState }) {
   const [code, setCode] = useState('');
+  const [changingNumber, setChangingNumber] = useState(false);
+  const [newNumber, setNewNumber] = useState('');
+  const [remaining, setRemaining] = useState(RESEND_SECONDS);
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
+
+  // Counts down once, from when this screen appeared. Not persisted: a reload
+  // is a fair reason to be allowed another code, and the server's own per-number
+  // limit is what actually protects the sending cost.
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setRemaining(seconds => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [remaining]);
+
+  const confirm = () => {
+    if (code.length === 6) void submit({ text: code });
+  };
+
+  /**
+   * A different number, sent as an ordinary answer.
+   *
+   * The gateway already accepts a new number at this step and replaces the
+   * pending one — the chat says so in words ("send a different number instead").
+   * The form says it as a link, and neither needs a special endpoint.
+   */
+  const sendDifferentNumber = () => {
+    const digits = newNumber.replace(/\D/g, '').replace(/^0+/, '');
+    if (!digits) return;
+    setCode('');
+    setChangingNumber(false);
+    void submit({ text: `+60${digits}` });
+  };
 
   return (
     <PreClaimLayout
       eyebrow="Before we start"
-      title="Enter the code"
-      subtitle={state.lastReply ?? 'We have sent a six-digit code on WhatsApp.'}
+      title="Check your messages"
       actions={
-        <Button disabled={busy || code.length < 6} onClick={() => void submit({ text: code })}>
-          {busy ? t('checking') : t('continue')}
-        </Button>
+        <>
+          <Button variant="outline" disabled={busy} onClick={() => setChangingNumber(true)}>
+            {t('back')}
+          </Button>
+          <Button disabled={busy || code.length < 6} onClick={confirm}>
+            {busy ? t('checking') : 'Confirm'}
+          </Button>
+        </>
       }
     >
-      <div className="rounded-xl border bg-background p-5">
+      <div className="flex flex-col gap-3">
         <label htmlFor="code" className="text-sm font-semibold">
-          {t('codeLabel')}
+          Enter the 6-digit code
         </label>
-        <input
-          id="code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          value={code}
-          onChange={event => setCode(event.target.value.replace(/\D/g, ''))}
-          className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-center text-2xl tracking-[0.5em]"
-        />
+
+        {/*
+          No auto-submit on the sixth digit, deliberately, even though it is the
+          common pattern. A claimant gets five attempts before the server sends
+          them back to the number step, so a mistyped digit that submits itself
+          spends one of those before they have had a chance to look. The design
+          asks for Confirm and Confirm is also the safer control.
+        */}
+        <CodeBoxes value={code} onChange={setCode} disabled={busy} />
+
+        <p className="text-sm text-muted-foreground">
+          Sent on WhatsApp to <strong className="font-medium text-foreground">{state.pendingPhone ?? 'your number'}</strong>.{' '}
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={() => setChangingNumber(true)}
+          >
+            Wrong number?
+          </button>
+        </p>
+
+        <p className="text-sm text-muted-foreground">
+          Did not get it?{' '}
+          {remaining > 0 ? (
+            <>
+              <span className="opacity-60">Send again</span> in 0:
+              {String(remaining).padStart(2, '0')}.
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              className="underline underline-offset-2"
+              onClick={() => {
+                setRemaining(RESEND_SECONDS);
+                if (state.pendingPhone) void submit({ text: state.pendingPhone });
+              }}
+            >
+              Send again
+            </button>
+          )}
+        </p>
+
+        {/*
+          Only a rejected code is an error. The screen's own instruction — "we
+          have sent a code" — is the bot's most recent message the moment this
+          page opens, and showing it in red would greet everybody with a
+          failure they have not had.
+        */}
+        {code.length === 0 && state.lastReply?.toLowerCase().includes('did not match') && (
+          <p role="alert" className="text-sm text-destructive">
+            {state.lastReply}
+          </p>
+        )}
+
+        {changingNumber && (
+          <div className="mt-2 flex flex-col gap-2 rounded-xl border bg-background p-4">
+            <label htmlFor="new-number" className="text-sm font-semibold">
+              Send the code to a different number
+            </label>
+            <div className="flex items-center gap-2 rounded-lg border border-input px-3.5">
+              <span className="font-medium text-muted-foreground">+60</span>
+              <input
+                id="new-number"
+                type="tel"
+                inputMode="tel"
+                placeholder="12 345 6789"
+                value={newNumber}
+                onChange={event => setNewNumber(event.target.value)}
+                onKeyDown={event => event.key === 'Enter' && sendDifferentNumber()}
+                className="w-full bg-transparent py-2.5 text-base focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={busy || !newNumber.trim()} onClick={sendDifferentNumber}>
+                Send code
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setChangingNumber(false)}>
+                {t('cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </PreClaimLayout>
   );
@@ -321,51 +502,121 @@ function CodeStage({ state }: { state: FormState }) {
 function ConsentStage({ state }: { state: FormState }) {
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
+  const [choice, setChoice] = useState<'agree' | 'decline' | null>(null);
 
   return (
     <PreClaimLayout
       eyebrow="Before we start"
-      title={state.consent?.title ?? 'How we handle your personal data'}
+      title="How your data is used"
+      subtitle="Please read this before you tell us about your claim."
       actions={
-        <>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => void submit({ callbackValue: '__consent:decline' })}
-          >
-            {t('decline')}
-          </Button>
-          <Button disabled={busy} onClick={() => void submit({ callbackValue: '__consent:agree' })}>
-            {t('agree')}
-          </Button>
-        </>
+        <Button
+          disabled={busy || choice === null}
+          onClick={() =>
+            void submit({
+              callbackValue: choice === 'agree' ? '__consent:agree' : '__consent:decline',
+            })
+          }
+        >
+          {busy ? t('saving') : t('continue')}
+        </Button>
       }
     >
       {/*
-        Shown exactly as the server returned it. Consent recorded against
-        wording written here rather than the approved notice is unprovable
-        later, which is the whole reason notices are versioned and immutable.
+        The notice, shown exactly as the server returned it, under its own
+        approved title. Consent recorded against wording written here rather
+        than the approved version is unprovable later — which is the whole
+        reason notices are versioned and immutable, and why the page heading
+        above is the form's and the heading below is the notice's.
       */}
-      <div className="whitespace-pre-wrap rounded-xl border bg-background p-5 text-sm leading-relaxed">
-        {state.consent?.body}
+      <div className="flex flex-col gap-3 rounded-xl border bg-background p-5">
+        <h2 className="text-[15px] font-bold">
+          {state.consent?.title ?? 'Personal Data Protection Notice'}
+        </h2>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">{state.consent?.body}</p>
+        {state.consent && (
+          <p className="text-xs text-muted-foreground">Version {state.consent.version}</p>
+        )}
       </div>
-      {state.consent && (
-        <p className="text-xs text-muted-foreground">Version {state.consent.version}</p>
-      )}
-      <p className="text-xs text-muted-foreground">
-        {t('declineNote')}
-      </p>
+
+      {/*
+        Two options rather than two buttons. A pair of buttons makes declining
+        look like a way out of the page; a choice makes it what it is — an
+        answer, given deliberately, that the next screen acts on.
+      */}
+      <div role="radiogroup" aria-label="Do you agree?" className="flex flex-col gap-2">
+        {[
+          { value: 'agree' as const, label: t('agree') },
+          { value: 'decline' as const, label: t('decline') },
+        ].map(option => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={choice === option.value}
+            disabled={busy}
+            onClick={() => setChoice(option.value)}
+            className={cn(
+              'flex min-h-[52px] items-center gap-3 rounded-xl border px-4 text-left text-[15px]',
+              choice === option.value
+                ? 'border-primary bg-primary/5 font-semibold text-primary'
+                : 'border-input hover:border-primary/40'
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2',
+                choice === option.value
+                  ? 'border-primary bg-primary text-[10px] text-primary-foreground'
+                  : 'border-muted-foreground'
+              )}
+            >
+              {choice === option.value ? '✓' : ''}
+            </span>
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-xs text-muted-foreground">{t('declineNote')}</p>
     </PreClaimLayout>
   );
 }
 
+/**
+ * Which kind of claim, and the first screen that shows the section list.
+ *
+ * Start, Code and Consent have no list: no claim exists, so there is nothing to
+ * be part-way through. From here there is — the six sections are a fixed set
+ * whose names do not depend on which flow gets chosen, so the list can be shown
+ * before the flow is. Seeing the shape of what is ahead is most useful at the
+ * point somebody is deciding whether to begin.
+ *
+ * No case exists yet, so completeness is not read from answers: Claim type is
+ * the one in progress and everything after it is untouched.
+ */
 function ClaimTypeStage({ state }: { state: FormState }) {
   const { busy, submit } = useSimpleTurn();
 
+  const sections: ResolvedSection[] = SECTIONS.map(section => ({
+    ...section,
+    steps: [],
+    complete: false,
+    untouched: true,
+  }));
+
   return (
-    <PreClaimLayout
+    <SectionLayout
+      sections={sections}
+      activeId="claim-type"
       title={CLAIM_TYPE_SECTION.heading}
       subtitle={CLAIM_TYPE_SECTION.subtitle}
+      locale={state.locale}
+      // Nothing has been answered, so the rail has nothing to list. It is still
+      // drawn, because a column that appears once the first answer lands would
+      // shift the whole page sideways at the worst moment.
+      summary={[]}
+      actions={null}
     >
       <div className="grid gap-2.5 sm:grid-cols-2">
         {(state.claimTypes ?? []).map(choice => (
@@ -374,14 +625,19 @@ function ClaimTypeStage({ state }: { state: FormState }) {
             type="button"
             disabled={busy}
             onClick={() => void submit({ callbackValue: choice.value })}
-            className="flex min-h-[56px] items-center rounded-xl border border-input bg-background px-4 py-3 text-left text-sm font-medium hover:border-primary/40"
+            className="flex min-h-[56px] items-center rounded-xl border border-input bg-background px-4 py-3 text-left text-sm font-medium hover:border-primary/40 disabled:opacity-60"
           >
             {choice.label}
           </button>
         ))}
       </div>
-      {state.lastReply && <p className="text-xs text-muted-foreground">{state.lastReply}</p>}
-    </PreClaimLayout>
+      {/*
+        Not shown. The bot's message here is the question itself — "What has
+        happened? Choose the option that fits best" — which the heading above
+        already asks. On the chat it is the only place the question can appear;
+        on a form it is the same sentence twice.
+      */}
+    </SectionLayout>
   );
 }
 

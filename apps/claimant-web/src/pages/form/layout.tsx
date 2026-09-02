@@ -261,7 +261,14 @@ export function SectionLayout({
 
           {children}
 
-          <div className="flex justify-end gap-2.5 border-t pt-5">{actions}</div>
+          {/*
+            No action bar when there is nothing to put in it. The claim-type
+            screen advances on the choice itself, and an empty bordered strip
+            under it reads as a button that failed to render.
+          */}
+          {actions && (
+            <div className="flex justify-end gap-2.5 border-t pt-5">{actions}</div>
+          )}
         </main>
 
         {/*
