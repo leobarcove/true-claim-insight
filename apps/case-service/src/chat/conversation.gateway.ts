@@ -31,6 +31,7 @@ import {
   SHARED_MEDIA_DESCRIPTION,
   SHARED_PHONE_DESCRIPTION,
   DEFER_VALUE,
+  ATTACHED_VALUE,
   SKIP_VALUE,
   summariseAnswers,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -1848,6 +1849,45 @@ export class ConversationGateway implements OnModuleInit {
         await this.prisma.conversationMessage.update({
           where: { id: messageId },
           data: { caseDocumentId: stored.id },
+        });
+      } else if (!payload.mediaRef && word === ATTACHED_VALUE) {
+        /*
+          The form pointing at a file it has already sent.
+
+          Uploading and answering are two calls, and only the upload is durable
+          — the id lives in the page's memory until the answer names it. A
+          reload in between, and the claimant is looking at a row that says
+          Uploaded above a Continue button that does nothing, because nothing
+          left on the page can name the file. This is the way back: they name
+          the step, and the case is asked what is attached to it.
+
+          Scoped to the case, so it can only ever resolve to this claimant's own
+          file — the same guarantee the id branch above gets by checking, and
+          here by construction.
+        */
+        const attached = await this.prisma.caseDocument.findFirst({
+          where: { caseId: caseRow.id, stepId: step.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!attached) {
+          await this.prisma.conversationMessage.update({
+            where: { id: messageId },
+            data: {
+              status: ConversationMessageStatus.UNPARSEABLE,
+              stepId: step.id,
+              error: 'No document attached for this step',
+              processedAt: new Date(),
+            },
+          });
+          await this.say(adapter, binding.id, payload.platformUserId, {
+            text: 'We do not have that file yet. Please upload it and try again.',
+          });
+          return;
+        }
+        value = attached.id;
+        await this.prisma.conversationMessage.update({
+          where: { id: messageId },
+          data: { caseDocumentId: attached.id },
         });
       } else if (!payload.mediaRef && step.optional && word === SKIP_VALUE) {
         value = SKIP_VALUE;

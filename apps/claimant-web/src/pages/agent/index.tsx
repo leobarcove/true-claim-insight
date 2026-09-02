@@ -193,6 +193,25 @@ function AssistedSections({
         if (entered === undefined || entered === String(existing ?? '')) {
           const untouched = (entered ?? '') === '';
           const unanswered = existing === undefined || existing === '';
+
+          /*
+            A file that arrived without its answer.
+
+            Uploading stores the bytes and hands back an id; a second call
+            records that id as the answer. Only the first is durable, so a
+            reload between the two leaves a row reading "Uploaded" above a
+            Continue button that will never advance — the step is open and the
+            id that would close it went with the old page. The case still knows
+            what is attached, so it is asked.
+          */
+          if (step.answerType === 'document' && untouched && unanswered) {
+            const attached = data.case.documents.find(document => document.stepId === step.id);
+            if (attached) {
+              if (!(await saveOne(step, attached.id))) return;
+              continue;
+            }
+          }
+
           if (step.optional && untouched && unanswered) {
             if (!(await saveOne(step, 'skip'))) return;
           }

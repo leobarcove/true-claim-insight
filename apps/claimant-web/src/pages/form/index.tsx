@@ -906,6 +906,7 @@ function FlowStage({ state }: { state: FormState }) {
           values,
           answers,
           steps: active.steps.filter(step => step.answerType !== 'confirm'),
+          documents: state.case!.documents,
         },
         deps
       );

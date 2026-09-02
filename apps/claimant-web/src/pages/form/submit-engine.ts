@@ -59,6 +59,19 @@ export interface SubmitContext {
   answers: CaseAnswers;
   /** The steps of this section, in flow order. */
   steps: FlowStep[];
+  /**
+   * Documents already attached to the case, by step.
+   *
+   * The durable half of an upload. Storing the bytes and answering the question
+   * are two operations, and only the first survives a reload — so a file the
+   * claimant can plainly see on screen is one the engine would otherwise not
+   * know about, and a required document with no answer is a section that
+   * cannot advance and says nothing about why.
+   *
+   * No id here: the public payload does not carry one, deliberately. The step
+   * is enough, because the server can look up what is attached to it.
+   */
+  documents?: Array<{ stepId: string | null }>;
 }
 
 export interface TurnOutcome {
@@ -79,6 +92,13 @@ export interface SubmitResult {
 
 /** The literal the server reads as "I am not answering this one". */
 export const SKIP = 'skip';
+
+/**
+ * The literal for "use the file I already sent for this step".
+ *
+ * Mirrors `ATTACHED_VALUE` on the server, which is where the reasoning lives.
+ */
+export const ATTACHED = '__attached';
 
 /** A step the claimant has changed, or answered for the first time. */
 export function changedSteps(context: SubmitContext): FlowStep[] {
@@ -124,6 +144,23 @@ export function stepsToSend(context: SubmitContext): Array<{ step: FlowStep; val
       const unanswered =
         context.answers[step.id] === undefined || context.answers[step.id] === '';
 
+      /*
+        A file that arrived but was never named in an answer.
+        
+        This is what a claimant sees as "Continue does nothing": the row says
+        Uploaded because the document is on the case, the step is still open
+        because no turn ever carried its id, and the engine — reading only what
+        was typed this session — finds nothing to send. Silent, and permanent
+        until the file is uploaded again.
+        
+        Reading the case closes it: the attachment is the answer, whether it was
+        made a minute ago or before the last reload.
+      */
+      if (step.answerType === 'document' && untouched && unanswered) {
+        const attached = context.documents?.some(document => document.stepId === step.id);
+        if (attached) return { step, value: ATTACHED };
+      }
+
       if (step.optional && untouched && unanswered) return { step, value: SKIP };
 
       return null;
@@ -150,10 +187,10 @@ export function turnsFor(
     turns.push({ clientMessageId: newId(), callbackValue: `__edit:${step.id}` });
   }
 
-  // A skip is always text, whatever the step would otherwise take: the server
-  // reads the literal, not a value of that step's type.
-  if (value === SKIP) {
-    turns.push({ clientMessageId: newId(), text: SKIP, callbackStepId: step.id });
+  // Both literals are sent as text, whatever the step would otherwise take:
+  // the server reads the word, not a value of that step's type.
+  if (value === SKIP || value === ATTACHED) {
+    turns.push({ clientMessageId: newId(), text: value, callbackStepId: step.id });
     return turns;
   }
 

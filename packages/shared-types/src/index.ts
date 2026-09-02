@@ -701,6 +701,7 @@ export {
   parseAmount,
   SKIP_VALUE,
   DEFER_VALUE,
+  ATTACHED_VALUE,
   asStoredInstant,
   parseStoredDate,
   SENSITIVE_ANSWER_STEPS,

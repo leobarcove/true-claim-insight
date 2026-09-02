@@ -1207,6 +1207,28 @@ export const SKIP_VALUE = 'skip';
 export const DEFER_VALUE = 'later';
 
 /**
+ * "The file I already sent you for this question."
+ *
+ * A form uploads the bytes and answers the question in two separate calls, and
+ * only the first of those is durable — the stored id lives in a React state
+ * that a reload throws away. A claimant then sits in front of a row that says
+ * *Uploaded* and a Continue button that does nothing, for ever, because the
+ * step is open and nothing left on the page can name the file that would close
+ * it.
+ *
+ * The id is not the fix. It is deliberately withheld from the public payload
+ * (`publicDocument` in `claimant-conversation.service.ts`) because every
+ * document read is staff-only, and handing a visitor a handle to an endpoint
+ * they cannot call is how a later change turns it into a public route.
+ *
+ * So the claimant names the *step*, and the server finds the file — which it
+ * can do without being told, and which is checked against the case either way.
+ * The chat has no use for this: it sends the turn the instant the upload
+ * returns, while the id is still in hand.
+ */
+export const ATTACHED_VALUE = '__attached';
+
+/**
  * Steps whose answer must never be stored in the clear.
  *
  * Shared rather than duplicated: the Case answer bag masks these before

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FlowStep } from '@tci/shared-types';
 
 import {
+  ATTACHED,
   changedSteps,
   isRateLimited,
   stepsToSend,
@@ -512,5 +513,79 @@ describe('the rate limiter', () => {
     expect(result.ok).toBe(false);
     expect(result.error!.message).toMatch(/too quickly/i);
     expect(result.error!.message).not.toMatch(/faster than we can read/i);
+  });
+});
+
+/**
+ * The bug this exists to stop coming back: a file that arrived, an answer that
+ * never did, and a Continue button that silently does nothing about it.
+ *
+ * Uploading stores the bytes; a separate turn names them as the answer. The id
+ * that links the two lives only in the page's memory, so a reload between the
+ * two leaves a claimant looking at a row marked "Uploaded" above a button that
+ * will never advance — no error, no way forward, and the only escape is to
+ * upload the same file a second time.
+ */
+describe('a document that arrived before the answer did', () => {
+  const documentStep = (id: string, optional = false): FlowStep =>
+    ({ id, label: id, answerType: 'document', documentType: 'OTHER_DOCUMENT', optional }) as FlowStep;
+
+  it('is answered by naming the step, when nothing was typed this session', () => {
+    const sent = stepsToSend({
+      currentStepId: 'boarding-pass',
+      values: {},
+      answers: {},
+      steps: [documentStep('boarding-pass')],
+      documents: [{ stepId: 'boarding-pass' }],
+    });
+
+    expect(sent).toEqual([{ step: expect.objectContaining({ id: 'boarding-pass' }), value: ATTACHED }]);
+  });
+
+  it('sends it as text, since the form has no id to carry', () => {
+    const turns = turnsFor(documentStep('boarding-pass'), ATTACHED, 'boarding-pass', () => 'id-1');
+
+    expect(turns).toEqual([
+      { clientMessageId: 'id-1', text: ATTACHED, callbackStepId: 'boarding-pass' },
+    ]);
+  });
+
+  /** A file uploaded a moment ago is named by its id, as it always was. */
+  it('prefers the id when this session still holds one', () => {
+    const sent = stepsToSend({
+      currentStepId: 'boarding-pass',
+      values: { 'boarding-pass': 'doc-42' },
+      answers: {},
+      steps: [documentStep('boarding-pass')],
+      documents: [{ stepId: 'boarding-pass' }],
+    });
+
+    expect(sent).toEqual([{ step: expect.objectContaining({ id: 'boarding-pass' }), value: 'doc-42' }]);
+  });
+
+  /** Already answered is already answered — re-sending would attach it twice. */
+  it('leaves an answered step alone', () => {
+    const sent = stepsToSend({
+      currentStepId: 'boarding-pass',
+      values: {},
+      answers: { 'boarding-pass': 'doc-42' },
+      steps: [documentStep('boarding-pass')],
+      documents: [{ stepId: 'boarding-pass' }],
+    });
+
+    expect(sent).toEqual([]);
+  });
+
+  /**
+   * With no file, an optional step still skips and a required one still waits
+   * for the claimant — the marker must not become a way past either.
+   */
+  it('does not invent an attachment that is not there', () => {
+    const context = { currentStepId: null, values: {}, answers: {}, documents: [] };
+
+    expect(stepsToSend({ ...context, steps: [documentStep('required-one')] })).toEqual([]);
+    expect(stepsToSend({ ...context, steps: [documentStep('optional-one', true)] })).toEqual([
+      { step: expect.objectContaining({ id: 'optional-one' }), value: 'skip' },
+    ]);
   });
 });
