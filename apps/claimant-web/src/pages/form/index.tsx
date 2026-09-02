@@ -1164,7 +1164,24 @@ function FlowStage({ state }: { state: FormState }) {
                   halves that are read together, and that is where a return
                   date gets typed into the start box.
                 */
-                className={row.length === 2 ? 'grid grid-cols-2 gap-3 sm:gap-4' : undefined}
+                /*
+                  A pair of *dates* stays a pair on a phone: trip start and trip
+                  end are one question asked twice, they are narrow, and putting
+                  a scroll between them is where a return date gets typed into
+                  the start box.
+
+                  Text fields do not. Side by side at 390px the account number
+                  and the account holder are half a screen wide each, and their
+                  hints wrap to four lines apiece — which is how the design has
+                  it too: dates paired, everything else stacked.
+                */
+                className={
+                  row.length === 2
+                    ? row.every(step => step.answerType === 'date' || step.answerType === 'datetime')
+                      ? 'grid grid-cols-2 gap-3 sm:gap-4'
+                      : 'grid gap-4 sm:grid-cols-2'
+                    : undefined
+                }
           >
             {row.map(step => (
               <FieldControl
@@ -1235,12 +1252,22 @@ function FlowStage({ state }: { state: FormState }) {
         )}
 
         {/*
-          The design puts a name-mismatch warning here. It is not repeated,
-          because the flow's own hint on `bank-account-holder` already says it —
-          "if the account is in someone else's name, give their name here" — and
-          that copy belongs to the server, versioned with the flow. A second
-          copy on this surface would be the one that goes stale.
+          The commonest reason a payout is delayed, said where the account is
+          entered rather than discovered weeks later.
+
+          It repeats the flow's own hint on `bank-account-holder`, which I had
+          removed for that reason and have put back: it is in the design, and a
+          claimant skimming a form reads a boxed warning where they do not read
+          a grey line under a field. If the server's wording changes, this is
+          the copy that will go stale — it is the only place on this surface
+          that restates something the flow already says.
         */}
+        {active.id === 'payout' && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+            If the account is in someone else&rsquo;s name, give their name here — we will ask
+            about it later. A name mismatch is the most common reason a payout is delayed.
+          </p>
+        )}
       </div>
       )}
 

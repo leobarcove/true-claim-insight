@@ -71,7 +71,16 @@ export function FieldControl({
    * after the thing it instructs. So that control takes the hint, and this one
    * stops drawing it — otherwise it would appear twice.
    */
-  const ownsHint = step.answerType === 'choice' && usesChips(step);
+  /*
+    Whether something else on the page is already saying this step's hint.
+
+    Chips say theirs above the list. The payout warning repeats the account
+    holder hint word for word — it is in the design as a boxed warning, and a
+    claimant skimming reads a box where they do not read a grey line, but two
+    copies of one sentence on one screen reads as a mistake.
+  */
+  const ownsHint =
+    (step.answerType === 'choice' && usesChips(step)) || step.id === 'bank-account-holder';
 
   /**
    * A document row carries its own name and status, so the label above it would
@@ -382,8 +391,21 @@ function DocumentField({
         disabled={disabled || busy}
         onClick={() => inputRef.current?.click()}
         aria-describedby={describedBy}
-        className="min-h-[38px] shrink-0 rounded-full border border-input px-4 text-sm font-medium hover:border-primary/40 disabled:opacity-60"
+        className={cn(
+          'flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium disabled:opacity-60',
+          attached
+            ? 'border-input hover:border-primary/40'
+            : 'border-primary text-primary hover:bg-primary/5'
+        )}
       >
+        {/*
+          A camera on the button that adds, as the design has it, and nothing
+          on the one that replaces. It says what tapping does before the sheet
+          opens — on a phone this is the camera or the photo library, and that
+          is the moment a claimant decides whether they have the document to
+          hand or are about to go and photograph it.
+        */}
+        {!busy && !attached && <span aria-hidden="true">📷</span>}
         {busy ? 'Uploading…' : attached ? 'Replace' : 'Add'}
       </button>
 

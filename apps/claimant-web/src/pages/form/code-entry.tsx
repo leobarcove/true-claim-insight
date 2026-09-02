@@ -33,7 +33,11 @@ export function CodeBoxes({
   };
 
   return (
-    <div className="flex gap-2.5" role="group" aria-label="6-digit code">
+    // Six fixed-width boxes plus their gaps came to more than a phone is wide,
+    // so the last one sat off the edge of the screen — on the one screen where
+    // a claimant has to see all six to know how many digits are left. They now
+    // share the width available and stop growing once there is room.
+    <div className="flex gap-2 sm:gap-2.5" role="group" aria-label="6-digit code">
       {[0, 1, 2, 3, 4, 5].map(index => (
         <input
           key={index}
@@ -62,7 +66,7 @@ export function CodeBoxes({
             onChange(pasted);
             refs.current[Math.min(pasted.length, 5)]?.focus();
           }}
-          className="h-[72px] w-[62px] rounded-xl border-2 border-input bg-background text-center text-2xl font-semibold focus:border-primary focus:outline-none disabled:opacity-60"
+          className="h-[60px] w-full min-w-0 flex-1 rounded-xl border-2 border-input bg-background text-center text-2xl font-semibold focus:border-primary focus:outline-none disabled:opacity-60 sm:h-[72px] sm:w-[62px] sm:flex-none"
         />
       ))}
     </div>
