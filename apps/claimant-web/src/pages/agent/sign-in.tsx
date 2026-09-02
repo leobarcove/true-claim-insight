@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useAgentSendCode, useAgentVerifyCode } from '@/hooks/use-agent-intake';
+import { isRateLimited } from '@/lib/http-errors';
+import { CodeBoxes, RESEND_SECONDS } from '../form/code-entry';
 import { PreClaimLayout } from '../form/layout';
 
 /**
@@ -22,6 +24,8 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   const [code, setCode] = useState('');
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [sent, setSent] = useState(false);
+  const [numberHelp, setNumberHelp] = useState(false);
+  const [remaining, setRemaining] = useState(RESEND_SECONDS);
   const [error, setError] = useState('');
 
   const sendCode = useAgentSendCode();
@@ -36,22 +40,54 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
     setError('');
     try {
       await sendCode.mutateAsync(e164());
+      setRemaining(RESEND_SECONDS);
       setSent(true);
-    } catch {
-      setError('We could not send a code just now. Please try again.');
+    } catch (caught) {
+      /*
+        A limit and a failure need opposite advice, and until now both got
+        "please try again" — which, against a limit, is the one thing that keeps
+        it going. Sends are capped per number and per address, and an agent
+        re-reading the same instruction is how a two-minute wait becomes ten.
+
+        A number that is not registered reaches neither branch: the server
+        answers it exactly as it answers a successful send, so that this page
+        cannot be used to find out who works at an adjusting firm.
+      */
+      setError(
+        isRateLimited(caught)
+          ? 'Too many code requests. Please wait five minutes before asking for another.'
+          : 'We could not send a code just now. Please try again.'
+      );
     }
   };
 
-  const onVerify = async () => {
+  // Counts down from when the code screen appeared. Not persisted: a reload is
+  // a fair reason to be allowed another code, and the server's own per-number
+  // limit is what protects the sending cost.
+  useEffect(() => {
+    if (!sent || remaining <= 0) return;
+    const timer = setTimeout(() => setRemaining(seconds => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [sent, remaining]);
+
+  const onVerify = async (value = code) => {
     setError('');
     try {
-      await verify.mutateAsync({ phoneNumber: e164(), code, keepSignedIn });
+      await verify.mutateAsync({ phoneNumber: e164(), code: value, keepSignedIn });
       onSignedIn();
-    } catch {
+    } catch (caught) {
       // Deliberately the same message the server gives, which does not
       // distinguish a wrong code from an unknown number — "is this person one
       // of yours?" is exactly what anyone phishing an adjusting firm wants.
-      setError('That code did not match. Please try again.');
+      //
+      // Except when there was no attempt to judge: a refused *request* is not a
+      // wrong code, and telling somebody their code is wrong when it was never
+      // read sends them off to find a code that was fine all along.
+      setError(
+        isRateLimited(caught)
+          ? 'Too many attempts. Please wait five minutes before trying this code again.'
+          : 'That code did not match. Please try again.'
+      );
     }
   };
 
@@ -85,8 +121,27 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
             />
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
-            Yours, not the claimant&rsquo;s — the next screen asks for theirs.
+            Yours, not the claimant&rsquo;s — the next screen asks for theirs.{' '}
+            {/*
+              Says who can change it rather than offering to. Access here *is*
+              the list of numbers the firm holds, so a self-service change would
+              be a way to move access onto a handset nobody vetted.
+            */}
+            <button
+              type="button"
+              className="underline underline-offset-2"
+              onClick={() => setNumberHelp(true)}
+            >
+              Number changed?
+            </button>
           </p>
+          {numberHelp && (
+            <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+              Your firm admin updates the number on your account. Until they do, the code goes
+              to the old handset — signing in is what proves the number is yours, so it cannot
+              be changed from here.
+            </p>
+          )}
           {error && (
             <p role="alert" className="text-xs text-destructive">
               {error}
@@ -104,30 +159,54 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
       eyebrow="Staff access"
       title="Enter the code"
       subtitle={`Sent on WhatsApp to ${e164()}.`}
-      actions={
-        <>
-          <Button variant="outline" onClick={() => setSent(false)}>
-            Back
-          </Button>
-          <Button disabled={verify.isPending || code.length < 6} onClick={() => void onVerify()}>
-            {verify.isPending ? 'Checking…' : 'Continue'}
-          </Button>
-        </>
-      }
+      /*
+        No footer buttons, unlike every other screen here: the design puts one
+        full-width Continue inside the card, directly under the thing it acts
+        on. Nothing else on this screen competes with it.
+      */
     >
       <div className="flex flex-col gap-4 rounded-xl border bg-background p-5">
-        <label htmlFor="agent-code" className="text-sm font-semibold">
+        <label htmlFor="code" className="text-sm font-semibold">
           6-digit code
         </label>
-        <input
-          id="agent-code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          value={code}
-          onChange={event => setCode(event.target.value.replace(/\D/g, ''))}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-center text-2xl tracking-[0.5em]"
-        />
+
+        {/*
+          The same six boxes a claimant gets, from the same component. Two
+          implementations of one control is how the paste handling ends up
+          working on one surface and not the other.
+        */}
+        <CodeBoxes value={code} onChange={setCode} disabled={verify.isPending} />
+
+        <p className="text-xs text-muted-foreground">
+          Did not get it?{' '}
+          {remaining > 0 ? (
+            <>
+              <span className="opacity-60">Send again</span> in 0:
+              {String(remaining).padStart(2, '0')}.
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={sendCode.isPending}
+              className="underline underline-offset-2"
+              onClick={() => void onSend()}
+            >
+              Send again
+            </button>
+          )}{' '}
+          {/*
+            Not in the design, which leaves this screen with no way back. A
+            mistyped number would then be a dead end reachable only by
+            reloading — and the agent is on a call while it happens.
+          */}
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={() => setSent(false)}
+          >
+            Wrong number?
+          </button>
+        </p>
 
         {/*
           The thing that makes this liveable. An agent taking claims by phone
@@ -151,6 +230,14 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
             {error}
           </p>
         )}
+
+        <Button
+          className="w-full"
+          disabled={verify.isPending || code.length < 6}
+          onClick={() => void onVerify()}
+        >
+          {verify.isPending ? 'Checking…' : 'Continue'}
+        </Button>
       </div>
 
       <AgentOnlyNote />

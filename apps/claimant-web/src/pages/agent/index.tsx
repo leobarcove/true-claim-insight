@@ -363,19 +363,24 @@ function AssistedSections({
                   date gets typed into the start box.
                 */
                 /*
-                  A pair of *dates* stays a pair on a phone: trip start and trip
-                  end are one question asked twice, they are narrow, and putting
-                  a scroll between them is where a return date gets typed into
-                  the start box.
+                  A pair of plain *dates* stays a pair on a phone: trip start
+                  and trip end are one question asked twice, they are narrow,
+                  and putting a scroll between them is where a return date gets
+                  typed into the start box.
 
-                  Text fields do not. Side by side at 390px the account number
-                  and the account holder are half a screen wide each, and their
-                  hints wrap to four lines apiece — which is how the design has
-                  it too: dates paired, everything else stacked.
+                  Nothing else is. A date *and time* needs half again the width
+                  — at 390px, side by side, "01-Sep-2026 09:40" was clipped to
+                  "01-Sep-2026 0" behind the calendar button, so the departure
+                  times could not be read back at all. Text pairs fare no
+                  better: the account number and account holder end up half a
+                  screen each with their hints wrapping four lines.
+
+                  Which is how the design has it: dates paired, times and text
+                  stacked.
                 */
                 className={
                   row.length === 2
-                    ? row.every(step => step.answerType === 'date' || step.answerType === 'datetime')
+                    ? row.every(step => step.answerType === 'date')
                       ? 'grid grid-cols-2 gap-3 sm:gap-4'
                       : 'grid gap-4 sm:grid-cols-2'
                     : undefined

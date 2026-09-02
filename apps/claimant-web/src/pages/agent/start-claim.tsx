@@ -4,11 +4,14 @@ import { TRAVEL_CLAIM_TYPE_LABELS, TravelClaimType } from '@tci/shared-types';
 import { Button } from '@/components/ui/button';
 import {
   useAttestConsent,
+  useConsentNotice,
   useCreateAssistedCase,
   useResolveClaimant,
   type InteractionChannel,
   type ResolvedClaimant,
 } from '@/hooks/use-agent-intake';
+import { cn } from '@/lib/utils';
+import { formatNric, isCompleteNric, NRIC_DIGITS, nricDigits } from './nric';
 import { PreClaimLayout } from '../form/layout';
 
 /**
@@ -64,6 +67,16 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
 
   const onFind = async () => {
     setError('');
+    /*
+      A half-typed IC is worse than none. It hashes to a value that matches no
+      existing claimant, so the lookup misses somebody we already hold and opens
+      a second record for them — and afterwards nothing on either record says
+      they are the same person.
+    */
+    if (!isCompleteNric(nric)) {
+      setError(`That IC number is not complete — it should have ${NRIC_DIGITS} digits.`);
+      return;
+    }
     try {
       const claimant = await resolve.mutateAsync({
         phoneNumber: e164(),
@@ -159,13 +172,27 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
             <label htmlFor="claimant-nric" className="text-sm font-semibold">
               IC number
             </label>
+            {/*
+              Grouped as it is typed, and stopped at twelve digits. An agent is
+              usually reading this back off a card on a video call or hearing it
+              over the phone, and both are done in groups — a run of twelve
+              digits is checked by counting, which is how a transposed pair gets
+              missed.
+            */}
             <input
               id="claimant-nric"
+              inputMode="numeric"
               placeholder="880101-14-5555"
               value={nric}
-              onChange={event => setNric(event.target.value)}
+              onChange={event => setNric(formatNric(event.target.value))}
+              aria-invalid={!isCompleteNric(nric) || undefined}
               className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
             />
+            {!isCompleteNric(nric) && (
+              <p className="text-xs text-muted-foreground">
+                An IC has {NRIC_DIGITS} digits — {nricDigits(nric).length} so far.
+              </p>
+            )}
           </div>
         </div>
 
@@ -210,7 +237,7 @@ function DeclarationStep({
     if (!claimType) return;
     setError('');
     try {
-      await attest.mutateAsync({
+      const granted = await attest.mutateAsync({
         claimantId: claimant.id,
         interactionChannel: channel,
         interactionReference: reference.trim() || undefined,
@@ -219,10 +246,18 @@ function DeclarationStep({
         claimantId: claimant.id,
         travelClaimType: claimType,
       });
+      /*
+        The server's own record, not this browser's clock and not a hard-coded
+        version number. What is shown to the agent — and what they will repeat
+        to the claimant — should be the row that was actually written: a device
+        with the wrong time would otherwise print a confident, wrong account of
+        when consent was given, and the notice version is the whole point of the
+        record.
+      */
       onOpened(
         created.id,
-        new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-        1
+        (granted as any)?.grantedAt ?? new Date().toISOString(),
+        (granted as any)?.noticeVersion ?? 1
       );
     } catch (caught: any) {
       setError(
@@ -358,18 +393,63 @@ function DeclarationStep({
  * notice from the claimant-facing page or their script; this is the prompt.
  */
 function NoticeExtract() {
+  const notice = useConsentNotice();
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-background p-5">
       <div className="flex items-baseline gap-2">
-        <h2 className="text-[15px] font-bold">How we handle your personal data</h2>
-        <span className="text-[11px] text-muted-foreground">
-          the approved notice, in their language
-        </span>
+        <h2 className="text-[15px] font-bold">
+          {notice.data?.title ?? 'How we handle your personal data'}
+        </h2>
+        {notice.data && (
+          <span className="text-[11px] text-muted-foreground">
+            Version {notice.data.version}
+            {notice.data.locale ? ` · ${notice.data.locale.toUpperCase()}` : ''}
+          </span>
+        )}
       </div>
-      <p className="text-[13px] leading-relaxed text-muted-foreground">
-        Read the notice in full — what is collected and why, who it is shared with, that some
-        processing uses AI and happens outside Malaysia, how long it is kept, and how to withdraw
-        consent. Do not paraphrase it: consent is recorded against the exact approved version,
+
+      {notice.isLoading && (
+        <p className="text-[13px] text-muted-foreground">Loading the approved notice…</p>
+      )}
+
+      {/*
+        If the notice will not load, say so instead of falling back to a summary
+        of it. A summary read aloud is not the version the consent is recorded
+        against, and the difference only surfaces years later when somebody asks
+        what the claimant was actually told.
+      */}
+      {notice.isError && (
+        <p role="alert" className="text-[13px] text-destructive">
+          We could not load the approved notice. Do not paraphrase it — reload the page, and if
+          it still will not load, take this claim on a channel where the claimant reads it
+          themselves.
+        </p>
+      )}
+
+      {notice.data && (
+        <>
+          <p
+            className={cn(
+              'whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground',
+              !expanded && 'line-clamp-4'
+            )}
+          >
+            {notice.data.body}
+          </p>
+          <button
+            type="button"
+            className="self-start text-[13px] text-primary underline underline-offset-2"
+            onClick={() => setExpanded(current => !current)}
+          >
+            {expanded ? 'Collapse' : 'Read the full notice aloud →'}
+          </button>
+        </>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Read it in full and do not paraphrase: consent is recorded against this exact version,
         and a summary is not what they agreed to.
       </p>
     </div>

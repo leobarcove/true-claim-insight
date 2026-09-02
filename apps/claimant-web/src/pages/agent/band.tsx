@@ -1,5 +1,7 @@
 import { agentSignOut, type AgentUser, type ResolvedClaimant } from '@/hooks/use-agent-intake';
 
+import { asTime } from './when';
+
 /**
  * The strip across every assisted screen, and across no claimant screen.
  *
@@ -45,7 +47,7 @@ export function AgentBand({
         </span>
         <span className="text-xs">
           {consent
-            ? `Verbal consent attested by you at ${consent.attestedAt} · notice v${consent.noticeVersion}`
+            ? `Verbal consent attested by you at ${asTime(consent.attestedAt)} · notice v${consent.noticeVersion}`
             : 'Consent not yet recorded — no claim details can be entered'}
         </span>
       </div>
