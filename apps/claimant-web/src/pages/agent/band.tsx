@@ -1,5 +1,6 @@
 import { agentSignOut, type AgentUser, type ResolvedClaimant } from '@/hooks/use-agent-intake';
 
+import { AlertIcon } from '../form/icons';
 import { asTime } from './when';
 
 /**
@@ -30,9 +31,7 @@ export function AgentBand({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-4 border-b border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 sm:px-16 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-      <span aria-hidden="true" className="text-lg leading-none">
-        ⚠
-      </span>
+      <AlertIcon className="h-5 w-5" />
 
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[13px] font-bold">

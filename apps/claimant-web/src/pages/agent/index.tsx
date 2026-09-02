@@ -23,6 +23,7 @@ import { FieldControl } from '../form/field-control';
 import { FormShell, SectionLayout } from '../form/layout';
 import { ReviewStage, type ReviewRow } from '../form/review';
 import { rowsFor, sectionsFor, type ResolvedSection } from '../form/sections';
+import { CheckIcon } from '../form/icons';
 import { AgentBand } from './band';
 import { asDateAndTime, asTime } from './when';
 import { AgentSignInPage } from './sign-in';
@@ -451,7 +452,7 @@ function AssistedSubmitted({
     <div className="flex flex-1 justify-center px-4 py-12 sm:px-16">
       <main className="flex w-full max-w-[620px] flex-col items-center gap-4 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
-          ✓
+          <CheckIcon className="h-7 w-7" />
         </span>
         <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">
           Claim request {caseNumber} submitted

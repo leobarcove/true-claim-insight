@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-agent-intake';
 import { cn } from '@/lib/utils';
 import { formatNric, isCompleteNric, NRIC_DIGITS, nricDigits } from './nric';
+import { CheckIcon } from '../form/icons';
 import { PreClaimLayout } from '../form/layout';
 
 /**
@@ -138,7 +139,7 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
         {found && (
           <div className="flex items-center gap-3 rounded-xl border border-primary bg-primary/5 p-3.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background text-primary">
-              ✓
+              <CheckIcon className="h-3 w-3" />
             </span>
             <div className="flex min-w-0 flex-col">
               <span className="text-sm font-semibold">
@@ -443,7 +444,7 @@ function NoticeExtract() {
             className="self-start text-[13px] text-primary underline underline-offset-2"
             onClick={() => setExpanded(current => !current)}
           >
-            {expanded ? 'Collapse' : 'Read the full notice aloud →'}
+            {expanded ? 'Collapse' : 'Read the full notice aloud'}
           </button>
         </>
       )}

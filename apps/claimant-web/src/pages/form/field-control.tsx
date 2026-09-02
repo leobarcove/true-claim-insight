@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FlowStep } from '@tci/shared-types';
 
 import { cn } from '@/lib/utils';
+import { CameraIcon, CheckIcon, UploadIcon } from './icons';
 import { acceptsDigitsOnly, keepDigits } from './digits-only';
 
 /**
@@ -350,7 +351,7 @@ function DocumentField({
         )}
         aria-hidden="true"
       >
-        {attached ? '✓' : '⬆'}
+        {attached ? <CheckIcon className="h-4 w-4" /> : <UploadIcon className="h-4 w-4" />}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -375,7 +376,7 @@ function DocumentField({
         >
           {attached ? (
             <>
-              <span aria-hidden="true">✓</span>
+              <CheckIcon className="h-3.5 w-3.5" />
               <span className="min-w-0 truncate">Uploaded — {attached.fileName}</span>
             </>
           ) : step.optional ? (
@@ -405,7 +406,7 @@ function DocumentField({
           is the moment a claimant decides whether they have the document to
           hand or are about to go and photograph it.
         */}
-        {!busy && !attached && <span aria-hidden="true">📷</span>}
+        {!busy && !attached && <CameraIcon className="h-4 w-4" />}
         {busy ? 'Uploading…' : attached ? 'Replace' : 'Add'}
       </button>
 

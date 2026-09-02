@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAgentSendCode, useAgentVerifyCode } from '@/hooks/use-agent-intake';
 import { isRateLimited } from '@/lib/http-errors';
 import { CodeBoxes, RESEND_SECONDS } from '../form/code-entry';
+import { ShieldIcon } from '../form/icons';
 import { PreClaimLayout } from '../form/layout';
 
 /**
@@ -248,7 +249,7 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
 function AgentOnlyNote() {
   return (
     <div className="flex items-start gap-2.5 rounded-xl border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
-      <span aria-hidden="true">🛡</span>
+      <ShieldIcon className="mt-0.5 h-4 w-4" />
       <span>
         Staff only. Claimants use the public form, where the code goes to <strong>their own</strong>{' '}
         mobile — these screens cannot be reached without a registered staff number.

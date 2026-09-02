@@ -24,6 +24,7 @@ import {
 import { FieldControl } from './field-control';
 import { FormShell, PreClaimLayout, SectionLayout, SHOW_CHAT_ALTERNATIVE } from './layout';
 import { CodeBoxes, RESEND_SECONDS } from './code-entry';
+import { CheckIcon } from './icons';
 import { keepDigits } from './digits-only';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
@@ -313,10 +314,10 @@ function PhoneStage({ state }: { state: FormState }) {
                 marker reads as a list to check against, which is what this is.
               */}
               <span
-                className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary"
+                className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
                 aria-hidden="true"
               >
-                ✓
+                <CheckIcon className="h-3 w-3" />
               </span>
               {item}
             </div>
@@ -577,7 +578,7 @@ function ConsentStage({ state }: { state: FormState }) {
                   : 'border-muted-foreground'
               )}
             >
-              {choice === option.value ? '✓' : ''}
+              {choice === option.value && <CheckIcon className="h-3 w-3" />}
             </span>
             {option.label}
           </button>
@@ -673,7 +674,7 @@ function ClaimTypeStage({ state }: { state: FormState }) {
                   : 'border-muted-foreground'
               )}
             >
-              {chosen === choice.value ? '✓' : ''}
+              {chosen === choice.value && <CheckIcon className="h-3 w-3" />}
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
             <span className="text-sm font-medium">{choice.label}</span>
@@ -747,8 +748,8 @@ function SubmittedStage({ state }: { state: FormState }) {
         it worked — before reading a word of it.
       */
       icon={
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
-          ✓
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <CheckIcon className="h-7 w-7" />
         </span>
       }
     >

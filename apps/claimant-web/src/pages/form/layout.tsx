@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
+import { ChatIcon, CheckIcon } from './icons';
 import { copyFor, type Locale } from './form-copy';
 import type { ResolvedSection } from './sections';
 
@@ -247,7 +248,7 @@ export function SectionLayout({
                         : 'bg-muted text-muted-foreground'
                   )}
                 >
-                  {section.complete ? '✓' : index + 1}
+                  {section.complete ? <CheckIcon className="h-3 w-3" /> : index + 1}
                 </span>
                 <span
                   className={cn(
@@ -277,7 +278,7 @@ export function SectionLayout({
           */}
           {SHOW_CHAT_ALTERNATIVE && (
           <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-dashed p-3 text-xs leading-snug text-muted-foreground">
-            <span aria-hidden="true">💬</span>
+            <ChatIcon className="mt-0.5 h-4 w-4" />
             <span>
               Prefer to chat? The same questions are asked on{' '}
               <a href="#" className="text-primary underline">
