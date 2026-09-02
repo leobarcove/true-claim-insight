@@ -611,6 +611,48 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Web-form microsite — Phases 0–3 complete, 2 September 2026 (`1ec6198`, `5db71b6`, `3fa61d5`, `f1e03a8`)
+
+A fourth way to lodge a claim: a form at `/form` on claimant-web, alongside the
+web chat, WhatsApp and Telegram. Plan and decisions in
+`docs/WEB_FORM_MICROSITE_PLAN.md`; the manual walk-through that stands in for an
+e2e suite is `docs/WEB_FORM_MANUAL_TEST.md`. Tagged `phase-0`…`phase-3` so any
+phase can be reverted on its own.
+
+**It is not a second intake.** Every answer goes through the same
+`POST /public/conversation/turn` the chat uses, so redaction, policy matching,
+deadline tracking, audit rows and access checks are the ones that already
+existed. What the form adds is a way to *read* the whole picture at once —
+`GET /public/conversation/state`, which mirrors the two endpoints a logged-in
+claimant already has, using the same service methods rather than new
+serialisation.
+
+Verified end to end in a browser against the running stack: number → code →
+consent → claim type → five sections → three uploads → review → submit, landing
+in the adjuster's queue as `SUBMITTED` on channel `WEB_FORM`.
+
+| | |
+|---|---|
+| **Own channel** | `CaseChannel.WEB_FORM`. D1 was reversed: `/form` and `/chat` are separate conversations, so switching starts a fresh claim request. The surface rides inside the *signed* session payload, so it cannot be forged; case-service narrows the header to the two web channels, so this door can never name a messaging binding it cannot vouch for |
+| **Submit-only** | Take-over is refused on a `WEB_FORM` binding and a bare "human" in a field is treated as text. The form has no thread for a reply to appear in, so both guards are what make the missing handover screen safe rather than an oversight. Staff follow up on WhatsApp |
+| **Agent-assisted** | Staff sign in with their own mobile and a WhatsApp code — no password exists anywhere on the claimant-facing product. The endpoint answers identically for an unknown number, because "is this person one of yours?" is what anyone phishing an adjusting firm wants. An assisted claim routes to the handling firm exactly as the claimant's own would, which forces one narrow rule: the person who created a draft may finish it, until it is submitted |
+| **Consent** | `ConsentChannel.WEB_FORM` for the form; `VERBAL_AGENT_ATTESTED` added and kept distinct from `STAFF_CAPTURED`, which reads equally as "staff typed it while the claimant watched". An attested consent is refused if it names nobody |
+| **Blockers cleared** | Consent-notice approval was reachable from nowhere and blocked *all* intake on a fresh database; uploads were guarded only by the browser's `accept` attribute; two settings failed silently at a claimant rather than loudly at a deployment |
+
+**Four defects that only running it could find**, each recorded in the commit
+that fixed it: no adapter registered for the new channel (every form turn
+dropped); a DTO allowlist rejecting `WEB_FORM` *after* the code verified; an
+optional field left blank never skipped, so the flow silently never reached
+Review; and a turn cap of 20/minute sized for a claimant typing one message at
+a time, which an ordinary claimant filling a ~30-turn form crossed. The cap is
+now 60 — the burst defence is the edge throttle and is untouched.
+
+**Not done, deliberately:** no Malay wording for the questions (D5 — the switch
+works and carries the language; the flow copy is untranslated), no claimant
+email anywhere in the system, no claim-status page, no e2e harness. The launch
+gates in the plan's §7 — captcha on "Send code" and an SMS alternative to
+WhatsApp — remain open, and SMS is the long pole.
+
 ### Phase 0 — complete ✅ (`e404fc5`)
 All nine items done and verified: `@Roles` on every Cases endpoint (SUPPORT_DESK → 403 confirmed), bank details and answers omitted from the queue listing, `verify-nric` throttled with non-enumerating errors, `complete-signature` restricted to firm admins, `redactClaim` extended (nested claimant NRIC fail-closed, session deception/fraud data stripped for claimant + support desk), NRIC removed from logs, Cases audit rows on every transition incl. `convert()`, false-comfort assertions corrected, branch committed and pushed.
 

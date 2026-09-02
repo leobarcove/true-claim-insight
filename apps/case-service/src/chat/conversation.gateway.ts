@@ -762,9 +762,15 @@ export class ConversationGateway implements OnModuleInit {
 
     try {
       await this.route(messageId, payload, adapter);
+      // Named on every turn, not only on failure. It is the only way to answer
+      // "do more people finish on the form or the chat?", and the answer is
+      // what tells you whether the form was worth building — a question nobody
+      // can settle retrospectively, because a turn logged without its channel
+      // can never be classified later.
+      this.logger.debug(`Turn handled on ${payload.channel}.`);
     } catch (error) {
       this.logger.error(
-        `Turn ${payload.platformMessageId} failed: ${(error as Error).message}`,
+        `Turn ${payload.platformMessageId} failed on ${payload.channel}: ${(error as Error).message}`,
         (error as Error).stack
       );
       await this.prisma.conversationMessage.update({

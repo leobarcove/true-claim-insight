@@ -3,6 +3,7 @@ import type { CaseAnswers, FlowStep } from '@tci/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { FieldControl } from './field-control';
+import { copyFor, type Locale } from './form-copy';
 import type { ResolvedSection } from './sections';
 
 /**
@@ -44,6 +45,7 @@ export function ReviewStage({
   onChange,
   onSubmit,
   onBack,
+  locale = 'en',
 }: {
   sections: ResolvedSection[];
   answers: CaseAnswers;
@@ -55,7 +57,9 @@ export function ReviewStage({
   onChange: (step: FlowStep, value: string) => Promise<void>;
   onSubmit: () => Promise<void>;
   onBack: () => void;
+  locale?: Locale;
 }) {
+  const t = copyFor(locale);
   const [editing, setEditing] = useState<FlowStep | null>(null);
   const [draft, setDraft] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -85,6 +89,7 @@ export function ReviewStage({
                 {section.title}
               </h2>
 
+              <dl className="m-0">
               {rows.map(row => (
                 <div key={row.step.id} className="border-b px-5 py-3 last:border-0">
                   {editing?.id === row.step.id ? (
@@ -101,7 +106,7 @@ export function ReviewStage({
                       />
                       <div className="flex gap-2">
                         <Button size="sm" disabled={busy} onClick={() => void save()}>
-                          {busy ? 'Saving…' : 'Save'}
+                          {busy ? t('saving') : t('save')}
                         </Button>
                         <Button
                           size="sm"
@@ -109,15 +114,22 @@ export function ReviewStage({
                           disabled={busy}
                           onClick={() => setEditing(null)}
                         >
-                          Cancel
+                          {t('cancel')}
                         </Button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-start justify-between gap-4">
+                      {/*
+                        A description list, because that is what this is: each
+                        answer is a term and its value. A screen reader then
+                        reads "Trip start date, 12 August 2026" as one pair
+                        rather than two unrelated lines, which is the whole
+                        difference between checking a claim and guessing at it.
+                      */}
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="text-xs text-muted-foreground">{row.label}</span>
-                        <span className="break-words text-[15px] font-semibold">{row.value}</span>
+                        <dt className="text-xs text-muted-foreground">{row.label}</dt>
+                        <dd className="m-0 break-words text-[15px] font-semibold">{row.value}</dd>
                       </div>
                       {row.editable !== false && (
                         <button
@@ -126,13 +138,14 @@ export function ReviewStage({
                           onClick={() => startEditing(row.step)}
                           className="shrink-0 text-sm font-medium text-primary underline-offset-2 hover:underline"
                         >
-                          Change
+                          {t('change')}
                         </button>
                       )}
                     </div>
                   )}
                 </div>
               ))}
+              </dl>
             </section>
           );
         })}
@@ -151,8 +164,7 @@ export function ReviewStage({
           className="mt-0.5 h-5 w-5 shrink-0 accent-[hsl(var(--primary))]"
         />
         <span className="text-sm leading-relaxed">
-          I confirm the details above are true and complete to the best of my knowledge, and I
-          understand a false statement may void this claim.
+{t('confirmDeclaration')}
         </span>
       </label>
 
@@ -164,10 +176,10 @@ export function ReviewStage({
 
       <div className="flex justify-end gap-2.5 border-t pt-5">
         <Button variant="outline" disabled={busy} onClick={onBack}>
-          Back
+          {t('back')}
         </Button>
         <Button disabled={busy || !confirmed} onClick={() => void onSubmit()}>
-          {busy ? 'Submitting…' : 'Submit claim request'}
+          {busy ? t('submitting') : t('submit')}
         </Button>
       </div>
     </div>

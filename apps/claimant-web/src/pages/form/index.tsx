@@ -20,6 +20,7 @@ import {
 } from '@/hooks/use-form-conversation';
 import { FieldControl } from './field-control';
 import { FormShell, PreClaimLayout, SectionLayout } from './layout';
+import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
 import { SECTIONS } from './sections';
 import { rowsFor, sectionsFor, type ResolvedSection } from './sections';
@@ -49,6 +50,28 @@ const browserLocale = (): string | undefined => navigator.language?.split('-')[0
  * drift.
  */
 const CLAIM_TYPE_SECTION = SECTIONS.find(section => section.id === 'claim-type')!;
+
+/**
+ * Move focus to the field that was refused.
+ *
+ * A section can be taller than the screen, so an error message rendered below
+ * the fold is an error nobody sees: the claimant presses Continue, nothing
+ * appears to happen, and they press it again. Focus scrolls it into view and
+ * announces it to a screen reader in one act.
+ *
+ * Deferred a frame because the message is rendered by the same state update
+ * that calls this, and focusing an element React has not drawn yet does
+ * nothing at all.
+ */
+function focusField(stepId: string) {
+  requestAnimationFrame(() => {
+    const field = document.getElementById(stepId);
+    if (field instanceof HTMLElement) {
+      field.focus({ preventScroll: false });
+      field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+}
 
 export function ClaimFormPage() {
   const { data: state, isLoading } = useFormState();
@@ -146,6 +169,7 @@ const READY = [
 function PhoneStage({ state }: { state: FormState }) {
   const [phone, setPhone] = useState('');
   const { busy, submit } = useSimpleTurn();
+  const t = copyFor(state.locale);
 
   // E.164 for the server, "+60" shown as a prefix for the claimant — nobody
   // types a country code into a form on their own phone.
@@ -174,7 +198,7 @@ function PhoneStage({ state }: { state: FormState }) {
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="phone" className="text-sm font-semibold">
-              Mobile number
+              {t('mobileNumber')}
             </label>
             <div className="flex max-w-[540px] items-center gap-2 rounded-lg border border-input bg-background px-3.5">
               <span className="font-medium text-muted-foreground">+60</span>
@@ -208,7 +232,7 @@ function PhoneStage({ state }: { state: FormState }) {
 
           <div className="flex flex-wrap items-center gap-4">
             <Button size="lg" disabled={busy || !phone.trim()} onClick={send}>
-              {busy ? 'Sending…' : 'Send code'}
+              {busy ? t('sending') : t('sendCode')}
             </Button>
             <p className="text-sm text-muted-foreground">
               Or message us on{' '}
@@ -230,7 +254,7 @@ function PhoneStage({ state }: { state: FormState }) {
           reaches the uploads without their boarding pass to hand leaves.
         */}
         <aside className="flex h-fit flex-col gap-2.5 rounded-xl border bg-background p-5">
-          <h2 className="text-sm font-semibold">Have these ready</h2>
+          <h2 className="text-sm font-semibold">{t('haveTheseReady')}</h2>
           {READY.map(item => (
             <div key={item} className="flex items-start gap-2.5 text-sm">
               <span className="mt-0.5 shrink-0 text-primary" aria-hidden="true">
@@ -252,6 +276,7 @@ function PhoneStage({ state }: { state: FormState }) {
 function CodeStage({ state }: { state: FormState }) {
   const [code, setCode] = useState('');
   const { busy, submit } = useSimpleTurn();
+  const t = copyFor(state.locale);
 
   return (
     <PreClaimLayout
@@ -260,13 +285,13 @@ function CodeStage({ state }: { state: FormState }) {
       subtitle={state.lastReply ?? 'We have sent a six-digit code on WhatsApp.'}
       actions={
         <Button disabled={busy || code.length < 6} onClick={() => void submit({ text: code })}>
-          {busy ? 'Checking…' : 'Continue'}
+          {busy ? t('checking') : t('continue')}
         </Button>
       }
     >
       <div className="rounded-xl border bg-background p-5">
         <label htmlFor="code" className="text-sm font-semibold">
-          6-digit code
+          {t('codeLabel')}
         </label>
         <input
           id="code"
@@ -284,6 +309,7 @@ function CodeStage({ state }: { state: FormState }) {
 
 function ConsentStage({ state }: { state: FormState }) {
   const { busy, submit } = useSimpleTurn();
+  const t = copyFor(state.locale);
 
   return (
     <PreClaimLayout
@@ -296,10 +322,10 @@ function ConsentStage({ state }: { state: FormState }) {
             disabled={busy}
             onClick={() => void submit({ callbackValue: '__consent:decline' })}
           >
-            I do not agree
+            {t('decline')}
           </Button>
           <Button disabled={busy} onClick={() => void submit({ callbackValue: '__consent:agree' })}>
-            I agree
+            {t('agree')}
           </Button>
         </>
       }
@@ -316,7 +342,7 @@ function ConsentStage({ state }: { state: FormState }) {
         <p className="text-xs text-muted-foreground">Version {state.consent.version}</p>
       )}
       <p className="text-xs text-muted-foreground">
-        If you do not agree, no claim is opened and nothing you entered is kept.
+        {t('declineNote')}
       </p>
     </PreClaimLayout>
   );
@@ -349,9 +375,11 @@ function ClaimTypeStage({ state }: { state: FormState }) {
 }
 
 function SubmittedStage({ state }: { state: FormState }) {
+  const t = copyFor(state.locale);
+
   return (
     <PreClaimLayout
-      title="Your claim request is in"
+      title={t('submittedTitle')}
       subtitle={`Reference ${state.case?.caseNumber ?? ''}`}
     >
       <div className="flex flex-col gap-3 rounded-xl border bg-background p-5 text-sm leading-relaxed">
@@ -371,6 +399,7 @@ function FlowStage({ state }: { state: FormState }) {
   const send = useSendFormTurn();
   const refresh = useRefreshFormState();
 
+  const t = copyFor(state.locale);
   const answers = (state.case?.answers ?? {}) as CaseAnswers;
   const claimTypeLabel = state.flow ? TRAVEL_CLAIM_TYPE_LABELS[state.flow.travelClaimType] : null;
   const view = useMemo(
@@ -556,6 +585,7 @@ function FlowStage({ state }: { state: FormState }) {
 
       if (!result.ok && result.error) {
         setErrors({ [result.error.stepId]: result.error.message });
+        focusField(result.error.stepId);
         return;
       }
 
@@ -577,6 +607,7 @@ function FlowStage({ state }: { state: FormState }) {
       title={active.heading}
       subtitle={active.subtitle}
       summary={summary}
+      locale={state.locale}
       actions={
         active.id === 'review' ? null : (
           <>
@@ -587,11 +618,11 @@ function FlowStage({ state }: { state: FormState }) {
             */}
             {previous && (
               <Button variant="outline" disabled={busy} onClick={() => setActiveId(previous.id)}>
-                Back
+                {t('back')}
               </Button>
             )}
             <Button disabled={busy} onClick={() => void onContinue()}>
-              {busy ? 'Saving…' : 'Continue'}
+              {busy ? t('saving') : t('continue')}
             </Button>
           </>
         )
@@ -608,6 +639,7 @@ function FlowStage({ state }: { state: FormState }) {
           onChange={changeOne}
           onSubmit={onSubmit}
           onBack={() => previous && setActiveId(previous.id)}
+          locale={state.locale}
         />
       ) : (
       <div className="flex flex-col gap-5 rounded-xl border bg-background p-5">

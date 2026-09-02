@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
+import { copyFor, type Locale } from './form-copy';
 import type { ResolvedSection } from './sections';
 
 /**
@@ -141,6 +142,7 @@ export function SectionLayout({
   children,
   actions,
   summary,
+  locale = 'en',
 }: {
   sections: ResolvedSection[];
   activeId: string;
@@ -149,8 +151,10 @@ export function SectionLayout({
   children: ReactNode;
   actions: ReactNode;
   summary: Array<[string, string]>;
+  locale?: Locale;
 }) {
   const activeIndex = sections.findIndex(section => section.id === activeId);
+  const t = copyFor(locale);
 
   return (
     <>
@@ -253,7 +257,7 @@ export function SectionLayout({
         */}
         <aside className="hidden self-start rounded-xl border bg-background p-4 lg:col-span-3 lg:block">
           <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Your claim so far
+            {t('claimSoFar')}
           </h2>
           {summary.map(([key, value]) => (
             <div key={key} className="flex flex-col gap-0.5 border-b py-2 last:border-0">
@@ -262,7 +266,7 @@ export function SectionLayout({
             </div>
           ))}
           <p className="mt-2.5 text-xs leading-snug text-muted-foreground">
-            Saved after each step on this device.
+            {t('savedOnDevice')}
           </p>
         </aside>
       </div>
