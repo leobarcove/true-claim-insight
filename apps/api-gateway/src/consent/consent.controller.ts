@@ -57,6 +57,54 @@ export class ConsentProxyController {
     );
   }
 
+  /**
+   * Notice versions still waiting to be approved, and the two routes that clear
+   * them.
+   *
+   * These existed in case-service and were reachable from nowhere: not proxied,
+   * no screen. On a fresh database every notice is unapproved, and
+   * `assertConsent` refuses to open a Case without an approved one — so *all*
+   * intake was blocked, on every channel, and the only way out was editing the
+   * database by hand. See docs/PDPA_NOTICE_APPROVAL_GAP.md.
+   */
+  @Get('pending-approval')
+  @ApiOperation({ summary: 'Notice versions still awaiting approval' })
+  pendingApproval(@Req() req: any) {
+    return firstValueFrom(
+      this.httpService
+        .get(`${this.caseServiceUrl}/api/v1/consent/pending-approval`, {
+          headers: this.forward(req),
+        })
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The consent service is unavailable')
+        )
+    );
+  }
+
+  @Post('notice/:purpose/:version/approve')
+  @ApiOperation({ summary: 'Approve a notice version (refused unless EN and BM both exist)' })
+  approveNotice(
+    @Param('purpose') purpose: string,
+    @Param('version') version: string,
+    @Req() req: any
+  ) {
+    return firstValueFrom(
+      this.httpService
+        .post(
+          `${this.caseServiceUrl}/api/v1/consent/notice/${encodeURIComponent(
+            purpose
+          )}/${encodeURIComponent(version)}/approve`,
+          {},
+          { headers: this.forward(req) }
+        )
+        .pipe(
+          map(response => unwrapEnvelope(response.data)),
+          passThroughDownstreamError('The consent service is unavailable')
+        )
+    );
+  }
+
   @Get('claimant/:claimantId')
   @ApiOperation({ summary: "A claimant's consent standing" })
   forClaimant(@Param('claimantId') claimantId: string, @Req() req: any) {
