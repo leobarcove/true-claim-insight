@@ -12,6 +12,13 @@ import { IsBoolean, IsOptional, IsString, Length, Matches } from 'class-validato
  * of their own account with a 400 that reads as a bug.
  */
 export class StaffSendCodeDto {
+  @ApiProperty({ example: '999999-00' })
+  @IsString()
+  @Matches(/^\d{6}-\d{2}$/, {
+    message: 'registrationNumber must use the format 999999-00',
+  })
+  registrationNumber!: string;
+
   @ApiProperty({ example: '+60129876543' })
   @IsString()
   @Matches(/^\+[1-9]\d{7,14}$/, {
@@ -21,6 +28,13 @@ export class StaffSendCodeDto {
 }
 
 export class StaffVerifyCodeDto {
+  @ApiProperty({ example: '999999-00' })
+  @IsString()
+  @Matches(/^\d{6}-\d{2}$/, {
+    message: 'registrationNumber must use the format 999999-00',
+  })
+  registrationNumber!: string;
+
   @ApiProperty({ example: '+60129876543' })
   @IsString()
   @Matches(/^\+[1-9]\d{7,14}$/, {

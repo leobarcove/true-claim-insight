@@ -50,10 +50,9 @@ const renderStart = (onClaimantResolved = vi.fn()) => {
 
 const fill = async (
   user: ReturnType<typeof userEvent.setup>,
-  { phone = '123456789', nric = '880101145555', name = 'Chua Xin Ying' } = {}
+  { phone = '123456789', name = 'Chua Xin Ying' } = {}
 ) => {
   if (phone) await user.type(screen.getByLabelText('Their mobile number'), phone);
-  if (nric) await user.type(screen.getByLabelText('IC number'), nric);
   if (name) await user.type(screen.getByLabelText('Full name'), name);
 };
 
@@ -94,7 +93,7 @@ describe('who the claim is for', () => {
       expect(onChosen).toHaveBeenCalledWith({
         phoneNumber: '+60123456789',
         fullName: 'Chua Xin Ying',
-        nric: '880101-14-5555',
+        nric: null,
         nricLast4: null,
         id: null,
         existing: false,
@@ -114,20 +113,6 @@ describe('who the claim is for', () => {
         expect.objectContaining({ phoneNumber: '+60123456789' })
       )
     );
-  });
-
-  it('refuses a half-typed IC', async () => {
-    // Still checked, and it still matters: the IC is what the declaration
-    // matches on, so an incomplete one opens a second record for somebody
-    // already on file — with nothing on either saying they are the same.
-    const user = userEvent.setup();
-    const onChosen = renderStart();
-
-    await fill(user, { nric: '8801' });
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/not complete/);
-    expect(onChosen).not.toHaveBeenCalled();
   });
 
   it('refuses a claim with no name, which consent cannot be recorded against', async () => {

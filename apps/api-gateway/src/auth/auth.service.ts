@@ -17,6 +17,7 @@ export interface JwtPayload {
   tenantId: string | null; // Deprecated: for backward compatibility
   currentTenantId: string | null; // Active tenant context
   tenantIds?: string[]; // All tenants user has access to
+  identityType?: 'PIAM_AGENT';
   iat?: number;
   exp?: number;
 }
@@ -233,23 +234,27 @@ export class AuthService {
    * one, happens at verify — where it costs an attacker a code they cannot
    * obtain rather than a single request.
    */
-  async staffSendCode(phoneNumber: string): Promise<{ expiresIn: number; code?: string }> {
-    const user = await this.usersService.findByPhoneNumber(phoneNumber);
+  async staffSendCode(
+    registrationNumber: string,
+    phoneNumber: string
+  ): Promise<{ expiresIn: number; code?: string }> {
+    const registeredAgent = await this.usersService.findPiamRegisteredAgent(
+      registrationNumber,
+      phoneNumber
+    );
 
-    if (!user || !(user as any).isVerified || user.role === 'CLAIMANT') {
+    if (!registeredAgent || !registeredAgent.tenantId) {
       await this.audit.record({
         entityType: 'AUTH',
         entityId: phoneNumber,
         action: 'STAFF_CODE_REQUESTED_UNKNOWN_NUMBER',
-        metadata: { reason: 'no active staff account for this number' },
+        metadata: { reason: 'registration/phone mismatch or no matching insurer tenant' },
       });
-      // Plausible timing and shape, and nothing sent. The expiry is the real
-      // one so a client cannot tell the two apart by the number it displays.
-      return { expiresIn: 300 };
+      throw new UnauthorizedException('Registration number or mobile number not recognised.');
     }
 
-    const result = await this.otpService.sendOtp(user.phoneNumber, undefined, user.id);
-    this.logger.log(`Staff sign-in: code dispatched for user ${user.id}.`);
+    const result = await this.otpService.sendOtp(phoneNumber);
+    this.logger.log(`PIAM agent sign-in: code dispatched for agent ${registeredAgent.id}.`);
     return { expiresIn: result.expiresIn, code: result.code };
   }
 
@@ -264,11 +269,15 @@ export class AuthService {
    * place.
    */
   async staffVerifyCode(
+    registrationNumber: string,
     phoneNumber: string,
     code: string,
     keepSignedIn = false
   ): Promise<AuthResponse> {
-    const user = await this.usersService.findByPhoneNumber(phoneNumber);
+    const registeredAgent = await this.usersService.findPiamRegisteredAgent(
+      registrationNumber,
+      phoneNumber
+    );
 
     // Verified before the account is checked, so a wrong code and an unknown
     // number are indistinguishable from outside — see staffSendCode.
@@ -279,55 +288,63 @@ export class AuthService {
       verified = false;
     }
 
-    if (!verified || !user || !(user as any).isVerified || user.role === 'CLAIMANT') {
+    if (!verified || !registeredAgent || !registeredAgent?.tenantId) {
       await this.audit.record({
         entityType: 'AUTH',
         entityId: phoneNumber,
         action: 'STAFF_LOGIN_FAILED',
-        metadata: { reason: verified ? 'no active staff account' : 'invalid or expired code' },
+        metadata: { reason: verified ? 'invalid PIAM agent identity' : 'invalid or expired code' },
       });
       throw new UnauthorizedException('That code did not match. Please try again.');
     }
 
-    await this.usersService.updateLastLogin(user.id);
-
-    const userTenants = await this.getUserTenants(user.id);
-    const defaultTenant = userTenants.find(ut => ut.isDefault);
-    const activeTenantId =
-      defaultTenant?.tenantId || (user as any).currentTenantId || user.tenantId;
+    const activeTenantId = registeredAgent.tenantId;
+    const userTenants = [
+      {
+        tenantId: activeTenantId,
+        tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
+        role: 'ADJUSTER',
+        isDefault: true,
+        status: 'ACTIVE',
+      },
+    ];
 
     const tokens = await this.generateTokens(
-      { ...user, currentTenantId: activeTenantId },
+      {
+        id: registeredAgent.id,
+        role: 'ADJUSTER',
+        tenantId: activeTenantId,
+        currentTenantId: activeTenantId,
+        userTenants,
+        identityType: 'PIAM_AGENT',
+      },
       keepSignedIn ? '30d' : undefined
     );
 
     await this.audit.record({
       entityType: 'AUTH',
-      entityId: user.id,
+      entityId: registeredAgent.id,
       action: 'STAFF_LOGIN_SUCCEEDED',
-      actorId: user.id,
-      userId: user.id,
+      actorId: registeredAgent.id,
       tenantId: activeTenantId ?? null,
-      metadata: { role: user.role, method: 'mobile-code', keepSignedIn },
+      metadata: { role: 'ADJUSTER', method: 'mobile-code', keepSignedIn },
     });
 
-    this.logger.log(`Staff signed in by mobile: ${user.id}`);
+    this.logger.log(`PIAM agent signed in by mobile: ${registeredAgent.id}`);
 
     return {
       user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        phoneNumber: user.phoneNumber,
-        licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
-        avatarUrl: (user as any).avatarUrl,
-        tenantId: user.tenantId,
+        id: registeredAgent.id,
+        email: '',
+        fullName:
+          registeredAgent.agentName ?? registeredAgent.tenantName ?? registeredAgent.agencyName,
+        role: 'ADJUSTER',
+        phoneNumber: `+${registeredAgent.phoneNumber.replace(/^\+/, '')}`,
+        licenseNumber: registeredAgent.registrationNumber,
+        avatarUrl: null,
+        tenantId: activeTenantId,
         currentTenantId: activeTenantId,
-        tenantName:
-          userTenants.find(ut => ut.tenantId === activeTenantId)?.tenantName ||
-          (user as any).tenant?.name ||
-          '',
+        tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
       },
       userTenants,
       tokens,
@@ -400,6 +417,19 @@ export class AuthService {
         secret: this.configService.get<string>('jwt.secret'),
       });
 
+      if (payload.identityType === 'PIAM_AGENT') {
+        const agent = await this.usersService.findPiamRegisteredAgentById(payload.sub);
+        if (!agent) throw new UnauthorizedException('PIAM agent not found');
+        return this.generateTokens({
+          id: agent.id,
+          role: 'ADJUSTER',
+          tenantId: agent.tenantId,
+          currentTenantId: agent.tenantId,
+          identityType: 'PIAM_AGENT',
+          userTenants: [{ tenantId: agent.tenantId }],
+        });
+      }
+
       const user = await this.usersService.findById(payload.sub);
 
       if (!user) {
@@ -444,6 +474,45 @@ export class AuthService {
   }
 
   async validateJwtPayload(payload: JwtPayload) {
+    if (payload.identityType === 'PIAM_AGENT') {
+      const agent = await this.usersService.findPiamRegisteredAgentById(payload.sub);
+      if (!agent) throw new UnauthorizedException('PIAM agent not found');
+
+      /*
+        A registration with no tenant linked is not an unknown identity.
+
+        This threw 401 as well, and the tenant was resolved by matching
+        `agencyName` against `tenants.name` — a string from PIAM's register
+        against one of ours. A rename on either side signed every agent of that
+        agency out of a system that still showed them signed in, and reported it
+        as an authentication failure, which sends whoever debugs it looking at
+        tokens rather than at a name that no longer matches.
+
+        The link is stored now, so a null means the agency has not been onboarded
+        as a tenant. The identity stands; the tenant guard refuses the work,
+        where the refusal can say what is actually wrong.
+      */
+      if (!agent.tenantId) {
+        this.logger.warn(
+          `PIAM agent ${agent.id} (${agent.registrationNumber}) has no tenant linked — ` +
+            `"${agent.agencyName}" is not onboarded, so every case will be refused.`
+        );
+      }
+
+      return {
+        id: agent.id,
+        fullName: agent.agentName ?? agent.tenantName ?? agent.agencyName,
+        phoneNumber: `+${agent.phoneNumber.replace(/^\+/, '')}`,
+        licenseNumber: agent.registrationNumber,
+        role: 'ADJUSTER',
+        tenantId: agent.tenantId,
+        currentTenantId: agent.tenantId,
+        tenantName: agent.tenantName ?? agent.agencyName,
+        tenantIds: [agent.tenantId],
+        identityType: 'PIAM_AGENT',
+      };
+    }
+
     if (payload.role === 'CLAIMANT') {
       const claimant = await this.claimantsService.findById(payload.sub);
       if (!claimant) {
@@ -535,6 +604,7 @@ export class AuthService {
       tenantId: string | null;
       currentTenantId?: string | null;
       userTenants?: any[];
+      identityType?: 'PIAM_AGENT';
     },
     /**
      * How long the refresh token lives, overriding `jwt.refreshExpiresIn`.
@@ -559,6 +629,7 @@ export class AuthService {
       tenantId: user.tenantId,
       currentTenantId: user.currentTenantId || user.tenantId,
       tenantIds,
+      identityType: user.identityType,
     };
 
     const accessExpiresIn = this.configService.get<string>('jwt.accessExpiresIn', '15m');

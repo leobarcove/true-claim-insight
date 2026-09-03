@@ -110,7 +110,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a sign-in code to a staff member’s own mobile' })
   async staffSendCode(@Body() dto: StaffSendCodeDto) {
-    return this.authService.staffSendCode(dto.phoneNumber);
+    return this.authService.staffSendCode(dto.registrationNumber, dto.phoneNumber);
   }
 
   @Post('staff/verify-code')
@@ -124,6 +124,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: FastifyReply
   ) {
     const result = await this.authService.staffVerifyCode(
+      dto.registrationNumber,
       dto.phoneNumber,
       dto.code,
       dto.keepSignedIn ?? false
@@ -190,7 +191,18 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@CurrentUser() user: Express.User) {
-    const userTenants = await this.authService.getUserTenants(user.id);
+    const piamIdentity = (user as any).identityType === 'PIAM_AGENT';
+    const userTenants = piamIdentity
+      ? [
+          {
+            tenantId: user.tenantId,
+            tenantName: (user as any).tenantName,
+            role: user.role,
+            isDefault: true,
+            status: 'ACTIVE',
+          },
+        ]
+      : await this.authService.getUserTenants(user.id);
 
     return {
       id: user.id,
@@ -202,7 +214,8 @@ export class AuthController {
       avatarUrl: (user as any).avatarUrl,
       tenantId: user.tenantId,
       currentTenantId: (user as any).currentTenantId || user.tenantId,
-      tenantName: user.tenant?.name || (user as any).currentTenant?.name,
+      tenantName:
+        (user as any).tenantName || user.tenant?.name || (user as any).currentTenant?.name,
       userTenants,
     };
   }
@@ -392,7 +405,9 @@ export class AuthController {
   async sendOtp(@Body() dto: SendOtpDto) {
     const result = await this.otpService.sendOtp(dto.phoneNumber);
     return {
-      message: result.code ? 'No SMS provider — code returned for testing' : 'OTP sent successfully',
+      message: result.code
+        ? 'No SMS provider — code returned for testing'
+        : 'OTP sent successfully',
       expiresIn: result.expiresIn,
       // Present only outside production, and only while no transport can
       // deliver. The service throws rather than populating this in production,

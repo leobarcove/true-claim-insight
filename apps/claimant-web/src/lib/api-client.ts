@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { agentSession, agentUser } from '@/lib/agent-session';
 import { useAuthStore } from '@/stores/auth-store';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -43,8 +44,23 @@ apiClient.interceptors.response.use(
         );
 
         const { accessToken } = response.data.data;
-        const user = useAuthStore.getState().user;
 
+        /*
+          Kept by whichever session made the call.
+
+          The assisted form does not use the auth store — it holds its token in
+          its own key and attaches it per request — so `user` is null there and
+          the branch below skipped, throwing the fresh token away. Every request
+          then sent the dead one again: 401, refresh, discard, 401. An agent's
+          access token expires in minutes, so a call lasting longer than that
+          became a form that silently stopped saving, with the band still saying
+          they were signed in.
+        */
+        if (agentSession.read()) {
+          agentSession.write(accessToken);
+        }
+
+        const user = useAuthStore.getState().user;
         if (user) {
           useAuthStore.getState().setAuth(user, accessToken);
         }
@@ -52,6 +68,15 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
+        // Back to the door they came in by. Sending an agent to the claimant's
+        // login page loses the claim and offers them a sign-in they cannot use.
+        if (agentSession.read()) {
+          agentSession.clear();
+          agentUser.clear();
+          window.location.href = '/agent';
+          return Promise.reject(refreshError);
+        }
+
         useAuthStore.getState().logout();
         window.location.href = '/login';
         return Promise.reject(refreshError);

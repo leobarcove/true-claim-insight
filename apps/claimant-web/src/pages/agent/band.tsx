@@ -67,7 +67,7 @@ export function AgentBand({
   }, [accountOpen]);
 
   const consentLine = consent
-    ? `Verbal consent attested by you at ${asTime(consent.attestedAt)} · notice v${consent.noticeVersion}`
+    ? `Verbal consent attested by you at ${asTime(consent.attestedAt)}`
     : 'Consent not yet recorded — no claim details can be entered';
 
   return (
@@ -128,7 +128,10 @@ export function AgentBand({
 
             <span className="hidden whitespace-nowrap text-xs sm:inline">
               {agent.fullName}
-              {agent.tenantName && ` · ${agent.tenantName}`} ·{' '}
+              {agent.tenantName &&
+                agent.tenantName !== agent.fullName &&
+                ` · ${agent.tenantName}`}{' '}
+              ·{' '}
               <button type="button" className="underline" onClick={signOut}>
                 Sign out
               </button>
@@ -149,7 +152,7 @@ export function AgentBand({
         >
           <div className="flex min-w-0 flex-col">
             <span className="text-[13px] font-semibold text-foreground">{agent.fullName}</span>
-            {agent.tenantName && (
+            {agent.tenantName && agent.tenantName !== agent.fullName && (
               <span className="text-xs text-muted-foreground">{agent.tenantName}</span>
             )}
           </div>
@@ -201,5 +204,7 @@ export function AgentBand({
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
-  return ((parts[0][0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : '')).toUpperCase();
+  return (
+    (parts[0][0] ?? '') + (parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : '')
+  ).toUpperCase();
 }

@@ -36,7 +36,7 @@ describe('the assisted band', () => {
     outstanding.forEach(node => expect(node).toHaveTextContent(/no claim details can be entered/));
   });
 
-  it('names the notice and the time once consent is recorded', () => {
+  it('shows the time but not the internal notice version once consent is recorded', () => {
     render(
       <AgentBand
         agent={agent}
@@ -46,7 +46,8 @@ describe('the assisted band', () => {
     );
 
     expect(screen.queryByText(/Consent not yet recorded/)).toBeNull();
-    expect(screen.getAllByText(/notice v3/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Verbal consent attested by you at/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/notice v3/)).toBeNull();
   });
 
   it('opens an account panel rather than signing out on the tap', async () => {

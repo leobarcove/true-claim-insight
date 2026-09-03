@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CaseFlow } from '@tci/shared-types';
 
+import { agentSession, agentUser, type AgentUser } from '@/lib/agent-session';
 import { apiClient } from '@/lib/api-client';
 
 /**
@@ -21,54 +22,48 @@ import { apiClient } from '@/lib/api-client';
  * public form needs the submit engine; this needs a loop.
  */
 
-const AGENT_TOKEN_KEY = 'tci.agent.token';
+export { agentSession, agentUser, type AgentUser };
 
 /**
- * The staff session, kept where the form can find it.
+ * The signed-in agent, re-read from the server rather than trusted from storage.
  *
- * Its own key, never the portal's: this is a separate origin in every
- * environment past local dev, and sharing storage across them is not possible
- * anyway. Cleared on sign-out and whenever the server refuses it.
+ * `agentUser` is a copy written at sign-in, so it goes stale the moment anything
+ * about the account changes — a rename, a move between firms, a revoked role.
+ * The band prints that copy on every assisted screen, above the claim being
+ * entered, which is the wrong place to be confidently out of date.
+ *
+ * Gated on being signed in so it never fires on the sign-in screen itself, and
+ * left to fail quietly: a profile that cannot be re-read is not a reason to
+ * interrupt a claim, and the stored copy is the fallback.
  */
-export const agentSession = {
-  read: () => localStorage.getItem(AGENT_TOKEN_KEY) ?? undefined,
-  write: (token: string) => localStorage.setItem(AGENT_TOKEN_KEY, token),
-  clear: () => localStorage.removeItem(AGENT_TOKEN_KEY),
-  headers: () => {
-    const token = localStorage.getItem(AGENT_TOKEN_KEY);
-    return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
-  },
-};
-
-export interface AgentUser {
-  id: string;
-  fullName: string;
-  role: string;
-  tenantName: string;
+export function useAgentProfile(enabled: boolean) {
+  return useQuery({
+    queryKey: ['agent-profile'] as const,
+    enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<AgentUser> => {
+      const { data } = await apiClient.get<{ data: Record<string, unknown> }>('/auth/me', {
+        headers: agentSession.headers(),
+      });
+      const profile = ((data as any).data ?? data) as Record<string, unknown>;
+      return {
+        id: String(profile.id ?? ''),
+        fullName: String(profile.fullName ?? ''),
+        role: String(profile.role ?? ''),
+        tenantName: String(profile.tenantName ?? ''),
+      };
+    },
+  });
 }
-
-const AGENT_USER_KEY = 'tci.agent.user';
-
-export const agentUser = {
-  read: (): AgentUser | null => {
-    try {
-      const raw = localStorage.getItem(AGENT_USER_KEY);
-      return raw ? (JSON.parse(raw) as AgentUser) : null;
-    } catch {
-      return null;
-    }
-  },
-  write: (user: AgentUser) => localStorage.setItem(AGENT_USER_KEY, JSON.stringify(user)),
-  clear: () => localStorage.removeItem(AGENT_USER_KEY),
-};
 
 /** Step one of sign-in: a code to the agent's *own* number. */
 export function useAgentSendCode() {
   return useMutation({
-    mutationFn: async (phoneNumber: string) => {
+    mutationFn: async (input: { registrationNumber: string; phoneNumber: string }) => {
       const { data } = await apiClient.post<{ data: { expiresIn: number; code?: string } }>(
         '/auth/staff/send-code',
-        { phoneNumber }
+        input
       );
       return (data as any).data ?? data;
     },
@@ -78,7 +73,12 @@ export function useAgentSendCode() {
 /** Step two: the code, and a session that survives the fortnight. */
 export function useAgentVerifyCode() {
   return useMutation({
-    mutationFn: async (input: { phoneNumber: string; code: string; keepSignedIn: boolean }) => {
+    mutationFn: async (input: {
+      registrationNumber: string;
+      phoneNumber: string;
+      code: string;
+      keepSignedIn: boolean;
+    }) => {
       const { data } = await apiClient.post<{ data: any }>('/auth/staff/verify-code', input);
       const payload = (data as any).data ?? data;
 
@@ -146,11 +146,9 @@ export interface ClaimantLookup {
 export function useLookupClaimant() {
   return useMutation({
     mutationFn: async (input: { phoneNumber: string; nric?: string }) => {
-      const { data } = await apiClient.post<{ data: ClaimantLookup }>(
-        '/claimants/lookup',
-        input,
-        { headers: agentSession.headers() }
-      );
+      const { data } = await apiClient.post<{ data: ClaimantLookup }>('/claimants/lookup', input, {
+        headers: agentSession.headers(),
+      });
       return ((data as any).data ?? data) as ClaimantLookup;
     },
   });

@@ -12,6 +12,7 @@ import {
   agentUser,
   uploadAssistedDocument,
   useAssistedCase,
+  useAgentProfile,
   useRefreshAssistedCase,
   useSaveAssistedAnswer,
   useSubmitAssistedCase,
@@ -56,7 +57,12 @@ export function AgentFormPage() {
     null
   );
 
-  const agent = agentUser.read();
+  const { data: refreshedAgent } = useAgentProfile(signedIn);
+  const agent = refreshedAgent ?? agentUser.read();
+
+  useEffect(() => {
+    if (refreshedAgent) agentUser.write(refreshedAgent);
+  }, [refreshedAgent]);
 
   if (!signedIn) {
     return (
@@ -164,9 +170,7 @@ function AssistedSections({
     const alreadyAnswered = String(answers['claimant-name'] ?? '').trim() !== '';
     if (alreadyAnswered) return;
     setValues(current =>
-      current['claimant-name'] === undefined
-        ? { ...current, 'claimant-name': knownName }
-        : current
+      current['claimant-name'] === undefined ? { ...current, 'claimant-name': knownName } : current
     );
   }, [knownName, answers]);
 
@@ -477,10 +481,7 @@ function AssistedSections({
         ) : (
           <div className="flex flex-col gap-5 rounded-xl border bg-background p-5">
             {rowsFor(active.steps).map(row => (
-              <div
-                key={row.map(step => step.id).join('+')}
-                className={rowClassFor(row)}
-              >
+              <div key={row.map(step => step.id).join('+')} className={rowClassFor(row)}>
                 {row.map(step => (
                   <FieldControl
                     key={step.id}
@@ -556,8 +557,11 @@ function AssistedSubmitted({
             */
             [
               'Entered by',
-              `${agent?.fullName ?? 'you'}${agent?.tenantName ? ` · ${agent.tenantName}` : ''}` +
-                (consent ? ` · ${asDateAndTime(consent.attestedAt)}` : ''),
+              `${agent?.fullName ?? 'you'}${
+                agent?.tenantName && agent.tenantName !== agent.fullName
+                  ? ` · ${agent.tenantName}`
+                  : ''
+              }` + (consent ? ` · ${asDateAndTime(consent.attestedAt)}` : ''),
             ],
             /*
               The notice version is recorded, not printed. It is what makes the
@@ -600,7 +604,9 @@ function AssistedSubmitted({
 function displayAnswer(step: FlowStep, value: unknown): string {
   // Same reasoning as the claimant form: "skip" is how a question is closed,
   // not something to read back.
-  const raw = String(value ?? '').trim().toLowerCase();
+  const raw = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (raw === 'skip') return 'Not provided';
   if (raw === 'later') return 'To follow';
 

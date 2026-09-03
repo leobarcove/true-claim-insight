@@ -21,8 +21,21 @@ import { AuthService } from './auth.service';
  */
 describe('staff sign-in by mobile', () => {
   const build = (user: Record<string, unknown> | null) => {
+    const agent = user
+      ? {
+          id: 'piam-agent-1',
+          registrationNumber: '999999-00',
+          agentName: 'Emily Tan',
+          agencyName: 'MSIG Insurance (Malaysia) Bhd',
+          phoneNumber: '60129876543',
+          tenantId: 'msig-1',
+        }
+      : null;
     const usersService = {
       findByPhoneNumber: jest.fn().mockResolvedValue(user),
+      isPiamRegisteredAgent: jest.fn().mockResolvedValue(true),
+      findPiamRegisteredAgent: jest.fn().mockResolvedValue(agent),
+      findPiamRegisteredAgentById: jest.fn().mockResolvedValue(agent),
       updateLastLogin: jest.fn().mockResolvedValue(undefined),
     };
     const otpService = {
@@ -61,16 +74,18 @@ describe('staff sign-in by mobile', () => {
     it('sends to the number on the account', async () => {
       const { service, otpService } = build(staff);
 
-      const result = await service.staffSendCode('+60129876543');
+      const result = await service.staffSendCode('999999-00', '+60129876543');
 
-      expect(otpService.sendOtp).toHaveBeenCalledWith('+60129876543', undefined, 'user-1');
+      expect(otpService.sendOtp).toHaveBeenCalledWith('+60129876543');
       expect(result.expiresIn).toBe(300);
     });
 
     it('sends nothing for an unknown number', async () => {
       const { service, otpService } = build(null);
 
-      await service.staffSendCode('+60111111111');
+      await expect(service.staffSendCode('999999-00', '+60111111111')).rejects.toThrow(
+        UnauthorizedException
+      );
 
       expect(otpService.sendOtp).not.toHaveBeenCalled();
     });
@@ -79,38 +94,40 @@ describe('staff sign-in by mobile', () => {
      * The shape of the answer must not reveal whether the number is known —
      * including the expiry, which a client would otherwise display.
      */
-    it('answers the same either way, so the endpoint is not a staff directory', async () => {
-      const known = await build(staff).service.staffSendCode('+60129876543');
-      const unknown = await build(null).service.staffSendCode('+60111111111');
+    it('refuses when the PIAM registration and phone do not match', async () => {
+      const context = build(staff);
+      context.usersService.findPiamRegisteredAgent.mockResolvedValue(null);
 
-      expect(Object.keys(unknown).sort()).toEqual(expect.arrayContaining(['expiresIn']));
-      expect(unknown.expiresIn).toBe(known.expiresIn);
+      await expect(context.service.staffSendCode('000000-00', '+60129876543')).rejects.toThrow(
+        UnauthorizedException
+      );
+      expect(context.otpService.sendOtp).not.toHaveBeenCalled();
     });
 
     it('records the miss, so a sweep of numbers is visible afterwards', async () => {
       const { service, audit } = build(null);
 
-      await service.staffSendCode('+60111111111');
+      await service.staffSendCode('999999-00', '+60111111111').catch(() => undefined);
 
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'STAFF_CODE_REQUESTED_UNKNOWN_NUMBER' })
       );
     });
 
-    it('sends nothing to an unverified staff account', async () => {
+    it('does not consult users-table verification', async () => {
       const { service, otpService } = build({ ...staff, isVerified: false });
 
-      await service.staffSendCode('+60129876543');
+      await service.staffSendCode('999999-00', '+60129876543');
 
-      expect(otpService.sendOtp).not.toHaveBeenCalled();
+      expect(otpService.sendOtp).toHaveBeenCalled();
     });
 
-    it('sends nothing to a claimant account', async () => {
+    it('does not consult the users-table role', async () => {
       const { service, otpService } = build({ ...staff, role: 'CLAIMANT' });
 
-      await service.staffSendCode('+60129876543');
+      await service.staffSendCode('999999-00', '+60129876543');
 
-      expect(otpService.sendOtp).not.toHaveBeenCalled();
+      expect(otpService.sendOtp).toHaveBeenCalled();
     });
   });
 
@@ -118,9 +135,11 @@ describe('staff sign-in by mobile', () => {
     it('signs the agent in', async () => {
       const { service } = build(staff);
 
-      const result = await service.staffVerifyCode('+60129876543', '482913');
+      const result = await service.staffVerifyCode('999999-00', '+60129876543', '482913');
 
-      expect(result.user.id).toBe('user-1');
+      expect(result.user.id).toBe('piam-agent-1');
+      expect(result.user.fullName).toBe('Emily Tan');
+      expect(result.user.tenantName).toBe('MSIG Insurance (Malaysia) Bhd');
       expect(result.tokens).toBeDefined();
     });
 
@@ -128,7 +147,7 @@ describe('staff sign-in by mobile', () => {
       const { service, otpService } = build(staff);
       otpService.verifyOtp.mockResolvedValue(false);
 
-      await expect(service.staffVerifyCode('+60129876543', '000000')).rejects.toThrow(
+      await expect(service.staffVerifyCode('999999-00', '+60129876543', '000000')).rejects.toThrow(
         UnauthorizedException
       );
     });
@@ -137,25 +156,25 @@ describe('staff sign-in by mobile', () => {
       const { service, otpService } = build(staff);
       otpService.verifyOtp.mockRejectedValue(new Error('no code outstanding'));
 
-      await expect(service.staffVerifyCode('+60129876543', '482913')).rejects.toThrow(
+      await expect(service.staffVerifyCode('999999-00', '+60129876543', '482913')).rejects.toThrow(
         UnauthorizedException
       );
     });
 
-    it('refuses a claimant account even with a correct code', async () => {
+    it('ignores an unrelated claimant row with the same phone', async () => {
       const { service } = build({ ...staff, role: 'CLAIMANT' });
 
-      await expect(service.staffVerifyCode('+60129876543', '482913')).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(
+        service.staffVerifyCode('999999-00', '+60129876543', '482913')
+      ).resolves.toBeDefined();
     });
 
-    it('refuses an unverified staff account even with a correct code', async () => {
+    it('ignores users-table verification state', async () => {
       const { service } = build({ ...staff, isVerified: false });
 
-      await expect(service.staffVerifyCode('+60129876543', '482913')).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(
+        service.staffVerifyCode('999999-00', '+60129876543', '482913')
+      ).resolves.toBeDefined();
     });
 
     /**
@@ -177,8 +196,12 @@ describe('staff sign-in by mobile', () => {
         throw new Error('expected a refusal');
       };
 
-      expect(await messageOf(() => wrongCode.service.staffVerifyCode('+60129876543', 'x'))).toBe(
-        await messageOf(() => unknownNumber.service.staffVerifyCode('+60111111111', 'x'))
+      expect(
+        await messageOf(() => wrongCode.service.staffVerifyCode('999999-00', '+60129876543', 'x'))
+      ).toBe(
+        await messageOf(() =>
+          unknownNumber.service.staffVerifyCode('999999-00', '+60111111111', 'x')
+        )
       );
     });
 
@@ -190,7 +213,7 @@ describe('staff sign-in by mobile', () => {
     it('lengthens only the refresh token when asked to keep them signed in', async () => {
       const { service, jwtService } = build(staff);
 
-      await service.staffVerifyCode('+60129876543', '482913', true);
+      await service.staffVerifyCode('999999-00', '+60129876543', '482913', true);
 
       const [, refreshCall] = jwtService.signAsync.mock.calls;
       expect(refreshCall[1].expiresIn).toBe(30 * 24 * 60 * 60);
@@ -202,7 +225,7 @@ describe('staff sign-in by mobile', () => {
     it('uses the ordinary refresh life when not asked', async () => {
       const { service, jwtService } = build(staff);
 
-      await service.staffVerifyCode('+60129876543', '482913', false);
+      await service.staffVerifyCode('999999-00', '+60129876543', '482913', false);
 
       const [, refreshCall] = jwtService.signAsync.mock.calls;
       expect(refreshCall[1].expiresIn).toBe(7 * 24 * 60 * 60);
@@ -211,12 +234,12 @@ describe('staff sign-in by mobile', () => {
     it('records the sign-in against the agent', async () => {
       const { service, audit } = build(staff);
 
-      await service.staffVerifyCode('+60129876543', '482913');
+      await service.staffVerifyCode('999999-00', '+60129876543', '482913');
 
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'STAFF_LOGIN_SUCCEEDED',
-          actorId: 'user-1',
+          actorId: 'piam-agent-1',
           metadata: expect.objectContaining({ method: 'mobile-code' }),
         })
       );
@@ -225,7 +248,7 @@ describe('staff sign-in by mobile', () => {
     it('records a failure without naming whether the account exists', async () => {
       const { service, audit } = build(null);
 
-      await service.staffVerifyCode('+60111111111', 'x').catch(() => undefined);
+      await service.staffVerifyCode('999999-00', '+60111111111', 'x').catch(() => undefined);
 
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'STAFF_LOGIN_FAILED' })

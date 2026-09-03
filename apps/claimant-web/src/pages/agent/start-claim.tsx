@@ -11,7 +11,6 @@ import {
   type InteractionChannel,
 } from '@/hooks/use-agent-intake';
 import { cn } from '@/lib/utils';
-import { formatNric, isCompleteNric, NRIC_DIGITS, nricDigits } from './nric';
 import { CheckIcon, ClockIcon, ShieldIcon } from '../form/icons';
 import { PreClaimLayout } from '../form/layout';
 
@@ -68,7 +67,6 @@ export function AgentStartClaim({
 function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void }) {
   const [phone, setPhone] = useState('');
   const [fullName, setFullName] = useState('');
-  const [nric, setNric] = useState('');
   const [error, setError] = useState('');
 
   const e164 = () => {
@@ -91,10 +89,6 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
     obviously true now: there is no request on this screen at all.
   */
   const onContinue = () => {
-    if (!isCompleteNric(nric)) {
-      setError(`That IC number is not complete — it should have ${NRIC_DIGITS} digits.`);
-      return;
-    }
     if (!fullName.trim()) {
       setError('A full name is needed before consent can be recorded.');
       return;
@@ -106,7 +100,7 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
     onChosen({
       phoneNumber: e164(),
       fullName: fullName.trim(),
-      nric: nric.trim(),
+      nric: null,
       // Unknown, and deliberately not asked. The declaration resolves both.
       nricLast4: null,
       id: null,
@@ -118,7 +112,7 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
     <PreClaimLayout
       eyebrow="Assisted claim · step 1 of 2"
       title="Who are you filling this in for?"
-      subtitle="Their IC identifies them; the mobile number is how we reach them afterwards. Nothing is created until you record consent on the next screen."
+      subtitle="Their mobile number is how we identify and reach them afterwards. Nothing is created until you record consent on the next screen."
       actions={<Button onClick={onContinue}>Continue</Button>}
     >
       <div className="flex flex-col gap-4 rounded-xl border bg-background p-5">
@@ -134,7 +128,10 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
               inputMode="tel"
               placeholder="12 345 6789"
               value={phone}
-              onChange={event => { setPhone(event.target.value); setError(''); }}
+              onChange={event => {
+                setPhone(event.target.value);
+                setError('');
+              }}
               className="w-full bg-transparent py-3 text-base focus:outline-none"
             />
           </div>
@@ -143,8 +140,8 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
             No code is sent: the agent's own sign-in is what stands in for it.
           */}
           <p className="text-xs leading-snug text-muted-foreground">
-            The number on the policy — how we reach them afterwards. No code is sent: you are
-            signed in, so a code is not what identifies this claim.
+            The number on the policy — how we reach them afterwards. No code is sent: you are signed
+            in, so a code is not what identifies this claim.
           </p>
         </div>
 
@@ -155,36 +152,6 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
           typing it there quite correctly cleared the answer sitting above it,
           so an agent working top to bottom watched their result disappear.
         */}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="claimant-nric" className="text-sm font-semibold">
-            IC number
-          </label>
-          {/*
-            Grouped as it is typed, and stopped at twelve digits. An agent is
-            usually reading this back off a card on a video call or hearing it
-            over the phone, and both are done in groups — a run of twelve
-            digits is checked by counting, which is how a transposed pair gets
-            missed.
-          */}
-          <input
-            id="claimant-nric"
-            inputMode="numeric"
-            placeholder="880101-14-5555"
-            value={nric}
-            onChange={event => {
-              setNric(formatNric(event.target.value));
-              setError('');
-            }}
-            aria-invalid={!isCompleteNric(nric) || undefined}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
-          />
-          {!isCompleteNric(nric) && (
-            <p className="text-xs text-muted-foreground">
-              An IC has {NRIC_DIGITS} digits — {nricDigits(nric).length} so far.
-            </p>
-          )}
-        </div>
-
         <div className="flex flex-col gap-1.5">
           <label htmlFor="claimant-full-name" className="text-sm font-semibold">
             Full name
@@ -269,7 +236,6 @@ function DeclarationStep({
       const claimant = await resolve.mutateAsync({
         phoneNumber: subject.phoneNumber,
         fullName: subject.fullName ?? undefined,
-        nric: subject.nric ?? undefined,
       });
       onResolved({
         ...subject,
@@ -341,9 +307,9 @@ function DeclarationStep({
             className="mt-0.5 h-5 w-5 shrink-0 accent-[hsl(var(--primary))]"
           />
           <span className="text-sm font-medium leading-relaxed">
-            I confirm that I explained the assisted-claim process and the applicable privacy
-            notice to the claimant, and the claimant verbally agreed to me entering and
-            submitting this claim request on their behalf.
+            I confirm that I explained the assisted-claim process and the applicable privacy notice
+            to the claimant, and the claimant verbally agreed to me entering and submitting this
+            claim request on their behalf.
           </span>
         </label>
 
@@ -370,8 +336,7 @@ function DeclarationStep({
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="interaction-reference" className="text-[13px] font-semibold">
-            Call or appointment reference{' '}
-            <span className="font-normal opacity-75">(optional)</span>
+            Call or appointment reference <span className="font-normal opacity-75">(optional)</span>
           </label>
           <input
             id="interaction-reference"
@@ -461,9 +426,8 @@ function NoticeExtract() {
       */}
       {notice.isError && (
         <p role="alert" className="text-[13px] text-destructive">
-          We could not load the approved notice. Do not paraphrase it — reload the page, and if
-          it still will not load, take this claim on a channel where the claimant reads it
-          themselves.
+          We could not load the approved notice. Do not paraphrase it — reload the page, and if it
+          still will not load, take this claim on a channel where the claimant reads it themselves.
         </p>
       )}
 
@@ -482,14 +446,21 @@ function NoticeExtract() {
             className="self-start text-[13px] text-primary underline underline-offset-2"
             onClick={() => setExpanded(current => !current)}
           >
-            {expanded ? 'Collapse' : 'Read the full notice aloud'}
+            {/*
+              What the control does, not what the agent should do with it —
+              pressing this expands four clamped lines, it does not read
+              anything out. The instruction to read it aloud is in the line
+              below and in the screen's own subtitle, which is where it belongs
+              and where it already was, twice.
+            */}
+            {expanded ? 'Hide the full notice' : 'Show the full notice'}
           </button>
         </>
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Read it in full and do not paraphrase: consent is recorded against this exact version,
-        and a summary is not what they agreed to.
+        Read it in full and do not paraphrase: consent is recorded against this exact version, and a
+        summary is not what they agreed to.
       </p>
     </div>
   );

@@ -6,6 +6,7 @@ import { isRateLimited } from '@/lib/http-errors';
 import { CodeBoxes, RESEND_SECONDS } from '../form/code-entry';
 import { ShieldIcon } from '../form/icons';
 import { PreClaimLayout } from '../form/layout';
+import { checkAgentRegistrationNumber } from './registration-number';
 
 /**
  * Staff sign-in: their own mobile, a WhatsApp code, no password.
@@ -21,6 +22,8 @@ import { PreClaimLayout } from '../form/layout';
  * round is the obvious mistake and the copy is where it is prevented.
  */
 export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [registrationTouched, setRegistrationTouched] = useState(false);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [keepSignedIn, setKeepSignedIn] = useState(true);
@@ -31,6 +34,7 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
 
   const sendCode = useAgentSendCode();
   const verify = useAgentVerifyCode();
+  const registrationError = checkAgentRegistrationNumber(registrationNumber);
 
   const e164 = () => {
     const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
@@ -39,26 +43,31 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
 
   const onSend = async () => {
     setError('');
+    setRegistrationTouched(true);
+    if (registrationError) return;
     try {
-      await sendCode.mutateAsync(e164());
+      await sendCode.mutateAsync({
+        registrationNumber: registrationNumber.trim(),
+        phoneNumber: e164(),
+      });
       setRemaining(RESEND_SECONDS);
       setSent(true);
     } catch (caught) {
       /*
-        A limit and a failure need opposite advice, and until now both got
-        "please try again" — which, against a limit, is the one thing that keeps
-        it going. Sends are capped per number and per address, and an agent
-        re-reading the same instruction is how a two-minute wait becomes ten.
+        Every valid-looking pair advances, whether or not the backend sent a
+        code. Otherwise this public screen reveals which registration and phone
+        pairs exist. The backend remains authoritative and dispatches only for
+        a matching PIAM record.
 
-        A number that is not registered reaches neither branch: the server
-        answers it exactly as it answers a successful send, so that this page
-        cannot be used to find out who works at an adjusting firm.
+        A rate limit is different: no credential decision was made, and retrying
+        immediately only extends the wait, so keep that message here.
       */
-      setError(
-        isRateLimited(caught)
-          ? 'Too many code requests. Please wait five minutes before asking for another.'
-          : 'We could not send a code just now. Please try again.'
-      );
+      if (isRateLimited(caught)) {
+        setError('Too many code requests. Please wait five minutes before asking for another.');
+        return;
+      }
+      setRemaining(RESEND_SECONDS);
+      setSent(true);
     }
   };
 
@@ -74,7 +83,12 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   const onVerify = async (value = code) => {
     setError('');
     try {
-      await verify.mutateAsync({ phoneNumber: e164(), code: value, keepSignedIn });
+      await verify.mutateAsync({
+        registrationNumber: registrationNumber.trim(),
+        phoneNumber: e164(),
+        code: value,
+        keepSignedIn,
+      });
       onSignedIn();
     } catch (caught) {
       // Deliberately the same message the server gives, which does not
@@ -99,12 +113,39 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
         title="Sign in with your mobile"
         subtitle="We send a code on WhatsApp to the number your firm registered for you. There is no password."
         actions={
-          <Button disabled={sendCode.isPending || !phone.trim()} onClick={() => void onSend()}>
+          <Button
+            disabled={sendCode.isPending || Boolean(registrationError) || !phone.trim()}
+            onClick={() => void onSend()}
+          >
             {sendCode.isPending ? 'Sending…' : 'Send code'}
           </Button>
         }
       >
         <div className="flex flex-col gap-4 rounded-xl border bg-background p-5">
+          <label htmlFor="agent-registration" className="text-sm font-semibold">
+            Agent registration number
+          </label>
+          <input
+            id="agent-registration"
+            type="text"
+            autoCapitalize="characters"
+            placeholder="999999-00"
+            value={registrationNumber}
+            onChange={event => setRegistrationNumber(event.target.value.replace(/\s/g, ''))}
+            onBlur={() => setRegistrationTouched(true)}
+            aria-invalid={(registrationTouched && Boolean(registrationError)) || undefined}
+            aria-describedby={
+              registrationTouched && registrationError ? 'agent-registration-error' : undefined
+            }
+            className={`w-full rounded-lg border bg-background px-3.5 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+              registrationTouched && registrationError ? 'border-destructive' : 'border-input'
+            }`}
+          />
+          {registrationTouched && registrationError && (
+            <p id="agent-registration-error" role="alert" className="text-xs text-destructive">
+              {registrationError}
+            </p>
+          )}
           <label htmlFor="agent-phone" className="text-sm font-semibold">
             Your mobile number
           </label>
@@ -138,9 +179,9 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
           </p>
           {numberHelp && (
             <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
-              Your firm admin updates the number on your account. Until they do, the code goes
-              to the old handset — signing in is what proves the number is yours, so it cannot
-              be changed from here.
+              Your firm admin updates the number on your account. Until they do, the code goes to
+              the old handset — signing in is what proves the number is yours, so it cannot be
+              changed from here.
             </p>
           )}
           {error && (
