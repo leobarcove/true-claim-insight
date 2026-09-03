@@ -97,6 +97,59 @@ export class UsersService {
     });
   }
 
+  /** Match the two public credentials recorded for a PIAM-registered agent. */
+  async isPiamRegisteredAgent(registrationNumber: string, phoneNumber: string): Promise<boolean> {
+    return Boolean(await this.findPiamRegisteredAgent(registrationNumber, phoneNumber));
+  }
+
+  async findPiamRegisteredAgent(registrationNumber: string, phoneNumber: string) {
+    const normalizedPhone = phoneNumber.replace(/^\+/, '');
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        registrationNumber: string;
+        agentName: string | null;
+        agencyName: string;
+        phoneNumber: string;
+        tenantId: string | null;
+        /** The organisation's own name, for display. Null until it is linked. */
+        tenantName: string | null;
+      }>
+    >`
+      SELECT p."id", p."registrationNumber", p."agentName", p."agencyName", p."phoneNumber",
+             p."tenantId", t."name" AS "tenantName"
+      FROM "piam_registered_agents" p
+      LEFT JOIN "tenants" t ON t."id" = p."tenantId"
+      WHERE UPPER("registrationNumber") = UPPER(${registrationNumber.trim()})
+        AND regexp_replace("phoneNumber", '^\\+', '') = ${normalizedPhone}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
+
+  async findPiamRegisteredAgentById(id: string) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        registrationNumber: string;
+        agentName: string | null;
+        agencyName: string;
+        phoneNumber: string;
+        tenantId: string | null;
+        /** The organisation's own name, for display. Null until it is linked. */
+        tenantName: string | null;
+      }>
+    >`
+      SELECT p."id", p."registrationNumber", p."agentName", p."agencyName", p."phoneNumber",
+             p."tenantId", t."name" AS "tenantName"
+      FROM "piam_registered_agents" p
+      LEFT JOIN "tenants" t ON t."id" = p."tenantId"
+      WHERE p."id" = ${id}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },

@@ -120,11 +120,33 @@ async function main() {
 
       try {
         const record = validateResult(await lookup(criteria, keyword, code, captcha.token));
+        /*
+          Link the tenant here, once, rather than matching names on every
+          request. The match is the same one it always was — the register's
+          agency name against a tenant's — but it happens at import, where a
+          miss is a line on this console for a person to act on, instead of at
+          sign-in, where it used to be a 401 telling an agent they do not exist.
+
+          Only ever fills a blank: a link corrected by hand survives the next
+          import.
+        */
+        const tenant = await prisma.tenant.findFirst({
+          where: { name: { equals: record.agencyName, mode: 'insensitive' } },
+          select: { id: true, name: true },
+        });
+
         await prisma.piamRegisteredAgent.upsert({
           where: { registrationNumber: record.registrationNumber },
-          create: record,
-          update: record,
+          create: { ...record, tenantId: tenant?.id ?? null },
+          update: tenant ? { ...record, tenantId: tenant.id } : record,
         });
+        if (!tenant) {
+          stdout.write(
+            `  No tenant named "${record.agencyName}" — agents can sign in, but every case ` +
+              `will be refused until one is linked.
+`
+          );
+        }
         stdout.write(`Saved ${record.registrationNumber} — ${record.agencyName}\n`);
         if (record.permanentLinkCode) {
           stdout.write(`Permanent-link code (cs): ${record.permanentLinkCode}\n`);

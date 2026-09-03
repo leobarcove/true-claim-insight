@@ -3038,7 +3038,23 @@ enum ConversationMode {
 model PiamRegisteredAgent {
   id                 String   @id @default(uuid())
   registrationNumber String   @unique
+  agentName           String?
+  /// The register's own name for the agency, kept as imported.
+  ///
+  /// Not the link to a tenant — `tenantId` is. This is PIAM's field, from
+  /// PIAM's register, and it exists to reconcile against on the next import
+  /// and to record which agency a historical attestation named. It used to do
+  /// a foreign key's job through `LOWER(t.name) = LOWER(p.agencyName)`, which
+  /// meant a rename in somebody else's register — "Bhd" for "Berhad", a
+  /// trailing space — signed every agent of that agency out with
+  /// "PIAM agent not found".
   agencyName          String
+  /// The organisation this registration belongs to, resolved once.
+  ///
+  /// Nullable because an agent can be imported from the register before the
+  /// tenant exists. A null here means "not onboarded yet", which is a thing to
+  /// report, never a reason to refuse the agent's identity.
+  tenantId            String?
   phoneNumber         String?
   principals         Json
   corporateNominees  String[] @default([])
@@ -3049,7 +3065,7 @@ model PiamRegisteredAgent {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  @@index([agencyName])
+  @@index([tenantId])
   @@index([sourceCheckedAt])
   @@map("piam_registered_agents")
 }
