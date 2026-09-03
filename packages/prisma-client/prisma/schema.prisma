@@ -1469,6 +1469,9 @@ enum DocumentType {
   PASSPORT
   OVERSEAS_MEDICAL_BILL
   TRAVEL_BOOKING_INVOICE // bookings, cancellation/refund proof
+  DEATH_CERTIFICATE // Sijil Kematian from JPN
+  BURIAL_PERMIT // Permit Menguburkan (JPN.LM02) — the interim proof, issued days before the certificate
+  PROOF_OF_RELATIONSHIP // birth or marriage certificate linking claimant to the deceased
 }
 
 enum ActorType {
@@ -3027,4 +3030,25 @@ enum ConversationMode {
   /// A human has it. The bot stands down entirely until resolved, then the
   /// flow resumes at the step the Case is pinned to.
   HANDOVER
+}
+
+/// Snapshot of a public PIAM OARS agent/agency enquiry result.
+/// The searched NRIC is deliberately not retained; registration number is the
+/// stable public identifier returned by PIAM.
+model PiamRegisteredAgent {
+  id                 String   @id @default(uuid())
+  registrationNumber String   @unique
+  agencyName          String
+  principals         Json
+  corporateNominees  String[] @default([])
+  permanentUrl        String?
+  permanentLinkCode   String?
+  sourceUrl           String   @default("https://oars.piam.org.my/eid/")
+  sourceCheckedAt     DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([agencyName])
+  @@index([sourceCheckedAt])
+  @@map("piam_registered_agents")
 }

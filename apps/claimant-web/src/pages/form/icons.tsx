@@ -120,6 +120,25 @@ export function AlertIcon({ className }: IconProps) {
   );
 }
 
+/** Nothing has happened yet: the pause before a record is created. */
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={`${base} ${className ?? 'h-4 w-4'}`}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  );
+}
+
 /** Staff-only, and why. */
 export function ShieldIcon({ className }: IconProps) {
   return (

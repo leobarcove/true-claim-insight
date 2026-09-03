@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  ClipboardList,
   Clock,
   FileQuestion,
   Inbox,
@@ -61,6 +62,7 @@ export const caseStatusConfig: Record<
  */
 const channelIcons: Record<string, { icon: any; label: string }> = {
   WEB_CHAT: { icon: MessageSquare, label: 'Web chat' },
+  WEB_FORM: { icon: ClipboardList, label: 'Web form' },
   STAFF: { icon: Phone, label: 'Staff capture' },
   EMAIL: { icon: Mail, label: 'Email FNOL' },
   WHATSAPP: { icon: MessageCircle, label: 'WhatsApp' },
@@ -189,7 +191,7 @@ export function CasesListPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {caseRow.claimant?.fullName || 'Unknown'}
+                          {caseRow.claimant?.fullName || caseRow.statedClaimantName || 'Unknown'}
                           <div className="text-xs text-muted-foreground">
                             {caseRow.claimant?.phoneNumber}
                           </div>

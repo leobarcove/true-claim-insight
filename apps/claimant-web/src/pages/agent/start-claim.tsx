@@ -7,12 +7,12 @@ import {
   useConsentNotice,
   useCreateAssistedCase,
   useResolveClaimant,
+  type ClaimSubject,
   type InteractionChannel,
-  type ResolvedClaimant,
 } from '@/hooks/use-agent-intake';
 import { cn } from '@/lib/utils';
 import { formatNric, isCompleteNric, NRIC_DIGITS, nricDigits } from './nric';
-import { CheckIcon } from '../form/icons';
+import { CheckIcon, ClockIcon, ShieldIcon } from '../form/icons';
 import { PreClaimLayout } from '../form/layout';
 
 /**
@@ -23,10 +23,18 @@ import { PreClaimLayout } from '../form/layout';
  * then attest that the notice was read out and agreed to verbally.
  *
  * The order is not cosmetic. Consent is recorded against a claimant, and
- * `CasesService.create` refuses to open a case without a live one — so the
- * claimant has to be resolved first, the declaration made second, and only then
- * does a claim request exist. That is also why nothing is saved on the lookup
- * screen: until consent is recorded there is nothing lawful to save.
+ * `CasesService.create` refuses to open a case without a live one — so all
+ * three writes happen together, in that order, at the moment the declaration is
+ * made: the claimant, the consent, then the case.
+ *
+ * Nothing is written on the first screen, and nothing is read either. It used
+ * to call the find-*or-create* endpoint, so a number typed wrongly left a
+ * claimant row carrying a name and an IC — stored before consent, on a screen
+ * saying nothing was saved, one screen before another that says no details may
+ * be entered until consent is recorded. Then it called a read-only lookup; now
+ * it calls nothing at all. The agent types what the claimant tells them and
+ * moves on, and the declaration resolves the record in one act with the
+ * consent and the case.
  */
 
 const CHANNELS: Array<{ value: InteractionChannel; label: string }> = [
@@ -41,70 +49,77 @@ export function AgentStartClaim({
   onClaimantResolved,
   onOpened,
 }: {
-  claimant: ResolvedClaimant | null;
-  onClaimantResolved: (claimant: ResolvedClaimant | null) => void;
+  claimant: ClaimSubject | null;
+  onClaimantResolved: (claimant: ClaimSubject | null) => void;
   onOpened: (caseId: string, attestedAt: string, noticeVersion: number) => void;
 }) {
   return claimant ? (
-    <DeclarationStep claimant={claimant} onBack={() => onClaimantResolved(null)} onOpened={onOpened} />
+    <DeclarationStep
+      subject={claimant}
+      onBack={() => onClaimantResolved(null)}
+      onResolved={onClaimantResolved}
+      onOpened={onOpened}
+    />
   ) : (
-    <LookupStep onResolved={onClaimantResolved} />
+    <LookupStep onChosen={onClaimantResolved} />
   );
 }
 
-function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) => void }) {
+function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void }) {
   const [phone, setPhone] = useState('');
   const [fullName, setFullName] = useState('');
   const [nric, setNric] = useState('');
-  const [found, setFound] = useState<ResolvedClaimant | null>(null);
   const [error, setError] = useState('');
-
-  const resolve = useResolveClaimant();
 
   const e164 = () => {
     const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
     return digits ? `+60${digits}` : '';
   };
 
-  const onFind = async () => {
-    setError('');
-    /*
-      A half-typed IC is worse than none. It hashes to a value that matches no
-      existing claimant, so the lookup misses somebody we already hold and opens
-      a second record for them — and afterwards nothing on either record says
-      they are the same person.
-    */
+  /*
+    Taken as typed, and looked up by nobody.
+
+    This screen used to call a lookup and draw a card saying whether we already
+    held this person. It is gone: the agent is on a call reading details back,
+    and a search that has to be run, waited for and read before Continue becomes
+    live is a step between them and the claim — for an answer that changes
+    nothing they do. Whether the record exists is the *server's* business, and
+    it settles it at the declaration, where `resolve` finds an existing claimant
+    by IC or number and creates one only if there is none.
+
+    Nothing is written here. That was true before this change and is more
+    obviously true now: there is no request on this screen at all.
+  */
+  const onContinue = () => {
     if (!isCompleteNric(nric)) {
       setError(`That IC number is not complete — it should have ${NRIC_DIGITS} digits.`);
       return;
     }
-    try {
-      const claimant = await resolve.mutateAsync({
-        phoneNumber: e164(),
-        fullName: fullName.trim() || undefined,
-        nric: nric.trim() || undefined,
-      });
-      setFound(claimant);
-      if (claimant.fullName) setFullName(claimant.fullName);
-    } catch {
-      setError('We could not look that number up. Please check it and try again.');
+    if (!fullName.trim()) {
+      setError('A full name is needed before consent can be recorded.');
+      return;
     }
+    if (!e164()) {
+      setError('A mobile number is needed.');
+      return;
+    }
+    onChosen({
+      phoneNumber: e164(),
+      fullName: fullName.trim(),
+      nric: nric.trim(),
+      // Unknown, and deliberately not asked. The declaration resolves both.
+      nricLast4: null,
+      id: null,
+      existing: false,
+    });
   };
 
   return (
     <PreClaimLayout
       eyebrow="Assisted claim · step 1 of 2"
       title="Who are you filling this in for?"
-      subtitle="Find them by the mobile number on the policy. If they are new, fill in the details and we will create the record."
-      actions={
-        found ? (
-          <Button onClick={() => onResolved(found)}>Continue</Button>
-        ) : (
-          <Button disabled={resolve.isPending || !phone.trim()} onClick={() => void onFind()}>
-            {resolve.isPending ? 'Looking up…' : 'Find claimant'}
-          </Button>
-        )
-      }
+      subtitle="Their IC identifies them; the mobile number is how we reach them afterwards. Nothing is created until you record consent on the next screen."
+      actions={<Button onClick={onContinue}>Continue</Button>}
     >
       <div className="flex flex-col gap-4 rounded-xl border bg-background p-5">
         <div className="flex flex-col gap-1.5">
@@ -119,10 +134,7 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
               inputMode="tel"
               placeholder="12 345 6789"
               value={phone}
-              onChange={event => {
-                setPhone(event.target.value);
-                setFound(null);
-              }}
+              onChange={event => { setPhone(event.target.value); setError(''); }}
               className="w-full bg-transparent py-3 text-base focus:outline-none"
             />
           </div>
@@ -131,70 +143,67 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
             No code is sent: the agent's own sign-in is what stands in for it.
           */}
           <p className="text-xs leading-snug text-muted-foreground">
-            The number on the policy. We do not send a code — you are signed in, so the code is
-            not what identifies this claim.
+            The number on the policy — how we reach them afterwards. No code is sent: you are
+            signed in, so a code is not what identifies this claim.
           </p>
         </div>
 
-        {found && (
-          <div className="flex items-center gap-3 rounded-xl border border-primary bg-primary/5 p-3.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background text-primary">
-              <CheckIcon className="h-3 w-3" />
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm font-semibold">
-                {found.fullName ?? 'New claimant'}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {found.existing ? 'Existing claimant' : 'New record created'}
-                {found.nricLast4 && ` · IC ···· ${found.nricLast4}`}
-              </span>
-            </div>
-            <span className="flex-1" />
-            <span className="text-xs font-semibold text-primary">
-              {found.existing ? 'Found' : 'New'}
-            </span>
-          </div>
-        )}
+        {/*
+          The IC belongs beside the number, above the answer, because both
+          decide it: the lookup matches on the IC first and falls back to the
+          phone. Left below the result card it read as an afterthought — and
+          typing it there quite correctly cleared the answer sitting above it,
+          so an agent working top to bottom watched their result disappear.
+        */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="claimant-nric" className="text-sm font-semibold">
+            IC number
+          </label>
+          {/*
+            Grouped as it is typed, and stopped at twelve digits. An agent is
+            usually reading this back off a card on a video call or hearing it
+            over the phone, and both are done in groups — a run of twelve
+            digits is checked by counting, which is how a transposed pair gets
+            missed.
+          */}
+          <input
+            id="claimant-nric"
+            inputMode="numeric"
+            placeholder="880101-14-5555"
+            value={nric}
+            onChange={event => {
+              setNric(formatNric(event.target.value));
+              setError('');
+            }}
+            aria-invalid={!isCompleteNric(nric) || undefined}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
+          />
+          {!isCompleteNric(nric) && (
+            <p className="text-xs text-muted-foreground">
+              An IC has {NRIC_DIGITS} digits — {nricDigits(nric).length} so far.
+            </p>
+          )}
+        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="claimant-full-name" className="text-sm font-semibold">
-              Full name
-            </label>
-            <input
-              id="claimant-full-name"
-              value={fullName}
-              onChange={event => setFullName(event.target.value)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="claimant-nric" className="text-sm font-semibold">
-              IC number
-            </label>
-            {/*
-              Grouped as it is typed, and stopped at twelve digits. An agent is
-              usually reading this back off a card on a video call or hearing it
-              over the phone, and both are done in groups — a run of twelve
-              digits is checked by counting, which is how a transposed pair gets
-              missed.
-            */}
-            <input
-              id="claimant-nric"
-              inputMode="numeric"
-              placeholder="880101-14-5555"
-              value={nric}
-              onChange={event => setNric(formatNric(event.target.value))}
-              aria-invalid={!isCompleteNric(nric) || undefined}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
-            />
-            {!isCompleteNric(nric) && (
-              <p className="text-xs text-muted-foreground">
-                An IC has {NRIC_DIGITS} digits — {nricDigits(nric).length} so far.
-              </p>
-            )}
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="claimant-full-name" className="text-sm font-semibold">
+            Full name
+          </label>
+          {/*
+            The same example the flow gives for its own name field. This box
+            is not a flow step — no Case exists yet — so it cannot read one,
+            but an agent keying a name for a claimant who is not on file faces
+            the identical question about how much of it to type.
+          */}
+          <input
+            id="claimant-full-name"
+            placeholder="e.g. Nur Aisyah binti Rahman"
+            value={fullName}
+            onChange={event => setFullName(event.target.value)}
+            /* The name does not change who we matched, so it leaves the
+               lookup standing — only the number and the IC decide that. */
+            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base"
+          />
         </div>
 
         {error && (
@@ -205,10 +214,10 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
       </div>
 
       <div className="flex items-start gap-2.5 rounded-xl border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
-        <span aria-hidden="true">🕐</span>
+        <ClockIcon className="mt-0.5 h-4 w-4 text-primary" />
         <span>
-          Nothing about the claim is saved yet. The claim request is only created once you have
-          recorded consent on the next screen.
+          Nothing is saved yet — not the claim, and not this person. Their record is created
+          together with the consent you record on the next screen.
         </span>
       </div>
     </PreClaimLayout>
@@ -216,12 +225,15 @@ function LookupStep({ onResolved }: { onResolved: (claimant: ResolvedClaimant) =
 }
 
 function DeclarationStep({
-  claimant,
+  subject,
   onBack,
+  onResolved,
   onOpened,
 }: {
-  claimant: ResolvedClaimant;
+  subject: ClaimSubject;
   onBack: () => void;
+  /** The subject, once it has an id — so the band and the receipt can use it. */
+  onResolved: (subject: ClaimSubject) => void;
   onOpened: (caseId: string, attestedAt: string, noticeVersion: number) => void;
 }) {
   const [confirmed, setConfirmed] = useState(false);
@@ -230,14 +242,42 @@ function DeclarationStep({
   const [claimType, setClaimType] = useState<TravelClaimType | null>(null);
   const [error, setError] = useState('');
 
+  const resolve = useResolveClaimant();
   const attest = useAttestConsent();
   const createCase = useCreateAssistedCase();
-  const busy = attest.isPending || createCase.isPending;
+  const busy = resolve.isPending || attest.isPending || createCase.isPending;
 
+  /**
+   * The three writes consent authorises, in the order they depend on.
+   *
+   * The claimant record is created *here*, not on the lookup screen. That is
+   * the whole point of the change: a number typed wrongly and corrected leaves
+   * nothing behind, and no name or IC is stored before there is a basis for
+   * storing it. `resolve` is find-or-create and idempotent, so a claimant
+   * already on file is matched rather than duplicated, and blanks on their
+   * record are filled from what the agent typed.
+   *
+   * Not a transaction — three services, three calls. The order is what makes a
+   * partial failure safe: a claimant with no consent and no case is a row that
+   * a retry finds and reuses, where a case with no consent would be a claim
+   * nobody agreed to.
+   */
   const onRecord = async () => {
     if (!claimType) return;
     setError('');
     try {
+      const claimant = await resolve.mutateAsync({
+        phoneNumber: subject.phoneNumber,
+        fullName: subject.fullName ?? undefined,
+        nric: subject.nric ?? undefined,
+      });
+      onResolved({
+        ...subject,
+        id: claimant.id,
+        fullName: claimant.fullName ?? subject.fullName,
+        nricLast4: claimant.nricLast4 ?? subject.nricLast4,
+      });
+
       const granted = await attest.mutateAsync({
         claimantId: claimant.id,
         interactionChannel: channel,
@@ -368,7 +408,7 @@ function DeclarationStep({
       </div>
 
       <div className="flex items-start gap-2.5 rounded-xl border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
-        <span aria-hidden="true">🛡</span>
+        <ShieldIcon className="mt-0.5 h-4 w-4 text-primary" />
         <span>
           This is recorded as <strong>agent-attested verbal consent</strong> against the approved
           notice — your name, your firm and the time. It is never recorded as the claimant having
@@ -399,17 +439,15 @@ function NoticeExtract() {
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-background p-5">
-      <div className="flex items-baseline gap-2">
-        <h2 className="text-[15px] font-bold">
-          {notice.data?.title ?? 'How we handle your personal data'}
-        </h2>
-        {notice.data && (
-          <span className="text-[11px] text-muted-foreground">
-            Version {notice.data.version}
-            {notice.data.locale ? ` · ${notice.data.locale.toUpperCase()}` : ''}
-          </span>
-        )}
-      </div>
+      {/*
+        The title alone. The version is still recorded against the consent — it
+        is what makes the attestation provable, and the band and the receipt
+        both name it — but it is not something the person being read to needs
+        printed beside the heading they are hearing.
+      */}
+      <h2 className="text-[15px] font-bold">
+        {notice.data?.title ?? 'How we handle your personal data'}
+      </h2>
 
       {notice.isLoading && (
         <p className="text-[13px] text-muted-foreground">Loading the approved notice…</p>

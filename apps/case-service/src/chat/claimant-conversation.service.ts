@@ -394,6 +394,8 @@ export class ClaimantConversationService {
    */
   private async openQuestion(binding: {
     id: string;
+    /** Which surface is asking — the web form and the web chat are not the same. */
+    channel: CaseChannel;
     mode: ConversationMode;
     activeCaseId: string | null;
     locale: string | null;
@@ -426,13 +428,23 @@ export class ClaimantConversationService {
     });
     if (!caseRow?.currentStepId) return null;
 
-    // The pinned version, not the built-in flow: a Case walks the wording and
-    // structure it started with, and showing the claimant a newer prompt than
-    // the one they are answering is how the two drift apart.
-    // Overlaid for this channel and language, so a Malay claimant reads the
-    // Malay wording — the same resolution Telegram gets, from the same place.
+    /*
+      The pinned version, not the built-in flow: a Case walks the wording and
+      structure it started with, and showing the claimant a newer prompt than
+      the one they are answering is how the two drift apart.
+
+      Overlaid for this channel and language, so a Malay claimant reads the
+      Malay wording — the same resolution Telegram gets, from the same place.
+
+      The channel is the binding's, not a constant. This service serves the web
+      *form* as well as the web chat, and they are separate channels on purpose
+      (`WEB_FORM` has its own binding key). Hardcoding `WEB_CHAT` meant the form
+      would have been dressed in the chat's wording the day anyone published an
+      overlay for either — silently, since with no overlay rows the two are
+      identical and nothing looks wrong.
+    */
     const flow = await this.flows.forCase(caseRow, {
-      channel: CaseChannel.WEB_CHAT,
+      channel: binding.channel,
       locale: binding.locale ?? 'en',
     });
 

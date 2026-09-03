@@ -2038,4 +2038,104 @@ describe('ConversationGateway', () => {
       expect(sent).toHaveLength(0);
     });
   });
+  /**
+   * "Send again" must send again.
+   *
+   * The form has one verb at this step — a turn carrying text — so the only way
+   * it can ask for another code is to send the pending number back. That used
+   * to fall through to `verify`, which meant the button sent nothing, scored an
+   * incorrect code, and on the fifth press burned the pending number and
+   * returned the claimant to the number screen with "that is too many incorrect
+   * codes". Nothing errored and nothing logged; the only symptom was a form that
+   * threw you out for pressing Send again three times.
+   */
+  describe('asking for another code', () => {
+    const webChat = (over: Record<string, unknown> = {}) => {
+      const kit = setup({
+        binding: {
+          channel: CaseChannel.WEB_CHAT,
+          pendingPhone: '+60123456789',
+          otpAttempts: 0,
+          ...over,
+        },
+      });
+      // A browser attests nothing, so this is the channel that verifies a
+      // number in-conversation. The default adapter is Telegram, which never
+      // takes that path.
+      (kit.adapter as { channel: CaseChannel }).channel = CaseChannel.WEB_CHAT;
+      (kit.adapter as { capabilities: ChannelCapabilities }).capabilities =
+        CHANNEL_CAPABILITIES[CaseChannel.WEB_CHAT];
+      return kit;
+    };
+
+    const webTurn = (text: string) =>
+      turn({ channel: CaseChannel.WEB_CHAT, sessionId: 'sess-1', text } as never);
+
+    it('sends a fresh code when the same number comes back', async () => {
+      const { gateway, phones, sent } = webChat();
+
+      await gateway.handleTurn(webTurn('+60123456789'));
+
+      expect(phones.send).toHaveBeenCalledWith('+60123456789');
+      expect(sent[0].text).toMatch(/another code/i);
+    });
+
+    it('does not score it as a wrong code', async () => {
+      const { gateway, phones, prisma } = webChat();
+
+      await gateway.handleTurn(webTurn('+60123456789'));
+
+      expect(phones.verify).not.toHaveBeenCalled();
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ otpAttempts: 1 }) })
+      );
+    });
+
+    it('keeps the pending number, so pressing it does not end at the start', async () => {
+      // The reported bug, at the point it bit: one attempt from the cap, the
+      // resend used to spend the last one and null the number.
+      const { gateway, prisma } = webChat({ otpAttempts: 4 });
+
+      await gateway.handleTurn(webTurn('+60123456789'));
+
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ pendingPhone: null }) })
+      );
+    });
+
+    it('holds the number when the code cannot be sent, rather than starting over', async () => {
+      // A rate limit is a reason to wait. Dropping the pending number here
+      // would be the same expulsion by another route.
+      const { gateway, prisma, sent, phones } = webChat();
+      (phones.send as jest.Mock).mockRejectedValueOnce(new Error('too many requests'));
+
+      await gateway.handleTurn(webTurn('+60123456789'));
+
+      expect(prisma.conversationBinding.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ pendingPhone: null }) })
+      );
+      expect(sent[0].text).toMatch(/could not send another code/i);
+    });
+
+    it('still starts the step over for a genuinely different number', async () => {
+      const { gateway, prisma } = webChat();
+
+      await gateway.handleTurn(webTurn('+60129998888'));
+
+      expect(prisma.conversationBinding.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ pendingPhone: null }) })
+      );
+    });
+
+    it('still reads six digits as a code', async () => {
+      // The floor in `normalisePhone` is what keeps these apart: eight digits
+      // minimum, so a code can never be mistaken for a number asking for one.
+      const { gateway, phones } = webChat();
+
+      await gateway.handleTurn(webTurn('715324'));
+
+      expect(phones.verify).toHaveBeenCalledWith('+60123456789', '715324');
+      expect(phones.send).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   formatDateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -26,9 +26,11 @@ import { FormShell, PreClaimLayout, SectionLayout, SHOW_CHAT_ALTERNATIVE } from 
 import { CodeBoxes, RESEND_SECONDS } from './code-entry';
 import { CheckIcon } from './icons';
 import { keepDigits } from './digits-only';
+import { checkMobileNumber, toE164 } from './mobile-number';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
-import { rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
+import { focusField } from './focus-field';
+import { rowClassFor, rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
 import { missingRequired, submitSection, type TurnOutcome } from './submit-engine';
 
 /**
@@ -55,28 +57,6 @@ const browserLocale = (): string | undefined => navigator.language?.split('-')[0
  * drift.
  */
 const CLAIM_TYPE_SECTION = SECTIONS.find(section => section.id === 'claim-type')!;
-
-/**
- * Move focus to the field that was refused.
- *
- * A section can be taller than the screen, so an error message rendered below
- * the fold is an error nobody sees: the claimant presses Continue, nothing
- * appears to happen, and they press it again. Focus scrolls it into view and
- * announces it to a screen reader in one act.
- *
- * Deferred a frame because the message is rendered by the same state update
- * that calls this, and focusing an element React has not drawn yet does
- * nothing at all.
- */
-function focusField(stepId: string) {
-  requestAnimationFrame(() => {
-    const field = document.getElementById(stepId);
-    if (field instanceof HTMLElement) {
-      field.focus({ preventScroll: false });
-      field.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  });
-}
 
 export function ClaimFormPage() {
   const { data: state, isLoading } = useFormState();
@@ -158,16 +138,35 @@ const NUMBERED_QUESTION = /^\(\d+ of \d+\)/;
 function useSimpleTurn() {
   const send = useSendFormTurn();
   const refresh = useRefreshFormState();
+  /*
+    Busy until the screen has caught up, not until the request has.
+
+    `send.isPending` goes false the moment the server answers — which is *before*
+    the re-read that tells this page what the answer was. In that gap the screen
+    holds the previous state while presenting itself as idle, and anything
+    rendered from `lastReply` is the reply to the last turn shown as the reply to
+    this one: press Send on a perfectly good number and the bot's greeting
+    appears in red for a second, reading exactly like a validation failure, until
+    the real state lands and the page moves on.
+
+    So the turn is not over until the state behind it is.
+  */
+  const [settling, setSettling] = useState(false);
 
   return {
-    busy: send.isPending,
+    busy: send.isPending || settling,
     submit: async (turn: { text?: string; callbackValue?: string }) => {
-      await send.mutateAsync({
-        clientMessageId: newTurnId(),
-        locale: browserLocale(),
-        ...turn,
-      });
-      await refresh();
+      setSettling(true);
+      try {
+        await send.mutateAsync({
+          clientMessageId: newTurnId(),
+          locale: browserLocale(),
+          ...turn,
+        });
+        await refresh();
+      } finally {
+        setSettling(false);
+      }
     },
   };
 }
@@ -180,19 +179,47 @@ const READY = [
   'Bank account for the payout',
 ];
 
-function PhoneStage({ state }: { state: FormState }) {
+function PhoneStage({
+  state,
+  onSent,
+}: {
+  state: FormState;
+  /**
+   * The number this screen has just sent, if anyone is waiting on it.
+   *
+   * Only the code screen passes one: it renders this same screen for **Back**,
+   * and needs to know which number to watch for coming back as the pending one.
+   * On the real phone stage nobody listens, because the server moving to `code`
+   * is the answer.
+   */
+  onSent?: (phone: string) => void;
+}) {
   const [phone, setPhone] = useState('');
   const [attempted, setAttempted] = useState(false);
+  /** What this screen found wrong with the number, before anything was sent. */
+  const [invalid, setInvalid] = useState<string | null>(null);
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
 
-  // E.164 for the server, "+60" shown as a prefix for the claimant — nobody
-  // types a country code into a form on their own phone.
+  /*
+    Checked here, then sent. E.164 for the server, "+60" shown as a prefix for
+    the claimant — nobody types a country code into a form on their own phone.
+
+    The check is not the server's job done twice. The server's refusal costs a
+    round trip and lands after a wait, by which time the screen has said a code
+    is on its way; a number one digit short is something this field can see for
+    itself, immediately, next to the box it is about.
+  */
   const send = () => {
-    const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
-    if (!digits) return;
+    const wrong = checkMobileNumber(phone);
+    if (wrong) {
+      setInvalid(wrong);
+      document.getElementById('phone')?.focus();
+      return;
+    }
     setAttempted(true);
-    void submit({ text: `+60${digits}` });
+    void submit({ text: toE164(phone) });
+    onSent?.(toE164(phone));
   };
 
   return (
@@ -233,8 +260,16 @@ function PhoneStage({ state }: { state: FormState }) {
                   Spaces and dashes go the same way, because people type them:
                   "012-345 6789" is how the number is written down.
                 */
-                onChange={event => setPhone(keepDigits(event.target.value))}
+                onChange={event => {
+                  setPhone(keepDigits(event.target.value));
+                  // Punish late, forgive early: the message stops being true
+                  // the moment they start fixing it, and leaving it in red
+                  // under a box they are correcting reads as "still wrong".
+                  setInvalid(null);
+                }}
                 onKeyDown={event => event.key === 'Enter' && send()}
+                aria-invalid={invalid ? true : undefined}
+                aria-describedby={invalid ? 'phone-error' : undefined}
                 className="w-full bg-transparent py-3 text-base focus:outline-none"
               />
             </div>
@@ -250,15 +285,25 @@ function PhoneStage({ state }: { state: FormState }) {
             </p>
             {/*
               `lastReply` is only an error once the claimant has tried
-              something. On a conversation that has just opened it is the bot's
-              *greeting* — "Hello, we handle insurance claims…" — and rendering
-              that in red as a `role="alert"` told everyone arriving at the form
-              that something had already gone wrong, before they had touched it.
-              A message is a failure only if it is a reply to an attempt.
+              something, **and** the answer to that attempt is in. On a
+              conversation that has just opened it is the bot's *greeting* —
+              "Hello, we handle insurance claims…" — and rendering that in red as
+              a `role="alert"` told everyone arriving at the form that something
+              had already gone wrong, before they had touched it. While a turn is
+              in flight it is the reply to the *previous* one, which is worse: it
+              appears at the moment of pressing Send and reads as a verdict on
+              the number just typed. A message is a failure only if it is the
+              reply to the attempt being made.
             */}
-            {attempted && state.lastReply && (
-              <p role="alert" className="text-xs text-destructive">
-                {state.lastReply}
+            {/*
+              One line, whoever is speaking. This screen's own objection wins
+              while it stands, because it is about the number now in the box —
+              the server's is about the one that was sent, and showing both
+              would have a claimant reading two verdicts on one field.
+            */}
+            {(invalid || (attempted && !busy && state.lastReply)) && (
+              <p id="phone-error" role="alert" className="text-xs text-destructive">
+                {invalid ?? state.lastReply}
               </p>
             )}
           </div>
@@ -269,12 +314,13 @@ function PhoneStage({ state }: { state: FormState }) {
               only action on the screen, and a pill hugging two words is a small
               target sitting in a lot of empty space.
             */}
-            <Button
-              size="lg"
-              className="w-full sm:w-auto"
-              disabled={busy || !phone.trim()}
-              onClick={send}
-            >
+            {/*
+              Live even on an empty field. A greyed-out button says no without
+              saying why, and on a screen whose hint runs three lines the
+              claimant reads that as the site being broken. Pressing it names
+              what is missing, which is the thing they can act on.
+            */}
+            <Button size="lg" className="w-full sm:w-auto" disabled={busy} onClick={send}>
               {busy ? t('sending') : t('sendCode')}
             </Button>
             {/*
@@ -334,12 +380,49 @@ function PhoneStage({ state }: { state: FormState }) {
 
 function CodeStage({ state }: { state: FormState }) {
   const [code, setCode] = useState('');
-  const [changingNumber, setChangingNumber] = useState(false);
-  const [newNumber, setNewNumber] = useState('');
   const [remaining, setRemaining] = useState(RESEND_SECONDS);
   const [attempted, setAttempted] = useState(false);
+  /*
+    Back, meaning back.
+
+    This screen used to answer **Back** by opening a panel titled "Send the code
+    to a different number" — the same panel the "Wrong number?" link opened, so
+    two controls did one thing and the one carrying the universal word was the
+    one not doing the universal thing.
+
+    There is no page to pop: the stage is the server's, and it is at `code`. But
+    the way *back* is the way the number arrived, and the gateway takes a new
+    number at this step and replaces the pending one. So Back re-renders the
+    number screen, and sending from it is the same turn the panel sent. One
+    screen fewer, one state fewer, and the word means what it says.
+  */
+  const [goingBack, setGoingBack] = useState(false);
+  /** The number sent from that screen, until the server says it is the pending one. */
+  const [awaiting, setAwaiting] = useState<string | null>(null);
   const { busy, submit } = useSimpleTurn();
   const t = copyFor(state.locale);
+
+  /*
+    Come back once the code is going to the number that was just typed.
+
+    Read from `pendingPhone` rather than from the turn resolving, because those
+    are different facts: a refused number resolves too, and bouncing off the
+    screen would take its refusal with it — the claimant would land here with no
+    idea why the number they gave was not taken. Re-entering the *same* number
+    satisfies it immediately, which is right: a fresh code has been sent to it.
+  */
+  const pending = state.pendingPhone ? keepDigits(state.pendingPhone) : null;
+  // Before the paint, not after: an ordinary effect leaves one frame in which
+  // the number screen is on show with the *new* pending number's confirmation
+  // under it — the code screen's message, on the wrong screen, in red.
+  useLayoutEffect(() => {
+    if (!awaiting || keepDigits(awaiting) !== pending) return;
+    setAwaiting(null);
+    setGoingBack(false);
+    setCode('');
+    setAttempted(false);
+    setRemaining(RESEND_SECONDS);
+  }, [awaiting, pending]);
 
   // Counts down once, from when this screen appeared. Not persisted: a reload
   // is a fair reason to be allowed another code, and the server's own per-number
@@ -371,21 +454,7 @@ function CodeStage({ state }: { state: FormState }) {
     setCode('');
   };
 
-  /**
-   * A different number, sent as an ordinary answer.
-   *
-   * The gateway already accepts a new number at this step and replaces the
-   * pending one — the chat says so in words ("send a different number instead").
-   * The form says it as a link, and neither needs a special endpoint.
-   */
-  const sendDifferentNumber = () => {
-    const digits = newNumber.replace(/\D/g, '').replace(/^0+/, '');
-    if (!digits) return;
-    setAttempted(false);
-    setCode('');
-    setChangingNumber(false);
-    void submit({ text: `+60${digits}` });
-  };
+  if (goingBack) return <PhoneStage state={state} onSent={setAwaiting} />;
 
   return (
     <PreClaimLayout
@@ -393,7 +462,7 @@ function CodeStage({ state }: { state: FormState }) {
       title="Check your messages"
       actions={
         <>
-          <Button variant="outline" disabled={busy} onClick={() => setChangingNumber(true)}>
+          <Button variant="outline" disabled={busy} onClick={() => setGoingBack(true)}>
             {t('back')}
           </Button>
           <Button disabled={busy || code.length < 6} onClick={confirm}>
@@ -418,10 +487,17 @@ function CodeStage({ state }: { state: FormState }) {
 
         <p className="text-sm text-muted-foreground">
           Sent on WhatsApp to <strong className="font-medium text-foreground">{state.pendingPhone ?? 'your number'}</strong>.{' '}
+          {/*
+            The same act as Back, said where the number is. A claimant reading
+            the number they were sent to is the moment they notice it is wrong,
+            and the fix should be under their thumb rather than at the foot of
+            the screen — but it goes to the same place, because there is only
+            one way to change it.
+          */}
           <button
             type="button"
             className="underline underline-offset-2"
-            onClick={() => setChangingNumber(true)}
+            onClick={() => setGoingBack(true)}
           >
             Wrong number?
           </button>
@@ -472,35 +548,6 @@ function CodeStage({ state }: { state: FormState }) {
             {state.lastReply}
           </p>
         )}
-
-        {changingNumber && (
-          <div className="mt-2 flex flex-col gap-2 rounded-xl border bg-background p-4">
-            <label htmlFor="new-number" className="text-sm font-semibold">
-              Send the code to a different number
-            </label>
-            <div className="flex items-center gap-2 rounded-lg border border-input px-3.5">
-              <span className="font-medium text-muted-foreground">+60</span>
-              <input
-                id="new-number"
-                type="tel"
-                inputMode="tel"
-                placeholder="12 345 6789"
-                value={newNumber}
-                onChange={event => setNewNumber(event.target.value)}
-                onKeyDown={event => event.key === 'Enter' && sendDifferentNumber()}
-                className="w-full bg-transparent py-2.5 text-base focus:outline-none"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" disabled={busy || !newNumber.trim()} onClick={sendDifferentNumber}>
-                Send code
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setChangingNumber(false)}>
-                {t('cancel')}
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </PreClaimLayout>
   );
@@ -541,9 +588,6 @@ function ConsentStage({ state }: { state: FormState }) {
           {state.consent?.title ?? 'Personal Data Protection Notice'}
         </h2>
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{state.consent?.body}</p>
-        {state.consent && (
-          <p className="text-xs text-muted-foreground">Version {state.consent.version}</p>
-        )}
       </div>
 
       {/*
@@ -752,17 +796,33 @@ function SubmittedStage({ state }: { state: FormState }) {
           <CheckIcon className="h-7 w-7" />
         </span>
       }
+      centred
+      /*
+        The reference sits with the heading rather than below the fold of it,
+        because on this page the reference *is* the outcome — it is the only
+        thing a claimant is asked to keep.
+      */
+      subtitle={
+        <>
+          Reference{' '}
+          <strong className="font-semibold text-foreground">{state.case?.caseNumber}</strong>. Keep
+          it — it is how we find your claim request.
+        </>
+      }
     >
-      <p className="text-[15px] leading-relaxed text-muted-foreground">
-        Reference{' '}
-        <strong className="font-semibold text-foreground">{state.case?.caseNumber}</strong>. Keep
-        it — it is how we find your claim request.
-      </p>
+      {/*
+        Three cards with air between them, not three rows of one card.
 
-      <ol className="flex flex-col gap-0 rounded-xl border bg-background">
+        They are three separate things that happen on three separate days, and
+        the design draws them apart for that reason: a divided list reads as one
+        block to get through, where separated cards read as steps to count off.
+        The numeral is filled rather than tinted for the same reason — it is a
+        position in a sequence, not a decorative bullet.
+      */}
+      <ol className="flex flex-col gap-2.5">
         {stages.map(([title, detail], index) => (
-          <li key={title} className="flex gap-3.5 border-b p-5 last:border-0">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          <li key={title} className="flex gap-3.5 rounded-xl border bg-background p-4">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {index + 1}
             </span>
             <div className="flex flex-col gap-1">
@@ -773,7 +833,7 @@ function SubmittedStage({ state }: { state: FormState }) {
         ))}
       </ol>
 
-      <p className="text-sm leading-relaxed text-muted-foreground">
+      <p className="text-center text-sm leading-relaxed text-muted-foreground">
         Anything to add or change? Our team will contact you on <strong>WhatsApp</strong>, on the
         number you verified — this page will not update.
       </p>
@@ -810,10 +870,9 @@ function StartAnother({ caseNumber }: { caseNumber?: string | null }) {
   if (isFormChannelSession()) return null;
 
   return (
-    <div className="flex flex-col gap-1.5 border-t pt-5">
+    <div className="flex flex-col items-center gap-1.5 border-t pt-5 text-center">
       <Button
         variant="outline"
-        className="self-start"
         onClick={() => {
           clearFormSession();
           window.location.reload();
@@ -891,6 +950,24 @@ function FlowStage({ state }: { state: FormState }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
+  /*
+    Punish late, forgive early.
+
+    A field is only ever marked after Continue was pressed, so the message is
+    news at the moment it appears. It stops being news the moment the claimant
+    acts on it: leaving "Please fill this in before continuing." in red under a
+    box they have just filled reads as "still wrong", and the obvious response
+    to that is to clear the box and try something else. Cleared on change
+    rather than on blur because a phone keyboard can hide the message, and the
+    field may never be blurred before Continue is pressed again.
+  */
+  const clearError = (stepId: string) =>
+    setErrors(current => {
+      if (!current[stepId]) return current;
+      const { [stepId]: _cleared, ...rest } = current;
+      return rest;
+    });
+
   // Where a returning claimant lands: the first section that is not finished,
   // or Review once nothing is outstanding.
   //
@@ -921,8 +998,38 @@ function FlowStage({ state }: { state: FormState }) {
       .map(step => [step.label, displayAnswer(step, answers[step.id])] as [string, string]),
   ];
 
-  /** One answer, moved to and sent — the Change link's whole job. */
-  const changeOne = async (step: FlowStep, value: string) => {
+  /**
+   * Store a file against a step, and report the id a turn can name it by.
+   *
+   * Shared by the section screens and the review screen rather than written
+   * twice: the review screen had no uploader at all, so Replace opened the
+   * picker, took a file and did nothing with it — `DocumentField` drops the
+   * file when no `onUpload` is passed, and it drops it in silence. The
+   * claimant saw the old filename still on the row and tried again.
+   *
+   * The re-read is part of the upload, not an afterthought: every row that
+   * names a document reads the *case* for its filename, because that is the
+   * copy that survives a reload. The server retires the document previously
+   * attached to this step, so after the refresh there is exactly one.
+   */
+  const uploadFor = async (step: FlowStep, file: File): Promise<string> => {
+    const stored = await uploadFormDocument(
+      file,
+      step.documentType ?? 'OTHER_DOCUMENT',
+      step.id
+    );
+    await refresh();
+    return stored.id;
+  };
+
+  /**
+   * One answer, moved to and sent — the Change link's whole job.
+   *
+   * Reports whether the server took it, so the caller can leave the editor
+   * open on a refusal. Closing it puts the claimant back on a row showing the
+   * value that was just rejected, with no sign anything went wrong.
+   */
+  const changeOne = async (step: FlowStep, value: string): Promise<boolean> => {
     setBusy(true);
     setErrors({});
     try {
@@ -937,9 +1044,10 @@ function FlowStage({ state }: { state: FormState }) {
       );
       if (!result.ok && result.error) {
         setErrors({ [result.error.stepId]: result.error.message });
-        return;
+        return false;
       }
       await refresh();
+      return true;
     } finally {
       setBusy(false);
     }
@@ -1038,7 +1146,11 @@ function FlowStage({ state }: { state: FormState }) {
         currentStepId: state.case!.currentStepId,
         values,
         answers,
-        steps: active.steps.filter(step => step.answerType !== 'confirm'),
+        // Confirm steps included: a notice in the section is acknowledged by
+        // continuing past it, the way tapping Confirm acknowledges it in a
+        // thread. `missingRequired` still ignores them — there is nothing in
+        // one to fill in.
+        steps: active.steps,
         documents: state.case!.documents,
       };
 
@@ -1149,6 +1261,7 @@ function FlowStage({ state }: { state: FormState }) {
           busy={busy}
           error={Object.values(errors)[0] ?? null}
           onChange={changeOne}
+          onUpload={uploadFor}
           onSubmit={onSubmit}
           onBack={() => previous && setActiveId(previous.id)}
           locale={state.locale}
@@ -1158,36 +1271,7 @@ function FlowStage({ state }: { state: FormState }) {
         {rowsFor(active.steps).map(row => (
           <div
             key={row.map(step => step.id).join('+')}
-            /*
-                  A pair stays a pair on a phone. Trip start and trip end are
-                  one question asked twice, and a date box is narrow enough for
-                  two to fit at 390px — stacking them puts a scroll between two
-                  halves that are read together, and that is where a return
-                  date gets typed into the start box.
-                */
-                /*
-                  A pair of plain *dates* stays a pair on a phone: trip start
-                  and trip end are one question asked twice, they are narrow,
-                  and putting a scroll between them is where a return date gets
-                  typed into the start box.
-
-                  Nothing else is. A date *and time* needs half again the width
-                  — at 390px, side by side, "01-Sep-2026 09:40" was clipped to
-                  "01-Sep-2026 0" behind the calendar button, so the departure
-                  times could not be read back at all. Text pairs fare no
-                  better: the account number and account holder end up half a
-                  screen each with their hints wrapping four lines.
-
-                  Which is how the design has it: dates paired, times and text
-                  stacked.
-                */
-                className={
-                  row.length === 2
-                    ? row.every(step => step.answerType === 'date')
-                      ? 'grid grid-cols-2 gap-3 sm:gap-4'
-                      : 'grid gap-4 sm:grid-cols-2'
-                    : undefined
-                }
+            className={rowClassFor(row)}
           >
             {row.map(step => (
               <FieldControl
@@ -1196,26 +1280,17 @@ function FlowStage({ state }: { state: FormState }) {
                 disabled={busy}
                 error={errors[step.id]}
                 value={values[step.id] ?? String(answers[step.id] ?? '')}
-                onChange={value => setValues(current => ({ ...current, [step.id]: value }))}
+                onChange={value => {
+                  setValues(current => ({ ...current, [step.id]: value }));
+                  clearError(step.id);
+                }}
                 attached={
                   state.case!.documents.find(document => document.stepId === step.id) ?? null
                 }
                 onUpload={async file => {
-                  const stored = await uploadFormDocument(
-                    file,
-                    step.documentType ?? 'OTHER_DOCUMENT',
-                    step.id
-                  );
-                  setValues(current => ({ ...current, [step.id]: stored.id }));
-                  /*
-                    The row reads "Uploaded — filename" from the *case*, not
-                    from this component's state, because that is the copy that
-                    survives a reload. So the upload has to be followed by a
-                    re-read or the file lands on the server and the screen goes
-                    on saying "Required" — which reads as a failed upload and
-                    invites the claimant to send it again.
-                  */
-                  await refresh();
+                  const storedId = await uploadFor(step, file);
+                  setValues(current => ({ ...current, [step.id]: storedId }));
+                  clearError(step.id);
                 }}
               />
             ))}

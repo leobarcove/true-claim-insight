@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   formatDateAnswer,
   TRAVEL_CLAIM_TYPE_LABELS,
@@ -15,15 +15,17 @@ import {
   useRefreshAssistedCase,
   useSaveAssistedAnswer,
   useSubmitAssistedCase,
-  type ResolvedClaimant,
+  type ClaimSubject,
 } from '@/hooks/use-agent-intake';
 import { useStrayDropGuard } from '@/hooks/use-stray-drop-guard';
 
 import { FieldControl } from '../form/field-control';
+import { focusField } from '../form/focus-field';
 import { FormShell, SectionLayout } from '../form/layout';
 import { ReviewStage, type ReviewRow } from '../form/review';
-import { rowsFor, sectionsFor, type ResolvedSection } from '../form/sections';
+import { rowClassFor, rowsFor, sectionsFor, type ResolvedSection } from '../form/sections';
 import { CheckIcon } from '../form/icons';
+import { missingRequired } from '../form/submit-engine';
 import { AgentBand } from './band';
 import { asDateAndTime, asTime } from './when';
 import { AgentSignInPage } from './sign-in';
@@ -48,7 +50,7 @@ import { AgentStartClaim } from './start-claim';
 
 export function AgentFormPage() {
   const [signedIn, setSignedIn] = useState(() => agentSession.read() !== undefined);
-  const [claimant, setClaimant] = useState<ResolvedClaimant | null>(null);
+  const [claimant, setClaimant] = useState<ClaimSubject | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [consent, setConsent] = useState<{ attestedAt: string; noticeVersion: number } | null>(
     null
@@ -104,7 +106,7 @@ function AssistedSections({
 }: {
   caseId: string;
   agent: ReturnType<typeof agentUser.read>;
-  claimant: ResolvedClaimant | null;
+  claimant: ClaimSubject | null;
   consent: { attestedAt: string; noticeVersion: number } | null;
   onStartAnother: () => void;
 }) {
@@ -117,6 +119,19 @@ function AssistedSections({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /*
+    Punish late, forgive early — the claimant's form's rule, and the same
+    reasoning. A field is only marked after Continue was pressed, so it is news
+    when it appears; it stops being news the moment the agent acts on it, and
+    leaving it red under a box they are correcting reads as "still wrong".
+  */
+  const clearError = (stepId: string) =>
+    setErrors(current => {
+      if (!current[stepId]) return current;
+      const { [stepId]: _cleared, ...rest } = current;
+      return rest;
+    });
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -125,6 +140,35 @@ function AssistedSections({
     () => (data?.flow ? sectionsFor(data.flow, answers) : null),
     [data?.flow, answers]
   );
+
+  /*
+    The name is already known, so the flow asks the agent to confirm it rather
+    than to type it again.
+
+    It was typed on the lookup screen and it is on the claimant's record — the
+    same name, for the same purpose, asked twice one screen apart. Re-keying it
+    is not merely tedious: two spellings of one person's name is exactly what
+    the "does it match the IC and the bank account?" hint exists to prevent, and
+    the second typing is the one nobody checks.
+
+    Seeded into `values`, not merely displayed. A value that showed in the box
+    but was not a pending answer would be reported missing by the required-field
+    guard and never sent — a full box with an error under it, which is worse
+    than an empty one. Seeded once, and never over an answer the case already
+    holds or a correction the agent has started, so it prefills without ever
+    overwriting.
+  */
+  const knownName = claimant?.fullName?.trim();
+  useEffect(() => {
+    if (!knownName) return;
+    const alreadyAnswered = String(answers['claimant-name'] ?? '').trim() !== '';
+    if (alreadyAnswered) return;
+    setValues(current =>
+      current['claimant-name'] === undefined
+        ? { ...current, 'claimant-name': knownName }
+        : current
+    );
+  }, [knownName, answers]);
 
   if (isLoading || !data || !view) {
     return (
@@ -179,12 +223,88 @@ function AssistedSections({
     return true;
   };
 
+  /**
+   * Store a file against a step, and report the id an answer can name it by.
+   *
+   * Two steps, and the second is easy to forget. Uploading stores the bytes and
+   * attaches them to the case; it does *not* answer the question. The
+   * claimant's path records the answer on the turn that names the stored id —
+   * this path has to do it explicitly, and without it the document sits on the
+   * case while the step stays open and the section refuses to advance, with the
+   * file plainly visible on screen.
+   *
+   * Shared with the review screen, which had no uploader at all: Replace opened
+   * the picker, took a file and dropped it in silence.
+   */
+  const uploadFor = async (step: FlowStep, file: File): Promise<string> => {
+    const stored = await uploadAssistedDocument(
+      caseId,
+      file,
+      step.documentType ?? 'OTHER_DOCUMENT',
+      step.id
+    );
+    await refresh();
+    return stored.id;
+  };
+
   const onContinue = async () => {
     setBusy(true);
     setErrors({});
     try {
+      /*
+        Say what is missing before sending anything.
+
+        The same guard the claimant's form carries, and it is needed here for
+        the same reason: an empty required field is not a *changed* field, so
+        the loop below finds nothing to send for it and Continue does nothing
+        whatsoever — no movement, no message. On this surface it is worse than
+        on the claimant's, because the agent is on a call while it happens and
+        the only thing to say is "it is not doing anything".
+
+        Checked in one pass rather than left to the server, which can only
+        refuse one question at a time: an agent who has filled in none of six
+        would otherwise be walked through them one refusal per press.
+      */
+      const missing = missingRequired({
+        currentStepId: data.case.currentStepId,
+        values,
+        answers,
+        // Confirm steps included, as on the claimant's form: `missingRequired`
+        // ignores them, and the loop below acknowledges them.
+        steps: active.steps,
+        documents: data.case.documents,
+      });
+      if (missing.length > 0) {
+        setErrors(
+          Object.fromEntries(
+            missing.map(step => [
+              step.id,
+              step.answerType === 'document'
+                ? 'Please add this document before continuing.'
+                : 'Please fill this in before continuing.',
+            ])
+          )
+        );
+        focusField(missing[0].id);
+        return;
+      }
+
       for (const step of active.steps) {
-        if (step.answerType === 'confirm') continue;
+        /*
+          A notice is acknowledged by continuing past it.
+
+          `medical-review-note` is a required `confirm` step — the chat shows it
+          with a Confirm button and records `'true'`. This loop used to skip
+          every confirm step outright, so a medical claim entered here reached
+          the review with a required step still open: finished by the form's
+          reckoning, unfinished by the server's.
+        */
+        if (step.answerType === 'confirm') {
+          if (step.isReview) continue;
+          if (String(answers[step.id] ?? '') !== '') continue;
+          if (!(await saveOne(step, 'true'))) return;
+          continue;
+        }
 
         const entered = values[step.id];
         const existing = answers[step.id];
@@ -330,11 +450,14 @@ function AssistedSections({
                 setBusy(true);
                 setErrors({});
                 try {
-                  if (await saveOne(step, value)) await refresh();
+                  if (!(await saveOne(step, value))) return false;
+                  await refresh();
+                  return true;
                 } finally {
                   setBusy(false);
                 }
               }}
+              onUpload={uploadFor}
               onSubmit={onSubmit}
               onBack={() => previous && setActiveId(previous.id)}
             />
@@ -356,36 +479,7 @@ function AssistedSections({
             {rowsFor(active.steps).map(row => (
               <div
                 key={row.map(step => step.id).join('+')}
-                /*
-                  A pair stays a pair on a phone. Trip start and trip end are
-                  one question asked twice, and a date box is narrow enough for
-                  two to fit at 390px — stacking them puts a scroll between two
-                  halves that are read together, and that is where a return
-                  date gets typed into the start box.
-                */
-                /*
-                  A pair of plain *dates* stays a pair on a phone: trip start
-                  and trip end are one question asked twice, they are narrow,
-                  and putting a scroll between them is where a return date gets
-                  typed into the start box.
-
-                  Nothing else is. A date *and time* needs half again the width
-                  — at 390px, side by side, "01-Sep-2026 09:40" was clipped to
-                  "01-Sep-2026 0" behind the calendar button, so the departure
-                  times could not be read back at all. Text pairs fare no
-                  better: the account number and account holder end up half a
-                  screen each with their hints wrapping four lines.
-
-                  Which is how the design has it: dates paired, times and text
-                  stacked.
-                */
-                className={
-                  row.length === 2
-                    ? row.every(step => step.answerType === 'date')
-                      ? 'grid grid-cols-2 gap-3 sm:gap-4'
-                      : 'grid gap-4 sm:grid-cols-2'
-                    : undefined
-                }
+                className={rowClassFor(row)}
               >
                 {row.map(step => (
                   <FieldControl
@@ -394,27 +488,17 @@ function AssistedSections({
                     disabled={busy}
                     error={errors[step.id]}
                     value={values[step.id] ?? String(answers[step.id] ?? '')}
-                    onChange={value => setValues(current => ({ ...current, [step.id]: value }))}
+                    onChange={value => {
+                      setValues(current => ({ ...current, [step.id]: value }));
+                      clearError(step.id);
+                    }}
                     attached={
                       data.case.documents.find(document => document.stepId === step.id) ?? null
                     }
                     onUpload={async file => {
-                      // Two steps, and the second is easy to forget. Uploading
-                      // stores the bytes and attaches them to the case; it does
-                      // *not* answer the question. The claimant's path records
-                      // the answer on the turn that names the stored id — this
-                      // path has to do it explicitly, and without it the
-                      // document sits on the case while the step stays open and
-                      // the section refuses to advance, with the file plainly
-                      // visible on screen.
-                      const stored = await uploadAssistedDocument(
-                        caseId,
-                        file,
-                        step.documentType ?? 'OTHER_DOCUMENT',
-                        step.id
-                      );
-                      setValues(current => ({ ...current, [step.id]: stored.id }));
-                      await refresh();
+                      const storedId = await uploadFor(step, file);
+                      setValues(current => ({ ...current, [step.id]: storedId }));
+                      clearError(step.id);
                     }}
                   />
                 ))}
@@ -443,7 +527,7 @@ function AssistedSubmitted({
   onStartAnother,
 }: {
   caseNumber: string;
-  claimant: ResolvedClaimant | null;
+  claimant: ClaimSubject | null;
   agent: ReturnType<typeof agentUser.read>;
   consent: { attestedAt: string; noticeVersion: number } | null;
   onStartAnother: () => void;
@@ -475,11 +559,28 @@ function AssistedSubmitted({
               `${agent?.fullName ?? 'you'}${agent?.tenantName ? ` · ${agent.tenantName}` : ''}` +
                 (consent ? ` · ${asDateAndTime(consent.attestedAt)}` : ''),
             ],
-            ['Consent', `Agent attested verbal${consent ? ` · notice v${consent.noticeVersion}` : ''}`],
+            /*
+              The notice version is recorded, not printed. It is what makes the
+              attestation provable and it is on the consent row in the database
+              — but "notice v1" on a receipt is a document-control detail shown
+              to somebody who is not doing document control, and the agent may
+              well read it out to the claimant as if it meant something to them.
+            */
+            ['Consent', 'Agent attested verbal'],
           ].map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-4 border-b py-2.5 last:border-0">
+            /*
+              Stacked on a phone, opposed from `sm`. "Entered by" against
+              "Faiz Rahman · Pacific Adjusters · 14 Aug 2026, 11:07" in 390px
+              leaves the value about 200px to wrap into and strands the label
+              beside three ragged lines — a term and its value that no longer
+              read as a pair, which is the one thing this list is for.
+            */
+            <div
+              key={label}
+              className="flex flex-col gap-0.5 border-b py-2.5 last:border-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+            >
               <dt className="text-sm text-muted-foreground">{label}</dt>
-              <dd className="m-0 text-sm font-semibold">{value}</dd>
+              <dd className="m-0 text-sm font-semibold sm:text-right">{value}</dd>
             </div>
           ))}
         </dl>

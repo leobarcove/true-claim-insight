@@ -1,4 +1,4 @@
-import type { CaseAnswers, CaseFlow, FlowStep } from '@tci/shared-types';
+import { pathSteps, type CaseAnswers, type CaseFlow, type FlowStep } from '@tci/shared-types';
 
 /**
  * Which section of the form each question belongs to.
@@ -83,6 +83,32 @@ const FIELD_PAIRS: ReadonlyArray<readonly [string, string]> = [
  * and working it out inside the render would put layout logic in three places —
  * desktop, phone, and the review page.
  */
+/**
+ * How a row lays out.
+ *
+ * Beside `rowsFor` rather than in the two components that draw it: the pairing
+ * and the columns are one decision, and split across the customer form and the
+ * agent form they drifted the first time one of them was touched.
+ *
+ * **Pairs are a wide-screen affordance.** On a phone every field takes the full
+ * width, whatever it holds. That used to be true of everything except two plain
+ * dates, which stayed side by side at 390px — and the seam showed: trip start
+ * and trip end sat in a row while scheduled and actual departure, a pair by the
+ * same reasoning and arguably a tighter one, stacked underneath. The difference
+ * was never about meaning. It was that a date *and time* does not fit in half a
+ * phone — at 390px it clipped to "01-Sep-2026 0" behind the calendar button —
+ * so an exception was made for the type that happened to fit.
+ *
+ * It only just fitted. The card's interior at 390px is 318px, so a column is
+ * 153px: a date and a calendar button with nothing spare, one longer locale
+ * format or one larger system font from the same clipping. Two fields that are
+ * read together are not separated by stacking them anyway — with no hints they
+ * are 70px each, both on screen, 16px apart.
+ */
+export function rowClassFor(row: FlowStep[]): string | undefined {
+  return row.length === 2 ? 'grid gap-4 sm:grid-cols-2' : undefined;
+}
+
 export function rowsFor(steps: FlowStep[]): FlowStep[][] {
   const byId = new Map(steps.map(step => [step.id, step]));
   const paired = new Set<string>();
@@ -140,6 +166,8 @@ const SECTION_OF_STEP: Record<string, SectionId> = {
   'contents-description': 'what-happened',
   'estimated-amount': 'what-happened',
   'cancellation-reason': 'what-happened',
+  'deceased-relationship': 'what-happened',
+  'death-certificate-issued': 'what-happened',
   'treatment-country': 'what-happened',
   'hospital-name': 'what-happened',
   'diagnosis-description': 'what-happened',
@@ -204,7 +232,30 @@ export interface SectionsView {
 export function sectionsFor(flow: CaseFlow, answers: CaseAnswers): SectionsView {
   const grouped = new Map<SectionId, FlowStep[]>(SECTIONS.map(section => [section.id, []]));
 
+  /*
+    Only the steps these answers actually lead through.
+    
+    The form used to lay out `flow.steps` whole, which reads every question in
+    the flow rather than the ones this claim asks — so a trip cancelled by a
+    natural disaster demanded a **medical report**, marked Required, on the
+    evidence screen. The flow had branched correctly all along
+    (`cancellation-reason` switching to the medical report, the bereavement
+    steps, or straight to the booking invoice); the conversation honoured it, because
+    it walks a step at a time, and the form did not, because it walked a list.
+    
+    It was not only an odd question. That step is required and off the path, so
+    the server's own `missingSteps` never asked for it while the form's guard
+    always did — an evidence section that could not be completed by uploading
+    anything, on a claim the server considered ready.
+    
+    `pathSteps` is the flow's own resolver, the one the gateway and the submit
+    guard use. Sharing it is the point: a second walk written here would be a
+    second opinion about which questions this claim asks.
+  */
+  const onPath = pathSteps(flow, answers);
+
   for (const step of flow.steps) {
+    if (!onPath.has(step.id)) continue;
     grouped.get(sectionOf(step))!.push(step);
   }
 

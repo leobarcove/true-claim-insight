@@ -316,7 +316,7 @@ this site.
 | Step | Claimant | Agent |
 |---|---|---|
 | 1 | Mobile number → WhatsApp code to *their* phone | Sign in (agent's own mobile → code) |
-| 2 | Read the notice, tap **I agree** | **Who is this for** — find the claimant by the policy mobile; existing records are matched and shown, new ones are typed in. No code is sent. |
+| 2 | Read the notice, tap **I agree** | **Who is this for** — look the claimant up; existing records are matched and shown, new ones are typed in but **not created here**. No code is sent. |
 | 3 | — | **Verbal consent declaration** — the notice, the attestation tick, how they spoke (phone / in person / video / other), an optional call reference |
 | 4–9 | Claim type → You & your trip → What happened → Evidence → Payout → Review | **Identical** |
 | End | Submitted | Submitted, plus who it was handed to and who entered it |
@@ -327,6 +327,52 @@ screen ever does. It names the claimant being entered for, their number, the con
 made, then `Verbal consent attested by you at 10:42 · notice v3 (EN)`), and the signed-in
 agent with a sign-out link. Amber rather than the site green deliberately: it is a standing
 reminder that the person typing is not the person the data is about.
+
+At phone width the strip is redrawn rather than wrapped. The desktop row becomes four lines
+at 390px and the line that wraps off the bottom is the consent state — the one thing an
+agent must not lose track of, pushed under the fold by the agent's own name. So: the
+claimant on top, consent on a tinted row of its own, and the agent's identity reduced to a
+44px initials button that opens an account panel. The button **opens a panel; it does not
+sign out on the tap.** A circle that ends the session and discards a half-entered claim,
+sitting beside the name an agent reads constantly, is a trap — the destructive action lives
+behind a button that says what it is and what it costs.
+
+**Nothing is written before consent, and nothing is read either.** The first
+screen makes no request at all: the agent types the number, the IC and the name
+the claimant gives them and continues. A search that must be run, waited for and
+read before Continue goes live is a step between an agent on a call and the
+claim, for an answer that changes nothing they then do — so whether we already
+hold this person is settled server-side at the declaration, where `resolve`
+matches on the IC first and the number second and creates a record only if there
+is none. `POST /claimants/lookup` remains, read-only and unused by the form.
+
+The cost, recorded because it is real: the agent no longer sees *"we hold this
+person, on a different number"*. `findOrCreate` fills only blank fields, so an
+existing claimant's name and IC are never overwritten — but a claim matched by
+IC still attaches to the record's own number rather than the one the agent is
+speaking to, and now says so to nobody. If that bites, the place to surface it
+is the declaration screen, after the resolve, not a search before it. The claimant record, the consent row and the
+Case are all created together on **Record consent and continue**, in that order — the order
+is what makes a partial failure safe, since a claimant with no consent is a row a retry
+finds and reuses, where a Case with no consent would be a claim nobody agreed to.
+
+This was wrong until 3 September 2026: **Find claimant** called the find-*or-create*
+endpoint, so a mistyped digit left a permanent claimant row carrying a name and an IC, with
+nothing in the flow to remove it once the agent noticed and retyped. The litter was the
+lesser half. That row is personal data, written before consent, on a screen that told the
+agent nothing was saved and one screen before another that says no details may be entered
+until consent is recorded. `POST /claimants/resolve` still exists and is still
+find-or-create; it is now called once, from the declaration screen.
+
+**What identifies a claimant is the IC, not the phone.** Both `lookup` and `resolve` match
+on the NRIC blind index first and fall back to the phone number — an IC identifies a
+person, a phone number identifies a handset. The consequence has to be visible: a claimant
+can be found on a number we do not hold for them, and the Case then carries the number on
+their record rather than the one the agent is speaking to. The lookup response therefore
+returns `matchedOn`, and the screen says *"Found by IC — we hold +60… for them, not the
+number above."* A half-typed IC is refused before the lookup runs, because it hashes to
+nothing, misses a claimant we already hold, and would open a second record for them at the
+declaration screen.
 
 **What is actually new on the server — three things, not eight routes.**
 
@@ -376,7 +422,8 @@ reachable.
   capture form resolves a claimant from a phone number with no OTP
   (`apps/api-gateway/src/cases/cases.controller.ts:74`, `findOrCreate`) and creates the
   case as `channel: STAFF` / `initiatedBy: STAFF` / `createdByUserId`. The **Who is this
-  for** screen does exactly this. Note that the existing page captures **no consent**, and
+  for** screen does the same resolution, but splits the read from the write: it *looks up*,
+  and the create happens at the declaration (above). Note that the existing page captures **no consent**, and
   `CasesService.create` refuses to open a Case without it — which is why staff capture
   fails today for any claimant who has not consented on another channel. The declaration
   screen closes that for the agent form; the portal page needs its own, simpler fix (below).
@@ -437,6 +484,12 @@ An explicit map from step id to section. Five flows, about twenty step ids betwe
 
 **Fallback:** anything unrecognised goes to *What happened*, so a step the map has not heard of still renders instead of vanishing.
 
+**The notice version is recorded, not printed.** Neither the claimant's consent screen nor
+the agent's notice extract shows `Version n · EN` beside the heading. The version is what
+makes the consent provable and it is on the record, in the band and on the receipt — but a
+version stamp beside the wording being read aloud is a document-control detail shown to
+someone who is not doing document control.
+
 This lives in claimant-web, not shared-types — only the form uses it. It is a plain map rather than a rule engine because there is no flow editor UI, so no one can currently produce a flow with renamed steps. Revisit if that changes; the fallback holds the line until then.
 
 Alongside it, `sectionsFor(flow, answers)` returns the six sections with their steps, whether each is complete, and the first incomplete one — driving the progress bar, the section list, and where someone lands when they return.
@@ -444,6 +497,70 @@ Alongside it, `sectionsFor(flow, answers)` returns the six sections with their s
 **2.2 Field controls** — one control per `answerType`
 
 text · date (native picker, shown dd/mm/yyyy) · datetime · number (RM prefix, numeric keypad) · choice (radio cards up to 6, searchable list above that; `allowOther` accepts typed text) · phone · document (drop zone on desktop, camera on phone) · confirm (card with one action).
+
+Two rules across all of them:
+
+- **`FlowStep.placeholder` is an example, never a second label.** A box labelled "Full name"
+  with "Full name" greyed inside it says nothing and vanishes on the first keystroke. What
+  it answers is the question the label cannot: how much of a name (does `binti` belong in
+  it?), whether a flight number carries the airline code. It lives on the step beside
+  `prompt`, `label` and `hint`, so both form surfaces show the same example and neither can
+  drift from what the server accepts. The chat ignores it — a bot bubble has no empty box.
+  **Every field that draws a box has one**, asserted against `drawsTextBox` — the control's
+  own rule, asked rather than copied, so a type that changes how it renders shows up as a
+  failing test instead of a quietly bare field. What is exempt is what has nowhere to put
+  one: a short closed list draws radio cards, a document draws a filename row, a confirm
+  draws a card, and a date or datetime draws the browser's own `dd/mm/yyyy` mask, which
+  ignores `placeholder` outright.
+- **What you will need is a chat message, not a form panel.** `whatYouWillNeed`
+  is branch-aware — a document reachable only down an arm the answers have not
+  taken is marked *(only if it applies)*, so trip cancellation does not send the
+  person whose flight was cancelled by a typhoon looking for a death
+  certificate. It is sent by the conversation, where there is no other way to
+  see what is coming. The forms do not draw it: a section list, a step bar and
+  six named sections already show the shape of the claim, and a list of
+  documents above the first question is a wall to read before the first answer.
+  Tried on both surfaces on 3 September 2026 and removed the same day.
+- **Overlay wording resolves per channel and per locale on every surface.**
+  `flow_overlays` carries the per-channel, per-locale wording, and three callers
+  reached it inconsistently: the gateway passed the real channel, `/state`
+  hardcoded `WEB_CHAT` even though it serves the web *form* as well, and
+  `/cases/:id/flow` passed nothing at all — so the authenticated surfaces could
+  never show Malay. `/state` now passes `binding.channel` and `/cases/:id/flow`
+  takes a `?locale=` (narrowed to `en`/`ms`) and dresses with the Case's own
+  channel. Inert while no overlay is published, which is exactly why it was
+  invisible.
+- **The agent form prefills the claimant's name.** It was typed on the lookup screen one
+  step earlier and is on the claimant's record; asking for it again invites two spellings of
+  one person's name, which is precisely what that field's own hint about matching the IC and
+  the bank account exists to prevent. Seeded into pending `values` rather than merely shown,
+  or the required-field guard would report a full box as missing — and seeded only where the
+  case holds no answer and the agent has typed nothing, so it prefills without ever
+  overwriting.
+- **The form asks what the conversation asks.** Telegram, WhatsApp and the web
+  chat walk the flow a step at a time through `evaluateNext`, so they cannot ask
+  a question the answers route around. The form draws a whole section at once,
+  which is the only way the two can disagree — and it did, twice:
+  `sectionsFor` laid out `flow.steps` whole, so a trip cancelled by a **natural
+  disaster** was asked for a *medical report*, and the loop skipped every
+  `confirm` step, so a **medical** claim reached the review with the required
+  specialist-review notice still unanswered. Both were invisible from the form's
+  side: it thought the claim finished and the server did not, or it demanded a
+  document the server never wanted, so an evidence section could not be
+  completed by uploading anything. `sectionsFor` now filters through `pathSteps`
+  — the flow's own resolver, the one the gateway and the submit guard use — and
+  `stepsToSend` acknowledges a notice with `'true'`, exactly as tapping Confirm
+  does in a thread. The property is asserted over every combination of every
+  branch input in every flow, so a branch added later is covered the day it is
+  published. One `sectionsFor` serves both form surfaces, so both are fixed.
+  (Only one branch exists today: `cancellation-reason` in `ILLNESS` or
+  `DEATH_OF_RELATIVE` → medical report, else straight to the booking invoice.)
+- **A pair of fields is a wide-screen affordance.** `FIELD_PAIRS` declares which fields sit
+  together; `rowClassFor` gives every pair `sm:grid-cols-2`, so on a phone each field takes
+  the full width whatever it holds. Two plain dates used to be excepted and stayed paired at
+  390px, which put trip start and trip end in a row while scheduled and actual departure —
+  a pair by the same reasoning — stacked beneath. The seam tracked the field *type*, not
+  what the fields meant, and the date only just fitted at 153px a column anyway.
 
 This is `AnswerControl` from `apps/claimant-web/src/pages/cases/new.tsx`, reshaped for a form. Keep it in claimant-web for now.
 
@@ -630,9 +747,17 @@ sustained flood, where threefold changes nothing about whether it is stopped.
 **claimant-web — the agent path** (same Vitest setup; `apps/adjuster-portal` still has no
 test harness, and this path no longer lives there)
 
-- The assisted form requires the attestation before any personal-data answer, displays the
-  approved notice version, sends turns in server path order, preserves validation errors at
-  the correct field, and shows agent provenance on review.
+- The assisted form requires the attestation before any personal-data answer, sends turns in
+  server path order, preserves validation errors at the correct field, and shows agent
+  provenance on review.
+- **Find claimant writes nothing.** Assert the endpoint, because it is the only visible
+  difference: both calls succeed and both draw a card, and what separates them is a row in a
+  database no rendering test can see. Cover the not-on-file card, the editing of a number
+  dropping a stale answer, the half-typed IC being refused before any call, and the typed
+  details being carried forward with no id.
+- The initials button opens the account panel and does not sign out on the tap.
+- Both forms mark every missing required field in one pass and clear each mark as soon as
+  the field is corrected.
 - **The door decides.** Assert against the source, the way the services do: no client-set
   value — field, query parameter or header — can put the app into assisted mode. A claimant
   session on the public host renders the claimant first screen and nothing else.

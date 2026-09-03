@@ -103,7 +103,66 @@ export interface ResolvedClaimant {
   existing: boolean;
 }
 
-/** Who this claim is for. Finds the claimant, or creates one. */
+/**
+ * Who this claim is for, whether or not a record exists for them yet.
+ *
+ * The lookup screen works in this shape rather than in `ResolvedClaimant`,
+ * because before consent is attested there is deliberately nothing with an id:
+ * the agent has typed a number, a name and an IC, and none of it has been
+ * written. `id` fills in at the moment consent is recorded.
+ */
+export interface ClaimSubject {
+  phoneNumber: string;
+  fullName: string | null;
+  nric: string | null;
+  nricLast4: string | null;
+  /** The record's id, once there is a record. Null until consent is attested. */
+  id: string | null;
+  /** True when we already held this person when we looked. */
+  existing: boolean;
+}
+
+export interface ClaimantLookup {
+  existing: boolean;
+  /**
+   * Which field found them.
+   *
+   * An IC identifies a person and a phone number identifies a handset, so the
+   * IC wins — which means a claimant can be found on a number that is not the
+   * one we hold for them. The screen has to say so, or an agent attaches a
+   * claim to a record the firm will later ring on a different number.
+   */
+  matchedOn?: 'phone' | 'nric';
+  claimant: ResolvedClaimant | null;
+}
+
+/**
+ * Whether we already hold this person. Writes nothing.
+ *
+ * What **Find claimant** calls. It used to call `resolve` below, which creates
+ * — so a mistyped digit left a claimant row behind, and the row held a name and
+ * an IC that had been stored before anybody consented to storing them.
+ */
+export function useLookupClaimant() {
+  return useMutation({
+    mutationFn: async (input: { phoneNumber: string; nric?: string }) => {
+      const { data } = await apiClient.post<{ data: ClaimantLookup }>(
+        '/claimants/lookup',
+        input,
+        { headers: agentSession.headers() }
+      );
+      return ((data as any).data ?? data) as ClaimantLookup;
+    },
+  });
+}
+
+/**
+ * Who this claim is for. Finds the claimant, or creates one.
+ *
+ * Called once, from the declaration screen, as the first of the three writes
+ * that consent authorises — the claimant, the consent row and the case. Never
+ * from the lookup screen: see `useLookupClaimant`.
+ */
 export function useResolveClaimant() {
   return useMutation({
     mutationFn: async (input: { phoneNumber: string; fullName?: string; nric?: string }) => {
@@ -113,6 +172,37 @@ export function useResolveClaimant() {
         { headers: agentSession.headers() }
       );
       return ((data as any).data ?? data) as ResolvedClaimant;
+    },
+  });
+}
+
+export interface ConsentNotice {
+  title: string;
+  body: string;
+  version: number | string;
+  locale?: string;
+  approvedAt?: string;
+}
+
+/**
+ * The approved notice, fetched rather than reproduced.
+ *
+ * The agent has to read this to the claimant word for word, and consent is
+ * recorded against the exact approved version — so a copy written into this
+ * page would be a second source that drifts, and the day it drifts the consent
+ * on file is against wording nobody heard. Telling the agent to find it
+ * somewhere else was the same problem wearing a different hat: there is no
+ * claimant screen in front of them.
+ */
+export function useConsentNotice(locale = 'en') {
+  return useQuery({
+    queryKey: ['consent-notice', locale] as const,
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: ConsentNotice }>('/consent/notice', {
+        params: { purpose: 'CLAIM_PROCESSING', locale },
+        headers: agentSession.headers(),
+      });
+      return ((data as any).data ?? data) as ConsentNotice;
     },
   });
 }

@@ -174,6 +174,23 @@ export function stepsToSend(context: SubmitContext): Array<{ step: FlowStep; val
         if (attached) return { step, value: ATTACHED };
       }
 
+      /*
+        A notice, acknowledged by moving past it.
+
+        `medical-review-note` is a required `confirm` step: the chat shows it
+        with a Confirm button and records `'true'` when it is tapped. The form
+        drew the same text and answered nothing, so a medical claim reached the
+        review with a required step still open — the form's own guard skipped it
+        (there is nothing to fill in) while the server's `missingSteps` counted
+        it, which is a claim the form thinks is finished and the server does not.
+
+        Continuing the section is the tap. The notice is on screen, above the
+        button, exactly as it is above the button in a thread.
+      */
+      if (step.answerType === 'confirm' && !step.isReview && unanswered) {
+        return { step, value: 'true' };
+      }
+
       if (step.optional && untouched && unanswered) return { step, value: SKIP };
 
       return null;
@@ -198,6 +215,16 @@ export function stepsToSend(context: SubmitContext): Array<{ step: FlowStep; val
 export function missingRequired(context: SubmitContext): FlowStep[] {
   return context.steps.filter(step => {
     if (step.optional) return false;
+
+    /*
+      A notice has nothing to fill in. It is a `confirm` step — the chat posts
+      it with a Confirm button and the tap is the answer — and on a form the
+      text sits in the section with the section's own Continue underneath it.
+      Reporting it missing would put "please fill this in" under a paragraph
+      with no control, which is unanswerable. `stepsToSend` acknowledges it
+      instead.
+    */
+    if (step.answerType === 'confirm') return false;
 
     const entered = (context.values[step.id] ?? '').trim();
     if (entered !== '') return false;

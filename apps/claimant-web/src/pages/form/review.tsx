@@ -43,6 +43,7 @@ export function ReviewStage({
   busy,
   error,
   onChange,
+  onUpload,
   onSubmit,
   onBack,
   locale = 'en',
@@ -54,7 +55,10 @@ export function ReviewStage({
   rowsFor: (section: ResolvedSection) => ReviewRow[];
   busy: boolean;
   error?: string | null;
-  onChange: (step: FlowStep, value: string) => Promise<void>;
+  /** Send one corrected answer. False means the server refused it. */
+  onChange: (step: FlowStep, value: string) => Promise<boolean>;
+  /** Store a replacement file and report the id a turn can name it by. */
+  onUpload: (step: FlowStep, file: File) => Promise<string>;
   onSubmit: () => Promise<void>;
   onBack: () => void;
   locale?: Locale;
@@ -66,13 +70,44 @@ export function ReviewStage({
 
   const startEditing = (step: FlowStep) => {
     setEditing(step);
-    setDraft(String(answers[step.id] ?? ''));
+    /*
+      A document opens empty. Every other answer opens on what was said, so the
+      claimant edits rather than retypes — but a document answer is the id of a
+      stored file, and pre-filling it would mean Save re-sends the file already
+      attached and calls that a correction. Empty says what is true: nothing has
+      been chosen yet, and until one is, Save has nothing to send.
+    */
+    setDraft(step.answerType === 'document' ? '' : String(answers[step.id] ?? ''));
   };
 
   const save = async () => {
     if (!editing) return;
-    await onChange(editing, draft);
-    setEditing(null);
+    // Closed rather than sent: a document editor left without a new file is a
+    // claimant who opened Change and thought better of it, and the answer they
+    // already have is the one they meant.
+    if (editing.answerType === 'document' && draft === '') {
+      setEditing(null);
+      return;
+    }
+    if (await onChange(editing, draft)) setEditing(null);
+  };
+
+  /**
+   * A replacement file, stored and named in one act.
+   *
+   * There is no Save step for a document, because there is nothing left to
+   * decide once the file has been chosen: the bytes are already on the case
+   * and the server has retired the one they replace. Waiting for Save would
+   * leave the screen showing a new filename against an answer still naming the
+   * old file — the two disagreeing, with the claimant given no way to tell.
+   *
+   * The editor stays open if the turn is refused, so the message lands on the
+   * field it belongs to.
+   */
+  const replaceDocument = async (step: FlowStep, file: File) => {
+    const storedId = await onUpload(step, file);
+    setDraft(storedId);
+    if (await onChange(step, storedId)) setEditing(null);
   };
 
   return (
@@ -103,11 +138,23 @@ export function ReviewStage({
                         attached={
                           documents.find(document => document.stepId === row.step.id) ?? null
                         }
+                        onUpload={file => replaceDocument(row.step, file)}
                       />
+                      {/*
+                        No Save on a document. Choosing the file is the whole
+                        act — it stores, replaces and closes — so a Save button
+                        beside it is one that does nothing, and a claimant who
+                        reads it as the step that commits the change will press
+                        it, see the editor shut, and have no idea whether the
+                        file went. Cancel stays, because backing out without
+                        picking anything is still a thing to do.
+                      */}
                       <div className="flex gap-2">
-                        <Button size="sm" disabled={busy} onClick={() => void save()}>
-                          {busy ? t('saving') : t('save')}
-                        </Button>
+                        {row.step.answerType !== 'document' && (
+                          <Button size="sm" disabled={busy} onClick={() => void save()}>
+                            {busy ? t('saving') : t('save')}
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

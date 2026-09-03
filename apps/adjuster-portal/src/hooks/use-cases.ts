@@ -53,6 +53,8 @@ export interface CaseSummary {
   category: ClaimCategory | string;
   travelClaimType?: TravelClaimType | string | null;
   claimant?: { id: string; fullName?: string | null; phoneNumber: string } | null;
+  /** Name supplied during intake; it may not have been identity-verified. */
+  statedClaimantName?: string | null;
   policy?: { id: string; policyNumber: string; insuredName?: string } | null;
   policyNumberRaw?: string | null;
   needsPolicyReview: boolean;

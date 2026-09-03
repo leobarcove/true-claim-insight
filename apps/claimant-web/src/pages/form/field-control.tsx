@@ -29,8 +29,25 @@ const CHIP_MAX = 8;
  * One rule, used by both the control and the label above it, so the two cannot
  * disagree about who draws the hint.
  */
-const usesChips = (step: FlowStep): boolean =>
+export const usesChips = (step: FlowStep): boolean =>
   (step.choices?.length ?? 0) > RADIO_MAX || Boolean(step.allowOther);
+
+/**
+ * Whether this step draws a box somebody can type into.
+ *
+ * The question a placeholder depends on, exported so the test that requires one
+ * everywhere asks the control rather than keeping its own copy of the rule — a
+ * copy would go stale the day a type changes how it renders, and go stale
+ * quietly, because a placeholder nobody can see breaks nothing.
+ *
+ * A short closed list draws radio cards, a document draws a filename row, a
+ * confirm draws a card, and a date draws the browser's own dd/mm/yyyy mask,
+ * which ignores `placeholder` outright. None of them has anywhere to put one.
+ */
+export function drawsTextBox(step: FlowStep): boolean {
+  if (step.answerType === 'choice') return usesChips(step);
+  return ['text', 'number', 'phone'].includes(step.answerType);
+}
 
 interface FieldProps {
   step: FlowStep;
@@ -161,7 +178,6 @@ function FieldInput({
         disabled={disabled}
         onUpload={onUpload}
         attached={attached}
-        onSkip={() => onChange('skip')}
       />
     );
   }
@@ -238,6 +254,7 @@ function FieldInput({
           inputMode="decimal"
           className={base}
           value={value}
+          placeholder={step.placeholder}
           disabled={disabled}
           aria-describedby={describedBy}
           aria-invalid={invalid || undefined}
@@ -274,6 +291,12 @@ function FieldInput({
       inputMode={step.answerType === 'phone' ? 'tel' : digitsOnly ? 'numeric' : undefined}
       className={base}
       value={value}
+      /*
+        The flow's example, not a second label. A date or datetime draws its own
+        format mask and ignores this, which is right — the browser's mask is the
+        one that matches the picker it opens.
+      */
+      placeholder={step.placeholder}
       disabled={disabled}
       aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
@@ -297,7 +320,6 @@ function DocumentField({
   disabled,
   onUpload,
   attached,
-  onSkip,
 }: {
   step: FlowStep;
   invalid: boolean;
@@ -305,7 +327,6 @@ function DocumentField({
   disabled?: boolean;
   onUpload?: (file: File) => Promise<void>;
   attached?: { fileName: string } | null;
-  onSkip: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -410,16 +431,16 @@ function DocumentField({
         {busy ? 'Uploading…' : attached ? 'Replace' : 'Add'}
       </button>
 
-      {step.optional && !attached && (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onSkip}
-          className="shrink-0 text-xs text-muted-foreground underline"
-        >
-          I do not have this
-        </button>
-      )}
+      {/*
+        No "I do not have this".
+        
+        It was the chat's `type "skip"` wearing a form's clothes, and on a form
+        it is a control for doing nothing. An optional document left alone is
+        skipped by Continue already — `stepsToSend` sends `skip` for any
+        optional step that is untouched and unanswered — so the link asked the
+        claimant to declare an absence the form can see for itself, beside a row
+        that already says "Optional".
+      */}
 
       <input
         ref={inputRef}
@@ -486,6 +507,13 @@ function ChoiceWithChips({
           type="text"
           className="w-full bg-transparent py-2.5 text-base focus:outline-none"
           value={query}
+          /*
+            An example, in the box that is also the search. The chips below are
+            the common answers; the example says what a typed one should look
+            like for anybody whose answer is not among them, which is the whole
+            reason this control accepts typing at all.
+          */
+          placeholder={step.placeholder}
           disabled={disabled}
           aria-describedby={describedBy}
           aria-invalid={invalid || undefined}

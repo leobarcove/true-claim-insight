@@ -14,7 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CasesService } from './cases.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
@@ -77,8 +77,20 @@ export class CasesController {
       'step. Returns the version pinned at creation, so a flow published mid-conversation ' +
       'does not change the questions already asked.',
   })
-  getFlow(@Param('id', ParseUUIDPipe) id: string, @Tenant() tenantContext: TenantContext) {
-    return this.service.getFlowForCase(id, tenantContext);
+  @ApiQuery({
+    name: 'locale',
+    required: false,
+    description: 'Language for the flow wording — `en` (default) or `ms`.',
+  })
+  getFlow(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Tenant() tenantContext: TenantContext,
+    @Query('locale') locale?: string
+  ) {
+    // Narrowed here rather than trusted: the value picks an overlay row, and an
+    // unknown one simply finds none and falls back to the base wording — but
+    // taking it raw would put an arbitrary client string into a query.
+    return this.service.getFlowForCase(id, tenantContext, locale === 'ms' ? 'ms' : 'en');
   }
 
   @Patch(':id/answers')

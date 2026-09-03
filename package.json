@@ -25,6 +25,7 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
+    "telegram:terminal": "node scripts/telegram-terminal.js",
     "docker:reset": "docker compose down -v && docker compose up -d",
     "setup:build": "pnpm --filter @tci/shared-types build && pnpm --filter @tci/ui-components build",
     "setup:reset": "pnpm install && cp -n .env.example .env || true && turbo run setup && pnpm docker:up && sleep 5 && pnpm prisma:clean && pnpm --filter @tci/prisma-client exec prisma migrate reset --force && pnpm prisma:seed && pnpm prisma:generate && pnpm run setup:build",
@@ -36,6 +37,7 @@
     "@types/node": "^22.10.0",
     "husky": "^9.1.0",
     "lint-staged": "^15.3.0",
+    "playwright": "^1.62.1",
     "prettier": "^3.4.0",
     "turbo": "^2.3.0",
     "typescript": "^5.8.0"

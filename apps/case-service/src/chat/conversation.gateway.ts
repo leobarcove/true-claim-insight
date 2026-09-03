@@ -1102,6 +1102,53 @@ export class ConversationGateway implements OnModuleInit {
       return;
     }
 
+    /*
+     * The same number again is a request for another code, not a guess at one.
+     *
+     * It cannot be a guess: `normalisePhone` floors at eight digits precisely so
+     * a six-digit code is never read as a number, so anything arriving here in
+     * phone shape is the claimant asking rather than answering.
+     *
+     * This used to fall straight through to `verify`, and the damage was
+     * silent. "Send again" on the form sends the pending number — the only way
+     * a resend can be expressed on a channel with no other verbs — so it sent
+     * no code at all, was scored as an incorrect one, and on the fifth press
+     * burned the pending number and put the claimant back at the number step
+     * with "that is too many incorrect codes". Three presses of a button
+     * labelled Send again spent an allowance meant for typos.
+     *
+     * `otpAttempts` is deliberately left alone. A fresh code retires the old one
+     * but the allowance is per pending *number* and guards possession of the
+     * handset, which a resend does not re-prove; resetting it here would hand
+     * anyone who can press the button a fresh five guesses.
+     */
+    if (corrected) {
+      try {
+        await this.phones.send(binding.pendingPhone);
+      } catch (error) {
+        this.logger.error(
+          `Binding ${binding.id}: could not send another code: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        // The pending number stays. Unlike the first send there is nothing to
+        // undo — the number is still outstanding, the earlier code may well
+        // still arrive, and a rate limit is a reason to wait rather than to
+        // start over.
+        await this.say(adapter, binding.id, payload.platformUserId, {
+          text: 'Sorry — we could not send another code just now. Please try again in a moment.',
+        });
+        return;
+      }
+
+      await this.say(adapter, binding.id, payload.platformUserId, {
+        text:
+          `We have sent another code to ${binding.pendingPhone} on WhatsApp. ` +
+          'Please type it here.',
+      });
+      return;
+    }
+
     const code = typed.replace(/\D/g, '');
     const verified = code.length >= 4 && (await this.phones.verify(binding.pendingPhone, code));
 

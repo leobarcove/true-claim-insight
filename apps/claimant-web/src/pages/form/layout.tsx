@@ -127,6 +127,7 @@ export function PreClaimLayout({
   subtitle,
   children,
   actions,
+  centred = false,
 }: {
   eyebrow?: string;
   /** Shown above the heading. Only the submitted page uses one. */
@@ -135,11 +136,20 @@ export function PreClaimLayout({
   subtitle?: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
+  /**
+   * Centre the tick, the heading and the line under it.
+   *
+   * The submitted page only, as the design has it. Every other page in this
+   * layout is asking for something, and a question centred over a left-aligned
+   * field it belongs to reads as two separate things. This page asks for
+   * nothing: it reports an outcome, and the outcome is the whole screen.
+   */
+  centred?: boolean;
 }) {
   return (
-    <div className="flex flex-1 justify-center px-4 py-10 sm:px-16 sm:py-16">
+    <div className="flex flex-1 justify-center px-4 pb-10 pt-6 sm:px-16 sm:py-16">
       <main className="flex w-full max-w-[640px] flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
+        <div className={cn('flex flex-col gap-1.5', centred && 'items-center text-center')}>
           {icon}
           {eyebrow && (
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
@@ -226,7 +236,7 @@ export function SectionLayout({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-8 px-4 py-8 sm:px-16 lg:grid lg:grid-cols-12 lg:gap-10">
+      <div className="flex flex-1 flex-col gap-8 px-4 pb-8 pt-5 sm:px-16 sm:pt-8 lg:grid lg:grid-cols-12 lg:gap-10">
         <nav aria-label="Sections" className="hidden lg:col-span-3 lg:block">
           <ol className="flex flex-col gap-0.5">
             {sections.map((section, index) => (

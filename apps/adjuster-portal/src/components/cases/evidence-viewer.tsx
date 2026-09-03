@@ -3,6 +3,7 @@ import { Download, FileText, Loader2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
+import { convertToTitleCase } from '@/lib/utils';
 
 /**
  * Looking at what the claimant actually sent.
@@ -75,9 +76,9 @@ export function EvidenceViewer({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{doc.fileName}</p>
+            <p className="truncate text-sm font-medium">{convertToTitleCase(doc.documentType)}</p>
             <p className="text-xs text-muted-foreground">
-              {doc.documentType.replace(/_/g, ' ').toLowerCase()}
+              {doc.fileName}
               {doc.supersededAt ? ' · superseded by a later upload' : ''}
             </p>
           </div>

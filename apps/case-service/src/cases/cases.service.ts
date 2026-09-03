@@ -57,6 +57,13 @@ import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto } from './dto/review-case.dto';
 
+/** Name supplied in intake, kept separate from a verified claimant record. */
+export function statedClaimantNameFromAnswers(answers: unknown): string | null {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return null;
+  const value = (answers as Record<string, unknown>)['claimant-name'];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 /**
  * Allowed case lifecycle transitions. Conversion of MEDICAL cases is
  * additionally gated behind REFERRED_TO_EXPERT (see convert()) — medical
@@ -261,7 +268,7 @@ export class CasesService {
     const currentStepId =
       answers[flow.entryStepId] === undefined
         ? flow.entryStepId
-        : resolveNextStep(flow, flow.entryStepId, answers) ?? flow.entryStepId;
+        : (resolveNextStep(flow, flow.entryStepId, answers) ?? flow.entryStepId);
 
     const created = await this.prisma.case.create({
       data: {
@@ -337,7 +344,6 @@ export class CasesService {
           bankAccountNumberEncrypted: true,
           bankAccountLast4: true,
           bankAccountHolderName: true,
-          answers: true,
         },
         include: {
           claimant: { select: { id: true, fullName: true, phoneNumber: true } },
@@ -350,9 +356,11 @@ export class CasesService {
     ]);
 
     const data = cases.map(caseRow => {
+      const { answers, ...safeCaseRow } = caseRow;
       const applicable = this.requirementsFor(requirements, caseRow);
       return {
-        ...caseRow,
+        ...safeCaseRow,
+        statedClaimantName: statedClaimantNameFromAnswers(answers),
         // Null means "this line has no published checklist", which is a
         // different thing from "nothing uploaded" and reads as a dash.
         completeness: applicable.length
@@ -442,7 +450,23 @@ export class CasesService {
       caseRow.status = CaseStatus.UNDER_REVIEW;
     }
 
-    const requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
+    let requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
+
+    // A subtype checklist is still too broad when the intake flow branches.
+    // Trip cancellation, for example, can ask for a medical report OR death
+    // evidence OR neither. Show only document types on this case's actual path
+    // so the adjuster is not prompted to collect evidence for a reason the
+    // claimant did not give.
+    if (caseRow.travelClaimType) {
+      const flow = await this.flows.forCase(caseRow);
+      const onPath = pathSteps(flow, caseRow.answers as CaseAnswers);
+      const documentTypesOnPath = new Set(
+        flow.steps
+          .filter(step => step.answerType === 'document' && onPath.has(step.id))
+          .flatMap(step => (step.documentType ? [String(step.documentType)] : []))
+      );
+      requirements = requirements.filter(req => documentTypesOnPath.has(req.documentType));
+    }
 
     return {
       ...(await this.withFlowState(caseRow)),
@@ -510,8 +534,7 @@ export class CasesService {
       data: {
         answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
         currentStepId: nextStepId,
-        status:
-          caseRow.status === CaseStatus.DRAFT ? CaseStatus.IN_PROGRESS : caseRow.status,
+        status: caseRow.status === CaseStatus.DRAFT ? CaseStatus.IN_PROGRESS : caseRow.status,
         ...promoted,
       },
       include: { policy: true },
@@ -624,11 +647,14 @@ export class CasesService {
   ) {
     const caseRow = await this.getEditableCase(id, tenantContext);
 
-    const documentType =
-      (file.fields?.type?.value as DocumentType) || DocumentType.OTHER_DOCUMENT;
-    const stepId = (file.fields?.stepId?.value as string) || null;
-
+    // Fastify parses multipart parts in order. Browser clients historically
+    // appended the file before `type` and `stepId`, so those fields were not
+    // populated until the file stream had been consumed. Reading them first
+    // silently filed every piece of evidence as OTHER_DOCUMENT and left the
+    // checklist at 0/n even though the attachments were visible below it.
     const buffer = await file.toBuffer();
+    const documentType = (file.fields?.type?.value as DocumentType) || DocumentType.OTHER_DOCUMENT;
+    const stepId = (file.fields?.stepId?.value as string) || null;
     // Resolved rather than trusted: Telegram's file download returns an
     // unhelpful content-type, so every upload from that channel was stored as
     // application/octet-stream — which serves back as a download prompt
@@ -873,12 +899,7 @@ export class CasesService {
     return updated;
   }
 
-  async referToExpert(
-    id: string,
-    note: string,
-    tenantContext: TenantContext,
-    expertName?: string
-  ) {
+  async referToExpert(id: string, note: string, tenantContext: TenantContext, expertName?: string) {
     const caseRow = await this.getStaffCase(id, tenantContext);
     if (caseRow.travelClaimType !== TravelClaimType.MEDICAL) {
       throw new BadRequestException('Only medical cases can be referred to an expert');
@@ -984,12 +1005,7 @@ export class CasesService {
    * offered back.
    */
   async abandon(id: string, note: string, tenantContext: TenantContext) {
-    const updated = await this.transitionWithNote(
-      id,
-      CaseStatus.ABANDONED,
-      note,
-      tenantContext
-    );
+    const updated = await this.transitionWithNote(id, CaseStatus.ABANDONED, note, tenantContext);
     await this.prisma.conversationBinding.updateMany({
       where: { activeCaseId: id },
       data: { activeCaseId: null },
@@ -1131,7 +1147,7 @@ export class CasesService {
         });
         if (isLicensedMode(tenant?.settings)) {
           throw new BadRequestException(
-            "No expert outcome is recorded on this case. Record what the expert answered " +
+            'No expert outcome is recorded on this case. Record what the expert answered ' +
               'before converting — the report will cite it.'
           );
         }
@@ -1199,8 +1215,7 @@ export class CasesService {
           userId: tenantContext.userId,
           createdById: tenantContext.userId,
           updatedById: tenantContext.userId,
-          estimatedLossAmount:
-            estimatedAmount !== undefined ? Number(estimatedAmount) : null,
+          estimatedLossAmount: estimatedAmount !== undefined ? Number(estimatedAmount) : null,
         },
       });
 
@@ -1223,8 +1238,7 @@ export class CasesService {
           hospitalName: this.answerString(answers['hospital-name']),
           referredToExpert: caseRow.status === CaseStatus.REFERRED_TO_EXPERT,
           cancellationReason: this.answerString(answers['cancellation-reason']),
-          estimatedAmountRm:
-            estimatedAmount !== undefined ? Number(estimatedAmount) : null,
+          estimatedAmountRm: estimatedAmount !== undefined ? Number(estimatedAmount) : null,
         },
       });
 
@@ -1278,10 +1292,7 @@ export class CasesService {
       // a routing failure would be the worse outcome. An unrouted claim is
       // visible — it has no mode — where a refused conversion is a dead end.
       try {
-        const decision = await this.assessment.decide(
-          converted.convertedClaimId,
-          tenantContext
-        );
+        const decision = await this.assessment.decide(converted.convertedClaimId, tenantContext);
         this.logger.log(
           `Claim ${converted.convertedClaim?.claimNumber} routed to ${decision.mode}` +
             (decision.fastTracked ? ' (fast-tracked)' : '')
@@ -1634,7 +1645,10 @@ export class CasesService {
    */
   private requirementsFor<
     R extends { category: ClaimCategory; travelClaimType: TravelClaimType | null },
-  >(requirements: R[], caseRow: { category: ClaimCategory; travelClaimType: TravelClaimType | null }): R[] {
+  >(
+    requirements: R[],
+    caseRow: { category: ClaimCategory; travelClaimType: TravelClaimType | null }
+  ): R[] {
     return requirements.filter(
       req =>
         req.category === caseRow.category &&
@@ -1670,9 +1684,23 @@ export class CasesService {
    * next; the list and per-answer responses do not, and embedding eighteen step
    * definitions in each of them would cost far more than the extra request.
    */
-  async getFlowForCase(id: string, tenantContext: TenantContext): Promise<CaseFlow> {
+  async getFlowForCase(
+    id: string,
+    tenantContext: TenantContext,
+    /**
+     * The language to dress the wording in. The channel is the Case's own.
+     *
+     * Passed at all because this path used to pass nothing: the authenticated
+     * surfaces — the claimant app and the agent's assisted form — got base
+     * wording whatever the overlays said, and no locale at all, so a Malay
+     * claimant would have read English questions on one surface and Malay ones
+     * on another for the same claim. The conversation gateway has always
+     * resolved both; this brings the per-case endpoint into line with it.
+     */
+    locale = 'en'
+  ): Promise<CaseFlow> {
     const caseRow = await this.findOne(id, tenantContext);
-    return this.flows.forCase(caseRow);
+    return this.flows.forCase(caseRow, { channel: caseRow.channel, locale });
   }
 
   private buildClaimDescription(type: TravelClaimType, answers: CaseAnswers): string {
@@ -1714,6 +1742,3 @@ export class CasesService {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 }
-
-
-
