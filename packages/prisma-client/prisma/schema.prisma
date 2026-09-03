@@ -3039,6 +3039,7 @@ model PiamRegisteredAgent {
   id                 String   @id @default(uuid())
   registrationNumber String   @unique
   agencyName          String
+  phoneNumber         String?
   principals         Json
   corporateNominees  String[] @default([])
   permanentUrl        String?

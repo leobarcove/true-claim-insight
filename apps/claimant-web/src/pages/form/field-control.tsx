@@ -208,10 +208,14 @@ function FieldInput({
             >
               <span
                 className={cn(
-                  'h-4 w-4 shrink-0 rounded-full border-2',
-                  value === choice.value ? 'border-primary bg-primary' : 'border-muted-foreground'
+                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                  value === choice.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-muted-foreground'
                 )}
-              />
+              >
+                {value === choice.value && <CheckIcon className="h-2.5 w-2.5" />}
+              </span>
               <span>
                 {choice.label}
                 {choice.description && (
@@ -246,21 +250,16 @@ function FieldInput({
 
   if (step.answerType === 'number') {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">RM</span>
-        <input
-          id={step.id}
-          type="number"
-          inputMode="decimal"
-          className={base}
-          value={value}
-          placeholder={step.placeholder}
-          disabled={disabled}
-          aria-describedby={describedBy}
-          aria-invalid={invalid || undefined}
-          onChange={event => onChange(event.target.value)}
-        />
-      </div>
+      <MoneyInput
+        id={step.id}
+        value={value}
+        onChange={onChange}
+        className={base}
+        placeholder={step.placeholder}
+        disabled={disabled}
+        describedBy={describedBy}
+        invalid={invalid}
+      />
     );
   }
 
@@ -302,6 +301,57 @@ function FieldInput({
       aria-invalid={invalid || undefined}
       onChange={event => onChange(digitsOnly ? keepDigits(event.target.value) : event.target.value)}
     />
+  );
+}
+
+/** Currency is shown as money when resting, without fighting partial input while typing. */
+function MoneyInput({
+  id,
+  value,
+  onChange,
+  className,
+  placeholder,
+  disabled,
+  describedBy,
+  invalid,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  className: string;
+  placeholder?: string;
+  disabled?: boolean;
+  describedBy?: string;
+  invalid: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const amount = Number(value);
+  const displayValue =
+    !editing && value.trim() !== '' && Number.isFinite(amount) ? amount.toFixed(2) : value;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">RM</span>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        className={className}
+        value={displayValue}
+        placeholder={placeholder}
+        disabled={disabled}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || undefined}
+        onFocus={() => setEditing(true)}
+        onChange={event => onChange(event.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          const parsed = Number(value);
+          if (value.trim() !== '' && Number.isFinite(parsed)) onChange(parsed.toFixed(2));
+        }}
+      />
+    </div>
   );
 }
 

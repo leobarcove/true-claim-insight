@@ -768,7 +768,7 @@ function SubmittedStage({ state }: { state: FormState }) {
   const stages: Array<[string, string]> = [
     [
       'Documents checked',
-      'Usually within one working day. We message you on WhatsApp if anything is unclear.',
+      'Usually within one working day. We contact you if anything is unclear.',
     ],
     [
       'Assessment',
@@ -834,8 +834,8 @@ function SubmittedStage({ state }: { state: FormState }) {
       </ol>
 
       <p className="text-center text-sm leading-relaxed text-muted-foreground">
-        Anything to add or change? Our team will contact you on <strong>WhatsApp</strong>, on the
-        number you verified — this page will not update.
+        Anything to add or change? Our team will contact you on the number you verified — this
+        page will not update.
       </p>
 
       {/*

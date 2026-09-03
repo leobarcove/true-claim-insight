@@ -56,7 +56,7 @@ const EN = {
   submittedTitle: 'Your claim request is submitted',
   submittedChecking: 'A member of our team will check what you have sent.',
   submittedContact:
-    'If anything is missing they will contact you on WhatsApp, on the number you verified.',
+    'If anything is missing they will contact you on the number you verified.',
   submittedReference: 'Keep the reference above — it is how we find your claim request.',
 
   /** Shown when the section could not be saved for a reason that is not a field's fault. */
