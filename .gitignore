@@ -81,3 +81,9 @@ deploy/staging/.env.staging
 
 # Founder / corporate papers — commercially confidential, kept out of the repo
 docs/founders/
+
+# Vite writes these beside vitest.config.ts while resolving it
+*.timestamp-*.mjs
+
+# Local scraper run logs / captchas
+packages/prisma-client/.runlogs/

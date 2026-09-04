@@ -1,18 +1,79 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import {
   CaseChannel,
+  CaseStatus,
+  ConsentPurpose,
+  ConversationMessageStatus,
   ConversationMode,
   MessageDirection,
 } from '@prisma/client';
 
-import { getStep } from '@tci/shared-types';
+import { getStep, type CaseAnswers } from '@tci/shared-types';
 
 import { PrismaService } from '../config/prisma.service';
 import { ConversationGateway } from './conversation.gateway';
+import { ConsentService } from '../consent/consent.service';
 import { FlowsService } from '../cases/flows.service';
 import type { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
 import { CasesService } from '../cases/cases.service';
+
+/** The synthetic step ids the gateway asks before any flow is chosen. */
+const CONSENT_STEP_ID = '__consent';
+const CLAIM_TYPE_STEP_ID = '__claim-type';
+
+/**
+ * Statuses that mean the claimant is finished: the request is in, and the form
+ * shows the submitted page rather than a section to fill in. Everything before
+ * SUBMITTED is still theirs to edit; everything after is the firm's to work.
+ */
+const SUBMITTED_STATUSES = new Set<CaseStatus>([
+  CaseStatus.SUBMITTED,
+  CaseStatus.UNDER_REVIEW,
+  CaseStatus.INFO_REQUESTED,
+  CaseStatus.REFERRED_TO_EXPERT,
+  CaseStatus.CONVERTED,
+  CaseStatus.REJECTED,
+]);
+
+/**
+ * Everything the form needs to draw itself.
+ *
+ * Declared as one shape with optional parts rather than a discriminated union
+ * on `stage`. A union would be tidier to read and worse to use: every consumer
+ * would have to narrow before touching `case`, and the client walking the flow
+ * wants `case` and `flow` together with the stage as one more fact about them.
+ * The optional fields are documented by which stage supplies them.
+ */
+export interface PublicConversationState {
+  /** Which screen the form should draw. Derived here, never guessed by the client. */
+  stage: 'phone' | 'code' | 'consent' | 'claim-type' | 'flow' | 'submitted';
+  locale: 'en' | 'ms';
+  /** The bot's most recent message — the form's error text. */
+  lastReply: string | null;
+  /**
+   * `stage === 'code'`: the number a code was sent to, so the form can say
+   * where to look for it.
+   *
+   * Returned in full rather than masked. It is the claimant's own number, which
+   * they typed into this same session moments ago — masking it would hide the
+   * one thing that lets them notice a typo, which is exactly what this screen
+   * is for. Nothing else about them is said until a code is proved.
+   */
+  pendingPhone?: string;
+  /** `stage === 'consent'`: the approved notice, shown exactly as returned. */
+  consent?: { title: string; body: string; version: number };
+  /** `stage === 'claim-type'`: the choices for the pre-claim question. */
+  claimTypes?: unknown;
+  /** `stage === 'flow' | 'submitted'`: same shape as `GET /cases/:id`. */
+  case?: Record<string, unknown>;
+  /** `stage === 'flow' | 'submitted'`: same shape as `GET /cases/:id/flow`. */
+  flow?: unknown;
+}
+
+/** PDPA notices exist in exactly these two languages; anything else reads English. */
+const noticeLocale = (locale: string | null | undefined): 'en' | 'ms' =>
+  locale === 'ms' ? 'ms' : 'en';
 
 /**
  * Who is talking.
@@ -24,7 +85,7 @@ import { CasesService } from '../cases/cases.service';
  */
 export type ConversationIdentity =
   | TenantContext
-  | { sessionId: string }
+  | { sessionId: string; webChannel?: CaseChannel }
   | { channel: CaseChannel; platformUserId: string };
 
 /**
@@ -45,7 +106,8 @@ export class ClaimantConversationService {
     private readonly prisma: PrismaService,
     private readonly gateway: ConversationGateway,
     private readonly flows: FlowsService,
-    private readonly cases: CasesService
+    private readonly cases: CasesService,
+    private readonly consent: ConsentService
   ) {}
 
   /**
@@ -99,16 +161,24 @@ export class ClaimantConversationService {
     }
 
     if ('sessionId' in identity) {
+      // WEB_CHAT unless the gateway said otherwise. The form is its own
+      // channel, so the same visitor on /form and on /chat holds two bindings
+      // that never meet — and because the binding key is (channel,
+      // platformUserId), this line is the whole of that separation
+      // (WEB_FORM_MICROSITE_PLAN D1). The value comes from the signed session
+      // payload, not from anything the browser can set.
+      const webChannel = identity.webChannel ?? CaseChannel.WEB_CHAT;
+
       return this.prisma.conversationBinding.upsert({
         where: {
           channel_platformUserId: {
-            channel: CaseChannel.WEB_CHAT,
+            channel: webChannel,
             platformUserId: identity.sessionId,
           },
         },
         update: { lastSeenAt: new Date() },
         create: {
-          channel: CaseChannel.WEB_CHAT,
+          channel: webChannel,
           platformUserId: identity.sessionId,
           // Deliberately unbound and unverified. The onboarding steps in
           // ConversationGateway fill both in once a code has been proved, and
@@ -324,6 +394,8 @@ export class ClaimantConversationService {
    */
   private async openQuestion(binding: {
     id: string;
+    /** Which surface is asking — the web form and the web chat are not the same. */
+    channel: CaseChannel;
     mode: ConversationMode;
     activeCaseId: string | null;
     locale: string | null;
@@ -347,19 +419,53 @@ export class ClaimantConversationService {
 
     const caseRow = await this.prisma.case.findUnique({
       where: { id: binding.activeCaseId },
-      select: { currentStepId: true, travelClaimType: true, flowDefinitionId: true },
+      select: {
+        currentStepId: true,
+        travelClaimType: true,
+        flowDefinitionId: true,
+        answers: true,
+      },
     });
     if (!caseRow?.currentStepId) return null;
 
-    // The pinned version, not the built-in flow: a Case walks the wording and
-    // structure it started with, and showing the claimant a newer prompt than
-    // the one they are answering is how the two drift apart.
-    // Overlaid for this channel and language, so a Malay claimant reads the
-    // Malay wording — the same resolution Telegram gets, from the same place.
+    /*
+      The pinned version, not the built-in flow: a Case walks the wording and
+      structure it started with, and showing the claimant a newer prompt than
+      the one they are answering is how the two drift apart.
+
+      Overlaid for this channel and language, so a Malay claimant reads the
+      Malay wording — the same resolution Telegram gets, from the same place.
+
+      The channel is the binding's, not a constant. This service serves the web
+      *form* as well as the web chat, and they are separate channels on purpose
+      (`WEB_FORM` has its own binding key). Hardcoding `WEB_CHAT` meant the form
+      would have been dressed in the chat's wording the day anyone published an
+      overlay for either — silently, since with no overlay rows the two are
+      identical and nothing looks wrong.
+    */
     const flow = await this.flows.forCase(caseRow, {
-      channel: CaseChannel.WEB_CHAT,
+      channel: binding.channel,
       locale: binding.locale ?? 'en',
     });
+
+    // A claimant who asked to change something is looking at the edit menu, and
+    // the menu belongs to no flow — so `getStep` found nothing and the PWA drew
+    // a question with no way to answer it. The case's cursor has not moved
+    // (they are still on the review step), so what is open has to be read from
+    // the last thing the bot actually asked. Closes INTAKE_CHANGE_SOMETHING_GAP.
+    const lastAsked = await this.prisma.conversationMessage.findFirst({
+      where: { bindingId: binding.id, direction: MessageDirection.OUTBOUND, stepId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { stepId: true },
+    });
+    if (lastAsked?.stepId && lastAsked.stepId !== caseRow.currentStepId) {
+      const synthesised = await this.gateway.synthesiseStep(lastAsked.stepId, binding.locale, {
+        flow,
+        answers: (caseRow.answers ?? {}) as CaseAnswers,
+      });
+      if (synthesised) return synthesised;
+    }
+
     return getStep(flow, caseRow.currentStepId) ?? null;
   }
 
@@ -385,4 +491,118 @@ export class ClaimantConversationService {
     });
     return this.transcript(identity);
   }
+
+  /**
+   * Everything the form needs to draw itself, in one read.
+   *
+   * The chat asks one question at a time, so the transcript is enough for it:
+   * the last bubble *is* the state. A form shows a whole section at once and
+   * has to know which section, what has been answered, what is still missing
+   * and what the flow will ask next — the same picture a logged-in claimant
+   * already gets from `GET /cases/:id` and `GET /cases/:id/flow`. A visitor has
+   * no case id and no login, so neither is reachable; this mirrors the pair for
+   * the session instead.
+   *
+   * Deliberately not a new description of a claim. The two payloads are the
+   * *same shapes* those endpoints return, produced by the same service methods,
+   * so a change to either reaches the form without being copied — which is the
+   * whole reason the form is cheap to build.
+   */
+  async state(identity: ConversationIdentity): Promise<PublicConversationState> {
+    const binding = await this.bindingFor(identity);
+    const locale = noticeLocale(binding.locale);
+
+    // The bot's last word. On the chat this is just the newest bubble; on the
+    // form it is the error text — the reason a section refused to advance,
+    // shown under the field that caused it.
+    const lastOutbound = await this.prisma.conversationMessage.findFirst({
+      where: {
+        bindingId: binding.id,
+        direction: MessageDirection.OUTBOUND,
+        status: { not: ConversationMessageStatus.FAILED },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { text: true, stepId: true },
+    });
+
+    const base = { locale, lastReply: lastOutbound?.text ?? null };
+
+    // Before a code is proved there is no claimant, and nothing about any claim
+    // is said. These two stages are the whole of what an unverified visitor can
+    // learn from this endpoint.
+    if (!binding.claimantId) {
+      return binding.pendingPhone
+        ? { ...base, stage: 'code', pendingPhone: binding.pendingPhone }
+        : { ...base, stage: 'phone' };
+    }
+
+    if (!binding.activeCaseId) {
+      // Verified, but no Case yet: the open question is consent or which kind
+      // of claim this is. Neither belongs to a flow — none has been chosen —
+      // so which one is open is read from the last thing the bot asked.
+      if (lastOutbound?.stepId === CONSENT_STEP_ID) {
+        const notice = await this.consent.currentNotice(
+          ConsentPurpose.CLAIM_PROCESSING,
+          locale
+        );
+        return {
+          ...base,
+          stage: 'consent',
+          consent: notice
+            ? { title: notice.title, body: notice.body, version: notice.version }
+            : undefined,
+        };
+      }
+
+      const menu = await this.gateway.synthesiseStep(CLAIM_TYPE_STEP_ID, binding.locale);
+      return { ...base, stage: 'claim-type', claimTypes: menu?.choices };
+    }
+
+    // The claimant's own context, so every ownership check downstream runs
+    // exactly as it would for a logged-in one. `findOne` refuses a case that is
+    // not theirs, which is what makes the session safe to trust here.
+    const context = {
+      tenantId: binding.tenantId ?? '',
+      userId: binding.claimantId,
+      userRole: 'CLAIMANT' as const,
+      scope: TenantScope.STRICT,
+      allowCrossTenant: false,
+    };
+
+    const [caseDetail, flow] = await Promise.all([
+      this.cases.findOne(binding.activeCaseId, context),
+      this.cases.getFlowForCase(binding.activeCaseId, context),
+    ]);
+
+    return {
+      ...base,
+      stage: SUBMITTED_STATUSES.has(caseDetail.status as CaseStatus) ? 'submitted' : 'flow',
+      case: { ...caseDetail, documents: caseDetail.documents.map(publicDocument) },
+      flow,
+    };
+  }
+}
+
+/**
+ * A document as the claimant may see it: that it exists, what it was called,
+ * and when it arrived.
+ *
+ * The id is removed, not merely unused. Every document read is staff-only, so
+ * an id in this payload would be a handle to an endpoint the holder cannot
+ * call — useless at best, and the sort of thing a later change turns into a
+ * public route by accident. The transcript has never returned one either; this
+ * adds a filename and nothing more.
+ */
+function publicDocument(document: {
+  fileName: string;
+  documentType: string;
+  stepId: string | null;
+  createdAt: Date;
+}) {
+  return {
+    fileName: document.fileName,
+    documentType: document.documentType,
+    stepId: document.stepId,
+    createdAt: document.createdAt,
+  };
 }

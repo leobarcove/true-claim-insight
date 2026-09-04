@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, ConflictException, Logger } from '@n
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 
 import { UsersService } from '../users/users.service';
 import { ClaimantsService } from '../claimants/claimants.service';
@@ -17,6 +18,7 @@ export interface JwtPayload {
   tenantId: string | null; // Deprecated: for backward compatibility
   currentTenantId: string | null; // Active tenant context
   tenantIds?: string[]; // All tenants user has access to
+  identityType?: 'PIAM_AGENT';
   iat?: number;
   exp?: number;
 }
@@ -217,6 +219,151 @@ export class AuthService {
     };
   }
 
+  /**
+   * Staff sign-in, step one: send a code to the number on their own account.
+   *
+   * The agent-assisted form has no password on it — the whole claimant-facing
+   * product has none, and adding one there would have created the only
+   * password in it, to be leaked, reset and shared between colleagues. So an
+   * agent proves the same thing a claimant proves, about their own handset,
+   * through the same WhatsApp transport.
+   *
+   * **Answers the same way whether or not the number is known.** A staff
+   * directory is worth having: "is this person one of yours?" is the first
+   * question anyone phishing an adjusting firm would like answered, and a
+   * response that varied would answer it for free. The refusal, if there is
+   * one, happens at verify — where it costs an attacker a code they cannot
+   * obtain rather than a single request.
+   */
+  async staffSendCode(
+    registrationNumber: string,
+    phoneNumber: string
+  ): Promise<{ expiresIn: number; code?: string }> {
+    const registeredAgent = await this.usersService.findPiamRegisteredAgent(
+      registrationNumber,
+      phoneNumber
+    );
+
+    if (!registeredAgent || !registeredAgent.tenantId) {
+      await this.audit.record({
+        entityType: 'AUTH',
+        entityId: phoneNumber,
+        action: 'STAFF_CODE_REQUESTED_UNKNOWN_NUMBER',
+        metadata: { reason: 'registration/phone mismatch or no matching insurer tenant' },
+      });
+      // Match the successful response exactly. Returning 401 here would turn
+      // this public endpoint into a staff-directory oracle: an attacker could
+      // enumerate registration/phone pairs without ever possessing a code.
+      // No OTP is created or sent, and verification still refuses generically.
+      return {
+        expiresIn: 300,
+        // Local development returns real codes because there is no delivery
+        // provider. Preserve the same response shape without creating a usable
+        // credential or revealing that the identity missed the registry.
+        ...((process.env.NODE_ENV ?? 'development') !== 'production'
+          ? { code: randomInt(100000, 1000000).toString() }
+          : {}),
+      };
+    }
+
+    const result = await this.otpService.sendOtp(phoneNumber);
+    this.logger.log(`PIAM agent sign-in: code dispatched for agent ${registeredAgent.id}.`);
+    return { expiresIn: result.expiresIn, code: result.code };
+  }
+
+  /**
+   * Staff sign-in, step two: the code, and a session that survives the week.
+   *
+   * `keepSignedIn` buys a 30-day *refresh* token, not a 30-day grant — the
+   * access token still expires in minutes and every renewal re-reads the
+   * account, so revoking someone still takes effect within that window. Without
+   * it an agent taking claims by phone all day would meet two OTP screens per
+   * claim, which is the friction that ruled out a password screen in the first
+   * place.
+   */
+  async staffVerifyCode(
+    registrationNumber: string,
+    phoneNumber: string,
+    code: string,
+    keepSignedIn = false
+  ): Promise<AuthResponse> {
+    const registeredAgent = await this.usersService.findPiamRegisteredAgent(
+      registrationNumber,
+      phoneNumber
+    );
+
+    // Verified before the account is checked, so a wrong code and an unknown
+    // number are indistinguishable from outside — see staffSendCode.
+    let verified = false;
+    try {
+      verified = Boolean(await this.otpService.verifyOtp(phoneNumber, code));
+    } catch {
+      verified = false;
+    }
+
+    if (!verified || !registeredAgent || !registeredAgent?.tenantId) {
+      await this.audit.record({
+        entityType: 'AUTH',
+        entityId: phoneNumber,
+        action: 'STAFF_LOGIN_FAILED',
+        metadata: { reason: verified ? 'invalid PIAM agent identity' : 'invalid or expired code' },
+      });
+      throw new UnauthorizedException('That code did not match. Please try again.');
+    }
+
+    const activeTenantId = registeredAgent.tenantId;
+    const userTenants = [
+      {
+        tenantId: activeTenantId,
+        tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
+        role: 'ADJUSTER',
+        isDefault: true,
+        status: 'ACTIVE',
+      },
+    ];
+
+    const tokens = await this.generateTokens(
+      {
+        id: registeredAgent.id,
+        role: 'ADJUSTER',
+        tenantId: activeTenantId,
+        currentTenantId: activeTenantId,
+        userTenants,
+        identityType: 'PIAM_AGENT',
+      },
+      keepSignedIn ? '30d' : undefined
+    );
+
+    await this.audit.record({
+      entityType: 'AUTH',
+      entityId: registeredAgent.id,
+      action: 'STAFF_LOGIN_SUCCEEDED',
+      actorId: registeredAgent.id,
+      tenantId: activeTenantId ?? null,
+      metadata: { role: 'ADJUSTER', method: 'mobile-code', keepSignedIn },
+    });
+
+    this.logger.log(`PIAM agent signed in by mobile: ${registeredAgent.id}`);
+
+    return {
+      user: {
+        id: registeredAgent.id,
+        email: '',
+        fullName:
+          registeredAgent.agentName ?? registeredAgent.tenantName ?? registeredAgent.agencyName,
+        role: 'ADJUSTER',
+        phoneNumber: `+${registeredAgent.phoneNumber.replace(/^\+/, '')}`,
+        licenseNumber: registeredAgent.registrationNumber,
+        avatarUrl: null,
+        tenantId: activeTenantId,
+        currentTenantId: activeTenantId,
+        tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
+      },
+      userTenants,
+      tokens,
+    };
+  }
+
   async verifyRegistration(userId: string, code: string): Promise<AuthResponse> {
     const user = await this.usersService.findById(userId);
     if (!user) {
@@ -283,6 +430,19 @@ export class AuthService {
         secret: this.configService.get<string>('jwt.secret'),
       });
 
+      if (payload.identityType === 'PIAM_AGENT') {
+        const agent = await this.usersService.findPiamRegisteredAgentById(payload.sub);
+        if (!agent) throw new UnauthorizedException('PIAM agent not found');
+        return this.generateTokens({
+          id: agent.id,
+          role: 'ADJUSTER',
+          tenantId: agent.tenantId,
+          currentTenantId: agent.tenantId,
+          identityType: 'PIAM_AGENT',
+          userTenants: [{ tenantId: agent.tenantId }],
+        });
+      }
+
       const user = await this.usersService.findById(payload.sub);
 
       if (!user) {
@@ -327,6 +487,45 @@ export class AuthService {
   }
 
   async validateJwtPayload(payload: JwtPayload) {
+    if (payload.identityType === 'PIAM_AGENT') {
+      const agent = await this.usersService.findPiamRegisteredAgentById(payload.sub);
+      if (!agent) throw new UnauthorizedException('PIAM agent not found');
+
+      /*
+        A registration with no tenant linked is not an unknown identity.
+
+        This threw 401 as well, and the tenant was resolved by matching
+        `agencyName` against `tenants.name` — a string from PIAM's register
+        against one of ours. A rename on either side signed every agent of that
+        agency out of a system that still showed them signed in, and reported it
+        as an authentication failure, which sends whoever debugs it looking at
+        tokens rather than at a name that no longer matches.
+
+        The link is stored now, so a null means the agency has not been onboarded
+        as a tenant. The identity stands; the tenant guard refuses the work,
+        where the refusal can say what is actually wrong.
+      */
+      if (!agent.tenantId) {
+        this.logger.warn(
+          `PIAM agent ${agent.id} (${agent.registrationNumber}) has no tenant linked — ` +
+            `"${agent.agencyName}" is not onboarded, so every case will be refused.`
+        );
+      }
+
+      return {
+        id: agent.id,
+        fullName: agent.agentName ?? agent.tenantName ?? agent.agencyName,
+        phoneNumber: `+${agent.phoneNumber.replace(/^\+/, '')}`,
+        licenseNumber: agent.registrationNumber,
+        role: 'ADJUSTER',
+        tenantId: agent.tenantId,
+        currentTenantId: agent.tenantId,
+        tenantName: agent.tenantName ?? agent.agencyName,
+        tenantIds: [agent.tenantId],
+        identityType: 'PIAM_AGENT',
+      };
+    }
+
     if (payload.role === 'CLAIMANT') {
       const claimant = await this.claimantsService.findById(payload.sub);
       if (!claimant) {
@@ -410,14 +609,28 @@ export class AuthService {
     return this.usersService.getUserTenants(userId);
   }
 
-  private async generateTokens(user: {
-    id: string;
-    email?: string;
-    role: string;
-    tenantId: string | null;
-    currentTenantId?: string | null;
-    userTenants?: any[];
-  }): Promise<TokenPair> {
+  private async generateTokens(
+    user: {
+      id: string;
+      email?: string;
+      role: string;
+      tenantId: string | null;
+      currentTenantId?: string | null;
+      userTenants?: any[];
+      identityType?: 'PIAM_AGENT';
+    },
+    /**
+     * How long the refresh token lives, overriding `jwt.refreshExpiresIn`.
+     *
+     * Only the agent-assisted form's "keep me signed in" passes one. An agent
+     * fills in claims on the phone all day, and a session that expired at the
+     * portal's cadence would put two OTP screens in front of every claim —
+     * which is exactly the friction that made a password screen unacceptable.
+     * The access token is unchanged: it still expires in minutes, so a
+     * long-lived *refresh* is not a long-lived grant.
+     */
+    refreshExpiresInOverride?: string
+  ): Promise<TokenPair> {
     // Get all tenant IDs if not provided
     const userTenants = user.userTenants || (await this.getUserTenants(user.id));
     const tenantIds = userTenants.map((ut: any) => ut.tenantId);
@@ -429,10 +642,12 @@ export class AuthService {
       tenantId: user.tenantId,
       currentTenantId: user.currentTenantId || user.tenantId,
       tenantIds,
+      identityType: user.identityType,
     };
 
     const accessExpiresIn = this.configService.get<string>('jwt.accessExpiresIn', '15m');
-    const refreshExpiresIn = this.configService.get<string>('jwt.refreshExpiresIn', '7d');
+    const refreshExpiresIn =
+      refreshExpiresInOverride ?? this.configService.get<string>('jwt.refreshExpiresIn', '7d');
 
     const accessExpiresInSeconds = this.parseTimeToSeconds(accessExpiresIn);
     const refreshExpiresInSeconds = this.parseTimeToSeconds(refreshExpiresIn);

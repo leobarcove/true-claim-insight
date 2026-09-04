@@ -31,6 +31,7 @@ import { BillingPage } from '@/pages/billing';
 import { DocumentsListPage } from '@/pages/documents';
 import { DocumentDetailPage } from '@/pages/documents/detail';
 import { TenantsPage } from '@/pages/tenants';
+import { ConsentNoticesPage } from '@/pages/consent-notices';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { RoleRoute } from '@/components/auth/role-guard';
@@ -176,6 +177,14 @@ export default function App() {
                 element={
                   <RoleRoute allowedRoles={['SUPER_ADMIN', 'SUPPORT_DESK']}>
                     <TenantsPage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/consent-notices"
+                element={
+                  <RoleRoute allowedRoles={['COMPLIANCE_OFFICER', 'FIRM_ADMIN', 'SUPER_ADMIN']}>
+                    <ConsentNoticesPage />
                   </RoleRoute>
                 }
               />

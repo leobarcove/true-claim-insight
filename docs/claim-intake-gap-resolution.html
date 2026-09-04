@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claim intake issue and fix</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <style>
+      :root {
+        --paper: #f4f7f5;
+        --surface: #ffffff;
+        --ink: #10201a;
+        --muted: #52645c;
+        --rule: #d9e5df;
+        --emerald: #087a54;
+        --emerald-soft: #e7f5ee;
+        --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--font);
+        line-height: 1.6;
+      }
+
+      main {
+        width: min(72rem, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 2.5rem 0 4rem;
+      }
+
+      header {
+        max-width: 48rem;
+        margin-inline: auto;
+      }
+
+      section,
+      .case-heading {
+        max-width: none;
+      }
+
+      h1 {
+        margin: 0.35rem 0 0.5rem;
+        font-size: clamp(1.65rem, 4vw, 2.35rem);
+        line-height: 1.18;
+      }
+
+      h2 {
+        margin: 2rem 0 0.65rem;
+        font-size: 1.2rem;
+      }
+
+      .status-label {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.55rem;
+        border-radius: 999px;
+        background: #f4c84a;
+        color: #573a00;
+        padding: 0.18rem 0.55rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        vertical-align: middle;
+        text-transform: uppercase;
+      }
+
+      p,
+      li {
+        font-size: 0.97rem;
+      }
+
+      .meta,
+      figcaption {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border-radius: 999px;
+        background: var(--emerald-soft);
+        color: var(--emerald);
+        padding: 0.25rem 0.65rem;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .badge::before {
+        content: '✓';
+      }
+
+      .summary {
+        margin-top: 1.5rem;
+        border: 1px solid #b8dacb;
+        border-radius: 14px;
+        background: var(--emerald-soft);
+        padding: 1rem 1.15rem;
+      }
+
+      .summary p {
+        margin: 0;
+      }
+
+      .open-question {
+        border: 1px solid #e5c76b;
+        border-radius: 14px;
+        background: #fff9e8;
+        padding: 1rem 1.15rem;
+      }
+
+      .open-question p {
+        margin: 0;
+      }
+
+      .open-question strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: #7a5200;
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin: 2rem 0;
+      }
+
+      .gallery-wide {
+        grid-template-columns: 1fr;
+      }
+
+      figure {
+        margin: 0;
+        overflow: hidden;
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 8px 30px rgb(28 53 43 / 7%);
+      }
+
+      figure img {
+        display: block;
+        width: 100%;
+        height: 31rem;
+        object-fit: contain;
+        background: #e5e7eb;
+      }
+
+      .gallery-wide figure img {
+        height: auto;
+        background: var(--surface);
+      }
+
+      .annotated-image {
+        position: relative;
+      }
+
+      .change-frame {
+        position: absolute;
+        top: 17.9%;
+        bottom: 1%;
+        border: 2px solid #dc2626;
+        pointer-events: none;
+      }
+
+      .change-frame.claimant-column {
+        left: 25.1%;
+        width: 11.4%;
+      }
+
+      .change-frame.channel-column {
+        left: 47.1%;
+        width: 7.4%;
+      }
+
+      .before-list .change-frame {
+        top: 38%;
+        bottom: 4%;
+      }
+
+      .before-list .claimant-column {
+        left: 16.2%;
+        width: 12.8%;
+      }
+
+      .before-list .channel-column {
+        left: 38.3%;
+        width: 8.2%;
+      }
+
+      figcaption {
+        min-height: 7.5rem;
+        border-top: 1px solid var(--rule);
+        padding: 0.9rem 1rem;
+      }
+
+      figcaption strong {
+        display: block;
+        margin-bottom: 0.25rem;
+        color: var(--ink);
+      }
+
+      .gallery-wide figcaption {
+        min-height: 0;
+      }
+
+      a {
+        color: var(--emerald);
+      }
+
+      @media (max-width: 780px) {
+        .gallery {
+          grid-template-columns: 1fr;
+        }
+
+        figure img {
+          height: auto;
+          max-height: 46rem;
+        }
+
+        figcaption {
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="badge">Resolved 2 September 2026</span>
+        <h1>Claim intake fixes</h1>
+        <p class="meta">
+          Online claim form | review and correction |
+          <a href="./INTAKE_CHANGE_SOMETHING_GAP.md">markdown record</a>
+        </p>
+        <div class="summary">
+          <p>
+            Claimants can change answers safely, and uploaded evidence is matched to the correct
+            checklist item. Staff must also link a policy before converting a case to a claim.
+          </p>
+        </div>
+      </header>
+
+      <section class="case-heading">
+        <h2>1. Changing an answer</h2>
+      </section>
+
+      <div class="gallery" aria-label="Before and after screenshots for changing an answer">
+        <figure>
+          <img
+            src="./assets/intake-change-something.png"
+            alt="The original broken review screen: the assistant asks which detail to change, but only the review buttons remain available."
+            width="472"
+            height="873"
+          />
+          <figcaption>
+            <strong>Before</strong>
+            The claimant could not choose an answer to change.
+          </figcaption>
+        </figure>
+
+        <figure>
+          <img
+            src="./assets/intake-edit-flow-fixed.png"
+            alt="The working edit menu has a cancel button at the top and a scroll bar that makes every answer reachable."
+            width="532"
+            height="908"
+          />
+          <figcaption>
+            <strong>After</strong>
+            The claimant can choose an answer, cancel, and scroll through the list.
+          </figcaption>
+        </figure>
+      </div>
+
+      <section>
+        <ul>
+          <li>The claimant can choose which answer to change.</li>
+          <li>The claimant can cancel without changing anything.</li>
+          <li>The list scrolls on a phone.</li>
+        </ul>
+      </section>
+
+      <section class="case-heading">
+        <h2>2. Evidence checklist</h2>
+      </section>
+
+      <div
+        class="gallery gallery-wide"
+        aria-label="Before and after screenshots for the evidence checklist"
+      >
+        <figure>
+          <img
+            src="./assets/evidence-checklist-before.png"
+            alt="Before the fix, uploaded files are marked Other Document and the checklist shows zero of three mandatory files uploaded."
+            width="1917"
+            height="907"
+          />
+          <figcaption>
+            <strong>Before</strong>
+            Files were marked as Other Document, so the checklist stayed at 0/3.
+          </figcaption>
+        </figure>
+
+        <figure>
+          <img
+            src="./assets/evidence-checklist-after.png"
+            alt="After the fix, each uploaded file has the correct evidence type and the checklist shows three of three mandatory files uploaded."
+            width="1917"
+            height="901"
+          />
+          <figcaption>
+            <strong>After</strong>
+            Each file has the correct type and the checklist shows 3/3.
+          </figcaption>
+        </figure>
+      </div>
+
+      <section>
+        <ul>
+          <li>New uploads keep the correct evidence type.</li>
+          <li>Previously uploaded files were corrected.</li>
+          <li>The checklist count now matches the uploaded evidence.</li>
+        </ul>
+      </section>
+
+      <section class="case-heading">
+        <h2>3. Claimant name and web form icon</h2>
+      </section>
+
+      <div class="gallery gallery-wide" aria-label="Case list before and after screenshots">
+        <figure>
+          <div class="annotated-image before-list">
+            <img
+              src="./assets/case-list-claimant-channel-before.png"
+              alt="Before the fix, the cases table shows Unknown for the claimant and a question-mark channel icon."
+              width="1680"
+              height="220"
+            />
+            <span class="change-frame claimant-column" aria-hidden="true"></span>
+            <span class="change-frame channel-column" aria-hidden="true"></span>
+          </div>
+          <figcaption>
+            <strong>Before</strong>
+            The claimant showed as Unknown and web form used an unknown icon.
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="annotated-image">
+            <img
+              src="./assets/case-list-claimant-channel-after.png"
+              alt="After the fix, intake claimant names and web form icons appear in the cases table."
+              width="1917"
+              height="901"
+            />
+            <span class="change-frame claimant-column" aria-hidden="true"></span>
+            <span class="change-frame channel-column" aria-hidden="true"></span>
+          </div>
+          <figcaption>
+            <strong>After</strong>
+            The table shows the name stated during intake and a clear web form icon.
+          </figcaption>
+        </figure>
+      </div>
+
+      <section>
+        <ul>
+          <li>The claimant name no longer shows as Unknown when an intake name is available.</li>
+          <li>Web form cases use a form icon instead of an unknown icon.</li>
+        </ul>
+      </section>
+
+      <section class="case-heading">
+        <h2>
+          4. Insurance company agent role
+          <span class="status-label">Open question</span>
+        </h2>
+      </section>
+
+      <section class="open-question">
+        <strong>Open question</strong>
+        <p>Do we need a separate AGENT role for users from an insurance company?</p>
+      </section>
+
+      <section>
+        <ul>
+          <li>What work would an insurance company agent do?</li>
+          <li>What cases and information should they be allowed to see?</li>
+          <li>Can an existing role be used, or is a new role needed?</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

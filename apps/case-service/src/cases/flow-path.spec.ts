@@ -27,8 +27,43 @@ describe('pathSteps follows the branch the answers select', () => {
     ).toBe(false);
   });
 
+  it('sends a bereavement down its own arm, not the medical one', () => {
+    const onPath = pathSteps(flow, {
+      'cancellation-reason': 'DEATH_OF_RELATIVE',
+      'death-certificate-issued': 'YES',
+    });
+
+    expect(onPath.has('deceased-relationship')).toBe(true);
+    expect(onPath.has('doc-death-certificate')).toBe(true);
+    expect(onPath.has('doc-proof-of-relationship')).toBe(true);
+    expect(onPath.has('doc-medical-report')).toBe(false);
+  });
+
+  it('asks for the burial permit instead when the certificate is not issued', () => {
+    // Never both: an interim slip filed as a death certificate is an evidence
+    // record that says the final document has arrived when it has not.
+    const onPath = pathSteps(flow, {
+      'cancellation-reason': 'DEATH_OF_RELATIVE',
+      'death-certificate-issued': 'NO',
+    });
+
+    expect(onPath.has('doc-burial-permit')).toBe(true);
+    expect(onPath.has('doc-death-certificate')).toBe(false);
+    expect(onPath.has('doc-proof-of-relationship')).toBe(true);
+  });
+
+  it('keeps the bereavement steps off the illness arm', () => {
+    // The illness arm rejoins over the top of them. Without that override the
+    // medical report would fall through into a death certificate.
+    const onPath = pathSteps(flow, { 'cancellation-reason': 'ILLNESS' });
+
+    expect(onPath.has('deceased-relationship')).toBe(false);
+    expect(onPath.has('doc-death-certificate')).toBe(false);
+    expect(onPath.has('doc-booking-invoice')).toBe(true);
+  });
+
   it('always reaches the review, whichever branch is taken', () => {
-    for (const reason of ['ILLNESS', 'NATURAL_DISASTER', 'OTHER']) {
+    for (const reason of ['ILLNESS', 'DEATH_OF_RELATIVE', 'NATURAL_DISASTER', 'OTHER']) {
       expect(pathSteps(flow, { 'cancellation-reason': reason }).has('review')).toBe(true);
     }
   });

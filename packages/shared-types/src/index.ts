@@ -81,6 +81,8 @@ export enum CaseChannel {
   WHATSAPP = 'WHATSAPP',
   TELEGRAM = 'TELEGRAM',
   MESSENGER = 'MESSENGER',
+  /** The web form at /form — its own conversation, never the chat's. */
+  WEB_FORM = 'WEB_FORM',
 }
 
 export enum CaseInitiator {
@@ -352,6 +354,9 @@ export enum DocumentType {
   PASSPORT = 'PASSPORT',
   OVERSEAS_MEDICAL_BILL = 'OVERSEAS_MEDICAL_BILL',
   TRAVEL_BOOKING_INVOICE = 'TRAVEL_BOOKING_INVOICE',
+  DEATH_CERTIFICATE = 'DEATH_CERTIFICATE',
+  BURIAL_PERMIT = 'BURIAL_PERMIT',
+  PROOF_OF_RELATIONSHIP = 'PROOF_OF_RELATIONSHIP',
 }
 
 export enum DocumentStatus {
@@ -677,6 +682,7 @@ export interface RiskAssessmentResponse {
 // tsc's __exportStar helper, but does detect explicit re-export bindings.
 export {
   CASE_FLOWS,
+  TRAVEL_CLAIM_TYPE_DESCRIPTIONS,
   TRAVEL_CLAIM_TYPE_LABELS,
   AIRLINE_CHOICES,
   BANK_CHOICES,
@@ -699,6 +705,7 @@ export {
   parseAmount,
   SKIP_VALUE,
   DEFER_VALUE,
+  ATTACHED_VALUE,
   asStoredInstant,
   parseStoredDate,
   SENSITIVE_ANSWER_STEPS,
@@ -749,6 +756,7 @@ export {
   ANOTHER_CLAIM_YES,
   ANOTHER_CLAIM_NO,
   describeCallbackValue,
+  EDIT_CANCEL_VALUE,
   EDIT_CALLBACK_PREFIX,
   PAGE_CALLBACK_PREFIX,
   RESUME_CASE_CALLBACK_PREFIX,

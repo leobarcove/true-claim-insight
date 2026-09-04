@@ -106,7 +106,7 @@ true-claim-insight/
 │   ├── risk-engine/          # NestJS - Trinity rules, fraud signals, LLM extraction
 │   ├── risk-analyzer/        # Python FastAPI - Hume / Parselmouth / MediaPipe analysis
 │   ├── adjuster-portal/      # React - adjuster + operator web app
-│   └── claimant-web/         # React PWA - claimant app
+│   └── claimant-web/         # React PWA - claimant app + the web form at /form
 ├── packages/
 │   ├── shared-types/         # TypeScript interfaces + intake flows, overlay resolver, publish gate, channel capabilities (@tci/shared-types)
 │   ├── ui-components/        # Shared React components (@tci/ui-components)
@@ -268,6 +268,10 @@ platform is, what it must comply with, and what is built versus planned:
 Supporting documents:
 
 - **Market and cost analysis:** `docs/MARKET_RESEARCH_TPA_REVENUE.md` (fee pool, year-1 P&L, the three revenue paths — governs §5 sequencing and §9)
+- **Web form:** `docs/WEB_FORM_MICROSITE_PLAN.md` — the claim form at `/form`, a fourth
+  intake channel beside chat, WhatsApp and Telegram, plus the agent-assisted path.
+  `docs/WEB_FORM_MANUAL_TEST.md` is the walk-through that stands in for an e2e suite; walk
+  it before every release
 - **Case verification engine (non-motor):** `docs/CASE_VERIFICATION_ENGINE.md` — the plan for checking a Case before conversion. Replaces the motor-era Trinity engine for non-motor perils; Trinity itself stays, unextended, for motor
 - **GPU host setup:** `docs/GPU_HOST_SETUP.md` — runbook for configuring the office GPU workstation as the local-LLM host. Written to be executed by an agent; the machine is shared with two unrelated systems, so read its §0 first
 - **System User & Demo Guide:** `docs/SYSTEM_USER_GUIDE.md`
@@ -285,6 +289,18 @@ These are settled. Re-open them explicitly rather than drifting from them.
 4. **Personal data is encrypted at rest** with the master key behind a `KeyProvider` (`packages/crypto`), so moving to AWS KMS re-wraps one row and touches no data. Only the gateway and case-service hold a key.
 5. **Ciphertext and blind indexes never leave the server.** `SENSITIVE_FIELD_OMIT` (in `@tci/prisma-client`) is passed to every `PrismaClient`, so those columns are absent from query results by default; a path that genuinely decrypts opts back in with `omit: { <field>: false }`. Add any new encrypted or hashed personal-data column to that map — `sensitive-fields.spec.ts` reads the Prisma schema and fails if you forget. A `…Last4` tail is what screens display.
 6. **Prefer the durable design over the quick fix**, and never leave a partial migration — say so and scope it separately instead.
+7. **The web form is its own channel and is submit-only.** `/form` opens a `WEB_FORM`
+   binding, separate from the web chat's, so someone who switches surfaces starts a fresh
+   claim request — that separation is the `(channel, platformUserId)` binding key and
+   nothing else, and it lives in the *signed* session payload so a client cannot forge it.
+   Nothing ever comes back to the form: take-over is refused on a `WEB_FORM` conversation
+   and a bare "human" in a field is treated as text, because the form has no thread for a
+   reply to appear in. Staff follow up on WhatsApp, on the number the claimant verified.
+8. **Answers have one road in.** Every self-service answer goes through
+   `POST /api/v1/public/conversation/turn`, and the agent-assisted path uses the same
+   per-case endpoints the logged-in app uses. That path is where redaction, policy
+   matching, deadline tracking, audit rows and access checks live; there is no
+   batch-answer API and adding one would lose all of them.
 
 ## Development Commands
 
@@ -343,6 +359,10 @@ allocate the whole stack — `apps/api-gateway/.env` is a symlink to the root
 file and the other services read it too, so a bare `PORT` there would make every
 service fight for one number. Do not reintroduce `PORT` into a per-service
 `.env`: it wins silently and is invisible from the allocation block.
+
+The claimant app serves both surfaces: `/chat` is the conversation and `/form` is the web
+form. They are different channels on the server and hold **different browser session keys**,
+so "start again" on one leaves the other alone.
 
 The portals need no API URL. They default to the same-origin path `/api/v1`,
 and `vite.config.ts` proxies `/api` to `API_GATEWAY_PORT` — matching staging,

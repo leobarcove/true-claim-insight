@@ -72,7 +72,7 @@ services:
     env_file: .env.staging
     environment:
       <<: *node-env
-      CORS_ORIGINS: ${ADJUSTER_ORIGIN:?}, ${CLAIMANT_ORIGIN:?}
+      CORS_ORIGINS: ${ADJUSTER_ORIGIN:?}, ${CLAIMANT_ORIGIN:?}, ${AGENT_ORIGIN:?}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -168,6 +168,9 @@ services:
     environment:
       ADJUSTER_HOST: ${ADJUSTER_HOST:?}
       CLAIMANT_HOST: ${CLAIMANT_HOST:?}
+      # Same build as CLAIMANT_HOST, different name — the name is what selects
+      # the agent-assisted surface. See deploy/staging/Caddyfile.
+      AGENT_HOST: ${AGENT_HOST:?}
     volumes:
       - caddy_data:/data
       - caddy_config:/config

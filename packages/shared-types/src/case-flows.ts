@@ -49,6 +49,9 @@ const Doc = {
   TRAVEL_BOOKING_INVOICE: 'TRAVEL_BOOKING_INVOICE',
   OVERSEAS_MEDICAL_BILL: 'OVERSEAS_MEDICAL_BILL',
   PASSPORT: 'PASSPORT',
+  DEATH_CERTIFICATE: 'DEATH_CERTIFICATE',
+  BURIAL_PERMIT: 'BURIAL_PERMIT',
+  PROOF_OF_RELATIONSHIP: 'PROOF_OF_RELATIONSHIP',
 } as unknown as typeof import('./index').DocumentType;
 
 export type AnswerValue = string | number | boolean;
@@ -138,6 +141,32 @@ export interface FlowStep {
    * also means a channel too tight to carry both can drop this one.
    */
   hint?: string;
+  /**
+   * An example of the answer, shown in an empty box on the form surfaces.
+   *
+   * A *format*, never a repeat of the label. "Full name" over a box saying
+   * "Full name" tells nobody anything, and a placeholder standing in for a
+   * label disappears the moment somebody types — which is the accessibility
+   * complaint against them, and the reason `label` stays a separate field that
+   * is always drawn.
+   *
+   * What it is for is the question a label cannot answer: how much, and in what
+   * shape. A Malaysian claimant asked for a full name has to decide whether
+   * "bin"/"binti" belongs in it; asked for a flight number, whether the airline
+   * code does. An example settles both in three words and without a sentence of
+   * hint text.
+   *
+   * Lives on the step, beside `prompt`, `label` and `hint`, because it is the
+   * same kind of thing they are: copy about one question, owned by the flow, so
+   * the form and the assisted form cannot drift apart or from what the server
+   * will accept. The chat has no use for it — a bot bubble has no empty box —
+   * and simply ignores it.
+   *
+   * Not set on the free-text descriptions. An example long enough to be useful
+   * there is longer than a placeholder should be, and greys out at the moment
+   * it is most needed; those carry a `hint` instead.
+   */
+  placeholder?: string;
   optional?: boolean;
   /**
    * Refuse a date after today. Set on steps recording something that has
@@ -218,6 +247,27 @@ export const TRAVEL_CLAIM_TYPE_LABELS: Record<TravelClaimType, string> = {
   [TravelType.LUGGAGE_LOSS]: 'Luggage loss',
   [TravelType.TRIP_CANCELLATION]: 'Trip cancellation',
   [TravelType.MEDICAL]: 'Medical expenses',
+};
+
+/**
+ * What each claim type covers, in the claimant's words.
+ *
+ * A label alone makes somebody guess: a missed connection is not obviously a
+ * "flight delay", and a bag the airline never returned is not obviously
+ * "luggage loss" rather than damage. Choosing wrong is expensive here — the
+ * type pins the flow to the case and every question after it, and there is no
+ * turn that re-pins it.
+ *
+ * Kept beside the labels, and put on the choice itself, so the help arrives on
+ * every channel that asks the question rather than only the one it was written
+ * for.
+ */
+export const TRAVEL_CLAIM_TYPE_DESCRIPTIONS: Record<TravelClaimType, string> = {
+  [TravelType.FLIGHT_DELAY]: 'Delayed, cancelled or missed connection',
+  [TravelType.LUGGAGE_DAMAGE]: 'Bag or contents damaged in transit',
+  [TravelType.LUGGAGE_LOSS]: 'Bag not returned by the airline',
+  [TravelType.TRIP_CANCELLATION]: 'Illness, bereavement, disaster or other reason',
+  [TravelType.MEDICAL]: 'Hospital or clinic bills abroad',
 };
 
 /** Notification deadlines mirrored from typical Malaysian travel policy terms. */
@@ -381,9 +431,9 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     // "as it appears on your IC or passport" earns its length: the name has to
     // match the documents uploaded later and the account being paid, and a
     // first name alone does none of that.
-    prompt:
-      'First, what is your full name, as it appears on your IC or passport?',
+    prompt: 'First, what is your full name, as it appears on your IC or passport?',
     label: 'Full name',
+    placeholder: 'e.g. Nur Aisyah binti Rahman',
     answerType: 'text',
     // Two characters, not the usual description threshold: "Ng" is a complete
     // Malaysian surname and a real claimant should never be told their own
@@ -399,8 +449,9 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     prompt: 'What is your travel policy number?',
     hint:
       'It is on your policy schedule or the confirmation email you were sent when you bought the cover. ' +
-      'If you cannot find it, type "skip" — our team will look it up for you.',
+      'If you cannot find it, type "skip". Our team will look it up for you.',
     label: 'Policy number',
+    placeholder: 'e.g. TC-8827-3341-09',
     answerType: 'text',
     optional: true,
   },
@@ -422,6 +473,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     prompt: 'Which country were you travelling to?',
     hint: 'Tap your destination below, or type the country name if it is not listed.',
     label: 'Destination',
+    placeholder: 'e.g. Japan',
     answerType: 'choice',
     choices: [...DESTINATION_CHOICES],
     allowOther: true,
@@ -446,12 +498,13 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     // the copy asserts is true: the number is encrypted at rest and staff
     // screens show only the last four digits.
     prompt:
-      'Nearly done — the last part is where to send your payout.\n\n' +
+      'Nearly done. The last part is where to send your payout.\n\n' +
       'Your account number is encrypted and our team only ever sees the last four digits. ' +
       'We will never ask you to pay us anything.\n\n' +
       'Which bank is your account with?',
     hint: 'Tap your bank below, or type its name if it is not listed.',
     label: 'Bank name',
+    placeholder: 'e.g. Maybank',
     answerType: 'choice',
     choices: [...BANK_CHOICES],
     allowOther: true,
@@ -459,24 +512,25 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   {
     id: 'bank-account-number',
     prompt: 'What is your bank account number?',
-    hint: 'Numbers only — no spaces or dashes.',
+    hint: 'Numbers only, with no spaces or dashes.',
     label: 'Bank account number',
+    placeholder: 'e.g. 512345678901',
     answerType: 'text',
     validation: {
       pattern: '^[0-9]{6,20}$',
       // The generic rejection told a claimant their account number was wrong
       // without saying why, at the last step before submission, with the
       // obvious repair — retyping it the same way — failing identically.
-      patternError:
-        'Please type the account number using numbers only, with no spaces or dashes.',
+      patternError: 'Please type the account number using numbers only, with no spaces or dashes.',
     },
     system: true, // keys SENSITIVE_ANSWER_STEPS — the redaction set is by step id
   },
   {
     id: 'bank-account-holder',
     prompt: 'And the account holder name, exactly as registered with the bank?',
-    hint: 'If the account is in someone else’s name, give their name here — we will ask about it later.',
+    hint: 'If the account is in someone else’s name, give their name here. We will ask about it later.',
     label: 'Account holder name',
+    placeholder: 'e.g. Nur Aisyah binti Rahman',
     answerType: 'text',
   },
   {
@@ -487,8 +541,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     // below, and the bot pointed at something that did not exist. Channels with
     // no summary surface get the answers appended to this message instead —
     // see ChannelCapabilities.summaryPanel.
-    prompt:
-      'Thank you. Please review your details, then confirm to submit your claim request.',
+    prompt: 'Thank you. Please review your details, then confirm to submit your claim request.',
     label: 'Review and confirm',
     answerType: 'confirm',
     system: true, // resolveNextStep and submit() both special-case this id
@@ -553,6 +606,7 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     prompt: 'Which airline were you flying with?',
     hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
+    placeholder: 'e.g. Malaysia Airlines',
     answerType: 'choice',
     choices: [...AIRLINE_CHOICES],
     allowOther: true,
@@ -562,11 +616,12 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     prompt: 'What was your flight number?',
     hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
+    placeholder: 'e.g. MH2614',
     answerType: 'text',
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -589,15 +644,14 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     'Please upload the airline’s written confirmation of the delay or cancellation.',
     'Airline delay confirmation',
     'This is the email, SMS or printed slip from the airline saying your flight was delayed ' +
-    'or cancelled. A clear photo or screenshot is fine.',
+      'or cancelled. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-boarding-pass',
     Doc.BOARDING_PASS,
     'Please upload your boarding pass for the delayed flight.',
     'Boarding pass',
-    'The paper stub, or the pass saved in your phone. ' +
-    'A clear photo or screenshot is fine.',
+    'The paper stub, or the pass saved in your phone. ' + 'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-flight-itinerary',
@@ -605,7 +659,7 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     'Please upload your e-ticket or booking confirmation.',
     'Flight itinerary',
     'The email the airline or travel agent sent you when you booked. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
 ]);
 
@@ -615,6 +669,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     prompt: 'Which airline were you flying with when the damage occurred?',
     hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
+    placeholder: 'e.g. Malaysia Airlines',
     answerType: 'choice',
     choices: [...AIRLINE_CHOICES],
     allowOther: true,
@@ -624,11 +679,12 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     prompt: 'What was your flight number?',
     hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
+    placeholder: 'e.g. MH2614',
     answerType: 'text',
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -636,12 +692,14 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     id: 'baggage-tag',
     prompt: 'What is the baggage tag number for the affected luggage?',
     label: 'Baggage tag number',
+    placeholder: 'e.g. MH123456',
     answerType: 'text',
   },
   {
     id: 'damage-description',
     prompt: 'Please describe the damage to your luggage.',
     label: 'Damage description',
+    placeholder: 'e.g. Cracked shell, one wheel snapped off',
     answerType: 'text',
     validation: { minLength: 20 },
   },
@@ -649,6 +707,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     id: 'estimated-amount',
     prompt: 'What is your estimated claim amount in Ringgit Malaysia (RM)?',
     label: 'Estimated amount (RM)',
+    placeholder: 'e.g. 1200',
     answerType: 'number',
     validation: { min: 0, max: 1000000 },
   },
@@ -657,8 +716,8 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     Doc.PROPERTY_IRREGULARITY_REPORT,
     'Please send the baggage report the airline issued.',
     'Airline baggage report (PIR)',
-    'The form the airline gave you at the baggage counter when you reported the problem — ' +
-    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
+    'The form the airline gave you at the baggage counter when you reported the problem. ' +
+      'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-baggage-tag',
@@ -666,7 +725,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'Please upload a photo of the baggage tag.',
     'Baggage tag',
     'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-damage-photo',
@@ -674,7 +733,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'Please upload clear photographs of the damaged luggage.',
     'Damage photographs',
     'Take them in good light: one of the whole bag, then a close-up of each damaged part. ' +
-    'Several photos are better than one.',
+      'Several photos are better than one.'
   ),
   documentStep(
     'doc-proof-of-ownership',
@@ -682,7 +741,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'If you have a receipt or proof of purchase for the luggage, please send it.',
     'Proof of ownership',
     'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.',
     true
   ),
 ]);
@@ -693,6 +752,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     prompt: 'Which airline were you flying with when your luggage was lost?',
     hint: 'Tap your airline below, or type its name if it is not listed.',
     label: 'Airline',
+    placeholder: 'e.g. Malaysia Airlines',
     answerType: 'choice',
     choices: [...AIRLINE_CHOICES],
     allowOther: true,
@@ -702,11 +762,12 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     prompt: 'What was your flight number?',
     hint: 'The letters and numbers on your boarding pass, for example MH168 or AK6042.',
     label: 'Flight number',
+    placeholder: 'e.g. MH2614',
     answerType: 'text',
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -714,12 +775,14 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     id: 'baggage-tag',
     prompt: 'What is the baggage tag number for the lost luggage?',
     label: 'Baggage tag number',
+    placeholder: 'e.g. MH123456',
     answerType: 'text',
   },
   {
     id: 'contents-description',
     prompt: 'Please list the main contents of the lost luggage and their approximate values.',
     label: 'Contents description',
+    placeholder: 'e.g. Laptop, camera, two jackets',
     answerType: 'text',
     validation: { minLength: 20 },
   },
@@ -727,6 +790,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     id: 'estimated-amount',
     prompt: 'What is your estimated claim amount in Ringgit Malaysia (RM)?',
     label: 'Estimated amount (RM)',
+    placeholder: 'e.g. 1200',
     answerType: 'number',
     validation: { min: 0, max: 1000000 },
   },
@@ -735,8 +799,8 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     Doc.PROPERTY_IRREGULARITY_REPORT,
     'Please send the baggage report the airline issued.',
     'Airline baggage report (PIR)',
-    'The form the airline gave you at the baggage counter when you reported the problem — ' +
-    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
+    'The form the airline gave you at the baggage counter when you reported the problem. ' +
+      'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-baggage-tag',
@@ -744,7 +808,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     'Please upload a photo of the baggage tag or check-in receipt.',
     'Baggage tag',
     'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-proof-of-ownership',
@@ -752,7 +816,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     'Please upload receipts or proof of ownership for the items you are claiming.',
     'Proof of ownership',
     'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
 ]);
 
@@ -773,19 +837,110 @@ const tripCancellationFlow = buildFlow(
     },
     {
       id: 'estimated-amount',
-      prompt:
-        'What is the total non-refundable amount you are claiming, in Ringgit Malaysia (RM)?',
+      prompt: 'What is the total non-refundable amount you are claiming, in Ringgit Malaysia (RM)?',
       label: 'Estimated amount (RM)',
+      placeholder: 'e.g. 1200',
       answerType: 'number',
       validation: { min: 0, max: 1000000 },
     },
     documentStep(
       'doc-medical-report',
       Doc.MEDICAL_REPORT,
-      'As the cancellation was for medical reasons, please upload the medical report or certificate.',
+      'As the cancellation was on medical grounds, please upload the medical report or certificate.',
       'Medical report',
       'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
+    ),
+    {
+      // Asked, rather than inferred from an uploaded certificate, because this
+      // is what decides the claim: every travel policy pays a cancellation
+      // bereavement only for a death inside its own definition of *immediate
+      // family*, and no document states the claimant's side of that link. A
+      // Sijil Kematian records the deceased and the informant, not "my
+      // brother". One tap here is what tells an adjuster whether the link is
+      // settled or worth chasing a certificate for.
+      id: 'deceased-relationship',
+      prompt: 'We are sorry for your loss. Who was the family member you lost?',
+      // Six, not the seven the relationships would fill, and no `allowOther`.
+      // Past six the form draws a searchable chip list instead of radio cards
+      // — right for four hundred destinations, wrong for a list this short, and
+      // a typed answer there would not be a code an adjuster can rely on. The
+      // in-law case is the one folded into the last option and named in the
+      // hint, because it is the relationship policies most often exclude, so it
+      // wants a human reading the wording either way.
+      hint:
+        'If it was a parent-in-law, a grandchild or another relative, choose the last option. ' +
+        'our team will check what your policy covers.',
+      label: 'Relationship to the deceased',
+      answerType: 'choice',
+      choices: [
+        { value: 'SPOUSE', label: 'Spouse' },
+        { value: 'CHILD', label: 'Child' },
+        { value: 'PARENT', label: 'Parent' },
+        { value: 'SIBLING', label: 'Brother or sister' },
+        { value: 'GRANDPARENT', label: 'Grandparent' },
+        { value: 'OTHER_RELATIVE', label: 'Another relative' },
+      ],
+    },
+    {
+      /*
+        Asked so the claim knows which document is arriving, before it arrives.
+
+        JPN issues the burial permit at the point of death and the Sijil
+        Kematian up to seven days later, so on a cancellation — which is urgent
+        by nature — the permit is usually the only thing that exists. Refusing
+        it would stall a genuine claimant for a week at a required upload.
+
+        But accepting it *as* a death certificate is the other failure: the
+        adjuster's evidence list would show a certificate that is really an
+        interim slip, and nothing would say the real one is still to come. One
+        yes/no routes the upload to the right document type, and the answer
+        itself is the flag that a follow-up is owed.
+      */
+      id: 'death-certificate-issued',
+      prompt: 'Has the death certificate been issued yet?',
+      hint:
+        'JPN issues the Sijil Kematian a few days after the burial permit is registered, ' +
+        'so it is quite normal not to have it yet. Either one lets us start.',
+      label: 'Death certificate issued',
+      answerType: 'choice',
+      choices: [
+        { value: 'YES', label: 'Yes, I have the death certificate' },
+        { value: 'NO', label: 'Not yet, I only have the burial permit' },
+      ],
+    },
+    documentStep(
+      'doc-death-certificate',
+      Doc.DEATH_CERTIFICATE,
+      'Please upload the death certificate.',
+      'Death certificate',
+      'The Sijil Kematian issued by JPN. A clear photo or screenshot is fine.'
+    ),
+    documentStep(
+      'doc-burial-permit',
+      Doc.BURIAL_PERMIT,
+      'Please upload the burial permit. You can send the death certificate once JPN issues it.',
+      'Burial permit',
+      // The hospital form is folded in here rather than given a type of its own:
+      // it serves the identical purpose — interim proof of the death — and a
+      // third enum value would split one checklist line into two for no gain.
+      'The Permit Menguburkan (the blue JPN.LM02 slip) or the hospital’s cause-of-death ' +
+        'form. A clear photo or screenshot is fine.'
+    ),
+    documentStep(
+      'doc-proof-of-relationship',
+      Doc.PROOF_OF_RELATIONSHIP,
+      'If you have something showing your relationship to them, please send it. Otherwise, you can skip this.',
+      'Proof of relationship',
+      // Optional deliberately. Insurers differ on whether they ask for this at
+      // all, and the certificate plus the answer above usually settles it; the
+      // cases where it genuinely does not — a sibling needs *both* birth
+      // certificates — are for an adjuster to chase, not for a bot to block a
+      // bereaved claimant on. It is also a third party’s personal data, and
+      // asking every claimant for it by default is not data minimisation.
+      'A birth certificate, marriage certificate or family record showing how you were related. ' +
+        'A clear photo or screenshot is fine.',
+      true
     ),
     documentStep(
       'doc-booking-invoice',
@@ -793,7 +948,7 @@ const tripCancellationFlow = buildFlow(
       'Please upload your booking invoices and any cancellation or refund correspondence.',
       'Booking invoices',
       'Your booking invoices, plus any email showing what was refunded and what was not. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
     ),
     documentStep(
       'doc-flight-itinerary',
@@ -801,19 +956,44 @@ const tripCancellationFlow = buildFlow(
       'Please upload the e-ticket or booking confirmation for the cancelled trip.',
       'Flight itinerary',
       'The email the airline or travel agent sent you when you booked. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
     ),
   ],
   {
-    // Medical evidence is only requested when the reason is illness or death.
+    /*
+      Reason evidence, one arm per reason.
+
+      Illness and bereavement used to share the medical-report step, which
+      asked a grieving claimant for “the report from the doctor or hospital who
+      treated you” — a document about the wrong person, for a cancellation the
+      copy called medical. What a death claim turns on is the certificate and
+      the family link, so it gets its own arm.
+
+      A `switch` rather than nested branches: three destinations chained as
+      binary rules read as a ladder, and a fourth reason later would deepen it
+      again. `cancellation-reason` sets no `allowOther`, so every answer is one
+      of these codes and `default` is only ever the disaster/other arm.
+    */
     'estimated-amount': {
-      type: 'branch',
-      when: [
-        { stepId: 'cancellation-reason', op: 'in', value: ['ILLNESS', 'DEATH_OF_RELATIVE'] },
+      type: 'switch',
+      on: 'cancellation-reason',
+      cases: [
+        { value: 'ILLNESS', goto: 'doc-medical-report' },
+        { value: 'DEATH_OF_RELATIVE', goto: 'deceased-relationship' },
       ],
-      then: 'doc-medical-report',
-      else: 'doc-booking-invoice',
+      default: 'doc-booking-invoice',
     },
+    // The illness arm rejoins here, over the top of the death steps.
+    'doc-medical-report': { type: 'step', stepId: 'doc-booking-invoice' },
+    // Certificate or permit, never both — and whichever arrives, the optional
+    // relationship proof follows it.
+    'death-certificate-issued': {
+      type: 'branch',
+      when: [{ stepId: 'death-certificate-issued', op: 'eq', value: 'YES' }],
+      then: 'doc-death-certificate',
+      else: 'doc-burial-permit',
+    },
+    'doc-death-certificate': { type: 'step', stepId: 'doc-proof-of-relationship' },
   }
 );
 
@@ -823,6 +1003,7 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     prompt: 'In which country did you receive treatment?',
     hint: 'Tap the country below, or type its name if it is not listed.',
     label: 'Treatment country',
+    placeholder: 'e.g. Thailand',
     answerType: 'choice',
     choices: [...DESTINATION_CHOICES],
     allowOther: true,
@@ -831,12 +1012,14 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     id: 'hospital-name',
     prompt: 'What is the name of the hospital or clinic that treated you?',
     label: 'Hospital / clinic',
+    placeholder: 'e.g. Hospital Kuala Lumpur',
     answerType: 'text',
   },
   {
     id: 'diagnosis-description',
     prompt: 'Please describe the illness or injury and the treatment you received.',
     label: 'Condition and treatment',
+    placeholder: 'e.g. Food poisoning, two nights on a drip',
     answerType: 'text',
     validation: { minLength: 20 },
   },
@@ -844,6 +1027,7 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     id: 'estimated-amount',
     prompt: 'What is the total amount of your medical bills, in Ringgit Malaysia (RM)?',
     label: 'Estimated amount (RM)',
+    placeholder: 'e.g. 1200',
     answerType: 'number',
     validation: { min: 0, max: 5000000 },
   },
@@ -852,8 +1036,8 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     Doc.OVERSEAS_MEDICAL_BILL,
     'Please upload your itemised medical bills and receipts.',
     'Overseas medical bills',
-    'The itemised bills and receipts — the ones listing each treatment and what it cost. ' +
-    'A clear photo or screenshot is fine.',
+    'The itemised bills and receipts, listing each treatment and what it cost. ' +
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-medical-report',
@@ -861,7 +1045,7 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     'Please upload the medical report or discharge summary from the treating hospital.',
     'Medical report',
     'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-passport',
@@ -869,12 +1053,12 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     'Please upload the passport pages showing your identity and travel entry/exit stamps.',
     'Passport',
     'The photo page, plus the pages stamped when you entered and left the country. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   {
     id: 'medical-review-note',
     prompt:
-      'Thank you. Please note that medical claims are reviewed personally by our claims specialists before being passed to your insurer — a member of the team may contact you for further details.',
+      'Thank you. Please note that medical claims are reviewed personally by our claims specialists before being passed to your insurer. A member of the team may contact you for further details.',
     label: 'Specialist review notice',
     answerType: 'confirm',
   },
@@ -892,8 +1076,7 @@ export const CASE_FLOWS: Record<TravelClaimType, CaseFlow> = {
 // Helpers — used identically by case-service and both frontends
 // ---------------------------------------------------------------------------
 
-export const getFlow = (type: TravelClaimTypeLike): CaseFlow =>
-  CASE_FLOWS[type as TravelClaimType];
+export const getFlow = (type: TravelClaimTypeLike): CaseFlow => CASE_FLOWS[type as TravelClaimType];
 
 export const getStep = (flow: CaseFlow, stepId: string): FlowStep | undefined =>
   flow.steps.find(step => step.id === stepId);
@@ -1136,7 +1319,11 @@ export interface AnswerValidation {
  * unreadable stays NaN for the validator to refuse.
  */
 export function parseAmount(raw: string): number {
-  const cleaned = raw.trim().replace(/^rm\s*/i, '').replace(/,/g, '').trim();
+  const cleaned = raw
+    .trim()
+    .replace(/^rm\s*/i, '')
+    .replace(/,/g, '')
+    .trim();
   if (cleaned === '') return NaN;
   return Number(cleaned);
 }
@@ -1165,21 +1352,41 @@ const sentenceCase = (label: string): string =>
  * eleven with nothing to hand, and their choices were to abandon or to skip
  * something the claim needs. Derived from the flow rather than written per
  * line, so a flow edited in the authoring tool cannot promise the wrong list.
+ *
+ * A branch makes the list conditional, and saying so is the whole difference
+ * between useful and misleading. Trip cancellation asks for a medical report,
+ * or a death certificate, or neither, depending on the reason — listing all
+ * three flatly sends somebody whose flight was cancelled by a typhoon looking
+ * for a death certificate, and listing only the certain ones leaves the person
+ * who was ill to meet the medical report at question nine with nothing to hand.
+ * So both are named, and the conditional ones say that they are.
+ *
+ * `answers` narrows it as the claim fills in: called with none — which is when
+ * it is most useful, at the start — the branch is unresolved and everything off
+ * the default path is marked. Called later, an answered branch turns its arm
+ * into plain certainty.
  */
-export const whatYouWillNeed = (flow: CaseFlow): string[] => {
+export const whatYouWillNeed = (flow: CaseFlow, answers: CaseAnswers = {}): string[] => {
+  const certain = pathSteps(flow, answers);
   const needs: string[] = [];
+
   if (flow.steps.some(step => step.id === 'policy-number')) {
     needs.push('your travel policy number');
   }
+
   for (const step of flow.steps) {
+    if (step.answerType !== 'document') continue;
     // Lower-cased to sit in a sentence-style list, except for acronyms, which
     // read as typos in lower case — "airline baggage report (pir)" looks like a
     // mistake in the first message a claimant gets.
-    if (step.answerType === 'document') needs.push(sentenceCase(step.label));
+    const label = sentenceCase(step.label);
+    needs.push(certain.has(step.id) ? label : `${label} (only if it applies)`);
   }
+
   if (flow.steps.some(step => step.id === 'bank-account-number')) {
     needs.push('your bank details for the payout');
   }
+
   return needs;
 };
 
@@ -1205,6 +1412,28 @@ export const SKIP_VALUE = 'skip';
  * evidence checklist an adjuster reads is unchanged.
  */
 export const DEFER_VALUE = 'later';
+
+/**
+ * "The file I already sent you for this question."
+ *
+ * A form uploads the bytes and answers the question in two separate calls, and
+ * only the first of those is durable — the stored id lives in a React state
+ * that a reload throws away. A claimant then sits in front of a row that says
+ * *Uploaded* and a Continue button that does nothing, for ever, because the
+ * step is open and nothing left on the page can name the file that would close
+ * it.
+ *
+ * The id is not the fix. It is deliberately withheld from the public payload
+ * (`publicDocument` in `claimant-conversation.service.ts`) because every
+ * document read is staff-only, and handing a visitor a handle to an endpoint
+ * they cannot call is how a later change turns it into a public route.
+ *
+ * So the claimant names the *step*, and the server finds the file — which it
+ * can do without being told, and which is checked against the case either way.
+ * The chat has no use for this: it sends the turn the instant the upload
+ * returns, while the id is still in hand.
+ */
+export const ATTACHED_VALUE = '__attached';
 
 /**
  * Steps whose answer must never be stored in the clear.
@@ -1302,7 +1531,7 @@ const DATE_ORDER: readonly DateOrderRule[] = [
       'That is after the flight actually departed ({other}). Please check the scheduled time.',
     whenLateIsEarly:
       'That is before the scheduled departure ({other}), which would mean the flight left early. ' +
-      'Please check the time — and if the flight was cancelled, give the replacement flight’s departure.',
+      'Please check the time. If the flight was cancelled, give the replacement flight’s departure.',
   },
 ];
 
@@ -1407,7 +1636,7 @@ export const validateAgainstAnswers = (
         return {
           valid: false,
           error:
-            `That is before your trip began (${dayLabel(tripStart)}). Please check the date — ` +
+            `That is before your trip began (${dayLabel(tripStart)}). Please check the date. ` +
             'if it happened before you travelled, this may be a cancellation claim instead.',
         };
       }
@@ -1453,7 +1682,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
             valid: false,
             error:
               step.validation.substanceError ??
-              'We need your own description here — it is the part nobody else can fill in ' +
+              'We need your own description here. It is the part nobody else can fill in ' +
                 'for you. Even a rough one helps, for example what is damaged and how.',
           };
         }
@@ -1462,7 +1691,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
             valid: false,
             error:
               step.validation.substanceError ??
-              `Please give a little more detail — around ${step.validation.minLength} characters or more.`,
+              `Please give a little more detail, around ${step.validation.minLength} characters or more.`,
           };
         }
       }
@@ -1471,7 +1700,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
           valid: false,
           error:
             step.validation.patternError ??
-            'That does not look right — please check the format and try again.',
+            'That does not look right. Please check the format and try again.',
         };
       }
       return { valid: true };
@@ -1490,7 +1719,10 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         return { valid: false, error: `Please enter a value of at least ${step.validation.min}.` };
       }
       if (step.validation?.max !== undefined && num > step.validation.max) {
-        return { valid: false, error: `Please enter a value no greater than ${step.validation.max}.` };
+        return {
+          valid: false,
+          error: `Please enter a value no greater than ${step.validation.max}.`,
+        };
       }
       return { valid: true };
     }
@@ -1531,7 +1763,8 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         if (date.getTime() > tomorrow) {
           return {
             valid: false,
-            error: 'That date is in the future. Please give the date the incident actually happened.',
+            error:
+              'That date is in the future. Please give the date the incident actually happened.',
           };
         }
         // And not absurdly far back. `1026` for `2026` is one slipped digit,
@@ -1543,7 +1776,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         if (date.getTime() < tenYearsAgo) {
           return {
             valid: false,
-            error: 'That date looks too far in the past — please check the year.',
+            error: 'That date looks too far in the past. Please check the year.',
           };
         }
       }
@@ -1669,7 +1902,7 @@ export const computeDeadlineFlags = (
   const warnings: string[] = [];
   if (outOfWindow) {
     warnings.push(
-      `This incident happened more than ${CLAIM_WINDOW_DAYS} days ago. Claims should be submitted within ${CLAIM_WINDOW_DAYS} days — your request will still be recorded, but it may be declined by the insurer.`
+      `This incident happened more than ${CLAIM_WINDOW_DAYS} days ago. Claims should be submitted within ${CLAIM_WINDOW_DAYS} days. Your request will still be recorded, but it may be declined by the insurer.`
     );
   } else if (notifiedLate) {
     warnings.push(
@@ -1705,7 +1938,10 @@ export const computeCompleteness = (
     mandatoryUploaded: mandatoryUploaded.length,
     optionalTotal: optional.length,
     optionalUploaded: optional.filter(req => uploaded.has(req.documentType)).length,
-    percent: mandatory.length === 0 ? 100 : Math.round((mandatoryUploaded.length / mandatory.length) * 100),
+    percent:
+      mandatory.length === 0
+        ? 100
+        : Math.round((mandatoryUploaded.length / mandatory.length) * 100),
     missingMandatory,
   };
 };

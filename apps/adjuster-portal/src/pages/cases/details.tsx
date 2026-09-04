@@ -277,9 +277,7 @@ export function CaseDetailPage() {
           )}
           {caseData.convertedClaim && (
             <Link to={`/claims/${caseData.convertedClaim.id}`}>
-              <Badge variant="success">
-                Converted → {caseData.convertedClaim.claimNumber}
-              </Badge>
+              <Badge variant="success">Converted → {caseData.convertedClaim.claimNumber}</Badge>
             </Link>
           )}
         </div>
@@ -335,8 +333,8 @@ export function CaseDetailPage() {
                   <span>Evidence checklist</span>
                   {caseData.completeness && (
                     <span className="text-sm font-normal text-muted-foreground">
-                      {caseData.completeness.mandatoryUploaded}/{caseData.completeness.mandatoryTotal}{' '}
-                      mandatory uploaded
+                      {caseData.completeness.mandatoryUploaded}/
+                      {caseData.completeness.mandatoryTotal} mandatory uploaded
                     </span>
                   )}
                 </CardTitle>
@@ -352,9 +350,7 @@ export function CaseDetailPage() {
                         <Circle className="h-4 w-4 text-muted-foreground mt-0.5" />
                       )}
                       <div>
-                        <span className="font-medium">
-                          {convertToTitleCase(req.documentType)}
-                        </span>
+                        <span className="font-medium">{convertToTitleCase(req.documentType)}</span>
                         {!req.isMandatory && (
                           <span className="text-muted-foreground"> (optional)</span>
                         )}
@@ -439,15 +435,30 @@ export function CaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-1">
-                {caseData.claimant?.fullName ? (
-                  <p className="font-medium">{caseData.claimant.fullName}</p>
-                ) : statedName ? (
+                {/*
+                  What this claimant typed, in preference to the linked record.
+
+                  The two can differ: a claimant who has claimed before is
+                  matched on their verified phone number, and that match carries
+                  a name from the earlier claim — possibly stale, possibly a
+                  spelling nobody corrected. This case is about what they told
+                  us *this time*, and that is what has to match the documents
+                  they upload and the account they ask to be paid into. Showing
+                  the older name here would leave an adjuster vetting a
+                  different string from the one two inches to the left.
+
+                  The record is still the fallback, for a case opened by staff
+                  where nobody was asked the question.
+                */}
+                {statedName ? (
                   <>
                     <p className="font-medium">{statedName}</p>
                     <Badge variant="outline" className="font-normal">
                       Stated at intake · not verified
                     </Badge>
                   </>
+                ) : caseData.claimant?.fullName ? (
+                  <p className="font-medium">{caseData.claimant.fullName}</p>
                 ) : (
                   <p className="font-medium text-muted-foreground">Unknown</p>
                 )}
@@ -557,8 +568,8 @@ export function CaseDetailPage() {
                           : 'Check the payee against the claimant'}
                       </p>
                       <p className="text-muted-foreground">
-                        Claim is in the name of {payeeCheck.claimantName}; the account
-                        is held by {payeeCheck.payeeName}.
+                        Claim is in the name of {payeeCheck.claimantName}; the account is held by{' '}
+                        {payeeCheck.payeeName}.
                       </p>
                     </div>
                   </div>
@@ -670,10 +681,7 @@ export function CaseDetailPage() {
                       <Button
                         disabled={!canConvert || convertCase.isPending}
                         onClick={() =>
-                          runAction(
-                            () => convertCase.mutateAsync(id),
-                            'Case converted to a claim'
-                          )
+                          runAction(() => convertCase.mutateAsync(id), 'Case converted to a claim')
                         }
                       >
                         Convert to claim

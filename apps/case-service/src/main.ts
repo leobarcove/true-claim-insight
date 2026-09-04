@@ -44,6 +44,19 @@ async function bootstrap() {
   );
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
+  // Every self-service claim is routed to a handling adjusting firm, and so is
+  // every agent-assisted one (WEB_FORM_MICROSITE_PLAN §1.4, Routing). Without
+  // this setting `resolveCaseTenant` throws at the moment a claimant finishes
+  // the consent step — the first thing they ever see is a failure, and the
+  // conversation has already taken their number and their agreement by then.
+  // A missing deployment setting should stop the deployment, not the claimant.
+  if (nodeEnv === 'production' && !configService.get<string>('HANDLING_FIRM_TENANT_ID')) {
+    throw new Error(
+      'HANDLING_FIRM_TENANT_ID is not set. Self-service and agent-assisted intake both ' +
+        'route claims to a handling adjusting firm, and neither can open a case without it.'
+    );
+  }
+
   // Security middleware
   await app.register(helmet, {
     contentSecurityPolicy: nodeEnv === 'production',

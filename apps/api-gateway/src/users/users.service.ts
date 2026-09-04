@@ -76,6 +76,80 @@ export class UsersService {
     });
   }
 
+  /**
+   * A staff member by the number they sign in with.
+   *
+   * Unique in the schema, so this can return one row or none — which is the
+   * whole reason the constraint exists. Two accounts on one number would make
+   * the lookup pick, and a wrong pick attributes a claimant's data to the wrong
+   * person. Used only by the agent-assisted form's sign-in, where there is no
+   * password and the number *is* the identifier.
+   */
+  async findByPhoneNumber(phoneNumber: string) {
+    return this.prisma.user.findUnique({
+      where: { phoneNumber },
+      include: {
+        tenant: true,
+        currentTenant: true,
+        adjuster: true,
+        userTenants: true,
+      },
+    });
+  }
+
+  /** Match the two public credentials recorded for a PIAM-registered agent. */
+  async isPiamRegisteredAgent(registrationNumber: string, phoneNumber: string): Promise<boolean> {
+    return Boolean(await this.findPiamRegisteredAgent(registrationNumber, phoneNumber));
+  }
+
+  async findPiamRegisteredAgent(registrationNumber: string, phoneNumber: string) {
+    const normalizedPhone = phoneNumber.replace(/^\+/, '');
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        registrationNumber: string;
+        agentName: string | null;
+        agencyName: string;
+        phoneNumber: string;
+        tenantId: string | null;
+        /** The organisation's own name, for display. Null until it is linked. */
+        tenantName: string | null;
+      }>
+    >`
+      SELECT p."id", p."registrationNumber", p."agentName", p."agencyName", p."phoneNumber",
+             p."tenantId", t."name" AS "tenantName"
+      FROM "piam_registered_agents" p
+      LEFT JOIN "tenants" t ON t."id" = p."tenantId"
+      WHERE UPPER("registrationNumber") = UPPER(${registrationNumber.trim()})
+        AND regexp_replace("phoneNumber", '^\\+', '') = ${normalizedPhone}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
+
+  async findPiamRegisteredAgentById(id: string) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        registrationNumber: string;
+        agentName: string | null;
+        agencyName: string;
+        phoneNumber: string;
+        tenantId: string | null;
+        /** The organisation's own name, for display. Null until it is linked. */
+        tenantName: string | null;
+      }>
+    >`
+      SELECT p."id", p."registrationNumber", p."agentName", p."agencyName", p."phoneNumber",
+             p."tenantId", t."name" AS "tenantName"
+      FROM "piam_registered_agents" p
+      LEFT JOIN "tenants" t ON t."id" = p."tenantId"
+      WHERE p."id" = ${id}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },

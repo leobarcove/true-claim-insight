@@ -12,7 +12,12 @@ model User {
   email              String              @unique
   password           String
   fullName           String
-  phoneNumber        String
+  /// Unique because it is a credential: staff sign in to the agent-assisted
+  /// form with their own number and a WhatsApp code, and a number shared by
+  /// two accounts would make "who is signing in?" unanswerable — the lookup
+  /// would have to pick one, and the wrong pick attributes a claimant's data
+  /// to the wrong person (WEB_FORM_MICROSITE_PLAN §1.4).
+  phoneNumber        String              @unique
   role               UserRole
   licenseNumber      String?
   avatarUrl          String?
@@ -1296,6 +1301,12 @@ enum CaseChannel {
   WHATSAPP
   TELEGRAM
   MESSENGER
+  /// The web form at /form. Its own channel, not a surface on WEB_CHAT: a
+  /// visitor who starts on the form and moves to the chat gets a fresh
+  /// conversation and a fresh claim request, nothing carried over. The
+  /// separation is the (channel, platformUserId) binding key and nothing else,
+  /// so this value is what enforces it (WEB_FORM_MICROSITE_PLAN D1, §1.2).
+  WEB_FORM
 }
 
 /// Publication state of a FlowDefinition. DRAFT is editable and unusable;
@@ -1458,6 +1469,9 @@ enum DocumentType {
   PASSPORT
   OVERSEAS_MEDICAL_BILL
   TRAVEL_BOOKING_INVOICE // bookings, cancellation/refund proof
+  DEATH_CERTIFICATE // Sijil Kematian from JPN
+  BURIAL_PERMIT // Permit Menguburkan (JPN.LM02) — the interim proof, issued days before the certificate
+  PROOF_OF_RELATIONSHIP // birth or marriage certificate linking claimant to the deceased
 }
 
 enum ActorType {
@@ -1887,6 +1901,15 @@ enum ConsentChannel {
   WEB_FORM
   VIDEO_SESSION
   STAFF_CAPTURED
+  /// Read out loud by a staff member on a call, and agreed to verbally.
+  ///
+  /// Its own value rather than STAFF_CAPTURED, which reads equally as "staff
+  /// typed it while the claimant watched the screen" — a materially different
+  /// record. This one rests entirely on an agent's attestation, and that has to
+  /// be visible in the data rather than inferred from who captured it. The
+  /// attesting user, their firm and how they spoke are on the row and in its
+  /// metadata (WEB_FORM_MICROSITE_PLAN §1.4).
+  VERBAL_AGENT_ATTESTED
   IMPORTED
   /// Agreed in a messaging thread (Telegram today; WhatsApp/Messenger later).
   /// Its own value rather than WEB_FORM: the record has to say where consent
@@ -3007,4 +3030,42 @@ enum ConversationMode {
   /// A human has it. The bot stands down entirely until resolved, then the
   /// flow resumes at the step the Case is pinned to.
   HANDOVER
+}
+
+/// Snapshot of a public PIAM OARS agent/agency enquiry result.
+/// The searched NRIC is deliberately not retained; registration number is the
+/// stable public identifier returned by PIAM.
+model PiamRegisteredAgent {
+  id                 String   @id @default(uuid())
+  registrationNumber String   @unique
+  agentName           String?
+  /// The register's own name for the agency, kept as imported.
+  ///
+  /// Not the link to a tenant — `tenantId` is. This is PIAM's field, from
+  /// PIAM's register, and it exists to reconcile against on the next import
+  /// and to record which agency a historical attestation named. It used to do
+  /// a foreign key's job through `LOWER(t.name) = LOWER(p.agencyName)`, which
+  /// meant a rename in somebody else's register — "Bhd" for "Berhad", a
+  /// trailing space — signed every agent of that agency out with
+  /// "PIAM agent not found".
+  agencyName          String
+  /// The organisation this registration belongs to, resolved once.
+  ///
+  /// Nullable because an agent can be imported from the register before the
+  /// tenant exists. A null here means "not onboarded yet", which is a thing to
+  /// report, never a reason to refuse the agent's identity.
+  tenantId            String?
+  phoneNumber         String?
+  principals         Json
+  corporateNominees  String[] @default([])
+  permanentUrl        String?
+  permanentLinkCode   String?
+  sourceUrl           String   @default("https://oars.piam.org.my/eid/")
+  sourceCheckedAt     DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([sourceCheckedAt])
+  @@map("piam_registered_agents")
 }

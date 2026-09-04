@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gap — Change something shows no options</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    :root {
+      --paper: #F6F8F6;
+      --surface: #FFFFFF;
+      --ink: #0C1613;
+      --ink-2: #4A5C55;
+      --rule: #DCE5E0;
+      --emerald: #0B744E;
+      --rose: #A33B32;
+      --rose-soft: #FAEBEA;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font);
+      line-height: 1.6;
+    }
+    main {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1 { font-size: 1.45rem; line-height: 1.25; margin: 0 0 0.35rem; }
+    .meta { color: var(--ink-2); font-size: 0.9rem; margin: 0 0 1.5rem; }
+    .badge {
+      display: inline-block;
+      background: var(--rose-soft);
+      color: var(--rose);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    figure {
+      margin: 0 0 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figcaption {
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: var(--ink-2);
+      border-top: 1px solid var(--rule);
+    }
+    h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+    p, li { font-size: 0.95rem; }
+    ul { padding-left: 1.2rem; }
+    a { color: var(--emerald); }
+    code {
+      font-size: 0.85em;
+      background: #E7F2EC;
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="badge">Open gap</span>
+    <h1>Change something shows no options and does not allow typing</h1>
+    <p class="meta">Found 28 August 2026 · claimant web chat review · <a href="./gaps.html#g2">all gaps</a> · <a href="./INTAKE_CHANGE_SOMETHING_GAP.md">markdown record</a></p>
+
+    <figure>
+      <img
+        src="./assets/intake-change-something.png"
+        alt="Review screen after tapping Change something. The transcript repeats Asked to change something and Which detail would you like to change? The composer still shows Confirm and submit and Change something, with no field list and no text box."
+        width="390"
+        height="844"
+      >
+      <figcaption>
+        After <strong>Change something</strong>, the bot asks which detail to change, but the composer stays on the review buttons. There is no field list and nothing to type.
+      </figcaption>
+    </figure>
+
+    <h2>What goes wrong</h2>
+    <ul>
+      <li>Transcript label: <em>Asked to change something</em> (callback <code>false</code>).</li>
+      <li>Bot reply: <em>Which detail would you like to change?</em></li>
+      <li>Composer still shows <strong>Confirm and submit</strong> / <strong>Change something</strong> only.</li>
+      <li>Tapping again repeats the same two bubbles.</li>
+    </ul>
+
+    <h2>Cause</h2>
+    <p>
+      The gateway already builds a synthetic choice step <code>__edit-menu</code> with one option per answered field.
+      Web chat <code>currentStep</code> is taken from the Case review confirm step, not from that menu, so the PWA never renders the choices or a text box.
+    </p>
+
+    <h2>Done when</h2>
+    <p>
+      After <strong>Change something</strong>, the claimant can pick a field from a list, or type which detail to change. The review buttons must not stay as the only control.
+    </p>
+  </main>
+</body>
+</html>

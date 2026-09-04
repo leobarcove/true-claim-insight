@@ -25,6 +25,7 @@ import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResolveIntakeClaimantDto } from './dto/resolve-intake-claimant.dto';
 import { ResolveChannelClaimantDto } from './dto/resolve-channel-claimant.dto';
+import { StaffSendCodeDto, StaffVerifyCodeDto } from './dto/staff-mobile-signin.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
@@ -89,6 +90,57 @@ export class AuthController {
     return result;
   }
 
+  /**
+   * Staff sign-in by mobile — the door to the agent-assisted form.
+   *
+   * There is no password anywhere on the claimant-facing site, and adding one
+   * for staff would have created the only one in it: a secret to leak, reset
+   * and quietly share between colleagues. An agent proves their own number
+   * instead, through the WhatsApp transport claimants already use, and access
+   * is granted or revoked by which numbers the firm has on its accounts.
+   *
+   * Throttled harder than the password login. Each request can dispatch a
+   * billed WhatsApp message, and unlike `/auth/login` there is no password to
+   * fail — so the rate limit is the only thing between an open endpoint and
+   * somebody making us send messages all afternoon.
+   */
+  @Post('staff/send-code')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 300000 } }) // 5 per 5 minutes
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a sign-in code to a staff member’s own mobile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Generic response whether or not the staff identity exists',
+  })
+  async staffSendCode(@Body() dto: StaffSendCodeDto) {
+    return this.authService.staffSendCode(dto.registrationNumber, dto.phoneNumber);
+  }
+
+  @Post('staff/verify-code')
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 300000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange a staff sign-in code for a session' })
+  @ApiResponse({ status: 401, description: 'Wrong code, or no active staff account' })
+  async staffVerifyCode(
+    @Body() dto: StaffVerifyCodeDto,
+    @Res({ passthrough: true }) response: FastifyReply
+  ) {
+    const result = await this.authService.staffVerifyCode(
+      dto.registrationNumber,
+      dto.phoneNumber,
+      dto.code,
+      dto.keepSignedIn ?? false
+    );
+    this.setRefreshTokenCookie(
+      response,
+      result.tokens!.refreshToken,
+      dto.keepSignedIn ? 30 : undefined
+    );
+    return result;
+  }
+
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -120,13 +172,19 @@ export class AuthController {
     return { message: 'Logout successful' };
   }
 
-  private setRefreshTokenCookie(response: FastifyReply, refreshToken: string) {
+  /**
+   * `days` is passed only by the agent-assisted sign-in's "keep me signed in".
+   * The cookie's life has to match the token's, or the browser drops a refresh
+   * token that was still valid and the agent is asked for a code again —
+   * looking exactly like the expiry the option was chosen to avoid.
+   */
+  private setRefreshTokenCookie(response: FastifyReply, refreshToken: string, days = 7) {
     response.setCookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: days * 24 * 60 * 60 * 1000,
     });
   }
 
@@ -137,7 +195,18 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@CurrentUser() user: Express.User) {
-    const userTenants = await this.authService.getUserTenants(user.id);
+    const piamIdentity = (user as any).identityType === 'PIAM_AGENT';
+    const userTenants = piamIdentity
+      ? [
+          {
+            tenantId: user.tenantId,
+            tenantName: (user as any).tenantName,
+            role: user.role,
+            isDefault: true,
+            status: 'ACTIVE',
+          },
+        ]
+      : await this.authService.getUserTenants(user.id);
 
     return {
       id: user.id,
@@ -149,7 +218,8 @@ export class AuthController {
       avatarUrl: (user as any).avatarUrl,
       tenantId: user.tenantId,
       currentTenantId: (user as any).currentTenantId || user.tenantId,
-      tenantName: user.tenant?.name || (user as any).currentTenant?.name,
+      tenantName:
+        (user as any).tenantName || user.tenant?.name || (user as any).currentTenant?.name,
       userTenants,
     };
   }
@@ -339,7 +409,9 @@ export class AuthController {
   async sendOtp(@Body() dto: SendOtpDto) {
     const result = await this.otpService.sendOtp(dto.phoneNumber);
     return {
-      message: result.code ? 'No SMS provider — code returned for testing' : 'OTP sent successfully',
+      message: result.code
+        ? 'No SMS provider — code returned for testing'
+        : 'OTP sent successfully',
       expiresIn: result.expiresIn,
       // Present only outside production, and only while no transport can
       // deliver. The service throws rather than populating this in production,

@@ -9,6 +9,7 @@ import {
   DocumentType,
   PolicySource,
   FlowStatus,
+  FeeBasis,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CSP_ADJUSTING_WORKING_DAYS, CSP_SUPPLEMENTARY_WORKING_DAYS } from '@tci/shared-types';
@@ -529,6 +530,33 @@ async function main() {
 
   console.log('🏢 MSIG tenant + sample travel policies created.');
 
+  // Illustrative SCALE from the CSP fee arithmetic tests — not any insurer's
+  // real terms. Without a row, drafting a fee note refuses: rates are tenant
+  // configuration. Pacific is included because a chat case converted without a
+  // linked policy bills the handling firm as insurerTenantId.
+  const demoFeeBands = [
+    { upTo: 10_000, pct: 0.1 },
+    { upTo: 50_000, pct: 0.05 },
+    { upTo: null, pct: 0.02 },
+  ];
+  for (const tenantId of [PACIFIC_ID, ALLIANZ_ID, msigTenant.id]) {
+    const existingScale = await prisma.feeScale.findFirst({
+      where: { tenantId, isActive: true },
+    });
+    if (existingScale) continue;
+    await prisma.feeScale.create({
+      data: {
+        tenantId,
+        basis: FeeBasis.SCALE,
+        bands: demoFeeBands,
+        sstRate: 0.08,
+        paymentTermsDays: 30,
+        isActive: true,
+      },
+    });
+  }
+  console.log('💷 Demo fee scales seeded (SCALE, 8% SST) for Pacific, Allianz and MSIG.');
+
   // 8. Travel evidence requirements — global defaults (tenantId null), one
   // checklist per travel claim subtype. Upsert-by-delete because the compound
   // unique key contains nullable tenantId, which Prisma upsert cannot target.
@@ -554,7 +582,13 @@ async function main() {
     // Trip cancellation
     { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.TRAVEL_BOOKING_INVOICE, isMandatory: true, description: 'Booking invoices and any cancellation or refund correspondence' },
     { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.FLIGHT_ITINERARY, isMandatory: true, description: 'E-ticket or booking confirmation for the cancelled trip' },
-    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.MEDICAL_REPORT, isMandatory: false, description: 'Medical report where cancellation is due to illness or death' },
+    // Reason evidence: not mandatory, because these rows are flat per subtype
+    // and only one of them applies to any given claim. Which one the claimant
+    // was actually asked for is decided by `cancellation-reason` in the flow.
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.MEDICAL_REPORT, isMandatory: false, description: 'Medical report where cancellation is due to illness' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.DEATH_CERTIFICATE, isMandatory: false, description: 'Death certificate (Sijil Kematian) where cancellation is due to a death in the family' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.BURIAL_PERMIT, isMandatory: false, description: 'Burial permit — interim proof accepted before JPN issues the death certificate; the certificate is still outstanding' },
+    { travelClaimType: TravelClaimType.TRIP_CANCELLATION, documentType: DocumentType.PROOF_OF_RELATIONSHIP, isMandatory: false, description: 'Birth or marriage certificate linking the claimant to the deceased' },
     // Medical (form + expert routing — never auto-assessed)
     { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.OVERSEAS_MEDICAL_BILL, isMandatory: true, description: 'Itemised overseas medical bills and receipts' },
     { travelClaimType: TravelClaimType.MEDICAL, documentType: DocumentType.MEDICAL_REPORT, isMandatory: true, description: 'Medical report or discharge summary from the treating hospital' },

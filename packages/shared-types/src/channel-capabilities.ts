@@ -27,6 +27,7 @@ const Channel = {
   WHATSAPP: 'WHATSAPP',
   TELEGRAM: 'TELEGRAM',
   MESSENGER: 'MESSENGER',
+  WEB_FORM: 'WEB_FORM',
 } as unknown as typeof import('./index').CaseChannel;
 
 /** How a channel presents a fixed set of options. */
@@ -159,6 +160,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   [Channel.WHATSAPP]: 'WhatsApp',
   [Channel.TELEGRAM]: 'Telegram',
   [Channel.MESSENGER]: 'Messenger',
+  [Channel.WEB_FORM]: 'Web form',
 };
 
 export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
@@ -182,6 +184,34 @@ export const CHANNEL_CAPABILITIES: Record<string, ChannelCapabilities> = {
     requestsContactShare: false,
     retainsPlaintext: false,
     // It is already the web; the Mini App renders this same page.
+    formPrimitive: 'webview',
+  },
+  /**
+   * The web form. Everything WEB_CHAT can do, and one thing it cannot.
+   *
+   * `summaryPanel` is the difference, and it is the whole reason this entry is
+   * not a copy. WEB_CHAT had to declare it false because the panel was
+   * announced and never built, and the flag told the gateway to stop appending
+   * the answers to the review message — so claimants were asked to confirm a
+   * submission with nothing on screen to confirm. The form draws that panel:
+   * the summary rail is beside every section and the review page lists every
+   * answer. Here the flag is true and honest.
+   *
+   * `formPrimitive` is 'webview' in the sense that matters — the surface *is*
+   * the web — but nothing opens a webview from a thread, because a form
+   * conversation has no thread the claimant reads.
+   */
+  [Channel.WEB_FORM]: {
+    channel: Channel.WEB_FORM,
+    choiceMax: Number.POSITIVE_INFINITY,
+    choiceStyle: 'native',
+    document: 'native',
+    dateEntry: 'picker',
+    maxMessageChars: Number.POSITIVE_INFINITY,
+    summaryPanel: true,
+    platformVerifiedPhone: false,
+    requestsContactShare: false,
+    retainsPlaintext: false,
     formPrimitive: 'webview',
   },
   [Channel.TELEGRAM]: {
