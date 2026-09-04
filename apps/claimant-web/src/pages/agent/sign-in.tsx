@@ -26,7 +26,6 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   const [registrationTouched, setRegistrationTouched] = useState(false);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [sent, setSent] = useState(false);
   const [numberHelp, setNumberHelp] = useState(false);
   const [remaining, setRemaining] = useState(RESEND_SECONDS);
@@ -87,7 +86,6 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
         registrationNumber: registrationNumber.trim(),
         phoneNumber: e164(),
         code: value,
-        keepSignedIn,
       });
       onSignedIn();
     } catch (caught) {
@@ -249,23 +247,6 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
             Wrong number?
           </button>
         </p>
-
-        {/*
-          The thing that makes this liveable. An agent taking claims by phone
-          all day would otherwise meet two sign-in screens per claim, which is
-          the friction that ruled out a password in the first place. It buys a
-          longer *refresh* token, not a longer grant — the access token still
-          expires in minutes and every renewal re-reads the account.
-        */}
-        <label className="flex cursor-pointer items-center gap-2.5 rounded-lg bg-primary/5 px-3.5 py-3">
-          <input
-            type="checkbox"
-            checked={keepSignedIn}
-            onChange={event => setKeepSignedIn(event.target.checked)}
-            className="h-4 w-4 accent-[hsl(var(--primary))]"
-          />
-          <span className="text-[13px]">Keep me signed in on this device for 30 days</span>
-        </label>
 
         {error && (
           <p role="alert" className="text-xs text-destructive">

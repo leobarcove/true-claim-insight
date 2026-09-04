@@ -70,14 +70,13 @@ export function useAgentSendCode() {
   });
 }
 
-/** Step two: the code, and a session that survives the fortnight. */
+/** Step two: verify the code and store the standard staff session. */
 export function useAgentVerifyCode() {
   return useMutation({
     mutationFn: async (input: {
       registrationNumber: string;
       phoneNumber: string;
       code: string;
-      keepSignedIn: boolean;
     }) => {
       const { data } = await authEntryClient.post<{ data: any }>('/auth/staff/verify-code', input);
       const payload = (data as any).data ?? data;

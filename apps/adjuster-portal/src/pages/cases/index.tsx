@@ -8,9 +8,9 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
-  Phone,
   Plus,
   Send,
+  UserCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/header';
@@ -63,7 +63,7 @@ export const caseStatusConfig: Record<
 const channelIcons: Record<string, { icon: any; label: string }> = {
   WEB_CHAT: { icon: MessageSquare, label: 'Web chat' },
   WEB_FORM: { icon: ClipboardList, label: 'Web form' },
-  STAFF: { icon: Phone, label: 'Staff capture' },
+  STAFF: { icon: UserCheck, label: 'Staff capture' },
   EMAIL: { icon: Mail, label: 'Email FNOL' },
   WHATSAPP: { icon: MessageCircle, label: 'WhatsApp' },
   TELEGRAM: { icon: Send, label: 'Telegram' },
