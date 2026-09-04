@@ -76,7 +76,7 @@ describe('synthesiseStep rebuilds the edit menu', () => {
 
     expect(step!.choices).toContainEqual({
       value: '__edit-cancel',
-      label: 'Cancel — back to review',
+      label: 'Cancel, back to review',
       title: 'Cancel',
       description: 'Return to review without changing anything',
     });

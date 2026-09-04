@@ -33,7 +33,7 @@ describe('the assisted band', () => {
     // the two can never disagree.
     const outstanding = screen.getAllByText(/Consent not yet recorded/);
     expect(outstanding.length).toBeGreaterThan(0);
-    outstanding.forEach(node => expect(node).toHaveTextContent(/no claim details can be entered/));
+    outstanding.forEach(node => expect(node).toHaveTextContent(/No claim details can be entered/));
   });
 
   it('shows the time but not the internal notice version once consent is recorded', () => {
@@ -60,7 +60,7 @@ describe('the assisted band', () => {
       half-entered claim, with nothing on it saying so — an agent reaching for
       it to check whose account they were in lost the claim instead.
     */
-    const initials = screen.getByRole('button', { name: 'Signed in as Faiz Rahman — account' });
+    const initials = screen.getByRole('button', { name: 'Signed in as Faiz Rahman, account' });
     expect(initials).toHaveTextContent('FR');
     expect(screen.queryByRole('dialog', { name: 'Account' })).toBeNull();
 
@@ -77,7 +77,7 @@ describe('the assisted band', () => {
     const user = userEvent.setup();
     render(<AgentBand agent={agent} claimant={claimant} consent={null} />);
 
-    await user.click(screen.getByRole('button', { name: 'Signed in as Faiz Rahman — account' }));
+    await user.click(screen.getByRole('button', { name: 'Signed in as Faiz Rahman, account' }));
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(screen.queryByRole('dialog', { name: 'Account' })).toBeNull();

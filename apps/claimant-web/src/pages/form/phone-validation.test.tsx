@@ -27,7 +27,7 @@ vi.mock('@/lib/api-client', () => ({
 const AT_PHONE = {
   stage: 'phone',
   locale: 'en',
-  lastReply: 'Hello — we handle travel insurance claims.',
+      lastReply: 'Hello. We handle travel insurance claims.',
 };
 
 const renderForm = () => {

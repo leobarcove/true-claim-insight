@@ -405,7 +405,7 @@ const outstanding = (flow: CaseFlow, answers: CaseAnswers): string => {
   if (deferred.length === 0) return '';
 
   return (
-    '\n\nStill to send, whenever you have them — just send them in this chat:\n' +
+      '\n\nStill to send, whenever you have them. Just send them in this chat:\n' +
     deferred.map(step => `• ${step.label}`).join('\n')
   );
 };
@@ -552,7 +552,7 @@ export class ConversationGateway implements OnModuleInit {
             text:
               `Our team needs one more thing on ${caseRow.caseNumber}` +
               (caseRow.reviewNote ? `: ${caseRow.reviewNote}` : '.') +
-              ' (sent as an approved template — the conversation window had closed)',
+          ' (sent as an approved template because the conversation window had closed)',
             status: ConversationMessageStatus.PROCESSED,
             processedAt: new Date(),
           },
@@ -797,7 +797,7 @@ export class ConversationGateway implements OnModuleInit {
 
       if (inHandover?.mode !== ConversationMode.HANDOVER) {
         await this.safeSend(adapter, payload.platformUserId, {
-          text: 'Sorry — something went wrong on our side. Please try again in a moment.',
+        text: 'Sorry, something went wrong on our side. Please try again in a moment.',
         });
       }
     }
@@ -822,7 +822,7 @@ export class ConversationGateway implements OnModuleInit {
       },
       data: {
         status: ConversationMessageStatus.FAILED,
-        error: 'Recorded but never processed — the service stopped mid-turn',
+          error: 'Recorded but never processed because the service stopped mid-turn',
         processedAt: new Date(),
       },
     });
@@ -910,7 +910,7 @@ export class ConversationGateway implements OnModuleInit {
         where: { id: messageId },
         data: {
           status: ConversationMessageStatus.UNPARSEABLE,
-          error: 'Edited message — cannot be applied retrospectively',
+        error: 'Edited messages cannot be applied retrospectively',
           processedAt: new Date(),
         },
       });
@@ -935,7 +935,7 @@ export class ConversationGateway implements OnModuleInit {
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          `Sorry — we cannot read a ${describeMediaKind(payload.unsupportedMedia)} here. ` +
+          `Sorry, we cannot read a ${describeMediaKind(payload.unsupportedMedia)} here. ` +
           'Please send a photo, a file, or type your answer. Type "human" if you would ' +
           'rather speak to someone.',
       });
@@ -1041,7 +1041,7 @@ export class ConversationGateway implements OnModuleInit {
 
         await this.say(adapter, binding.id, payload.platformUserId, {
           text: isOpening
-            ? 'Hello — we handle insurance claims, and we can start yours here.\n\n' +
+          ? 'Hello. We handle insurance claims, and we can start yours here.\n\n' +
               'What is your mobile number? Please include the country code, for example ' +
               '+60 12 345 6789.'
             : 'That does not look like a mobile number. Please include the country code, ' +
@@ -1072,7 +1072,7 @@ export class ConversationGateway implements OnModuleInit {
         });
         await this.say(adapter, binding.id, payload.platformUserId, {
           text:
-            'Sorry — we could not send the code just now. Please check the number and ' +
+            'Sorry, we could not send the code just now. Please check the number and ' +
             'send it again.',
         });
         return;
@@ -1136,7 +1136,7 @@ export class ConversationGateway implements OnModuleInit {
         // still arrive, and a rate limit is a reason to wait rather than to
         // start over.
         await this.say(adapter, binding.id, payload.platformUserId, {
-          text: 'Sorry — we could not send another code just now. Please try again in a moment.',
+        text: 'Sorry, we could not send another code just now. Please try again in a moment.',
         });
         return;
       }
@@ -1245,7 +1245,7 @@ export class ConversationGateway implements OnModuleInit {
     if (!payload.sharedPhone) {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'Hello — we handle insurance claims, and we can start yours here.\n\n' +
+          'Hello. We handle insurance claims, and we can start yours here.\n\n' +
           'First, please tap the button below to share your mobile number so we know who ' +
           'you are.',
         requestPhone: true,
@@ -1292,7 +1292,7 @@ export class ConversationGateway implements OnModuleInit {
     await this.say(adapter, binding.id, payload.platformUserId, {
       text: shared
         ? 'Thank you.'
-        : 'Hello — we handle insurance claims, and we can start yours here.',
+        : 'Hello. We handle insurance claims, and we can start yours here.',
       // The share-contact keyboard has done its job; without this it stays
       // pinned beneath every question that follows.
       removeKeyboard: true,
@@ -1424,7 +1424,7 @@ export class ConversationGateway implements OnModuleInit {
               answerType: 'choice',
               choices: returned.map(row => ({
                 value: `${RESUME_CASE_CALLBACK_PREFIX}${row.id}`,
-                label: `${row.caseNumber} — ${(row.reviewNote ?? 'more information needed').slice(0, 40)}`,
+                label: `${row.caseNumber}: ${(row.reviewNote ?? 'more information needed').slice(0, 40)}`,
                 title: row.caseNumber,
                 description: (row.reviewNote ?? 'More information needed').slice(0, 72),
               })),
@@ -1498,7 +1498,7 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
           'You have withdrawn your consent for us to process this claim, so we have stopped ' +
-          'here. Your claim request is unaffected — please contact our support desk if you ' +
+          'here. Your claim request is unaffected. Please contact our support desk if you ' +
           'would like to continue.',
       });
       return;
@@ -1531,7 +1531,7 @@ export class ConversationGateway implements OnModuleInit {
         },
       });
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'Sorry — our last message may not have reached you. Here it is again.',
+        text: 'Sorry, our last message may not have reached you. Here it is again.',
       });
       await this.ask(
         adapter,
@@ -1614,7 +1614,7 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
           word === '/start'
-            ? 'You already have a claim in progress — here is where we were.'
+            ? 'You already have a claim in progress. Here is where we were.'
             : 'Sorry, we do not recognise that command. Here is the question again.',
       });
       await this.ask(
@@ -1665,7 +1665,7 @@ export class ConversationGateway implements OnModuleInit {
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
           'That looks like a question rather than an answer. If you are unsure, type "human" ' +
-          'and one of our team will help — otherwise here is the question again.',
+          'and one of our team will help. Otherwise, here is the question again.',
       });
       await this.ask(
         adapter,
@@ -1951,7 +1951,7 @@ export class ConversationGateway implements OnModuleInit {
         value = DEFER_VALUE;
         await this.say(adapter, binding.id, payload.platformUserId, {
           text:
-            `Noted — we will carry on without it for now, and your claim will show ` +
+            `Noted. We will carry on without it for now, and your claim will show ` +
             `"${step.label}" as still to come. You can send it in this chat whenever you have it.`,
         });
       } else if (!payload.mediaRef) {
@@ -2002,7 +2002,7 @@ export class ConversationGateway implements OnModuleInit {
             await this.say(adapter, binding.id, payload.platformUserId, {
               text:
                 'That file is too large for us to receive (the limit is 20 MB). Please send a ' +
-                'smaller version — a photo of the document usually works.',
+                'smaller version. A photo of the document usually works.',
             });
             return;
           }
@@ -2324,7 +2324,7 @@ export class ConversationGateway implements OnModuleInit {
             'Asking for it rather than failing the submission.'
         );
         await this.say(adapter, binding.id, payload.platformUserId, {
-          text: 'One more thing before we submit — we are missing an answer.',
+          text: 'One more thing before we submit. We are missing an answer.',
         });
         await this.ask(
           adapter,
@@ -2341,7 +2341,7 @@ export class ConversationGateway implements OnModuleInit {
       const submitted = await this.cases.submit(caseRow.id, this.claimantContext(binding));
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          `Thank you — your claim request ${submitted.caseNumber} has been submitted. ` +
+          `Thank you. Your claim request ${submitted.caseNumber} has been submitted. ` +
           'Our team will review it and contact you if anything further is needed.' +
           // Named, not just counted. A claimant who deferred a document has
           // been told the claim would carry on without it; ending with a
@@ -2452,7 +2452,7 @@ export class ConversationGateway implements OnModuleInit {
       // record against is the failure this whole gate exists to prevent.
       this.logger.error('No approved CLAIM_PROCESSING notice; refusing to start intake.');
       await this.say(adapter, binding.id, payload.platformUserId, {
-        text: 'Sorry — we cannot start a claim just now. Please contact our support desk.',
+        text: 'Sorry, we cannot start a claim just now. Please contact our support desk.',
       });
       return;
     }
@@ -2472,7 +2472,7 @@ export class ConversationGateway implements OnModuleInit {
       this.logger.log(`Consent declined on ${payload.channel} for claimant ${binding.claimantId}.`);
       await this.say(adapter, binding.id, payload.platformUserId, {
         text:
-          'That is your choice — we cannot open a claim without permission to handle your ' +
+          'That is your choice. We cannot open a claim without permission to handle your ' +
           'details, so we will stop here.\n\nMessage us any time if you change your mind, or ' +
           'contact our support desk to claim another way.',
       });
@@ -2656,10 +2656,10 @@ export class ConversationGateway implements OnModuleInit {
 
     await this.say(adapter, binding.id, payload.platformUserId, {
       text:
-        `Your claim request is open — reference ${created.caseNumber}.\n\n` +
+        `Your claim request is open. Reference ${created.caseNumber}.\n\n` +
         `There are ${questions} questions. You will need:\n` +
         needs.map((need: string) => `• ${need}`).join('\n') +
-        '\n\nYou can stop at any point and carry on later — we will pick up where you left off.' +
+        '\n\nYou can stop at any point and carry on later. We will pick up where you left off.' +
         // Said plainly rather than discovered. Serving the consent notice in
         // Malay and then asking every question in English promises a level of
         // support that does not exist yet — worse than being consistently
@@ -2699,7 +2699,7 @@ export class ConversationGateway implements OnModuleInit {
     if (!configured) {
       this.logger.error(
         'HANDLING_FIRM_TENANT_ID is not set, so this conversation has no tenant until a Case ' +
-          'is created — it will not appear in any operator queue until then.'
+          'is created, so it will not appear in any operator queue until then.'
       );
       return null;
     }
@@ -2925,7 +2925,7 @@ export class ConversationGateway implements OnModuleInit {
                 : String(value);
         return {
           value: `${EDIT_CALLBACK_PREFIX}${step.id}`,
-          label: `${step.label} — ${shown}`.slice(0, 60),
+          label: `${step.label}: ${shown}`.slice(0, 60),
           // Split for channels with two-slot rows: WhatsApp shows 24
           // characters of title and 72 of description, so the value lives in
           // the slot that fits it.
@@ -2941,7 +2941,7 @@ export class ConversationGateway implements OnModuleInit {
     // the trap for anyone who cannot yet discover that the menu scrolls.
     choices.unshift({
       value: EDIT_CANCEL_VALUE,
-      label: 'Cancel — back to review',
+      label: 'Cancel, back to review',
       title: 'Cancel',
       description: 'Return to review without changing anything',
     });
@@ -3045,7 +3045,7 @@ export class ConversationGateway implements OnModuleInit {
       },
     });
     await this.say(adapter, binding.id, payload.platformUserId, {
-      text: 'Of course — one of our team will pick this up with you shortly.',
+      text: 'Of course. One of our team will pick this up with you shortly.',
     });
   }
 
@@ -3126,11 +3126,11 @@ export class ConversationGateway implements OnModuleInit {
     if (greeted) {
       // Not an error. They said hello; the honest reply is hello back and the
       // question they were on, not an apology for something they did not do.
-      lines.push('Hello! We are partway through your claim — here is where we left off.');
+      lines.push('Hello! We are partway through your claim. Here is where we left off.');
     } else if (step.answerType === 'date') {
       lines.push('Sorry, we could not read that as a date.');
       lines.push(
-        'You can write it as 16/06/2026, or as 16 June 2026 — or just "today" or "yesterday".'
+        'You can write it as 16/06/2026, as 16 June 2026, or just "today" or "yesterday".'
       );
     } else {
       lines.push('Sorry, we could not read that as a date and time.');
@@ -3191,7 +3191,7 @@ export class ConversationGateway implements OnModuleInit {
     ) {
       text +=
         step.answerType === 'date'
-          ? '\n\nFor example 16/06/2026, or 16 June 2026 — or just "today" or "yesterday".'
+          ? '\n\nFor example 16/06/2026, 16 June 2026, "today", or "yesterday".'
           : // No relative words offered here: `parseTextDate` refuses them on a
             // datetime step, because inventing a clock reading the claimant
             // never gave would put a made-up time on an incident record.
@@ -3209,7 +3209,7 @@ export class ConversationGateway implements OnModuleInit {
     if (step.answerType === 'document') {
       text += step.optional
         ? `\n\nIf this one does not apply to you, type "${SKIP_VALUE}".`
-        : `\n\nDo not have it yet? Type "${DEFER_VALUE}" and we will carry on — you can send it ` +
+        : `\n\nDo not have it yet? Type "${DEFER_VALUE}" and we will carry on. You can send it ` +
           'in this chat later.';
     }
 

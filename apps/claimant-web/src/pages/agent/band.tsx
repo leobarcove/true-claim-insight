@@ -68,7 +68,7 @@ export function AgentBand({
 
   const consentLine = consent
     ? `Verbal consent attested by you at ${asTime(consent.attestedAt)}`
-    : 'Consent not yet recorded — no claim details can be entered';
+    : 'Consent not yet recorded. No claim details can be entered';
 
   return (
     <div className="flex flex-col gap-1.5 border-b border-amber-300 bg-amber-50 px-4 py-2 text-amber-900 sm:flex-row sm:items-center sm:gap-4 sm:px-16 sm:py-3 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
@@ -117,7 +117,7 @@ export function AgentBand({
             */}
             <button
               type="button"
-              aria-label={`Signed in as ${agent.fullName} — account`}
+              aria-label={`Signed in as ${agent.fullName}, account`}
               aria-expanded={accountOpen}
               aria-haspopup="dialog"
               onClick={() => setAccountOpen(open => !open)}

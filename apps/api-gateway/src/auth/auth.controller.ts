@@ -109,6 +109,10 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 300000 } }) // 5 per 5 minutes
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a sign-in code to a staff member’s own mobile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Generic response whether or not the staff identity exists',
+  })
   async staffSendCode(@Body() dto: StaffSendCodeDto) {
     return this.authService.staffSendCode(dto.registrationNumber, dto.phoneNumber);
   }

@@ -448,7 +448,7 @@ function DocumentField({
           {attached ? (
             <>
               <CheckIcon className="h-3.5 w-3.5" />
-              <span className="min-w-0 truncate">Uploaded — {attached.fileName}</span>
+              <span className="min-w-0 truncate">Uploaded: {attached.fileName}</span>
             </>
           ) : step.optional ? (
             'Optional'

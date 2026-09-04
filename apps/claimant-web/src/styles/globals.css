@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 150 24% 98%;
+    --foreground: 164 44% 10%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
@@ -14,14 +14,14 @@
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 152 20% 95%;
+    --muted-foreground: 164 12% 42%;
     --accent: 150 90% 35%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.4% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 156 17% 87%;
+    --input: 156 17% 84%;
     --ring: 158 82% 25%;
     --radius: 0.75rem;
   }
@@ -87,6 +87,31 @@
     -moz-osx-font-smoothing: grayscale;
     /* Prevent pull-to-refresh on mobile */
     overscroll-behavior-y: contain;
+    letter-spacing: -0.006em;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.65);
+    outline-offset: 3px;
+  }
+
+  input,
+  textarea,
+  select {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease;
+  }
+
+  input:hover,
+  textarea:hover,
+  select:hover {
+    border-color: hsl(var(--primary) / 0.3);
   }
 
   /* Safe area padding for notched devices */
@@ -106,5 +131,97 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+}
+
+@layer components {
+  .claim-shell {
+    background: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(150 28% 97%) 100%);
+  }
+
+  .claim-header {
+    background: hsl(var(--background) / 0.86);
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.035);
+    backdrop-filter: blur(18px);
+  }
+
+  .claim-footer {
+    background: hsl(var(--background) / 0.78);
+    backdrop-filter: blur(14px);
+  }
+
+  .brand-mark {
+    position: relative;
+    display: grid;
+    height: 38px;
+    width: 38px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 12px;
+    color: white;
+    background: linear-gradient(145deg, hsl(158 78% 32%), hsl(164 84% 18%));
+    box-shadow:
+      0 8px 22px hsl(158 70% 22% / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+
+  .brand-mark::after {
+    content: '';
+    position: absolute;
+    inset: -50% -60% auto auto;
+    height: 46px;
+    width: 46px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  .brand-mark span {
+    position: relative;
+    z-index: 1;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .preclaim-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(hsl(var(--primary) / 0.09) 0.75px, transparent 0.75px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(to bottom, black, transparent 70%);
+  }
+
+  .preclaim-orb {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+  }
+
+  .preclaim-orb-one {
+    top: 7%;
+    left: -110px;
+    height: 260px;
+    width: 260px;
+    background: hsl(158 68% 78% / 0.22);
+  }
+
+  .preclaim-orb-two {
+    right: -90px;
+    bottom: 8%;
+    height: 220px;
+    width: 220px;
+    background: hsl(42 92% 76% / 0.18);
+  }
+
+  .preclaim-stage main > .rounded-xl.border {
+    border-color: hsl(var(--border) / 0.82);
+    border-radius: 18px;
+    background: hsl(var(--card) / 0.92);
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.03),
+      0 18px 50px hsl(164 35% 14% / 0.07);
+    backdrop-filter: blur(10px);
   }
 }

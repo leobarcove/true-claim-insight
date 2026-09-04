@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CaseFlow } from '@tci/shared-types';
 
 import { agentSession, agentUser, type AgentUser } from '@/lib/agent-session';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, authEntryClient } from '@/lib/api-client';
 
 /**
  * The agent-assisted side of the form.
@@ -61,7 +61,7 @@ export function useAgentProfile(enabled: boolean) {
 export function useAgentSendCode() {
   return useMutation({
     mutationFn: async (input: { registrationNumber: string; phoneNumber: string }) => {
-      const { data } = await apiClient.post<{ data: { expiresIn: number; code?: string } }>(
+      const { data } = await authEntryClient.post<{ data: { expiresIn: number; code?: string } }>(
         '/auth/staff/send-code',
         input
       );
@@ -79,7 +79,7 @@ export function useAgentVerifyCode() {
       code: string;
       keepSignedIn: boolean;
     }) => {
-      const { data } = await apiClient.post<{ data: any }>('/auth/staff/verify-code', input);
+      const { data } = await authEntryClient.post<{ data: any }>('/auth/staff/verify-code', input);
       const payload = (data as any).data ?? data;
 
       agentSession.write(payload.tokens.accessToken);

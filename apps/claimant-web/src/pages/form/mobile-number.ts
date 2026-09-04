@@ -53,14 +53,17 @@ export function checkMobileNumber(typed: string): string | null {
     stripping it would send the right number under a field showing the wrong
     one; saying so costs a sentence and leaves them in control.
   */
-  if (digits.startsWith('60')) return 'Leave out the 60 — it is already there. For example 12 345 6789.';
+  if (digits.startsWith('60'))
+    return 'Leave out the 60 because it is already there. For example 12 345 6789.';
 
   if (!digits.startsWith('1')) {
     return 'A Malaysian mobile number starts with 1 after +60. For example 12 345 6789.';
   }
 
-  if (digits.length < 9) return 'That is too short. A Malaysian mobile number has 9 or 10 digits after +60.';
-  if (digits.length > 10) return 'That is too long. A Malaysian mobile number has 9 or 10 digits after +60.';
+  if (digits.length < 9)
+    return 'That is too short. A Malaysian mobile number has 9 or 10 digits after +60.';
+  if (digits.length > 10)
+    return 'That is too long. A Malaysian mobile number has 9 or 10 digits after +60.';
 
   return null;
 }

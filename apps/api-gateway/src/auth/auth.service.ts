@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, ConflictException, Logger } from '@n
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 
 import { UsersService } from '../users/users.service';
 import { ClaimantsService } from '../claimants/claimants.service';
@@ -250,7 +251,19 @@ export class AuthService {
         action: 'STAFF_CODE_REQUESTED_UNKNOWN_NUMBER',
         metadata: { reason: 'registration/phone mismatch or no matching insurer tenant' },
       });
-      throw new UnauthorizedException('Registration number or mobile number not recognised.');
+      // Match the successful response exactly. Returning 401 here would turn
+      // this public endpoint into a staff-directory oracle: an attacker could
+      // enumerate registration/phone pairs without ever possessing a code.
+      // No OTP is created or sent, and verification still refuses generically.
+      return {
+        expiresIn: 300,
+        // Local development returns real codes because there is no delivery
+        // provider. Preserve the same response shape without creating a usable
+        // credential or revealing that the identity missed the registry.
+        ...((process.env.NODE_ENV ?? 'development') !== 'production'
+          ? { code: randomInt(100000, 1000000).toString() }
+          : {}),
+      };
     }
 
     const result = await this.otpService.sendOtp(phoneNumber);

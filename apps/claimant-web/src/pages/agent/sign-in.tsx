@@ -163,7 +163,7 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
             />
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
-            Yours, not the claimant&rsquo;s — the next screen asks for theirs.{' '}
+            Yours, not the claimant&rsquo;s. The next screen asks for theirs.{' '}
             {/*
               Says who can change it rather than offering to. Access here *is*
               the list of numbers the firm holds, so a self-service change would
@@ -180,7 +180,7 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
           {numberHelp && (
             <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
               Your firm admin updates the number on your account. Until they do, the code goes to
-              the old handset — signing in is what proves the number is yours, so it cannot be
+              the old handset. Signing in is what proves the number is yours, so it cannot be
               changed from here.
             </p>
           )}
@@ -293,7 +293,7 @@ function AgentOnlyNote() {
       <ShieldIcon className="mt-0.5 h-4 w-4" />
       <span>
         Staff only. Claimants use the public form, where the code goes to <strong>their own</strong>{' '}
-        mobile — these screens cannot be reached without a registered staff number.
+        mobile. These screens cannot be reached without a registered staff number.
       </span>
     </div>
   );

@@ -338,8 +338,8 @@ function PhoneStage({
                 or{' '}
                 <a href="#" className="text-primary underline">
                   Telegram
-                </a>{' '}
-                — same questions, same team.
+                </a>
+                , with the same questions and the same team.
               </p>
             )}
           </div>
@@ -369,8 +369,8 @@ function PhoneStage({
             </div>
           ))}
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            Missing something? Start anyway — we save as you go, and you can come back on this
-            device to add documents.
+            Missing something? Start anyway. We save as you go, and you can come back on this device
+            to add documents.
           </p>
         </aside>
       </div>
@@ -486,7 +486,11 @@ function CodeStage({ state }: { state: FormState }) {
         <CodeBoxes value={code} onChange={setCode} disabled={busy} />
 
         <p className="text-sm text-muted-foreground">
-          Sent on WhatsApp to <strong className="font-medium text-foreground">{state.pendingPhone ?? 'your number'}</strong>.{' '}
+          Sent on WhatsApp to{' '}
+          <strong className="font-medium text-foreground">
+            {state.pendingPhone ?? 'your number'}
+          </strong>
+          .{' '}
           {/*
             The same act as Back, said where the number is. A claimant reading
             the number they were sent to is the moment they notice it is wrong,
@@ -721,14 +725,14 @@ function ClaimTypeStage({ state }: { state: FormState }) {
               {chosen === choice.value && <CheckIcon className="h-3 w-3" />}
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-sm font-medium">{choice.label}</span>
-            {/*
+              <span className="text-sm font-medium">{choice.label}</span>
+              {/*
               What the type covers, from the flow rather than written here, so
               the same help appears wherever this question is asked.
             */}
-            {choice.description && (
-              <span className="text-xs text-muted-foreground">{choice.description}</span>
-            )}
+              {choice.description && (
+                <span className="text-xs text-muted-foreground">{choice.description}</span>
+              )}
             </span>
           </button>
         ))}
@@ -766,13 +770,10 @@ function SubmittedStage({ state }: { state: FormState }) {
     ?.choices?.find(choice => choice.value === answers['bank-name'])?.label;
 
   const stages: Array<[string, string]> = [
-    [
-      'Documents checked',
-      'Usually within one working day. We contact you if anything is unclear.',
-    ],
+    ['Documents checked', 'Usually within one working day. We contact you if anything is unclear.'],
     [
       'Assessment',
-      'An adjuster reviews the claim. Some claims need a short video call — we book it with you.',
+      'An adjuster reviews the claim. Some claims need a short video call, which we book with you.',
     ],
     [
       'Decision and payout',
@@ -806,7 +807,7 @@ function SubmittedStage({ state }: { state: FormState }) {
         <>
           Reference{' '}
           <strong className="font-semibold text-foreground">{state.case?.caseNumber}</strong>. Keep
-          it — it is how we find your claim request.
+          it. It is how we find your claim request.
         </>
       }
     >
@@ -834,8 +835,8 @@ function SubmittedStage({ state }: { state: FormState }) {
       </ol>
 
       <p className="text-center text-sm leading-relaxed text-muted-foreground">
-        Anything to add or change? Our team will contact you on the number you verified — this
-        page will not update.
+        Anything to add or change? Our team will contact you on the number you verified. This page
+        will not update.
       </p>
 
       {/*
@@ -881,7 +882,7 @@ function StartAnother({ caseNumber }: { caseNumber?: string | null }) {
         Make another claim request
       </Button>
       <span className="text-xs text-muted-foreground">
-        Starts a new request — we will send a code to your number again.
+        Starts a new request. We will send a code to your number again.
         {caseNumber ? ` Claim ${caseNumber} is not affected.` : ''}
       </span>
     </div>
@@ -1013,11 +1014,7 @@ function FlowStage({ state }: { state: FormState }) {
    * attached to this step, so after the refresh there is exactly one.
    */
   const uploadFor = async (step: FlowStep, file: File): Promise<string> => {
-    const stored = await uploadFormDocument(
-      file,
-      step.documentType ?? 'OTHER_DOCUMENT',
-      step.id
-    );
+    const stored = await uploadFormDocument(file, step.documentType ?? 'OTHER_DOCUMENT', step.id);
     await refresh();
     return stored.id;
   };
@@ -1267,72 +1264,69 @@ function FlowStage({ state }: { state: FormState }) {
           locale={state.locale}
         />
       ) : (
-      <div className="flex flex-col gap-5 rounded-xl border bg-background p-5">
-        {rowsFor(active.steps).map(row => (
-          <div
-            key={row.map(step => step.id).join('+')}
-            className={rowClassFor(row)}
-          >
-            {row.map(step => (
-              <FieldControl
-                key={step.id}
-                step={step}
-                disabled={busy}
-                error={errors[step.id]}
-                value={values[step.id] ?? String(answers[step.id] ?? '')}
-                onChange={value => {
-                  setValues(current => ({ ...current, [step.id]: value }));
-                  clearError(step.id);
-                }}
-                attached={
-                  state.case!.documents.find(document => document.stepId === step.id) ?? null
-                }
-                onUpload={async file => {
-                  const storedId = await uploadFor(step, file);
-                  setValues(current => ({ ...current, [step.id]: storedId }));
-                  clearError(step.id);
-                }}
-              />
-            ))}
-          </div>
-        ))}
+        <div className="flex flex-col gap-5 rounded-xl border bg-background p-5">
+          {rowsFor(active.steps).map(row => (
+            <div key={row.map(step => step.id).join('+')} className={rowClassFor(row)}>
+              {row.map(step => (
+                <FieldControl
+                  key={step.id}
+                  step={step}
+                  disabled={busy}
+                  error={errors[step.id]}
+                  value={values[step.id] ?? String(answers[step.id] ?? '')}
+                  onChange={value => {
+                    setValues(current => ({ ...current, [step.id]: value }));
+                    clearError(step.id);
+                  }}
+                  attached={
+                    state.case!.documents.find(document => document.stepId === step.id) ?? null
+                  }
+                  onUpload={async file => {
+                    const storedId = await uploadFor(step, file);
+                    setValues(current => ({ ...current, [step.id]: storedId }));
+                    clearError(step.id);
+                  }}
+                />
+              ))}
+            </div>
+          ))}
 
-        {/*
+          {/*
           Said on the screen where documents are actually handed over, not only
           in the footer. MASTER_PLAN §6 is explicit that AI is disclosed rather
           than downplayed, and "an extractor reads this" is a different, more
           concrete claim than "parts of the assessment use AI" — this is the
           moment a claimant can decide whether they are comfortable with it.
         */}
-        {active.id === 'evidence' && (
-          <>
-            {/*
+          {active.id === 'evidence' && (
+            <>
+              {/*
               Two hints, one per device, because they describe two different
               gestures. Telling a phone user to drag a file is an instruction
               they cannot follow, and it is the screen where somebody most
               needs to know what the button is about to open.
             */}
-            {/*
+              {/*
               "Onto the row", not "here". A drop is only unambiguous on the row
               it lands on: a file dropped on the card would have to be guessed
               into one of three document types, and a boarding pass filed as an
               airline delay letter is a wrong answer nobody sees until an
               adjuster opens it.
             */}
-            <p className="hidden text-xs text-muted-foreground sm:block">
-              Or drag a file onto the row it belongs to — JPG, PNG, HEIC or PDF, up to 50 MB.
-            </p>
-            <p className="text-xs text-muted-foreground sm:hidden">
-              On a phone, “Add” opens your camera or photo library.
-            </p>
-            <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
-              Documents are read by an automated extractor to pre-fill your claim. An adjuster
-              checks the result.
-            </p>
-          </>
-        )}
+              <p className="hidden text-xs text-muted-foreground sm:block">
+                Or drag a file onto the row it belongs to. Use JPG, PNG, HEIC or PDF, up to 50 MB.
+              </p>
+              <p className="text-xs text-muted-foreground sm:hidden">
+                On a phone, “Add” opens your camera or photo library.
+              </p>
+              <p className="rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+                Documents are read by an automated extractor to pre-fill your claim. An adjuster
+                checks the result.
+              </p>
+            </>
+          )}
 
-        {/*
+          {/*
           The commonest reason a payout is delayed, said where the account is
           entered rather than discovered weeks later.
 
@@ -1343,13 +1337,13 @@ function FlowStage({ state }: { state: FormState }) {
           the copy that will go stale — it is the only place on this surface
           that restates something the flow already says.
         */}
-        {active.id === 'payout' && (
-          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
-            If the account is in someone else&rsquo;s name, give their name here — we will ask
-            about it later. A name mismatch is the most common reason a payout is delayed.
-          </p>
-        )}
-      </div>
+          {active.id === 'payout' && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+              If the account is in someone else&rsquo;s name, give their name here. We will ask
+              about it later. A name mismatch is the most common reason a payout is delayed.
+            </p>
+          )}
+        </div>
       )}
 
       <StartAgain />
@@ -1377,7 +1371,12 @@ function StartAgain() {
       type="button"
       className="self-start text-xs text-muted-foreground underline"
       onClick={() => {
-        if (!window.confirm('This clears the claim request you are filling in on this device. The web chat is not affected.')) return;
+        if (
+          !window.confirm(
+            'This clears the claim request you are filling in on this device. The web chat is not affected.'
+          )
+        )
+          return;
         clearFormSession();
         window.location.reload();
       }}
@@ -1391,7 +1390,9 @@ function displayAnswer(step: FlowStep, value: unknown): string {
   // "skip" and "later" are how the engine closes a question nobody answered.
   // They are the right thing to send and the wrong thing to show: a summary
   // reading "Policy number — skip" looks like somebody typed the word.
-  const raw = String(value ?? '').trim().toLowerCase();
+  const raw = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (raw === 'skip') return 'Not provided';
   if (raw === 'later') return 'To follow';
 

@@ -83,9 +83,10 @@ describe('staff sign-in by mobile', () => {
     it('sends nothing for an unknown number', async () => {
       const { service, otpService } = build(null);
 
-      await expect(service.staffSendCode('999999-00', '+60111111111')).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(service.staffSendCode('999999-00', '+60111111111')).resolves.toMatchObject({
+        expiresIn: 300,
+        code: expect.stringMatching(/^\d{6}$/),
+      });
 
       expect(otpService.sendOtp).not.toHaveBeenCalled();
     });
@@ -98,10 +99,24 @@ describe('staff sign-in by mobile', () => {
       const context = build(staff);
       context.usersService.findPiamRegisteredAgent.mockResolvedValue(null);
 
-      await expect(context.service.staffSendCode('000000-00', '+60129876543')).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(
+        context.service.staffSendCode('000000-00', '+60129876543')
+      ).resolves.toMatchObject({
+        expiresIn: 300,
+        code: expect.stringMatching(/^\d{6}$/),
+      });
       expect(context.otpService.sendOtp).not.toHaveBeenCalled();
+    });
+
+    it('returns the same public shape for known and unknown identities', async () => {
+      const known = build(staff);
+      const unknown = build(null);
+
+      const knownResult = await known.service.staffSendCode('999999-00', '+60129876543');
+      const unknownResult = await unknown.service.staffSendCode('999999-00', '+60111111111');
+
+      expect(Object.keys(unknownResult).sort()).toEqual(Object.keys(knownResult).sort());
+      expect(unknownResult.expiresIn).toBe(knownResult.expiresIn);
     });
 
     it('records the miss, so a sweep of numbers is visible afterwards', async () => {

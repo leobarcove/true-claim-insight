@@ -140,8 +140,8 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
             No code is sent: the agent's own sign-in is what stands in for it.
           */}
           <p className="text-xs leading-snug text-muted-foreground">
-            The number on the policy — how we reach them afterwards. No code is sent: you are signed
-            in, so a code is not what identifies this claim.
+            The number on the policy is how we reach them afterwards. No code is sent: you are
+            signed in, so a code is not what identifies this claim.
           </p>
         </div>
 
@@ -183,7 +183,7 @@ function LookupStep({ onChosen }: { onChosen: (subject: ClaimSubject) => void })
       <div className="flex items-start gap-2.5 rounded-xl border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
         <ClockIcon className="mt-0.5 h-4 w-4 text-primary" />
         <span>
-          Nothing is saved yet — not the claim, and not this person. Their record is created
+          Nothing is saved yet, including the claim and this person. Their record is created
           together with the consent you record on the next screen.
         </span>
       </div>
@@ -376,8 +376,8 @@ function DeclarationStep({
         <ShieldIcon className="mt-0.5 h-4 w-4 text-primary" />
         <span>
           This is recorded as <strong>agent-attested verbal consent</strong> against the approved
-          notice — your name, your firm and the time. It is never recorded as the claimant having
-          accepted anything digitally.
+          notice, including your name, your firm and the time. It is never recorded as the claimant
+          having accepted anything digitally.
         </span>
       </div>
 
@@ -426,7 +426,7 @@ function NoticeExtract() {
       */}
       {notice.isError && (
         <p role="alert" className="text-[13px] text-destructive">
-          We could not load the approved notice. Do not paraphrase it — reload the page, and if it
+          We could not load the approved notice. Do not paraphrase it. Reload the page, and if it
           still will not load, take this claim on a channel where the claimant reads it themselves.
         </p>
       )}

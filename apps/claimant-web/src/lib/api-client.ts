@@ -12,6 +12,30 @@ export const apiClient = axios.create({
   },
 });
 
+/**
+ * Requests made before a user has a session must not participate in access
+ * token refresh. In particular, a rejected OTP is a form validation result;
+ * sending it through `apiClient` would let the authenticated-session
+ * interceptor turn that result into navigation.
+ */
+export const authEntryClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+/**
+ * A 401 while exchanging a staff OTP is an expected sign-in result, not an
+ * expired authenticated session. Trying to refresh here cannot work because
+ * the staff token and refresh cookie do not exist until this request succeeds;
+ * the failed refresh would otherwise send the agent to the claimant login.
+ */
+export function isStaffOtpVerification(url?: string): boolean {
+  return url?.split('?')[0].endsWith('/auth/staff/verify-code') ?? false;
+}
+
 // Request interceptor - add auth token
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -21,16 +45,20 @@ apiClient.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  error => Promise.reject(error)
 );
 
 // Response interceptor - handle errors and token refresh
 apiClient.interceptors.response.use(
-  (response) => response,
+  response => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
+
+    if (error.response?.status === 401 && isStaffOtpVerification(originalRequest?.url)) {
+      return Promise.reject(error);
+    }
 
     // Handle 401 - try refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {

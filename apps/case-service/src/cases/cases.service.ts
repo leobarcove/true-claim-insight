@@ -525,7 +525,7 @@ export class CasesService {
     }
     if (dto.stepId === 'policy-number' && promoted.needsPolicyReview) {
       warnings.push(
-        'We could not find that policy number in our records. You can continue — our team will verify the policy manually.'
+        'We could not find that policy number in our records. You can continue. Our team will verify the policy manually.'
       );
     }
 
@@ -1711,7 +1711,7 @@ export class CasesService {
       this.answerString(answers['diagnosis-description']) ??
       this.answerString(answers['cancellation-reason']) ??
       '';
-    return detail ? `Travel claim — ${label}: ${detail}` : `Travel claim — ${label}`;
+    return detail ? `Travel claim: ${label}: ${detail}` : `Travel claim: ${label}`;
   }
 
   private computeDelayHours(answers: CaseAnswers): number | null {

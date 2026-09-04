@@ -56,15 +56,15 @@ export function FormShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-muted/30">
-      <header className="flex h-16 items-center gap-4 border-b bg-background px-4 sm:px-16">
+    <div className="claim-shell flex min-h-dvh flex-col bg-muted/30">
+      <header className="claim-header flex h-[72px] items-center gap-4 border-b px-4 sm:px-16">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-[11px] font-bold text-primary-foreground">
-            TCI
+          <div className="brand-mark" aria-hidden="true">
+            <span>TC</span>
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-sm font-semibold">Travel Claims</span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[15px] font-bold tracking-[-0.01em]">Travel Claims</span>
+            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               assessed by True Claim Insight
             </span>
           </div>
@@ -90,7 +90,7 @@ export function FormShell({
           type="button"
           onClick={onLocaleChange ? () => onLocaleChange(locale === 'en' ? 'ms' : 'en') : undefined}
           aria-label="Change language"
-          className="flex h-[34px] items-center rounded-full border border-input bg-background px-3 text-[13px] text-muted-foreground"
+          className="language-switch flex h-9 items-center rounded-full border border-input bg-background/80 px-3 text-[13px] text-muted-foreground shadow-sm transition hover:border-primary/30"
         >
           <span className={locale === 'en' ? 'font-semibold text-foreground' : undefined}>EN</span>
           <span className="px-1.5">·</span>
@@ -105,7 +105,7 @@ export function FormShell({
         bank details twenty minutes after any notice they read at the door, and
         that is the screen where knowing a person decides matters most.
       */}
-      <footer className="flex flex-col gap-2 border-t bg-background px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-16">
+      <footer className="claim-footer flex flex-col gap-2 border-t px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-16">
         <span>
           Personal data is handled under the{' '}
           <a href="#" className="underline">
@@ -147,17 +147,23 @@ export function PreClaimLayout({
   centred?: boolean;
 }) {
   return (
-    <div className="flex flex-1 justify-center px-4 pb-10 pt-6 sm:px-16 sm:py-16">
-      <main className="flex w-full max-w-[640px] flex-col gap-5">
+    <div className="preclaim-stage relative flex flex-1 justify-center overflow-hidden px-4 pb-12 pt-8 sm:px-16 sm:py-16">
+      <div className="preclaim-orb preclaim-orb-one" aria-hidden="true" />
+      <div className="preclaim-orb preclaim-orb-two" aria-hidden="true" />
+      <main className="relative z-10 flex w-full max-w-[640px] flex-col gap-5">
         <div className={cn('flex flex-col gap-1.5', centred && 'items-center text-center')}>
           {icon}
           {eyebrow && (
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
               {eyebrow}
             </span>
           )}
-          <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">{title}</h1>
-          {subtitle && <p className="text-[15px] leading-relaxed text-muted-foreground">{subtitle}</p>}
+          <h1 className="text-[28px] font-bold leading-[1.12] tracking-[-0.035em] sm:text-[36px]">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="text-[15px] leading-relaxed text-muted-foreground">{subtitle}</p>
+          )}
         </div>
 
         {children}
@@ -287,18 +293,17 @@ export function SectionLayout({
             is live, and fill in the href.
           */}
           {SHOW_CHAT_ALTERNATIVE && (
-          <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-dashed p-3 text-xs leading-snug text-muted-foreground">
-            <ChatIcon className="mt-0.5 h-4 w-4" />
-            <span>
-              Prefer to chat? The same questions are asked on{' '}
-              <a href="#" className="text-primary underline">
-                WhatsApp
-              </a>
-              {assisted ? '.' : '. Starting there begins a new request.'}
-            </span>
-          </div>
+            <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-dashed p-3 text-xs leading-snug text-muted-foreground">
+              <ChatIcon className="mt-0.5 h-4 w-4" />
+              <span>
+                Prefer to chat? The same questions are asked on{' '}
+                <a href="#" className="text-primary underline">
+                  WhatsApp
+                </a>
+                {assisted ? '.' : '. Starting there begins a new request.'}
+              </span>
+            </div>
           )}
-
         </nav>
 
         <main className="flex flex-col gap-5 lg:col-span-6">

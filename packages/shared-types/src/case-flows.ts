@@ -431,8 +431,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     // "as it appears on your IC or passport" earns its length: the name has to
     // match the documents uploaded later and the account being paid, and a
     // first name alone does none of that.
-    prompt:
-      'First, what is your full name, as it appears on your IC or passport?',
+    prompt: 'First, what is your full name, as it appears on your IC or passport?',
     label: 'Full name',
     placeholder: 'e.g. Nur Aisyah binti Rahman',
     answerType: 'text',
@@ -450,7 +449,7 @@ const commonPrefix: Array<Omit<FlowStep, 'next'>> = [
     prompt: 'What is your travel policy number?',
     hint:
       'It is on your policy schedule or the confirmation email you were sent when you bought the cover. ' +
-      'If you cannot find it, type "skip" — our team will look it up for you.',
+      'If you cannot find it, type "skip". Our team will look it up for you.',
     label: 'Policy number',
     placeholder: 'e.g. TC-8827-3341-09',
     answerType: 'text',
@@ -499,7 +498,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     // the copy asserts is true: the number is encrypted at rest and staff
     // screens show only the last four digits.
     prompt:
-      'Nearly done — the last part is where to send your payout.\n\n' +
+      'Nearly done. The last part is where to send your payout.\n\n' +
       'Your account number is encrypted and our team only ever sees the last four digits. ' +
       'We will never ask you to pay us anything.\n\n' +
       'Which bank is your account with?',
@@ -513,7 +512,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
   {
     id: 'bank-account-number',
     prompt: 'What is your bank account number?',
-    hint: 'Numbers only — no spaces or dashes.',
+    hint: 'Numbers only, with no spaces or dashes.',
     label: 'Bank account number',
     placeholder: 'e.g. 512345678901',
     answerType: 'text',
@@ -522,15 +521,14 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
       // The generic rejection told a claimant their account number was wrong
       // without saying why, at the last step before submission, with the
       // obvious repair — retyping it the same way — failing identically.
-      patternError:
-        'Please type the account number using numbers only, with no spaces or dashes.',
+      patternError: 'Please type the account number using numbers only, with no spaces or dashes.',
     },
     system: true, // keys SENSITIVE_ANSWER_STEPS — the redaction set is by step id
   },
   {
     id: 'bank-account-holder',
     prompt: 'And the account holder name, exactly as registered with the bank?',
-    hint: 'If the account is in someone else’s name, give their name here — we will ask about it later.',
+    hint: 'If the account is in someone else’s name, give their name here. We will ask about it later.',
     label: 'Account holder name',
     placeholder: 'e.g. Nur Aisyah binti Rahman',
     answerType: 'text',
@@ -543,8 +541,7 @@ const commonSuffix: Array<Omit<FlowStep, 'next'>> = [
     // below, and the bot pointed at something that did not exist. Channels with
     // no summary surface get the answers appended to this message instead —
     // see ChannelCapabilities.summaryPanel.
-    prompt:
-      'Thank you. Please review your details, then confirm to submit your claim request.',
+    prompt: 'Thank you. Please review your details, then confirm to submit your claim request.',
     label: 'Review and confirm',
     answerType: 'confirm',
     system: true, // resolveNextStep and submit() both special-case this id
@@ -624,7 +621,7 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -647,15 +644,14 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     'Please upload the airline’s written confirmation of the delay or cancellation.',
     'Airline delay confirmation',
     'This is the email, SMS or printed slip from the airline saying your flight was delayed ' +
-    'or cancelled. A clear photo or screenshot is fine.',
+      'or cancelled. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-boarding-pass',
     Doc.BOARDING_PASS,
     'Please upload your boarding pass for the delayed flight.',
     'Boarding pass',
-    'The paper stub, or the pass saved in your phone. ' +
-    'A clear photo or screenshot is fine.',
+    'The paper stub, or the pass saved in your phone. ' + 'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-flight-itinerary',
@@ -663,7 +659,7 @@ const flightDelayFlow = buildFlow(TravelType.FLIGHT_DELAY, [
     'Please upload your e-ticket or booking confirmation.',
     'Flight itinerary',
     'The email the airline or travel agent sent you when you booked. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
 ]);
 
@@ -688,7 +684,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -720,8 +716,8 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     Doc.PROPERTY_IRREGULARITY_REPORT,
     'Please send the baggage report the airline issued.',
     'Airline baggage report (PIR)',
-    'The form the airline gave you at the baggage counter when you reported the problem — ' +
-    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
+    'The form the airline gave you at the baggage counter when you reported the problem. ' +
+      'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-baggage-tag',
@@ -729,7 +725,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'Please upload a photo of the baggage tag.',
     'Baggage tag',
     'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-damage-photo',
@@ -737,7 +733,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'Please upload clear photographs of the damaged luggage.',
     'Damage photographs',
     'Take them in good light: one of the whole bag, then a close-up of each damaged part. ' +
-    'Several photos are better than one.',
+      'Several photos are better than one.'
   ),
   documentStep(
     'doc-proof-of-ownership',
@@ -745,7 +741,7 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'If you have a receipt or proof of purchase for the luggage, please send it.',
     'Proof of ownership',
     'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.',
     true
   ),
 ]);
@@ -771,7 +767,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     validation: {
       pattern: '^[A-Za-z0-9]{2,3}\\s?[0-9]{1,4}[A-Za-z]?$',
       patternError:
-        'A flight number is two or three letters or digits followed by up to four numbers — ' +
+        'A flight number is two or three letters or digits followed by up to four numbers. ' +
         'for example MH168 or AK6042. You will find it on your boarding pass.',
     },
   },
@@ -803,8 +799,8 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     Doc.PROPERTY_IRREGULARITY_REPORT,
     'Please send the baggage report the airline issued.',
     'Airline baggage report (PIR)',
-    'The form the airline gave you at the baggage counter when you reported the problem — ' +
-    'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.',
+    'The form the airline gave you at the baggage counter when you reported the problem. ' +
+      'it may be called a PIR or a baggage irregularity form. A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-baggage-tag',
@@ -812,7 +808,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     'Please upload a photo of the baggage tag or check-in receipt.',
     'Baggage tag',
     'The sticker with the barcode, usually stuck to your ticket or passport at check-in. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-proof-of-ownership',
@@ -820,7 +816,7 @@ const luggageLossFlow = buildFlow(TravelType.LUGGAGE_LOSS, [
     'Please upload receipts or proof of ownership for the items you are claiming.',
     'Proof of ownership',
     'A receipt, a line on a bank or card statement, or the original box or warranty card. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
 ]);
 
@@ -841,8 +837,7 @@ const tripCancellationFlow = buildFlow(
     },
     {
       id: 'estimated-amount',
-      prompt:
-        'What is the total non-refundable amount you are claiming, in Ringgit Malaysia (RM)?',
+      prompt: 'What is the total non-refundable amount you are claiming, in Ringgit Malaysia (RM)?',
       label: 'Estimated amount (RM)',
       placeholder: 'e.g. 1200',
       answerType: 'number',
@@ -854,7 +849,7 @@ const tripCancellationFlow = buildFlow(
       'As the cancellation was on medical grounds, please upload the medical report or certificate.',
       'Medical report',
       'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
     ),
     {
       // Asked, rather than inferred from an uploaded certificate, because this
@@ -874,7 +869,7 @@ const tripCancellationFlow = buildFlow(
       // hint, because it is the relationship policies most often exclude, so it
       // wants a human reading the wording either way.
       hint:
-        'If it was a parent-in-law, a grandchild or another relative, choose the last option — ' +
+        'If it was a parent-in-law, a grandchild or another relative, choose the last option. ' +
         'our team will check what your policy covers.',
       label: 'Relationship to the deceased',
       answerType: 'choice',
@@ -911,7 +906,7 @@ const tripCancellationFlow = buildFlow(
       answerType: 'choice',
       choices: [
         { value: 'YES', label: 'Yes, I have the death certificate' },
-        { value: 'NO', label: 'Not yet — I only have the burial permit' },
+        { value: 'NO', label: 'Not yet, I only have the burial permit' },
       ],
     },
     documentStep(
@@ -919,7 +914,7 @@ const tripCancellationFlow = buildFlow(
       Doc.DEATH_CERTIFICATE,
       'Please upload the death certificate.',
       'Death certificate',
-      'The Sijil Kematian issued by JPN. A clear photo or screenshot is fine.',
+      'The Sijil Kematian issued by JPN. A clear photo or screenshot is fine.'
     ),
     documentStep(
       'doc-burial-permit',
@@ -929,13 +924,13 @@ const tripCancellationFlow = buildFlow(
       // The hospital form is folded in here rather than given a type of its own:
       // it serves the identical purpose — interim proof of the death — and a
       // third enum value would split one checklist line into two for no gain.
-      'The Permit Menguburkan — the blue JPN.LM02 slip — or the hospital’s cause-of-death ' +
-      'form. A clear photo or screenshot is fine.',
+      'The Permit Menguburkan (the blue JPN.LM02 slip) or the hospital’s cause-of-death ' +
+        'form. A clear photo or screenshot is fine.'
     ),
     documentStep(
       'doc-proof-of-relationship',
       Doc.PROOF_OF_RELATIONSHIP,
-      'If you have something showing your relationship to them, please send it — otherwise you can skip this.',
+      'If you have something showing your relationship to them, please send it. Otherwise, you can skip this.',
       'Proof of relationship',
       // Optional deliberately. Insurers differ on whether they ask for this at
       // all, and the certificate plus the answer above usually settles it; the
@@ -944,7 +939,7 @@ const tripCancellationFlow = buildFlow(
       // bereaved claimant on. It is also a third party’s personal data, and
       // asking every claimant for it by default is not data minimisation.
       'A birth certificate, marriage certificate or family record showing how you were related. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.',
       true
     ),
     documentStep(
@@ -953,7 +948,7 @@ const tripCancellationFlow = buildFlow(
       'Please upload your booking invoices and any cancellation or refund correspondence.',
       'Booking invoices',
       'Your booking invoices, plus any email showing what was refunded and what was not. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
     ),
     documentStep(
       'doc-flight-itinerary',
@@ -961,7 +956,7 @@ const tripCancellationFlow = buildFlow(
       'Please upload the e-ticket or booking confirmation for the cancelled trip.',
       'Flight itinerary',
       'The email the airline or travel agent sent you when you booked. ' +
-      'A clear photo or screenshot is fine.',
+        'A clear photo or screenshot is fine.'
     ),
   ],
   {
@@ -1041,8 +1036,8 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     Doc.OVERSEAS_MEDICAL_BILL,
     'Please upload your itemised medical bills and receipts.',
     'Overseas medical bills',
-    'The itemised bills and receipts — the ones listing each treatment and what it cost. ' +
-    'A clear photo or screenshot is fine.',
+    'The itemised bills and receipts, listing each treatment and what it cost. ' +
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-medical-report',
@@ -1050,7 +1045,7 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     'Please upload the medical report or discharge summary from the treating hospital.',
     'Medical report',
     'The letter, certificate or discharge summary from the doctor or hospital who treated you. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   documentStep(
     'doc-passport',
@@ -1058,12 +1053,12 @@ const medicalFlow = buildFlow(TravelType.MEDICAL, [
     'Please upload the passport pages showing your identity and travel entry/exit stamps.',
     'Passport',
     'The photo page, plus the pages stamped when you entered and left the country. ' +
-    'A clear photo or screenshot is fine.',
+      'A clear photo or screenshot is fine.'
   ),
   {
     id: 'medical-review-note',
     prompt:
-      'Thank you. Please note that medical claims are reviewed personally by our claims specialists before being passed to your insurer — a member of the team may contact you for further details.',
+      'Thank you. Please note that medical claims are reviewed personally by our claims specialists before being passed to your insurer. A member of the team may contact you for further details.',
     label: 'Specialist review notice',
     answerType: 'confirm',
   },
@@ -1081,8 +1076,7 @@ export const CASE_FLOWS: Record<TravelClaimType, CaseFlow> = {
 // Helpers — used identically by case-service and both frontends
 // ---------------------------------------------------------------------------
 
-export const getFlow = (type: TravelClaimTypeLike): CaseFlow =>
-  CASE_FLOWS[type as TravelClaimType];
+export const getFlow = (type: TravelClaimTypeLike): CaseFlow => CASE_FLOWS[type as TravelClaimType];
 
 export const getStep = (flow: CaseFlow, stepId: string): FlowStep | undefined =>
   flow.steps.find(step => step.id === stepId);
@@ -1325,7 +1319,11 @@ export interface AnswerValidation {
  * unreadable stays NaN for the validator to refuse.
  */
 export function parseAmount(raw: string): number {
-  const cleaned = raw.trim().replace(/^rm\s*/i, '').replace(/,/g, '').trim();
+  const cleaned = raw
+    .trim()
+    .replace(/^rm\s*/i, '')
+    .replace(/,/g, '')
+    .trim();
   if (cleaned === '') return NaN;
   return Number(cleaned);
 }
@@ -1533,7 +1531,7 @@ const DATE_ORDER: readonly DateOrderRule[] = [
       'That is after the flight actually departed ({other}). Please check the scheduled time.',
     whenLateIsEarly:
       'That is before the scheduled departure ({other}), which would mean the flight left early. ' +
-      'Please check the time — and if the flight was cancelled, give the replacement flight’s departure.',
+      'Please check the time. If the flight was cancelled, give the replacement flight’s departure.',
   },
 ];
 
@@ -1638,7 +1636,7 @@ export const validateAgainstAnswers = (
         return {
           valid: false,
           error:
-            `That is before your trip began (${dayLabel(tripStart)}). Please check the date — ` +
+            `That is before your trip began (${dayLabel(tripStart)}). Please check the date. ` +
             'if it happened before you travelled, this may be a cancellation claim instead.',
         };
       }
@@ -1684,7 +1682,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
             valid: false,
             error:
               step.validation.substanceError ??
-              'We need your own description here — it is the part nobody else can fill in ' +
+              'We need your own description here. It is the part nobody else can fill in ' +
                 'for you. Even a rough one helps, for example what is damaged and how.',
           };
         }
@@ -1693,7 +1691,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
             valid: false,
             error:
               step.validation.substanceError ??
-              `Please give a little more detail — around ${step.validation.minLength} characters or more.`,
+              `Please give a little more detail, around ${step.validation.minLength} characters or more.`,
           };
         }
       }
@@ -1702,7 +1700,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
           valid: false,
           error:
             step.validation.patternError ??
-            'That does not look right — please check the format and try again.',
+            'That does not look right. Please check the format and try again.',
         };
       }
       return { valid: true };
@@ -1721,7 +1719,10 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         return { valid: false, error: `Please enter a value of at least ${step.validation.min}.` };
       }
       if (step.validation?.max !== undefined && num > step.validation.max) {
-        return { valid: false, error: `Please enter a value no greater than ${step.validation.max}.` };
+        return {
+          valid: false,
+          error: `Please enter a value no greater than ${step.validation.max}.`,
+        };
       }
       return { valid: true };
     }
@@ -1762,7 +1763,8 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         if (date.getTime() > tomorrow) {
           return {
             valid: false,
-            error: 'That date is in the future. Please give the date the incident actually happened.',
+            error:
+              'That date is in the future. Please give the date the incident actually happened.',
           };
         }
         // And not absurdly far back. `1026` for `2026` is one slipped digit,
@@ -1774,7 +1776,7 @@ const validateField = (step: FlowStep, value: AnswerValue): AnswerValidation => 
         if (date.getTime() < tenYearsAgo) {
           return {
             valid: false,
-            error: 'That date looks too far in the past — please check the year.',
+            error: 'That date looks too far in the past. Please check the year.',
           };
         }
       }
@@ -1900,7 +1902,7 @@ export const computeDeadlineFlags = (
   const warnings: string[] = [];
   if (outOfWindow) {
     warnings.push(
-      `This incident happened more than ${CLAIM_WINDOW_DAYS} days ago. Claims should be submitted within ${CLAIM_WINDOW_DAYS} days — your request will still be recorded, but it may be declined by the insurer.`
+      `This incident happened more than ${CLAIM_WINDOW_DAYS} days ago. Claims should be submitted within ${CLAIM_WINDOW_DAYS} days. Your request will still be recorded, but it may be declined by the insurer.`
     );
   } else if (notifiedLate) {
     warnings.push(
@@ -1936,7 +1938,10 @@ export const computeCompleteness = (
     mandatoryUploaded: mandatoryUploaded.length,
     optionalTotal: optional.length,
     optionalUploaded: optional.filter(req => uploaded.has(req.documentType)).length,
-    percent: mandatory.length === 0 ? 100 : Math.round((mandatoryUploaded.length / mandatory.length) * 100),
+    percent:
+      mandatory.length === 0
+        ? 100
+        : Math.round((mandatoryUploaded.length / mandatory.length) * 100),
     missingMandatory,
   };
 };

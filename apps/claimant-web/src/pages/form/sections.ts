@@ -18,7 +18,13 @@ import { pathSteps, type CaseAnswers, type CaseFlow, type FlowStep } from '@tci/
  * The chat, Telegram and WhatsApp all ask in path order and need no sections.
  */
 
-export type SectionId = 'claim-type' | 'you-trip' | 'what-happened' | 'evidence' | 'payout' | 'review';
+export type SectionId =
+  | 'claim-type'
+  | 'you-trip'
+  | 'what-happened'
+  | 'evidence'
+  | 'payout'
+  | 'review';
 
 export interface SectionDefinition {
   id: SectionId;
@@ -36,7 +42,12 @@ export interface SectionDefinition {
 
 /** In the order the form walks them. The order is fixed; membership is not. */
 export const SECTIONS: readonly SectionDefinition[] = [
-  { id: 'claim-type', title: 'Claim type', heading: 'What do you want to claim for?', subtitle: 'We only ask the questions this type of claim needs.' },
+  {
+    id: 'claim-type',
+    title: 'Claim type',
+    heading: 'What do you want to claim for?',
+    subtitle: 'We only ask the questions this type of claim needs.',
+  },
   { id: 'you-trip', title: 'You & your trip', heading: 'You and your trip' },
   {
     id: 'what-happened',
@@ -51,10 +62,15 @@ export const SECTIONS: readonly SectionDefinition[] = [
     // rather than "Evidence", because what counts as evidence is the whole
     // question and the answer depends on which claim this is.
     heading: 'Evidence',
-    subtitle: 'Photos are fine. You can add the rest later — come back on this device.',
+    subtitle: 'Photos are fine. You can add the rest later by coming back on this device.',
   },
   { id: 'payout', title: 'Payout', heading: 'Where should we pay?' },
-  { id: 'review', title: 'Review', heading: 'Check and submit', subtitle: 'Use Change on anything that is wrong.' },
+  {
+    id: 'review',
+    title: 'Review',
+    heading: 'Check and submit',
+    subtitle: 'Use Change on anything that is wrong.',
+  },
 ];
 
 /**

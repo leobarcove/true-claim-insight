@@ -158,7 +158,7 @@ export class ConsentService {
     if (!notice) {
       throw new BadRequestException(
         `No approved ${locale} consent notice exists for ${purpose}. ` +
-          'Consent cannot be recorded against unapproved wording — have the notice ' +
+          'Consent cannot be recorded against unapproved wording. Have the notice ' +
           'reviewed and approved first.'
       );
     }

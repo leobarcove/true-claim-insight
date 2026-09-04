@@ -1156,7 +1156,7 @@ describe('ConversationGateway', () => {
       const labels = prompt.step.choices.map((c: any) => c.label);
       // The value has to be on the button: "Flight number" alone does not tell
       // a claimant which one holds their typo.
-      expect(labels).toContain('Flight number — MH360');
+      expect(labels).toContain('Flight number: MH360');
     });
 
     it('remembers where to resume, so a fix does not cost later answers', async () => {
