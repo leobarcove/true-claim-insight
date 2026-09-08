@@ -1,6 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { surfaceFor } from './surface';
+
+/**
+ * The configured-host list is read once, at module load, so a test cannot stub
+ * the value and re-call the same import — it has to load the module again.
+ */
+async function surfaceForWithAgentHosts(configured: string) {
+  vi.stubEnv('VITE_AGENT_HOSTS', configured);
+  vi.resetModules();
+  const reloaded = await import('./surface');
+  return reloaded.surfaceFor;
+}
 
 /**
  * SECURITY-ADJACENT TEST — the door decides, never the page.
@@ -41,6 +52,68 @@ describe('which surface a browser is on', () => {
     it('is not fooled by a host that merely contains the word', () => {
       expect(at('my-agent-claims.example.my', '/agent')).toBe('claimant');
       expect(at('claims.example.my/agent.', '/form')).toBe('claimant');
+    });
+  });
+
+  /**
+   * A deployment whose DNS does not follow the `agent.` convention names the
+   * host at build time instead. The risk this introduces is a matching rule
+   * loose enough to accept a host the deployment did not name — so these check
+   * the rejections at least as hard as the acceptance.
+   */
+  describe('a deployment that names its agent host', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    });
+
+    it('serves the agent surface on the named host', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'tci-agent.smitherytech.com', pathname: '/form' })).toBe('agent');
+    });
+
+    it('still serves claimants on the other hosts of the same deployment', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'tci-claim.smitherytech.com', pathname: '/form' })).toBe('claimant');
+      expect(at({ hostname: 'tci.smitherytech.com', pathname: '/form' })).toBe('claimant');
+    });
+
+    it('ignores the path there too, exactly as on any public host', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'tci-claim.smitherytech.com', pathname: '/agent' })).toBe('claimant');
+    });
+
+    /**
+     * The failure that would matter. A suffix or `includes` test would hand the
+     * agent surface to a host an attacker controls — `…smitherytech.com.evil.io`
+     * ends with nothing we own, but it *contains* the name we do.
+     */
+    it('matches the whole hostname, not a part of it', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'tci-agent.smitherytech.com.evil.io', pathname: '/form' })).toBe(
+        'claimant'
+      );
+      expect(at({ hostname: 'not-tci-agent.smitherytech.com', pathname: '/form' })).toBe(
+        'claimant'
+      );
+      expect(at({ hostname: 'tci-agent.smitherytech.co', pathname: '/form' })).toBe('claimant');
+    });
+
+    it('is case-insensitive, because DNS is', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'TCI-Agent.SmitheryTech.com', pathname: '/form' })).toBe('agent');
+    });
+
+    it('keeps the agent. convention working alongside a named host', async () => {
+      const at = await surfaceForWithAgentHosts('tci-agent.smitherytech.com');
+      expect(at({ hostname: 'agent.claims.example.my', pathname: '/form' })).toBe('agent');
+    });
+
+    it('accepts more than one name, and tolerates untidy spacing', async () => {
+      const at = await surfaceForWithAgentHosts(' tci-agent.smitherytech.com , agent.example.my ');
+      expect(at({ hostname: 'tci-agent.smitherytech.com', pathname: '/form' })).toBe('agent');
+      expect(at({ hostname: 'agent.example.my', pathname: '/form' })).toBe('agent');
+      expect(at({ hostname: 'other.example.my', pathname: '/form' })).toBe('claimant');
     });
   });
 

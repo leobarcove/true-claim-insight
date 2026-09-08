@@ -199,6 +199,12 @@ services:
   edge:
     mem_limit: 256m
     logging: *logging
+    build:
+      # The agent surface is selected by hostname inside the compiled bundle,
+      # so a deployment whose agent host does not start with `agent.` has to
+      # say so before the frontend is built — not after.
+      args:
+        VITE_AGENT_HOSTS: ${TCI_AGENT_FQDN:?set in .env.staging}
     # Empty the base stack's ['${CADDY_HTTP_PORT:-80}:80', '...:443'] outright.
     # !override replaces; a bare `ports:` here would merge and add.
     ports: !override []

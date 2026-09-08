@@ -54,6 +54,16 @@ COPY . .
 # api clients already default to /api/v1, this pins the one localhost fallback.
 ENV VITE_API_URL=/api/v1
 
+# Which hostname serves the agent-assisted surface, decided at build time
+# because the bundle must not be able to change its mind at runtime — see
+# apps/claimant-web/src/lib/surface.ts.
+#
+# Empty is the normal case: the app then falls back to the `agent.` prefix
+# convention. Set it only when DNS names the host some other way, e.g.
+# --build-arg VITE_AGENT_HOSTS=tci-agent.example.com
+ARG VITE_AGENT_HOSTS=
+ENV VITE_AGENT_HOSTS=${VITE_AGENT_HOSTS}
+
 # Ceilings for the build itself — the highest-memory phase of a deploy by a wide
 # margin, and the one no container mem_limit covers, because it happens before
 # any container exists.
