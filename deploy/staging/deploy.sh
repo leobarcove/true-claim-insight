@@ -55,7 +55,9 @@ TCI_CERT_RESOLVER="${TCI_CERT_RESOLVER:-main-resolver}"
 # Free memory the build needs. The build is unbounded by any container limit
 # and is the phase most likely to trigger the kernel OOM killer on a swapless
 # shared host — where the victim is chosen by size, i.e. the neighbour's DB.
-MIN_BUILD_MEM_MB="${MIN_BUILD_MEM_MB:-4096}"
+# Sized against the Dockerfile's ceilings, and must be raised with them:
+# TURBO_CONCURRENCY=3 compiling with a 2048 MB heap can want ~6 GB at peak.
+MIN_BUILD_MEM_MB="${MIN_BUILD_MEM_MB:-6144}"
 MIN_DISK_GB="${MIN_DISK_GB:-20}"
 
 cd "$(dirname "$0")"

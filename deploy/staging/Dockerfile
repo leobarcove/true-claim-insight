@@ -46,7 +46,16 @@ COPY packages/crypto/package.json packages/crypto/
 
 # HUSKY=0: the prepare hook must not run against a context with no .git.
 ENV HUSKY=0
-RUN pnpm install --frozen-lockfile
+
+# The pnpm store on a BuildKit cache mount, so a rebuild re-uses packages it has
+# already downloaded instead of fetching the whole workspace again. The store
+# lives OUTSIDE /app deliberately: `COPY . .` below would otherwise bury it.
+#
+# pnpm normally hardlinks from the store into node_modules; across a mount
+# boundary it cannot, and copies instead. That is still far cheaper than
+# downloading, and it is why the store is not simply left in its default place.
+RUN --mount=type=cache,id=tci-pnpm-store,target=/pnpm/store,sharing=locked \
+  pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 COPY . .
 
@@ -75,12 +84,25 @@ ENV VITE_AGENT_HOSTS=${VITE_AGENT_HOSTS}
 #
 # Both are overridable per environment, so a large dedicated builder can raise
 # them: --build-arg TURBO_CONCURRENCY=10 --build-arg NODE_BUILD_HEAP_MB=4096
-ARG TURBO_CONCURRENCY=2
+ARG TURBO_CONCURRENCY=3
 ARG NODE_BUILD_HEAP_MB=2048
 ENV TURBO_CONCURRENCY=${TURBO_CONCURRENCY}
 ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB}
 
-RUN pnpm prisma:generate && pnpm build
+# turbo's cache, kept across builds on a mount of its own.
+#
+# `COPY . .` above invalidates this layer on any source change, so Docker always
+# re-runs the command below — but turbo then compares its own input hashes per
+# package and restores the untouched ones instead of compiling them. Change one
+# service and only that service builds.
+#
+# Correctness depends on turbo.json listing VITE_* in the build task's env: Vite
+# inlines those values, so they change the output without changing a single
+# input file. A cache that does not know that returns the previous bundle and
+# reports a hit.
+ENV TURBO_CACHE_DIR=/turbo-cache
+RUN --mount=type=cache,id=tci-turbo,target=/turbo-cache,sharing=locked \
+  pnpm prisma:generate && pnpm build
 
 # ---------------------------------------------------------------------------
 # Shared Node runtime base — the built workspace, verbatim.
