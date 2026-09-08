@@ -18,6 +18,13 @@ async function bootstrap() {
     new FastifyAdapter({
       logger: false,
       bodyLimit: 500 * 1024 * 1024, // 500MB
+      // Behind the edge (Caddy, and Traefik in front of it on a shared host)
+      // every request arrives from the proxy's address. Without this, the
+      // throttler buckets the whole internet as one client: the OTP and login
+      // limits stop being per-caller, so a brute-force attempt is invisible
+      // and one noisy client locks everybody out. case-service already sets
+      // it; the gateway is the one that fronts auth, so it matters more here.
+      trustProxy: true,
     })
   );
 

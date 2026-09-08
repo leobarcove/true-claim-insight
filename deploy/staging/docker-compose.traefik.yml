@@ -1,0 +1,189 @@
+# ---------------------------------------------------------------------------
+# True Claim Insight — overlay for a SHARED host whose :80/:443 belong to an
+# existing Traefik.
+#
+# Layer it on top of the base stack, never instead of it:
+#
+#   docker compose --env-file .env.staging \
+#     -f docker-compose.staging.yml -f docker-compose.traefik.yml up -d
+#
+# (deploy.sh does exactly that; run it rather than typing this by hand.)
+#
+# Why this file exists
+# --------------------
+# The base stack assumes it owns the host — its Caddy edge publishes :80/:443
+# and obtains its own Let's Encrypt certificates. On a shared box those ports
+# are already taken, and two proxies cannot bind one port.
+#
+# So Caddy stays, and keeps every routing decision it makes — including the
+# deliberately-ordered WhatsApp rule whose comment explains why the byte
+# stream must not be re-serialised. It only stops doing two things: binding
+# host ports, and terminating TLS. The proxy already on the box does both.
+#
+#   internet :443 → Traefik → edge (Caddy, plain HTTP) → TCI services
+#
+# Traefik finds the edge by reading the labels below off the Docker socket.
+# Nothing belonging to the co-tenant stack is read, edited or restarted; this
+# is the same mechanism the expo-update-server project on this host already
+# uses to coexist with ERPNext.
+#
+# What this file is responsible for keeping true
+# ----------------------------------------------
+# 1. NO PUBLISHED PORTS. `ports: !override []` empties the base list rather
+#    than appending to it (Compose merges port lists, so a plain redefinition
+#    would ADD a binding, not replace one). The host's UFW default-incoming
+#    policy is ALLOW, so any published port is world-reachable the instant it
+#    exists — MASTER_PLAN §4.3 A1 is explicit that a reachable service port is
+#    one shared key away from cross-tenant PII. deploy.sh re-checks the
+#    rendered config and refuses to start if any port survives.
+#
+# 2. BOUNDED LOGS. Nine containers on the default json-file driver with no cap
+#    grow until the filesystem is full — and /var/lib/docker is the same
+#    filesystem the co-tenant's MariaDB writes to, so our logging is their
+#    outage. The usual remedy (a default in /etc/docker/daemon.json) needs a
+#    daemon restart, and Live Restore is DISABLED on this host, so that
+#    restart would stop every ERPNext container. Per-service limits need no
+#    daemon restart, which is why they are set here and not there.
+#
+# 3. MEMORY CEILINGS. The host has no swap and vm.overcommit_memory=0, so an
+#    OOM event kills the largest resident process outright — which would be
+#    the neighbour's MariaDB, not us. Every service carries a mem_limit, and
+#    every Node service carries a matching --max-old-space-size: Node does NOT
+#    read the cgroup limit, so without it V8 sizes its heap against the host's
+#    31 GiB and gets killed at its own limit with exit 137 and no message.
+#    Ceilings total ~7.5 GiB against ~24 GiB available. Raise them together,
+#    and check `free -h` on the box first.
+#
+# What this file does NOT do — stated plainly, because an earlier version of
+# this comment overclaimed it
+# ----------------------------------------------------------------------------
+# Attaching `edge` to the co-tenant's network is not isolation. It keeps TCI's
+# Postgres off that network, which is worth having, but the edge itself
+# listens on :80 there with no authentication and proxies /api/*, /case-files/*
+# and /risk-files/*. Any container in the ERPNext project can reach the whole
+# TCI API by container IP, bypassing Traefik — and our edge can reach their
+# MariaDB. That is a real cross-tenant path, accepted deliberately because the
+# alternative is not deploying here at all. It is a reason this host holds
+# synthetic data only, and a reason it is not the production target.
+#
+# Portability note: this file is host-shape-specific, not vendor-specific. The
+# base stack remains the artefact for the decided AWS ap-southeast-5 target
+# (MASTER_PLAN §8) — deploying there means simply not passing this overlay.
+# ---------------------------------------------------------------------------
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+networks:
+  # The co-tenant's Traefik network, joined but never defined by us: `external`
+  # means Compose attaches to it and will refuse to create or destroy it.
+  traefik:
+    external: true
+    name: ${TCI_TRAEFIK_NETWORK:-frappe_docker_frappe_network}
+
+services:
+  postgres:
+    mem_limit: 1g
+    logging: *logging
+
+  redis:
+    mem_limit: 256m
+    logging: *logging
+
+  # Also the container `pnpm seed` runs in (deploy.sh --seed), which is the
+  # most memory-hungry thing this image ever does — hence the larger ceiling
+  # than the migration itself needs.
+  migrate:
+    mem_limit: 1536m
+    logging: *logging
+    environment:
+      NODE_OPTIONS: --max-old-space-size=1152
+
+  api-gateway:
+    mem_limit: 768m
+    logging: *logging
+    environment:
+      NODE_OPTIONS: --max-old-space-size=576
+
+  case-service:
+    mem_limit: 1g
+    logging: *logging
+    environment:
+      NODE_OPTIONS: --max-old-space-size=768
+      # Absent from the base stack, which leaves the code on its
+      # http://localhost:3000 default — and inside this container localhost is
+      # the container itself, where nothing listens on 3000. Claimant
+      # resolution and phone verification on the chat/intake path fail
+      # silently without it.
+      # See apps/case-service/src/chat/http-claimant-resolver.ts and
+      # http-phone-verifier.ts.
+      API_GATEWAY_URL: http://api-gateway:3000
+
+  video-service:
+    mem_limit: 512m
+    logging: *logging
+    environment:
+      NODE_OPTIONS: --max-old-space-size=384
+
+  risk-engine:
+    mem_limit: 768m
+    logging: *logging
+    environment:
+      NODE_OPTIONS: --max-old-space-size=576
+
+  # MediaPipe and Parselmouth load models into memory; this is the one service
+  # whose ceiling is set by what it loads rather than by what it serves, and
+  # the one most likely to be OOM-killed. The base stack gives it no
+  # healthcheck, so a container crash-looping on exit 137 would be invisible —
+  # deploy.sh would report a healthy stack with a dead risk pipeline. It does
+  # expose GET /health (apps/risk-analyzer/app/main.py), and the image has
+  # curl, so there is no reason for the gap.
+  risk-analyzer:
+    mem_limit: 2g
+    logging: *logging
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:3005/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  edge:
+    mem_limit: 256m
+    logging: *logging
+    # Empty the base stack's ['${CADDY_HTTP_PORT:-80}:80', '...:443'] outright.
+    # !override replaces; a bare `ports:` here would merge and add.
+    ports: !override []
+    networks:
+      # Keep the project network — this is how Caddy reaches api-gateway,
+      # case-service and risk-engine. Listing networks at all makes the
+      # default implicit membership explicit, and omitting it here would
+      # detach the edge from the very services it proxies.
+      default: {}
+      traefik: {}
+    labels:
+      traefik.enable: 'true'
+      # Which network Traefik should dial the container on. The edge is on two;
+      # without this Traefik may pick the wrong address and fail intermittently.
+      traefik.docker.network: ${TCI_TRAEFIK_NETWORK:-frappe_docker_frappe_network}
+
+      # Bare hostnames, no scheme — Traefik matches the Host header, while
+      # ADJUSTER_HOST and friends carry an http:// prefix to keep Caddy in
+      # plain-HTTP mode. Same names, two different syntaxes, hence two vars.
+      traefik.http.routers.tci.rule: >-
+        Host(`${TCI_ADJUSTER_FQDN:?set in .env.staging}`) ||
+        Host(`${TCI_CLAIMANT_FQDN:?set in .env.staging}`) ||
+        Host(`${TCI_AGENT_FQDN:?set in .env.staging}`)
+      traefik.http.routers.tci.entrypoints: websecure
+      traefik.http.routers.tci.tls: 'true'
+      # The resolver the host's Traefik already runs; it holds the ACME account
+      # and the acme.json volume. We consume it, we do not configure it — and
+      # note that a failed challenge spends the CO-TENANT's Let's Encrypt
+      # failed-validation budget, so verify the first issuance rather than
+      # retrying blindly.
+      traefik.http.routers.tci.tls.certresolver: ${TCI_CERT_RESOLVER:-main-resolver}
+      # Caddy's port INSIDE the container. Unrelated to any host port.
+      traefik.http.services.tci.loadbalancer.server.port: '80'

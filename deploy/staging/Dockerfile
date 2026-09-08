@@ -54,6 +54,22 @@ COPY . .
 # api clients already default to /api/v1, this pins the one localhost fallback.
 ENV VITE_API_URL=/api/v1
 
+# Ceilings for the build itself — the highest-memory phase of a deploy by a wide
+# margin, and the one no container mem_limit covers, because it happens before
+# any container exists.
+#
+# turbo's default concurrency is 10: on a small host that means four nest builds
+# and two Vite builds compiling at once, each an unbounded Node heap. On a host
+# with no swap the kernel resolves that by killing whatever is largest, which on
+# a shared box is somebody else's database, not this build.
+#
+# Both are overridable per environment, so a large dedicated builder can raise
+# them: --build-arg TURBO_CONCURRENCY=10 --build-arg NODE_BUILD_HEAP_MB=4096
+ARG TURBO_CONCURRENCY=2
+ARG NODE_BUILD_HEAP_MB=2048
+ENV TURBO_CONCURRENCY=${TURBO_CONCURRENCY}
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB}
+
 RUN pnpm prisma:generate && pnpm build
 
 # ---------------------------------------------------------------------------
