@@ -71,6 +71,46 @@
 # (MASTER_PLAN §8) — deploying there means simply not passing this overlay.
 # ---------------------------------------------------------------------------
 
+# NODE_ENV, and why it is not 'production' here
+# ---------------------------------------------
+# The base stack sets NODE_ENV=production. Two services then refuse to boot,
+# both deliberately and both correctly:
+#
+#   api-gateway   auth.module.ts:63       — no OTP transport is configured, and
+#                                           in production the console fallback
+#                                           would swallow every login silently.
+#   case-service  storage.service.ts:36   — no Supabase, and the local-filesystem
+#                                           fallback loses claimant evidence on
+#                                           the next redeploy.
+#
+# Both guards say the same true thing: this configuration is not safe for
+# production. It is not production. It is a sandbox holding synthetic data,
+# with no WhatsApp Business account and no Supabase project — and the base
+# stack's own .env.staging.example calls local-filesystem storage "the staging
+# default" while provisioning volumes for it, so the intent was always to
+# degrade here, not to fail.
+#
+# Setting NODE_ENV=staging takes the documented non-production path in both:
+# the console OTP transport (codes appear in `./deploy.sh --logs api-gateway`,
+# which is how you log in as a claimant without a WABA) and filesystem storage
+# on the named volumes this stack already declares.
+#
+# It also turns ON the WhatsApp sender allowlist, which `=== 'production'`
+# disables — worth having on a public sandbox.
+#
+# The one thing it relaxes: the refresh-token cookie's `secure` flag
+# (auth.controller.ts:184) tracks NODE_ENV rather than the actual scheme, so it
+# is not set here. The edge is HTTPS-only — Traefik redirects :80 to :443
+# globally — so there is no plaintext path for the cookie to travel, but the
+# flag is a belt this deployment does without. It is a reason not to reuse this
+# value on a host that serves real data.
+#
+# Set only in this overlay. The base file keeps NODE_ENV=production for the
+# decided AWS ap-southeast-5 target, where the credentials those guards ask for
+# are expected to exist.
+x-staging-env: &staging-env
+  NODE_ENV: staging
+
 x-logging: &logging
   driver: json-file
   options:
@@ -100,18 +140,21 @@ services:
     mem_limit: 1536m
     logging: *logging
     environment:
+      <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=1152
 
   api-gateway:
     mem_limit: 768m
     logging: *logging
     environment:
+      <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=576
 
   case-service:
     mem_limit: 1g
     logging: *logging
     environment:
+      <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=768
       # Absent from the base stack, which leaves the code on its
       # http://localhost:3000 default — and inside this container localhost is
@@ -126,12 +169,14 @@ services:
     mem_limit: 512m
     logging: *logging
     environment:
+      <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=384
 
   risk-engine:
     mem_limit: 768m
     logging: *logging
     environment:
+      <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=576
 
   # MediaPipe and Parselmouth load models into memory; this is the one service
