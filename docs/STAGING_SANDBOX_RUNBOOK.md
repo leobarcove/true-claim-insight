@@ -11,26 +11,45 @@ why it was built this way, and the handful of commands you need.
 
 | What | Address |
 | --- | --- |
-| Adjuster portal | https://adjuster.89.233.105.237.sslip.io |
-| Claimant app | https://claim.89.233.105.237.sslip.io |
-| Agent-assisted form | https://agent.89.233.105.237.sslip.io |
+| Adjuster portal | https://tci.smitherytech.com |
+| Claimant app | https://tci-claim.smitherytech.com |
+| Agent-assisted form | https://tci-agent.smitherytech.com |
 
-Log in to the adjuster portal with `adjuster@pacific.com` / `DemoPass123!`.
+All three have real Let's Encrypt certificates, issued automatically.
 
-**Why the long addresses.** A web address needs a certificate to show the padlock,
-and certificates are not issued for bare IP addresses. Without HTTPS the claimant
-app cannot be installed as a phone app, video calls cannot reach the camera, and
-the Telegram Mini App will not open — so it was not optional.
+### How you sign in
 
-`sslip.io` is a free public service: any address shaped
-`anything.<your-ip>.sslip.io` automatically points at that IP. No signup, no DNS
-to manage, and a real Let's Encrypt certificate.
+**Adjuster portal** — email and password. Every seeded account uses
+`DemoPass123!`:
 
-**When you buy a domain**, this becomes three lines in one file plus a restart —
-no rebuild. See §7.
+| Role | Email |
+| --- | --- |
+| Adjuster *(start here)* | `adjuster@pacific.com` |
+| Firm admin (adjusting firm) | `admin@pacific.com` |
+| Super admin | `superadmin@tci.com` |
+| Firm admin (insurer) | `admin@allianz.com` |
+| SIU investigator | `siu@allianz.com` |
+| Compliance officer | `compliance@allianz.com` |
+| Support desk | `support@allianz.com` |
+| Shariah reviewer | `shariah@allianz.com` |
 
-> The `agent.` prefix is not decoration. The claimant app reads the hostname to
-> decide which screen to show, so that name must keep starting with `agent.`
+**Claimant app** — no password. Enter any Malaysian-format number, e.g.
+`+60123456789`, and a six-digit code follows.
+
+**Agent form** — registration number `999999-00` with phone `+60198888888`
+(Emily Tan / MSIG in the seed data), then a code. It asks for more than a login
+on purpose: this surface skips the code sent to the claimant's own phone, so
+the way in must not be something a claimant could type.
+
+Nothing sends those codes — there is no WhatsApp account connected — so the
+server returns them directly, and `./deploy.sh --otp` lists the recent ones.
+They expire after five minutes, and requests are capped at five per five
+minutes per number.
+
+> **The agent hostname is not cosmetic.** The claimant app and the agent form
+> are the *same build*; the address it was served from is what decides which
+> screens appear. That hostname is compiled into the bundle at build time, so
+> changing it means a rebuild, not just a restart. See §7.
 
 ---
 
@@ -150,8 +169,27 @@ structure and restarts. 2–5 minutes normally; the very first build took 15.
 | `./deploy.sh --logs case-service` | Watch one service |
 | `./deploy.sh --no-build` | Restart without rebuilding — for config changes |
 | `./deploy.sh --down` | Stop TCI. **Your data is kept** |
+| `./deploy.sh --otp` | Show recent sign-in codes |
 | `./deploy.sh --ssh` | Open a shell on the server, if you ever want one |
 | `./deploy.sh --help` | The list |
+
+### How long it takes
+
+About **11 minutes** for a full deploy, of which roughly one is compiling. The
+other ten are Docker packing and unpacking five service images of 2.3 GB each —
+every one carries the whole workspace, `node_modules` included.
+
+It was 25 minutes before two fixes: a build argument given to one image and not
+the others split Docker's cache key, so the entire workspace was compiled three
+times over; and the pnpm store and turbo cache now survive between builds
+instead of starting empty every time. Compiling went from ~400 seconds to ~40.
+
+Trimming those images is the remaining large win — it would take deploys to
+three or four minutes — but it risks removing something a service needs at
+runtime, so it has not been done blind.
+
+`./deploy.sh --no-build` skips all of it and restarts in seconds. It is the
+right command whenever only configuration changed.
 
 `--down` only stops TCI. It cannot touch the ERP — different project name.
 
@@ -229,14 +267,26 @@ you build up work you would miss, ask and a backup job takes ten minutes to add.
 
 ---
 
-## 7. Moving to a real domain later
+## 7. Changing the addresses later
 
-1. Buy a domain, point three A-records at `89.233.105.237`:
-   `claim`, `adjuster`, `agent` (that last name must start with `agent`).
-2. On the server, edit `.env.staging` and change the nine host lines.
-3. `./deploy.sh --no-build`
+1. Point A-records at `89.233.105.237` for the three names you want.
+2. On the server, edit `.env.staging` — nine lines: three `*_HOST`
+   (`http://`, because Traefik holds the certificate, not Caddy), three
+   `*_ORIGIN` (`https://`, what the browser sees), three `TCI_*_FQDN` (bare
+   names, for Traefik's routing).
+3. `./deploy.sh`
 
-No rebuild. Traefik fetches the new certificates by itself.
+Traefik fetches the new certificates by itself.
+
+**A full deploy, not `--no-build`.** The agent hostname is compiled into the
+claimant bundle — that is what tells the agent surface apart from the claimant
+one — so the frontend has to be rebuilt for it to take effect. Everything else
+would have been fine with a restart; that one thing is not.
+
+The agent name no longer has to start with `agent.`; `docker-compose.traefik.yml`
+passes whatever `TCI_AGENT_FQDN` says into the build. What it must never be is
+the *same* name as the claimant host — one build, two surfaces, and the address
+is the only thing telling them apart. `deploy.sh` refuses if they match.
 
 ---
 
