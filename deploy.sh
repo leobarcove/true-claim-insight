@@ -13,6 +13,7 @@
 #   ./deploy.sh --logs api-gateway   watch one service
 #   ./deploy.sh --no-build       restart without rebuilding
 #   ./deploy.sh --down           stop the sandbox (data is kept)
+#   ./deploy.sh --otp            show the most recent sign-in codes
 #   ./deploy.sh --ssh            just open a shell on the server
 #   ./deploy.sh --help
 #
@@ -50,6 +51,17 @@ usage() {
 case "${1:-}" in
   -h|--help) usage ;;
   --ssh) exec ssh -i "$SSH_KEY" -t "$SERVER" "cd ${REMOTE_DIR}/deploy/staging && exec bash -l" ;;
+  # Sign-in codes. Nothing sends them on this host — there is no WhatsApp
+  # account — so the app hands the code back in its own response and the row
+  # below is the other place to find it. Claimant and agent sign-in both land
+  # here; the phone number tells you which.
+  --otp)
+    exec ssh -i "$SSH_KEY" "$SERVER" \
+      "cd ${REMOTE_DIR}/deploy/staging && docker compose --env-file .env.staging \
+       -f docker-compose.staging.yml exec -T postgres psql -U tci -d true_claim_insight \
+       -c 'select \"phoneNumber\", code, \"expiresAt\" at time zone '\\''UTC'\\'' as expires_utc \
+           from otp_codes order by \"createdAt\" desc limit 5'"
+    ;;
 esac
 
 [[ -f "$SSH_KEY" ]] || die "no ssh key at ${SSH_KEY}
