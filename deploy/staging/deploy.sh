@@ -89,7 +89,18 @@ usage() {
 
 # Any temp file this script makes holds secrets. One trap, whole script.
 TMPFILES=()
-cleanup() { [[ ${#TMPFILES[@]} -gt 0 ]] && rm -f "${TMPFILES[@]}"; }
+# `return 0` is load-bearing, not tidiness. Written as
+# `[[ ${#TMPFILES[@]} -gt 0 ]] && rm -f ...` the function ends on a false test
+# whenever there is nothing to clean, so it returns 1 — and under `set -e` a
+# failing last command in an EXIT trap replaces the status the script meant to
+# exit with, including an explicit `exit 0`. Every successful run then reports
+# failure, which is exactly as misleading as it sounds.
+cleanup() {
+  if [[ ${#TMPFILES[@]} -gt 0 ]]; then
+    rm -f "${TMPFILES[@]}"
+  fi
+  return 0
+}
 trap cleanup EXIT
 mktmp() { local t; t="$(mktemp)"; chmod 600 "$t"; TMPFILES+=("$t"); printf '%s' "$t"; }
 
