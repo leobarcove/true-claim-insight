@@ -111,6 +111,23 @@
 x-staging-env: &staging-env
   NODE_ENV: staging
 
+# Build arguments, applied to EVERY image built from deploy/staging/Dockerfile
+# — including the four that make no use of them.
+#
+# That is the point. All six targets descend from one `build` stage that
+# compiles the whole workspace, and BuildKit reuses it across targets only
+# while its cache key is identical. Give one target a build arg the others
+# lack and the key diverges: the workspace is then compiled once per distinct
+# value, in parallel, which showed up as adjuster-portal being built three
+# times in a single deploy.
+#
+# So these belong to the shared stage, not to whichever service happens to
+# consume the result. Passing them everywhere is what keeps the build single.
+x-build-args: &build-args
+  # Compiled into the claimant bundle, which is what tells the agent surface
+  # apart from the claimant one. See apps/claimant-web/src/lib/surface.ts.
+  VITE_AGENT_HOSTS: ${TCI_AGENT_FQDN:?set in .env.staging}
+
 x-logging: &logging
   driver: json-file
   options:
@@ -139,6 +156,8 @@ services:
   migrate:
     mem_limit: 1536m
     logging: *logging
+    build:
+      args: *build-args
     environment:
       <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=1152
@@ -146,6 +165,8 @@ services:
   api-gateway:
     mem_limit: 768m
     logging: *logging
+    build:
+      args: *build-args
     environment:
       <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=576
@@ -153,6 +174,8 @@ services:
   case-service:
     mem_limit: 1g
     logging: *logging
+    build:
+      args: *build-args
     environment:
       <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=768
@@ -168,6 +191,8 @@ services:
   video-service:
     mem_limit: 512m
     logging: *logging
+    build:
+      args: *build-args
     environment:
       <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=384
@@ -175,6 +200,8 @@ services:
   risk-engine:
     mem_limit: 768m
     logging: *logging
+    build:
+      args: *build-args
     environment:
       <<: *staging-env
       NODE_OPTIONS: --max-old-space-size=576
@@ -200,11 +227,7 @@ services:
     mem_limit: 256m
     logging: *logging
     build:
-      # The agent surface is selected by hostname inside the compiled bundle,
-      # so a deployment whose agent host does not start with `agent.` has to
-      # say so before the frontend is built — not after.
-      args:
-        VITE_AGENT_HOSTS: ${TCI_AGENT_FQDN:?set in .env.staging}
+      args: *build-args
     # Empty the base stack's ['${CADDY_HTTP_PORT:-80}:80', '...:443'] outright.
     # !override replaces; a bare `ports:` here would merge and add.
     ports: !override []
