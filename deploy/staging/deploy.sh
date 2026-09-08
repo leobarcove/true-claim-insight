@@ -314,18 +314,35 @@ fi
 # A wrong IP produces names that resolve somewhere else entirely; the deploy
 # still "succeeds" and the certificate simply never arrives.
 step "Checking DNS"
+
+# Collect this host's addresses ONCE, as a list, and compare exactly. Grepping
+# the raw `ip addr` output for a dotted quad is unreliable twice over: the dots
+# are regex wildcards, and -w's word boundaries interact with the /prefix and
+# whitespace differently depending on how the address is rendered. That showed
+# up as the same IP passing for two names and failing for a third in one run.
+host_addrs=" $(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]}' | tr '\n' ' ')"
+
 for fqdn in "$(env_value TCI_ADJUSTER_FQDN)" "$(env_value TCI_CLAIMANT_FQDN)" "$(env_value TCI_AGENT_FQDN)"; do
-  resolved="$(getent hosts "$fqdn" 2>/dev/null | awk '{print $1}' | head -n1 || true)"
+  # Take every A record, not just the first: a name may legitimately carry
+  # several, and matching any one of them is what we care about.
+  resolved="$(getent ahostsv4 "$fqdn" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)"
+  resolved="${resolved% }"
   if [[ -z "$resolved" ]]; then
     die "${fqdn} does not resolve. Traefik cannot obtain a certificate for a
          name that does not exist."
   fi
-  if ip -4 addr show 2>/dev/null | grep -qw "$resolved"; then
+
+  matched=0
+  for ip_addr in $resolved; do
+    [[ "$host_addrs" == *" ${ip_addr} "* ]] && matched=1
+  done
+
+  if [[ "$matched" -eq 1 ]]; then
     ok "${fqdn} → ${resolved} (an address on this host)"
   else
     warn "${fqdn} → ${resolved}, which is not an address on this host.
-    If that is a NAT/floating IP this is fine; if it is wrong, the certificate
-    will never be issued."
+    If that is a NAT or floating IP this is fine; if it is wrong, the
+    certificate will never be issued."
   fi
 done
 
