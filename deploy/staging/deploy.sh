@@ -280,9 +280,17 @@ for required in ADJUSTER_ORIGIN CLAIMANT_ORIGIN AGENT_ORIGIN \
                 TCI_ADJUSTER_FQDN TCI_CLAIMANT_FQDN TCI_AGENT_FQDN; do
   [[ -n "$(env_value "$required")" ]] || die "${required} is empty in ${ENV_FILE}."
 done
-env_value TCI_AGENT_FQDN | grep -qE '^agent\.' \
-  || die "TCI_AGENT_FQDN must start with 'agent.' or the agent surface never
-         activates (apps/claimant-web/src/lib/surface.ts)."
+# The agent host no longer has to start with `agent.` — the overlay passes it
+# to the build as VITE_AGENT_HOSTS, and surfaceFor() matches it by name. What
+# still has to hold is that it is a DIFFERENT name from the claimant host: the
+# two surfaces are one build, told apart only by which address served them, so
+# giving them the same name serves the agent screens to claimants.
+if [[ "$(env_value TCI_AGENT_FQDN)" == "$(env_value TCI_CLAIMANT_FQDN)" ]]; then
+  die "TCI_AGENT_FQDN and TCI_CLAIMANT_FQDN are the same host.
+       They select which surface the shared build shows, so one name cannot
+       serve both — the agent surface skips the code sent to the claimant's
+       own phone."
+fi
 ok "hostnames well-formed"
 
 # Key backup gate. Marker-file based, so an aborted first run re-asks instead
