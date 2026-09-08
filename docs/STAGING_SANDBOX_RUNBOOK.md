@@ -130,35 +130,55 @@ Caddy container touches the shared one.
 
 ## 5. Commands you will actually use
 
-All from `/opt/true-claim-insight/deploy/staging` on the server.
+**Run these on your own machine, from the project root.** You do not need to log
+in to the server.
 
 ```bash
-ssh -i ~/.ssh/id_rsa_fitarch root@89.233.105.237
-cd /opt/true-claim-insight/deploy/staging
+cd C:\code\true-claim-insight
+./deploy.sh
 ```
 
-### Deploy your latest code — the normal one
-
-```bash
-./deploy.sh --pull
-```
-
-Pulls from GitHub, rebuilds what changed, updates the database structure,
-restarts. Takes 2–5 minutes normally; the very first build took 15.
-
-### The rest
+That is the whole deployment. It checks your work is pushed, connects to the
+server, pulls your code there, rebuilds what changed, updates the database
+structure and restarts. 2–5 minutes normally; the very first build took 15.
 
 | Command | What it does |
 | --- | --- |
+| `./deploy.sh` | Deploy your latest code — the normal one |
 | `./deploy.sh --status` | What is running |
 | `./deploy.sh --logs` | Watch everything (Ctrl-C to stop) |
 | `./deploy.sh --logs case-service` | Watch one service |
 | `./deploy.sh --no-build` | Restart without rebuilding — for config changes |
 | `./deploy.sh --down` | Stop TCI. **Your data is kept** |
-| `./deploy.sh` | Start it again |
+| `./deploy.sh --ssh` | Open a shell on the server, if you ever want one |
 | `./deploy.sh --help` | The list |
 
 `--down` only stops TCI. It cannot touch the ERP — different project name.
+
+### The one thing it will stop you on
+
+The server deploys by pulling **from GitHub**, not from your laptop. So anything
+you have not pushed is invisible to it, and you would deploy the previous version
+without noticing. `./deploy.sh` therefore checks first and offers to push:
+
+```
+! 2 commit(s) are not on GitHub yet:
+  The server pulls from GitHub, so it cannot see these.
+  Push them now? [Y/n]
+```
+
+Say yes. If pushing fails with *permission denied*, your GitHub account has lost
+write access to the repository — fix that first; nothing was deployed.
+
+### Two scripts, same name
+
+| | |
+| --- | --- |
+| `./deploy.sh` in the project root | the remote control you run on your laptop |
+| `deploy/staging/deploy.sh` | the real script, which runs on the server |
+
+The second one is where all the safety checks live. The first just calls it over
+SSH. You will only ever type the first.
 
 ### Logging in as a claimant
 
