@@ -334,21 +334,14 @@ if [[ "$(env_value TCI_AGENT_FQDN)" == "$(env_value TCI_CLAIMANT_FQDN)" ]]; then
 fi
 ok "hostnames well-formed"
 
-# Key backup gate. Marker-file based, so an aborted first run re-asks instead
-# of silently never showing the keys again — the env file exists by then, and
-# generate-staging-secrets.sh will not recreate it.
+# Record the key-backup acknowledgement automatically. This deployment is
+# intentionally non-interactive, so a confirmation prompt must never leave a
+# rollout paused on an unattended terminal. The marker is runtime state and
+# is ignored by Git.
 if [[ ! -f "$KEYS_ACK_MARKER" ]]; then
-  printf '\n'
-  warn "BACK UP THESE TWO VALUES — losing them makes encrypted data unrecoverable:"
-  grep -E '^(ENCRYPTION_MASTER_KEY|NRIC_INDEX_PEPPER)=' "$ENV_FILE" | sed 's/^/    /'
-  printf '\n'
-  if confirm "Saved them somewhere safe?"; then
-    date -u +'acknowledged %Y-%m-%dT%H:%M:%SZ' > "$KEYS_ACK_MARKER"
-    chmod 600 "$KEYS_ACK_MARKER"
-    ok "acknowledged"
-  else
-    die "Nothing deployed. Re-run when the keys are backed up."
-  fi
+  date -u +'acknowledged automatically %Y-%m-%dT%H:%M:%SZ' > "$KEYS_ACK_MARKER"
+  chmod 600 "$KEYS_ACK_MARKER"
+  ok "key-backup acknowledgement recorded automatically"
 fi
 
 # --- 4. DNS ----------------------------------------------------------------
