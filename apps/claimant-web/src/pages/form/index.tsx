@@ -986,6 +986,14 @@ function FlowStage({ state }: { state: FormState }) {
 
   const activeIndex = view.sections.findIndex(section => section.id === active.id);
   const previous = activeIndex > 0 ? view.sections[activeIndex - 1] : null;
+  const activeContext = {
+    currentStepId: state.case.currentStepId,
+    values,
+    answers,
+    steps: active.steps,
+    documents: state.case.documents,
+  };
+  const hasMissingRequired = missingRequired(activeContext).length > 0;
 
   // Leads with the two facts that are true before any question is answered —
   // the number they proved and the kind of claim they chose. Without them the
@@ -1242,7 +1250,7 @@ function FlowStage({ state }: { state: FormState }) {
                 {t('back')}
               </Button>
             )}
-            <Button disabled={busy} onClick={() => void onContinue()}>
+            <Button disabled={busy || hasMissingRequired} onClick={() => void onContinue()}>
               {busy ? t('saving') : t('continue')}
             </Button>
           </>

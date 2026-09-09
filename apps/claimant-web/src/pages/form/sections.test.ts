@@ -11,7 +11,7 @@ import {
   type FlowStep,
 } from '@tci/shared-types';
 
-import { drawsTextBox } from './field-control';
+import { drawsTextBox, valueForField } from './field-control';
 import { missingRequired, stepsToSend } from './submit-engine';
 import {
   CLAIM_TYPE_STEP_ID,
@@ -269,6 +269,16 @@ describe('how a row lays out', () => {
 
     expect(rowsFor(steps)).toEqual([[steps[0]]]);
     expect(rowClassFor(rowsFor(steps)[0])).toBeUndefined();
+  });
+});
+
+describe('saved date controls', () => {
+  const datetime = { id: 'departure', label: 'Departure', answerType: 'datetime' } as FlowStep;
+  const date = { id: 'trip-start', label: 'Trip start', answerType: 'date' } as FlowStep;
+
+  it('turns stored ISO instants back into values accepted by native controls', () => {
+    expect(valueForField(datetime, '2026-09-01T10:40:00.000Z')).toBe('2026-09-01T10:40');
+    expect(valueForField(date, '2026-09-01T00:00:00.000Z')).toBe('2026-09-01');
   });
 });
 

@@ -191,7 +191,11 @@ export function CasesListPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {caseRow.claimant?.fullName || caseRow.statedClaimantName || 'Unknown'}
+                          {/* The case list is an intake view: the name the claimant
+                              entered on this form is the authoritative label for this
+                              case. A claimant record can belong to an older claim or
+                              hold a placeholder name, so it is only a fallback. */}
+                          {caseRow.statedClaimantName || caseRow.claimant?.fullName || 'Unknown'}
                           <div className="text-xs text-muted-foreground">
                             {caseRow.claimant?.phoneNumber}
                           </div>

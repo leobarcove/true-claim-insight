@@ -49,6 +49,24 @@ export function drawsTextBox(step: FlowStep): boolean {
   return ['text', 'number', 'phone'].includes(step.answerType);
 }
 
+/**
+ * Stored dates are ISO instants (and therefore commonly end in `Z`), whereas
+ * the browser's date and datetime-local controls only accept their local input
+ * syntax. Feeding an ISO instant straight back makes those controls look blank
+ * when a claimant returns to a saved section, even though the summary has the
+ * right answer. Keep the wall-clock date and minute the claimant entered.
+ */
+export function valueForField(step: FlowStep, value: string): string {
+  const text = value.trim();
+  if (step.answerType === 'date') {
+    return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : value;
+  }
+  if (step.answerType === 'datetime') {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) ? text.slice(0, 16) : value;
+  }
+  return value;
+}
+
 interface FieldProps {
   step: FlowStep;
   value: string;
@@ -289,7 +307,7 @@ function FieldInput({
       }
       inputMode={step.answerType === 'phone' ? 'tel' : digitsOnly ? 'numeric' : undefined}
       className={base}
-      value={value}
+      value={valueForField(step, value)}
       /*
         The flow's example, not a second label. A date or datetime draws its own
         format mask and ignores this, which is right — the browser's mask is the
