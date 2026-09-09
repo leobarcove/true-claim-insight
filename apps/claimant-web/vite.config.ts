@@ -100,7 +100,16 @@ export default defineConfig(({ mode }) => {
     // that quietly moves is how a stale tunnel or CORS entry starts pointing
     // at the wrong app.
     strictPort: true,
-    allowedHosts: publicHost,
+    // Plus every *.localhost name, so the surfaces can be reached locally the
+    // way they are reached in production — claim.localhost:4301 and
+    // agent.localhost:4301 — rather than by the /agent path.
+    //
+    // That matters because the path only selects the agent surface on
+    // localhost (apps/claimant-web/src/lib/surface.ts): a deployment decides by
+    // hostname, so testing through the path exercises a branch production never
+    // takes. Browsers resolve *.localhost to 127.0.0.1 on their own, so this
+    // needs no hosts-file entry.
+    allowedHosts: [...publicHost, ".localhost"],
     fs: {
       allow: ['..', '../../packages'],
     },

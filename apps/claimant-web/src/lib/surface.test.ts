@@ -126,5 +126,30 @@ describe('which surface a browser is on', () => {
       expect(at('127.0.0.1', '/agent')).toBe('agent');
       expect(at('localhost', '/form')).toBe('claimant');
     });
+
+    /**
+     * The route to prefer locally, and the reason to prefer it: it takes the
+     * SAME branch a deployment takes. Browsers resolve *.localhost to 127.0.0.1
+     * unaided, so agent.localhost:4301 needs no hosts-file entry and no tunnel,
+     * and it exercises the hostname rule rather than the path fallback that
+     * production never reaches.
+     *
+     * Pinned because it is easy to lose: the prefix check exists for real
+     * deployments, and nothing else would notice if a tidy-up narrowed it to
+     * hosts with a dot-separated TLD.
+     */
+    it('prefers the hostname even locally, when one is used', () => {
+      expect(at('agent.localhost', '/')).toBe('agent');
+      expect(at('claim.localhost', '/')).toBe('claimant');
+    });
+
+    /**
+     * And the fallback still applies to any other .localhost name, because the
+     * whole of localhost is developer-only. This is the branch that is switched
+     * off in production — see the public-host tests above.
+     */
+    it('still lets the path decide on a non-agent localhost name', () => {
+      expect(at('claim.localhost', '/agent')).toBe('agent');
+    });
   });
 });
