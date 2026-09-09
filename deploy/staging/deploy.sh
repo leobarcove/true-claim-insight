@@ -64,6 +64,9 @@ cd "$(dirname "$0")"
 REPO_ROOT="$(cd ../.. && pwd)"
 ENV_FILE=".env.staging"
 KEYS_ACK_MARKER=".keys-backed-up"
+# This host has no swap and is shared with another stack. Two concurrent image
+# builds compete for the same memory and can OOM the co-tenant database.
+DEPLOY_LOCK_FILE="${TCI_DEPLOY_LOCK_FILE:-/tmp/tci-staging-deploy.lock}"
 
 BASE_COMPOSE="docker-compose.staging.yml"
 OVERLAY_COMPOSE="docker-compose.traefik.yml"
@@ -170,6 +173,14 @@ while [[ $# -gt 0 ]]; do
     *)          die "Unknown option: $1  (try --help)" ;;
   esac
 done
+
+# Hold the lock for the entire rollout. It is deliberately non-blocking: a
+# queued second deployment is stale by definition, and waiting can make an
+# operator believe it has already started. `flock` releases FD 9 on exit.
+command -v flock >/dev/null || die "flock is required to prevent concurrent deployments."
+exec 9>"$DEPLOY_LOCK_FILE"
+flock -n 9 || die "another TCI deployment is already running.
+       Wait for it to finish, then re-run ./deploy.sh."
 
 bold "True Claim Insight — deploy"
 info "host      $(hostname) (${TCI_HOST_IP})"
