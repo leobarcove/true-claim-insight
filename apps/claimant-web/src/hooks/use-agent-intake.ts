@@ -247,9 +247,20 @@ export function useAttestConsent() {
  * into the insurer's own queue, where the adjusters who do the work cannot see
  * it.
  */
+/**
+ * `claimantFullName` is the name the agent confirmed at the declaration, sent
+ * so the case records who it was opened for. It does not rename the claimant:
+ * `Claimant.fullName` is shared across every claim that person makes and is
+ * only ever filled when blank, so without this the confirmed name was dropped
+ * and the case displayed whatever the identity row already held.
+ */
 export function useCreateAssistedCase() {
   return useMutation({
-    mutationFn: async (input: { claimantId: string; travelClaimType: string }) => {
+    mutationFn: async (input: {
+      claimantId: string;
+      travelClaimType: string;
+      claimantFullName?: string;
+    }) => {
       const { data } = await apiClient.post<{ data: { id: string; caseNumber: string } }>(
         '/cases',
         { ...input, channel: 'STAFF', initiatedBy: 'STAFF', routeAsClaimant: true },

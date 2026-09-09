@@ -161,11 +161,20 @@ export function CaseDetailPage() {
    *
    * So: show what the claimant stated, and label it as stated rather than
    * verified. The database rule is untouched.
+   *
+   * Taken from the server's `statedClaimantName` rather than re-derived from
+   * `answers` here. The server ranks two sources — the `claimant-name` answer
+   * first, then the name the agent confirmed at the consent declaration — and
+   * an assisted case sits in DRAFT with no answers at all between those two
+   * moments. Reading only `answers` meant such a case fell through to the
+   * shared identity record and named a different person from the one the agent
+   * had just entered, while the case list (which does read the server field)
+   * named them correctly. One rule, computed once, in `statedClaimantNameOf`.
    */
-  const statedName = useMemo(() => {
-    const value = caseData?.answers?.['claimant-name'];
-    return typeof value === 'string' && value.trim() ? value.trim() : null;
-  }, [caseData]);
+  const statedName = useMemo(
+    () => caseData?.statedClaimantName?.trim() || null,
+    [caseData?.statedClaimantName]
+  );
 
   /**
    * Whether the person claiming is the person being paid. Never blocks — the

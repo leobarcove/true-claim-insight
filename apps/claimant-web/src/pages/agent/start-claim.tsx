@@ -255,6 +255,10 @@ function DeclarationStep({
       const created = await createCase.mutateAsync({
         claimantId: claimant.id,
         travelClaimType: claimType,
+        // The name the agent just confirmed, carried onto the case. `resolve`
+        // above cannot store it when the claimant is already on file under
+        // another name, so this is the only place it is recorded.
+        claimantFullName: subject.fullName?.trim() || undefined,
       });
       /*
         The server's own record, not this browser's clock and not a hard-coded

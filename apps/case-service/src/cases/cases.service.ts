@@ -65,6 +65,28 @@ export function statedClaimantNameFromAnswers(answers: unknown): string | null {
 }
 
 /**
+ * The name this claim was stated to be for, from whichever source has it.
+ *
+ * Two sources, deliberately ranked. `claimant-name` is step one of every flow
+ * and asks for the name as it appears on the IC or passport — the name AMLA
+ * screening screens and documents are matched against — so it wins as soon as
+ * it exists. `claimantNameDeclared` is what the agent confirmed at the consent
+ * declaration, which happens before step one; it is the only name a case has
+ * while it sits in DRAFT with no answers.
+ *
+ * Null when neither is set, which is the caller's cue to fall back to the
+ * claimant identity record. Composed here rather than at each call site: the
+ * list and the detail page disagreeing about whose claim it is was the
+ * original defect, and two independent expressions would let it back in.
+ */
+export function statedClaimantNameOf(
+  answers: unknown,
+  claimantNameDeclared?: string | null
+): string | null {
+  return statedClaimantNameFromAnswers(answers) ?? (claimantNameDeclared?.trim() || null);
+}
+
+/**
  * Allowed case lifecycle transitions. Conversion of MEDICAL cases is
  * additionally gated behind REFERRED_TO_EXPERT (see convert()) — medical
  * claims are never auto-assessed, only form + expert routing + insurer
@@ -279,6 +301,11 @@ export class CasesService {
         category: ClaimCategory.TRAVEL,
         travelClaimType: dto.travelClaimType,
         claimantId,
+        // What this intake declared, recorded against the case rather than
+        // written back onto the shared Claimant row — see the field's note in
+        // schema.prisma. Blank-or-whitespace becomes null, not an empty string,
+        // so display can fall back to the identity record with a plain `??`.
+        claimantNameDeclared: dto.claimantFullName?.trim() || null,
         createdByUserId: isClaimant ? null : tenantContext.userId,
         currentStepId,
         flowDefinitionId,
@@ -360,7 +387,7 @@ export class CasesService {
       const applicable = this.requirementsFor(requirements, caseRow);
       return {
         ...safeCaseRow,
-        statedClaimantName: statedClaimantNameFromAnswers(answers),
+        statedClaimantName: statedClaimantNameOf(answers, caseRow.claimantNameDeclared),
         // Null means "this line has no published checklist", which is a
         // different thing from "nothing uploaded" and reads as a dash.
         completeness: applicable.length
@@ -470,6 +497,11 @@ export class CasesService {
 
     return {
       ...(await this.withFlowState(caseRow)),
+      // The same field the case list has always sent. Its absence here is why
+      // the two screens could name different people for one claim: the list
+      // showed the name given at intake, the detail page had nothing to show
+      // but the shared identity record.
+      statedClaimantName: statedClaimantNameOf(caseRow.answers, caseRow.claimantNameDeclared),
       evidenceRequirements: requirements,
       completeness: requirements.length
         ? computeCompleteness(

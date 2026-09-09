@@ -555,6 +555,34 @@ model Case {
   category                   ClaimCategory         @default(TRAVEL)
   travelClaimType            TravelClaimType?
   claimantId                 String?
+  /// The claimant's name as declared for THIS claim.
+  ///
+  /// `Claimant` is one shared identity row per phone number, reused by every
+  /// claim that person makes, and `findOrCreate` writes its `fullName` only
+  /// when the record has none. That is deliberate and stays: a claimant here
+  /// already carries 28 cases, and letting one intake overwrite the name would
+  /// relabel all of them from a single mistyped form.
+  ///
+  /// The cost of that rule was silent. An agent who confirmed "Jane" against a
+  /// number already on file under an older name had their entry dropped with
+  /// no error, and the case then displayed the older name — so the agent's
+  /// screen and the adjuster's disagreed about whose claim it was.
+  ///
+  /// This column is the per-claim answer: what was declared at this intake,
+  /// recorded against the case, leaving the shared identity untouched.
+  ///
+  /// It is NOT a second `claimant-name`. That step — the first of every flow —
+  /// asks for the name as it appears on the IC or passport, and is what AMLA
+  /// screening reads and what document checks match against; it wins wherever
+  /// both exist (see `statedClaimantNameOf`). This is only what the agent
+  /// confirmed at the declaration, which happens BEFORE step one and is the
+  /// window in which a case has a claimant but no answers at all. Filling that
+  /// window is the whole job: a case sat in DRAFT showing the wrong person.
+  ///
+  /// Plaintext, like `claimant.fullName` and `bankAccountHolderName` — names
+  /// are not encrypted in this schema, so this is not a SENSITIVE_FIELD_OMIT
+  /// row. Revisit it here if that ever changes for names generally.
+  claimantNameDeclared       String?
   createdByUserId            String? // staff capture / email logging
   policyId                   String?
   policyNumberRaw            String? // as typed/extracted, pre-match
