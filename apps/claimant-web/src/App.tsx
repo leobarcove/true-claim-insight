@@ -95,7 +95,7 @@ function App() {
           can reach, so this route cannot be used to slip onto the agent screens
           in a real deployment.
         */}
-        <Route path="/agent" element={<SurfaceRoute />} />
+        <Route path="/agent" element={<AgentPathRoute />} />
         <Route path="*" element={<FramedRoutes />} />
       </Routes>
     </BrowserRouter>
@@ -112,6 +112,23 @@ function App() {
  */
 function SurfaceRoute() {
   return currentSurface() === 'agent' ? <AgentFormPage /> : <ClaimFormPage />;
+}
+
+/**
+ * `/agent` is a route only where the hostname cannot name the surface — bare
+ * localhost, which has no subdomain to carry the answer.
+ *
+ * Anywhere else the name has already decided, so this path is not a second way
+ * in: on claim.localhost it used to render the claimant form, an identical copy
+ * of /form under a name promising something else, and on a deployed host it did
+ * the same. Neither is a route anyone should be able to reach, so it behaves
+ * like any other unknown path here — the catch-all below sends those to
+ * /tracker.
+ *
+ * The agent form's own address is /form on an agent hostname.
+ */
+function AgentPathRoute() {
+  return currentSurface() === 'agent' ? <AgentFormPage /> : <Navigate to="/tracker" replace />;
 }
 
 /** Everything that belongs inside the phone column. */
