@@ -9,6 +9,10 @@
 #   ./deploy.sh --seed           ...and load demo data (safe: refuses if the
 #                                database already has tenants)
 #   ./deploy.sh --yes            never prompt (for non-interactive runs)
+#   ./deploy.sh --db-access      also publish postgres on 127.0.0.1:5432, so a
+#                                SQL client can reach it through an SSH tunnel.
+#                                Remembered in .env.staging, so every later
+#                                deploy keeps it. --no-db-access undoes it.
 #   ./deploy.sh --status         what is running, without changing anything
 #   ./deploy.sh --logs [svc]     follow logs
 #   ./deploy.sh --down           stop TCI (leaves data volumes intact)
@@ -73,11 +77,18 @@ DEPLOY_STATE_FILE="${TCI_DEPLOY_STATE_FILE:-/var/lib/tci-staging/last-successful
 
 BASE_COMPOSE="docker-compose.staging.yml"
 OVERLAY_COMPOSE="docker-compose.traefik.yml"
+# Publishes postgres on loopback for a tunnelled SQL client. Off unless
+# DB_ACCESS=1 is recorded in the env file — see --db-access below.
+DBACCESS_COMPOSE="docker-compose.dbaccess.yml"
 
 DO_PULL=0
 DO_BUILD=1
 DO_SEED=0
 ASSUME_YES=0
+# empty = leave the recorded setting alone; 1/0 = the user asked to change it.
+DB_ACCESS_REQUEST=""
+# Extra `-f` arguments for dc(), filled in once the env file has been read.
+DBACCESS_ARGS=()
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -113,7 +124,8 @@ mktmp() { local t; t="$(mktemp)"; chmod 600 "$t"; TMPFILES+=("$t"); printf '%s' 
 # Compose always needs BOTH: --env-file for ${VAR} interpolation, and the
 # per-service `env_file:` inside the base file for the container environment.
 dc() {
-  docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" -f "$OVERLAY_COMPOSE" "$@"
+  docker compose --env-file "$ENV_FILE" -f "$BASE_COMPOSE" -f "$OVERLAY_COMPOSE" \
+    "${DBACCESS_ARGS[@]}" "$@"
 }
 
 # ps / logs / down deliberately DROP the overlay. Those only need the project
@@ -168,6 +180,8 @@ while [[ $# -gt 0 ]]; do
     --no-build) DO_BUILD=0; shift ;;
     --seed)     DO_SEED=1; shift ;;
     --yes|-y)   ASSUME_YES=1; shift ;;
+    --db-access)    DB_ACCESS_REQUEST=1; shift ;;
+    --no-db-access) DB_ACCESS_REQUEST=0; shift ;;
     --status)   require_env_file; dc_admin ps -a; exit 0 ;;
     --logs)     shift; require_env_file; dc_admin logs -f --tail=100 "$@"; exit 0 ;;
     --down)     require_env_file; dc_admin down
@@ -359,6 +373,27 @@ if [[ ! -f "$KEYS_ACK_MARKER" ]]; then
   ok "key-backup acknowledgement recorded automatically"
 fi
 
+# Database access for a tunnelled SQL client — remembered, not re-asked.
+#
+# The setting lives in .env.staging because that file is gitignored and is
+# never rewritten once it exists, so it survives a pull. That is the whole
+# point: this replaces an untracked docker-compose override which
+# stash_server_changes_before_pull swept away on every single deployment (it
+# stashes untracked files and deliberately never pops them), leaving the
+# database unreachable again each time and no clue as to why.
+if [[ -n "$DB_ACCESS_REQUEST" ]]; then
+  set_env_var DB_ACCESS "$DB_ACCESS_REQUEST"
+fi
+if [[ "$(env_value DB_ACCESS | tr -d '\r')" == "1" ]]; then
+  [[ -f "$DBACCESS_COMPOSE" ]] \
+    || die "DB_ACCESS=1 is recorded in ${ENV_FILE} but ${DBACCESS_COMPOSE} is
+       not in this checkout. Pull, or turn it off with --no-db-access."
+  # Every dc() call from here on carries it, so `up -d` actually applies the
+  # mapping instead of quietly recreating postgres without it.
+  DBACCESS_ARGS=(-f "$DBACCESS_COMPOSE")
+  ok "database will be published on 127.0.0.1:5432 (--no-db-access to stop)"
+fi
+
 # --- 4. DNS ----------------------------------------------------------------
 # A wrong IP produces names that resolve somewhere else entirely; the deploy
 # still "succeeds" and the certificate simply never arrives.
@@ -402,7 +437,7 @@ done
 # grepped: a service with `ports: ["9090"]` renders no `published:` key at all
 # yet still gets a random world-reachable host port, and `network_mode: host`
 # renders no ports section while binding every listener to the host directly.
-step "Verifying no port would be exposed"
+step "Verifying nothing is exposed off this host"
 
 config_json="$(mktmp)"
 dc config --format json > "$config_json" \
@@ -417,12 +452,35 @@ with open(sys.argv[1]) as fh:
 services = cfg.get("services") or {}
 problems = []
 
+# Reachable only from the host itself, so getting to it costs an SSH session
+# and therefore the server's key. That is a different risk from a port on a
+# public interface, and the one case this guard deliberately permits.
+LOOPBACK = {"127.0.0.1", "::1"}
+loopback = []
+
 for name, svc in services.items():
     mode = svc.get("network_mode")
     if mode and (mode == "host" or str(mode).startswith("container:")):
         problems.append(f"{name}: network_mode={mode} bypasses container networking")
     for port in svc.get("ports") or []:
-        problems.append(f"{name}: publishes {port}")
+        # Compose normalises every short form into an object by this point.
+        # Anything still a bare string did not normalise, so there is nothing
+        # reliable to reason about — refuse it rather than guess.
+        if not isinstance(port, dict):
+            problems.append(f"{name}: publishes {port} (unparsed)")
+            continue
+        host_ip = str(port.get("host_ip") or "").strip()
+        published, target = port.get("published"), port.get("target")
+        if host_ip in LOOPBACK:
+            loopback.append(f"{name}: {host_ip}:{published} -> {target}")
+            continue
+        # An absent host_ip means 0.0.0.0. UFW's default incoming policy here
+        # is ALLOW and Docker publishes below UFW, so that is the open
+        # internet, with a password as the only thing in front of the claims
+        # database.
+        problems.append(
+            f"{name}: publishes {host_ip or '0.0.0.0'}:{published} -> {target}"
+        )
 
 edge = services.get("edge") or {}
 if "traefik" not in (edge.get("networks") or {}):
@@ -432,9 +490,13 @@ if problems:
     print("\n".join("      " + p for p in problems), file=sys.stderr)
     sys.exit(1)
 
-print(f"      {len(services)} services, none publishing a host port")
+print(f"      {len(services)} services, none reachable from off this host")
+for entry in loopback:
+    # Printed, never silent: a port that exists should be visible in the
+    # deployment output that allowed it.
+    print(f"      loopback only, allowed: {entry}")
 PY
-ok "no host ports published — reachable only through Traefik"
+ok "nothing published to a public interface — traffic arrives via Traefik"
 
 # --- 6. Build --------------------------------------------------------------
 # Decide which service images a commit range can affect, from the paths alone.
