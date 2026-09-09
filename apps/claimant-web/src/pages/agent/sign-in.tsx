@@ -45,10 +45,16 @@ export function AgentSignInPage({ onSignedIn }: { onSignedIn: () => void }) {
     setRegistrationTouched(true);
     if (registrationError) return;
     try {
-      await sendCode.mutateAsync({
+      const result = await sendCode.mutateAsync({
         registrationNumber: registrationNumber.trim(),
         phoneNumber: e164(),
       });
+      // POC only: non-production returns the code because no WhatsApp sender
+      // is connected. Production omits `code`, so this naturally leaves the
+      // boxes empty when a real delivery channel is enabled.
+      if (typeof result.code === 'string' && /^\d{6}$/.test(result.code)) {
+        setCode(result.code);
+      }
       setRemaining(RESEND_SECONDS);
       setSent(true);
     } catch (caught) {
