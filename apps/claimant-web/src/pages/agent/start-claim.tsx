@@ -240,7 +240,10 @@ function DeclarationStep({
       onResolved({
         ...subject,
         id: claimant.id,
-        fullName: claimant.fullName ?? subject.fullName,
+        // The agent has just confirmed this claimant's name for this claim.
+        // An older claimant record can carry a placeholder or stale spelling;
+        // use it only when this intake did not supply a name.
+        fullName: subject.fullName?.trim() || claimant.fullName,
         nricLast4: claimant.nricLast4 ?? subject.nricLast4,
       });
 
