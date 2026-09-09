@@ -109,9 +109,9 @@ function SurfaceRoute() {
 /** Everything that belongs inside the phone column. */
 function FramedRoutes() {
   return (
-      <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:py-8">
-        <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
-          <div className="flex min-h-0 flex-1 flex-col safe-area-top safe-area-bottom">
+      <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:items-center sm:p-8">
+        <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:h-[min(900px,calc(100dvh-4rem))] sm:w-auto sm:aspect-[9/19.5] sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain safe-area-top safe-area-bottom">
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<WelcomePage />} />
