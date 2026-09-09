@@ -4,7 +4,7 @@ import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
 import { ClaimFormPage } from '@/pages/form';
 import { AgentFormPage } from '@/pages/agent';
-import { currentSurface } from '@/lib/surface';
+import { currentSurface, pathMaySelectSurface } from '@/lib/surface';
 import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
@@ -89,11 +89,9 @@ function App() {
         */}
         <Route path="/form" element={<SurfaceRoute />} />
         {/*
-          Local development only. From staging onwards the agent surface is its
-          own hostname pointing at this same build, and `/agent` is never
-          navigated to — `surfaceFor` ignores the path on any host a claimant
-          can reach, so this route cannot be used to slip onto the agent screens
-          in a real deployment.
+          Bare localhost only. Everywhere a hostname exists — deployed, or the
+          *.localhost names used locally — the agent surface is /form on its own
+          host, and this path is not a route at all. See AgentPathRoute.
         */}
         <Route path="/agent" element={<AgentPathRoute />} />
         <Route path="*" element={<FramedRoutes />} />
@@ -118,16 +116,17 @@ function SurfaceRoute() {
  * `/agent` is a route only where the hostname cannot name the surface — bare
  * localhost, which has no subdomain to carry the answer.
  *
- * Anywhere else the name has already decided, so this path is not a second way
- * in: on claim.localhost it used to render the claimant form, an identical copy
- * of /form under a name promising something else, and on a deployed host it did
- * the same. Neither is a route anyone should be able to reach, so it behaves
- * like any other unknown path here — the catch-all below sends those to
- * /tracker.
- *
- * The agent form's own address is /form on an agent hostname.
+ * Everywhere else the form has exactly one address, /form, and the hostname
+ * says whose it is. A second path reaching the same page is not a feature: on
+ * claim.localhost it drew the claimant form under a name promising the
+ * opposite, and on agent.localhost it drew the agent form that /form already
+ * serves. Both now behave like any other unknown path — the catch-all sends
+ * those to /tracker.
  */
 function AgentPathRoute() {
+  if (!pathMaySelectSurface(window.location.hostname)) {
+    return <Navigate to="/tracker" replace />;
+  }
   return currentSurface() === 'agent' ? <AgentFormPage /> : <Navigate to="/tracker" replace />;
 }
 

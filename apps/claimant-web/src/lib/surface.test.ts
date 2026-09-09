@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { surfaceFor } from './surface';
+import { pathMaySelectSurface, surfaceFor } from './surface';
 
 /**
  * The configured-host list is read once, at module load, so a test cannot stub
@@ -154,6 +154,30 @@ describe('which surface a browser is on', () => {
     it('ignores the path once the hostname has named a surface', () => {
       expect(at('claim.localhost', '/agent')).toBe('claimant');
       expect(at('claim.localhost', '/agent/anything')).toBe('claimant');
+    });
+  });
+
+  /**
+   * The router asks the same question to decide whether `/agent` is a route at
+   * all, so the answer lives in one place. Where a hostname can name the
+   * surface, the form has one address — /form — and /agent is not a second way
+   * to the same page.
+   */
+  describe('whether the path is allowed to choose', () => {
+    it('allows it only on the bare loopback names', () => {
+      expect(pathMaySelectSurface('localhost')).toBe(true);
+      expect(pathMaySelectSurface('127.0.0.1')).toBe(true);
+    });
+
+    it('refuses it wherever a hostname could have answered', () => {
+      expect(pathMaySelectSurface('claim.localhost')).toBe(false);
+      expect(pathMaySelectSurface('agent.localhost')).toBe(false);
+      expect(pathMaySelectSurface('tci-claim.smitherytech.com')).toBe(false);
+      expect(pathMaySelectSurface('tci-agent.smitherytech.com')).toBe(false);
+    });
+
+    it('is case-insensitive, because DNS is', () => {
+      expect(pathMaySelectSurface('LocalHost')).toBe(true);
     });
   });
 });

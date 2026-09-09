@@ -56,18 +56,27 @@ export function surfaceFor(location: { hostname: string; pathname: string }): Su
   if (CONFIGURED_AGENT_HOSTS.includes(hostname)) return 'agent';
   if (hostname.startsWith(AGENT_HOST_PREFIX)) return 'agent';
 
-  // Local development only, and only on a host that has said nothing: one host,
-  // no edge, so the path stands in. A real deployment never reaches this line,
-  // because the hostname above has already answered.
-  //
-  // `*.localhost` is deliberately NOT here. claim.localhost is a name that has
-  // already chosen a surface, so letting /agent override it would give the
-  // local names a behaviour the deployed ones do not have — and the whole point
-  // of using them locally is that they behave the same. Bare localhost keeps
-  // the fallback, because there the path is the only thing that can choose.
-  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  return pathMaySelectSurface(hostname) && location.pathname.startsWith('/agent')
+    ? 'agent'
+    : 'claimant';
+}
 
-  return local && location.pathname.startsWith('/agent') ? 'agent' : 'claimant';
+/**
+ * Whether the path is allowed to choose the surface — true only where the
+ * hostname cannot, which is bare localhost and 127.0.0.1.
+ *
+ * `*.localhost` is deliberately excluded. claim.localhost is a name that has
+ * already chosen, so letting /agent override it would give the local names a
+ * behaviour the deployed ones do not have, and behaving the same is the entire
+ * reason to use them.
+ *
+ * Exported because the router needs the same answer: `/agent` is a route only
+ * where this is true. Everywhere else the form has one address — /form — and a
+ * second one under a different name is not a feature.
+ */
+export function pathMaySelectSurface(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1';
 }
 
 export const currentSurface = (): Surface => surfaceFor(window.location);
