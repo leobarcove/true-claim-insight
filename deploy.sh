@@ -79,13 +79,7 @@ if [[ $# -eq 0 || "${1:-}" == "--pull" ]]; then
   if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
     warn "you have uncommitted changes — these will NOT be deployed:"
     git status --short | head -8 | sed 's/^/      /'
-    printf '\n'
-    if [[ -t 0 ]]; then
-      read -r -p "  Deploy without them? [y/N] " reply
-      [[ "$reply" =~ ^[Yy]$ ]] || die "Nothing deployed. Commit and push first."
-    else
-      warn "continuing (not a terminal, cannot ask)"
-    fi
+    info "continuing; the server deploys only committed, pushed code"
   else
     ok "working copy is clean"
   fi

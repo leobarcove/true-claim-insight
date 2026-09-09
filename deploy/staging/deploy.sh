@@ -222,8 +222,36 @@ if ! swapon --show 2>/dev/null | grep -q .; then
 fi
 
 # --- 2. Source code --------------------------------------------------------
+# This checkout is a deployment target, not a second source of truth.  It does
+# keep generated secrets in .env.staging (which Git ignores), but a hand edit
+# to a tracked file, or an untracked file which a new revision introduces,
+# used to make `git pull` abort and leave the deploy stranded. Preserve both
+# in a named stash before pulling. We deliberately do not
+# pop it afterwards: the image must be built from the reviewed GitHub revision,
+# and applying an old server patch over new code can quietly undo a fix.
+stash_server_changes_before_pull() {
+  local stamp stash_ref
+
+  if [[ -z "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]]; then
+    return 0
+  fi
+
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  warn "server checkout has changes; saving them before pulling"
+  git -C "$REPO_ROOT" status --short | sed 's/^/      /'
+  # --include-untracked deliberately excludes ignored runtime state such as
+  # .env.staging and Docker-related local files.
+  git -C "$REPO_ROOT" stash push --include-untracked -m "tci-deploy-before-pull-${stamp}" \
+    || die "could not preserve the server changes; nothing was pulled."
+  stash_ref="$(git -C "$REPO_ROOT" stash list -1 --format='%gd')"
+  [[ -n "$stash_ref" ]] || die "server changes were not saved; nothing was pulled."
+  ok "saved server edits as ${stash_ref}"
+  info "review or recover them later: cd ${REPO_ROOT} && git stash show -p ${stash_ref}"
+}
+
 if [[ "$DO_PULL" -eq 1 ]]; then
   step "Updating the source"
+  stash_server_changes_before_pull
   git -C "$REPO_ROOT" pull --ff-only
   ok "pulled"
 fi
