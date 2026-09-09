@@ -18,11 +18,9 @@
  * the `agent.` convention. Both are fixed when the bundle is compiled, so the
  * answer is not something a running page can be talked into changing.
  *
- * Locally there is one host and no edge, so the path stands in. That is not a
- * weakening: nothing is granted by being on `/agent`, because every request it
- * makes carries a staff bearer token the server checks for itself. The path
- * chooses which screens to draw; the token is what decides whether anything
- * happens.
+ * Locally, browsers resolve `agent.localhost` to the loopback address without
+ * a hosts-file entry. That means local development takes the same hostname
+ * branch as deployed environments.
  */
 
 /**
@@ -56,27 +54,7 @@ export function surfaceFor(location: { hostname: string; pathname: string }): Su
   if (CONFIGURED_AGENT_HOSTS.includes(hostname)) return 'agent';
   if (hostname.startsWith(AGENT_HOST_PREFIX)) return 'agent';
 
-  return pathMaySelectSurface(hostname) && location.pathname.startsWith('/agent')
-    ? 'agent'
-    : 'claimant';
-}
-
-/**
- * Whether the path is allowed to choose the surface — true only where the
- * hostname cannot, which is bare localhost and 127.0.0.1.
- *
- * `*.localhost` is deliberately excluded. claim.localhost is a name that has
- * already chosen, so letting /agent override it would give the local names a
- * behaviour the deployed ones do not have, and behaving the same is the entire
- * reason to use them.
- *
- * Exported because the router needs the same answer: `/agent` is a route only
- * where this is true. Everywhere else the form has one address — /form — and a
- * second one under a different name is not a feature.
- */
-export function pathMaySelectSurface(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1';
+  return 'claimant';
 }
 
 export const currentSurface = (): Surface => surfaceFor(window.location);

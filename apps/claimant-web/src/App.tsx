@@ -4,7 +4,7 @@ import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
 import { ClaimFormPage } from '@/pages/form';
 import { AgentFormPage } from '@/pages/agent';
-import { currentSurface, pathMaySelectSurface } from '@/lib/surface';
+import { currentSurface } from '@/lib/surface';
 import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
@@ -88,12 +88,6 @@ function App() {
           needs a different frame is a route, not a configuration system.
         */}
         <Route path="/form" element={<SurfaceRoute />} />
-        {/*
-          Bare localhost only. Everywhere a hostname exists — deployed, or the
-          *.localhost names used locally — the agent surface is /form on its own
-          host, and this path is not a route at all. See AgentPathRoute.
-        */}
-        <Route path="/agent" element={<AgentPathRoute />} />
         <Route path="*" element={<FramedRoutes />} />
       </Routes>
     </BrowserRouter>
@@ -110,24 +104,6 @@ function App() {
  */
 function SurfaceRoute() {
   return currentSurface() === 'agent' ? <AgentFormPage /> : <ClaimFormPage />;
-}
-
-/**
- * `/agent` is a route only where the hostname cannot name the surface — bare
- * localhost, which has no subdomain to carry the answer.
- *
- * Everywhere else the form has exactly one address, /form, and the hostname
- * says whose it is. A second path reaching the same page is not a feature: on
- * claim.localhost it drew the claimant form under a name promising the
- * opposite, and on agent.localhost it drew the agent form that /form already
- * serves. Both now behave like any other unknown path — the catch-all sends
- * those to /tracker.
- */
-function AgentPathRoute() {
-  if (!pathMaySelectSurface(window.location.hostname)) {
-    return <Navigate to="/tracker" replace />;
-  }
-  return currentSurface() === 'agent' ? <AgentFormPage /> : <Navigate to="/tracker" replace />;
 }
 
 /** Everything that belongs inside the phone column. */

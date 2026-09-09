@@ -120,7 +120,7 @@ Repeat the golden path at 390px.
 
 ## The agent-assisted path
 
-Open the agent surface — `http://localhost:4301/agent` locally, `AGENT_HOST` from staging
+Open the agent surface — `http://agent.localhost:4301/form` locally, `AGENT_HOST/form` from staging
 onwards — and sign in as `adjuster@pacific.com` (`+60100000002`).
 
 | # | Do | Expect |

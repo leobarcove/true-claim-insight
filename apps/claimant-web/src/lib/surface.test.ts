@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { pathMaySelectSurface, surfaceFor } from './surface';
+import { surfaceFor } from './surface';
 
 /**
  * The configured-host list is read once, at module load, so a test cannot stub
@@ -21,9 +21,9 @@ async function surfaceForWithAgentHosts(configured: string) {
  * they can type. What replaces it is that the agent has proved *their own*
  * number and holds a staff token the server checks.
  *
- * So the one thing this must never do is let a *claimant-reachable* address
- * select the agent surface. On a real deployment that is a hostname; locally it
- * is a path, and locally is the only place a path is ever consulted.
+ * So the one thing this must never do is let a claimant-reachable address
+ * select the agent surface. The hostname is the only selector in every
+ * environment.
  */
 describe('which surface a browser is on', () => {
   const at = (hostname: string, pathname = '/form') => surfaceFor({ hostname, pathname });
@@ -118,15 +118,6 @@ describe('which surface a browser is on', () => {
   });
 
   describe('local development', () => {
-    // One host and no edge, so the path stands in. Nothing is *granted* by it:
-    // every request the agent screens make carries a staff token the server
-    // checks for itself. The path chooses which screens to draw.
-    it('uses the path, because there is only one host', () => {
-      expect(at('localhost', '/agent')).toBe('agent');
-      expect(at('127.0.0.1', '/agent')).toBe('agent');
-      expect(at('localhost', '/form')).toBe('claimant');
-    });
-
     /**
      * The route to prefer locally, and the reason to prefer it: it takes the
      * SAME branch a deployment takes. Browsers resolve *.localhost to 127.0.0.1
@@ -143,41 +134,11 @@ describe('which surface a browser is on', () => {
       expect(at('claim.localhost', '/')).toBe('claimant');
     });
 
-    /**
-     * The fallback stops where a name begins. claim.localhost has already
-     * chosen a surface, so /agent must not overrule it — otherwise the local
-     * names behave differently from the deployed ones, which is the single
-     * thing using them was meant to prevent.
-     *
-     * The bare hosts keep the fallback, because there nothing else can choose.
-     */
-    it('ignores the path once the hostname has named a surface', () => {
+    it('does not let a local path select a surface', () => {
+      expect(at('localhost', '/agent')).toBe('claimant');
+      expect(at('127.0.0.1', '/agent')).toBe('claimant');
       expect(at('claim.localhost', '/agent')).toBe('claimant');
       expect(at('claim.localhost', '/agent/anything')).toBe('claimant');
-    });
-  });
-
-  /**
-   * The router asks the same question to decide whether `/agent` is a route at
-   * all, so the answer lives in one place. Where a hostname can name the
-   * surface, the form has one address — /form — and /agent is not a second way
-   * to the same page.
-   */
-  describe('whether the path is allowed to choose', () => {
-    it('allows it only on the bare loopback names', () => {
-      expect(pathMaySelectSurface('localhost')).toBe(true);
-      expect(pathMaySelectSurface('127.0.0.1')).toBe(true);
-    });
-
-    it('refuses it wherever a hostname could have answered', () => {
-      expect(pathMaySelectSurface('claim.localhost')).toBe(false);
-      expect(pathMaySelectSurface('agent.localhost')).toBe(false);
-      expect(pathMaySelectSurface('tci-claim.smitherytech.com')).toBe(false);
-      expect(pathMaySelectSurface('tci-agent.smitherytech.com')).toBe(false);
-    });
-
-    it('is case-insensitive, because DNS is', () => {
-      expect(pathMaySelectSurface('LocalHost')).toBe(true);
     });
   });
 });

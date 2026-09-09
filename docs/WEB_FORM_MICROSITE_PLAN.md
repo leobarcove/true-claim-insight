@@ -275,8 +275,8 @@ was served from and renders the matching first screen.
 
 | | Claimant | Agent |
 |---|---|---|
-| Local dev | `http://localhost:4301/form` | `http://localhost:4301/agent` |
-| Local via the tunnel | `https://tci-app.smitherytech.com/form` | `https://tci-app.smitherytech.com/agent` |
+| Local dev | `http://localhost:4301/form` | `http://agent.localhost:4301/form` |
+| Local via the tunnel | `https://tci-app.smitherytech.com/form` | `https://tci-agent.smitherytech.com/form` |
 | Staging | `$CLAIMANT_HOST/form` | `$AGENT_HOST/form` |
 | Production | `https://claims.<brand>/form` | `https://agent.<brand>/form` |
 

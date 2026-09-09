@@ -101,7 +101,7 @@ apiClient.interceptors.response.use(
         if (agentSession.read()) {
           agentSession.clear();
           agentUser.clear();
-          window.location.href = '/agent';
+          window.location.href = '/form';
           return Promise.reject(refreshError);
         }
 
