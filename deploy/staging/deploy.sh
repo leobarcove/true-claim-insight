@@ -67,6 +67,9 @@ KEYS_ACK_MARKER=".keys-backed-up"
 # This host has no swap and is shared with another stack. Two concurrent image
 # builds compete for the same memory and can OOM the co-tenant database.
 DEPLOY_LOCK_FILE="${TCI_DEPLOY_LOCK_FILE:-/tmp/tci-staging-deploy.lock}"
+# Written only after a healthy, publicly reachable deployment. Keeping it
+# outside the checkout means a source update never stashes or overwrites it.
+DEPLOY_STATE_FILE="${TCI_DEPLOY_STATE_FILE:-/var/lib/tci-staging/last-successful-deploy-commit}"
 
 BASE_COMPOSE="docker-compose.staging.yml"
 OVERLAY_COMPOSE="docker-compose.traefik.yml"
@@ -264,6 +267,7 @@ if [[ "$DO_PULL" -eq 1 ]]; then
   step "Updating the source"
   stash_server_changes_before_pull
   git -C "$REPO_ROOT" pull --ff-only
+  source_rev_after="$(git -C "$REPO_ROOT" rev-parse HEAD)"
   ok "pulled"
 fi
 
@@ -433,6 +437,35 @@ PY
 ok "no host ports published — reachable only through Traefik"
 
 # --- 6. Build --------------------------------------------------------------
+changed_build_services() {
+  local previous_rev="$1" current_rev="$2" path
+  local -A services=()
+
+  # Unknown and shared changes intentionally fall back to a complete build.
+  # A fast deployment must never serve a stale shared package or miss a
+  # Docker/build configuration change.
+  while IFS= read -r path; do
+    case "$path" in
+      apps/claimant-web/*|apps/adjuster-portal/*|apps/agent-portal/*)
+        services[edge]=1 ;;
+      apps/api-gateway/*)
+        services[api-gateway]=1 ;;
+      apps/case-service/*)
+        services[case-service]=1 ;;
+      apps/video-service/*)
+        services[video-service]=1 ;;
+      apps/risk-engine/*)
+        services[risk-engine]=1 ;;
+      apps/risk-analyzer/*)
+        services[risk-analyzer]=1 ;;
+      *)
+        return 1 ;;
+    esac
+  done < <(git -C "$REPO_ROOT" diff --name-only "$previous_rev" "$current_rev")
+
+  printf '%s\n' "${!services[@]}" | sort
+}
+
 if [[ "$DO_BUILD" -eq 1 ]]; then
   step "Building images"
 
@@ -450,7 +483,28 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
 
   info "first build takes 5-15 minutes; later ones reuse cached layers"
   info "turbo concurrency and Node heap are capped in the Dockerfile"
-  dc build
+  build_services=()
+  if [[ "$DO_PULL" -eq 1 && -f "$DEPLOY_STATE_FILE" ]]; then
+    deployed_rev="$(tr -d '[:space:]' < "$DEPLOY_STATE_FILE")"
+    if git -C "$REPO_ROOT" rev-parse --verify -q "${deployed_rev}^{commit}" >/dev/null; then
+      mapfile -t build_services < <(changed_build_services "$deployed_rev" "$source_rev_after") || build_services=()
+      if [[ ${#build_services[@]} -gt 0 ]]; then
+        info "building changed services only: ${build_services[*]}"
+        dc build "${build_services[@]}"
+      elif git -C "$REPO_ROOT" diff --quiet "$deployed_rev" "$source_rev_after"; then
+        ok "source is already deployed; no images need rebuilding"
+      else
+        info "shared or deployment files changed; rebuilding all service images"
+        dc build
+      fi
+    else
+      warn "deployment state is invalid; rebuilding all service images"
+      dc build
+    fi
+  else
+    info "no prior successful deployment state; rebuilding all service images"
+    dc build
+  fi
   ok "images built"
 fi
 
@@ -562,6 +616,18 @@ case "${edge_status:-000}" in
   2*|3*) ok "claimant app answering over HTTPS (${edge_status})" ;;
   *) warn "claimant host returned HTTP ${edge_status} — check ./deploy.sh --logs edge" ;;
 esac
+
+# Do not use the checked-out HEAD as the baseline until the replacement stack
+# is both healthy and reachable. A failed rollout must get the conservative
+# full build on its next attempt, rather than incorrectly skipping images.
+if [[ "$DO_PULL" -eq 1 && "$DO_BUILD" -eq 1 && ${#pending[@]} -eq 0 && "${edge_status:-000}" =~ ^[23] ]]; then
+  install -d -m 700 "$(dirname "$DEPLOY_STATE_FILE")"
+  state_tmp="$(mktemp "$(dirname "$DEPLOY_STATE_FILE")/.last-successful-deploy-commit.XXXXXX")"
+  printf '%s\n' "$source_rev_after" > "$state_tmp"
+  chmod 600 "$state_tmp"
+  mv -f "$state_tmp" "$DEPLOY_STATE_FILE"
+  ok "recorded deployment baseline for selective future builds"
+fi
 
 printf '\n'
 bold "Open these:"
