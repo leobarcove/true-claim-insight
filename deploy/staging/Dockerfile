@@ -100,9 +100,11 @@ ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB}
 # inlines those values, so they change the output without changing a single
 # input file. A cache that does not know that returns the previous bundle and
 # reports a hit.
+# Pass the cache directory directly to Turbo, so task artefacts are retained
+# in the persistent BuildKit cache mount between deployments.
 ENV TURBO_CACHE_DIR=/turbo-cache
 RUN --mount=type=cache,id=tci-turbo,target=/turbo-cache,sharing=locked \
-  pnpm prisma:generate && pnpm build
+  pnpm prisma:generate && pnpm exec turbo run build --cache-dir=/turbo-cache
 
 # ---------------------------------------------------------------------------
 # Shared Node runtime base — the built workspace, verbatim.
