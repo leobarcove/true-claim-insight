@@ -106,7 +106,7 @@ export function LoginPage() {
   return (
     <div className="flex flex-col flex-1 bg-background">
       {/* Content */}
-      <main className="flex-1 flex flex-col justify-center px-14">
+      <main className="flex-1 flex flex-col justify-center px-8">
         <div className="space-y-8">
           {/* Title */}
           <div className="space-y-2 flex flex-col items-center text-center transition-all">
