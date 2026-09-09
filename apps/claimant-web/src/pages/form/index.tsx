@@ -1204,10 +1204,23 @@ function FlowStage({ state }: { state: FormState }) {
         return;
       }
 
+      // Forget only what was just sent — not everything that has been typed.
+      //
+      // These answers are the server's now and come back through `answers`, so
+      // holding a second copy here would let the two disagree. That was the
+      // whole reason for clearing. But clearing the *entire* map also threw
+      // away sections nobody had submitted yet, and Back is the only way out of
+      // a section while Continue is the only way forward — so filling in half
+      // of Payout, going Back to check something, and continuing forward again
+      // returned to Payout with the fields silently blank. Nothing warned,
+      // because nothing knew it had been discarded.
+      const justSent = new Set(active.steps.map(step => step.id));
+      setValues(current =>
+        Object.fromEntries(Object.entries(current).filter(([stepId]) => !justSent.has(stepId)))
+      );
       // Re-read rather than reasoning about what changed. A branch may have
       // opened or closed as a result of what was just answered, and the server
       // already knows which.
-      setValues({});
       setActiveId(null);
       await refresh();
     } finally {
@@ -1251,8 +1264,13 @@ function FlowStage({ state }: { state: FormState }) {
           <>
             {/*
               Back moves between *sections* of the form, not through the
-              server's cursor. Everything answered is already saved, so this is
-              navigation rather than an undo — nothing to warn about.
+              server's cursor, so it is navigation rather than an undo.
+
+              Answers already submitted are on the server. Anything typed but
+              not yet submitted stays in `values` — onContinue drops only the
+              section it just sent — so a half-filled section survives leaving
+              it and coming back. It does not survive a reload, because nothing
+              in it has been sent yet; that is why this warns about neither.
             */}
             {previous && (
               <Button variant="outline" disabled={busy} onClick={() => setActiveId(previous.id)}>
