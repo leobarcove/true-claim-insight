@@ -144,12 +144,16 @@ describe('which surface a browser is on', () => {
     });
 
     /**
-     * And the fallback still applies to any other .localhost name, because the
-     * whole of localhost is developer-only. This is the branch that is switched
-     * off in production — see the public-host tests above.
+     * The fallback stops where a name begins. claim.localhost has already
+     * chosen a surface, so /agent must not overrule it — otherwise the local
+     * names behave differently from the deployed ones, which is the single
+     * thing using them was meant to prevent.
+     *
+     * The bare hosts keep the fallback, because there nothing else can choose.
      */
-    it('still lets the path decide on a non-agent localhost name', () => {
-      expect(at('claim.localhost', '/agent')).toBe('agent');
+    it('ignores the path once the hostname has named a surface', () => {
+      expect(at('claim.localhost', '/agent')).toBe('claimant');
+      expect(at('claim.localhost', '/agent/anything')).toBe('claimant');
     });
   });
 });

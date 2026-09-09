@@ -56,13 +56,16 @@ export function surfaceFor(location: { hostname: string; pathname: string }): Su
   if (CONFIGURED_AGENT_HOSTS.includes(hostname)) return 'agent';
   if (hostname.startsWith(AGENT_HOST_PREFIX)) return 'agent';
 
-  // Local development only: one host, no edge, so the path selects the surface.
-  // A real deployment never reaches this line, because the hostname above has
-  // already answered.
-  const local =
-    location.hostname === 'localhost' ||
-    location.hostname === '127.0.0.1' ||
-    location.hostname.endsWith('.localhost');
+  // Local development only, and only on a host that has said nothing: one host,
+  // no edge, so the path stands in. A real deployment never reaches this line,
+  // because the hostname above has already answered.
+  //
+  // `*.localhost` is deliberately NOT here. claim.localhost is a name that has
+  // already chosen a surface, so letting /agent override it would give the
+  // local names a behaviour the deployed ones do not have — and the whole point
+  // of using them locally is that they behave the same. Bare localhost keeps
+  // the fallback, because there the path is the only thing that can choose.
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
   return local && location.pathname.startsWith('/agent') ? 'agent' : 'claimant';
 }
