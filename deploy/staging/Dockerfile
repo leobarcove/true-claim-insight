@@ -115,7 +115,34 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
 ENV NODE_ENV=production
-COPY --from=build /app /app
+
+# The built tree arrives in FOUR layers rather than one, and the split is the
+# single largest saving in a redeploy. /app/node_modules is 1.5 GB and changes
+# only when the lockfile does; the compiled apps and packages together are
+# ~40 MB and change on every commit. As one `COPY /app /app`, editing a single
+# line re-hashed and re-exported the whole 1.5 GB, because a layer is
+# invalidated as a unit.
+#
+# node_modules must come FIRST: layer caching is positional, so a hit on a
+# later layer is worthless once an earlier one has missed.
+#
+# This deliberately does not copy the whole tree. deploy/, .github/, the root
+# docker-compose.yml, CLAUDE.md and README were all being shipped inside every
+# service image; none is read at runtime. Leaving them out keeps the image
+# honest about what it actually runs. Anything a service DOES need at runtime
+# has to be named here explicitly — that is the trade for the speed.
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/packages /app/packages
+COPY --from=build /app/apps /app/apps
+# scripts/ is small and referenced by root package.json ("telegram:terminal").
+COPY --from=build /app/scripts /app/scripts
+COPY --from=build \
+  /app/package.json \
+  /app/pnpm-lock.yaml \
+  /app/pnpm-workspace.yaml \
+  /app/turbo.json \
+  /app/tsconfig.base.json \
+  /app/
 
 FROM node-runtime AS api-gateway
 WORKDIR /app/apps/api-gateway

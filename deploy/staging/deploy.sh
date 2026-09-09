@@ -437,16 +437,30 @@ PY
 ok "no host ports published — reachable only through Traefik"
 
 # --- 6. Build --------------------------------------------------------------
+# Decide which service images a commit range can affect, from the paths alone.
+#
+# Contract — the EXIT STATUS is what the caller must branch on, not the output:
+#   0  the printed list is complete. An EMPTY list genuinely means "no image
+#      needs rebuilding" (a docs-only commit, or the same commit again).
+#   1  the change set is not decidable from paths — rebuild everything.
+#
+# The status has to carry that distinction because "nothing to build" and
+# "cannot tell, build it all" are both empty output and have opposite meanings.
+# An earlier version printed an unguarded `"${!services[@]}"`, which on an empty
+# associative array emits one BLANK line; mapfile read that as a single empty
+# element, so redeploying an unchanged commit ran `dc build ""` and aborted the
+# whole deployment on "no such service".
 changed_build_services() {
   local previous_rev="$1" current_rev="$2" path
   local -A services=()
 
-  # Unknown and shared changes intentionally fall back to a complete build.
-  # A fast deployment must never serve a stale shared package or miss a
-  # Docker/build configuration change.
   while IFS= read -r path; do
     case "$path" in
-      apps/claimant-web/*|apps/adjuster-portal/*|apps/agent-portal/*)
+      # Never enters an image: not in the build context (see .dockerignore) or
+      # not read by anything at runtime. Rebuilding for these is pure waiting.
+      docs/*|screenshots/*|.github/*|*.md|.gitignore|.gitattributes|.prettierrc)
+        ;;
+      apps/claimant-web/*|apps/adjuster-portal/*)
         services[edge]=1 ;;
       apps/api-gateway/*)
         services[api-gateway]=1 ;;
@@ -458,12 +472,18 @@ changed_build_services() {
         services[risk-engine]=1 ;;
       apps/risk-analyzer/*)
         services[risk-analyzer]=1 ;;
+      # Shared packages, root manifests, the Dockerfile and the compose files
+      # all cross service boundaries. Falling back to a full build here is
+      # deliberate: a fast deployment must never serve a stale shared package.
       *)
         return 1 ;;
     esac
   done < <(git -C "$REPO_ROOT" diff --name-only "$previous_rev" "$current_rev")
 
-  printf '%s\n' "${!services[@]}" | sort
+  # Guarded: see the note above about the blank-line bug.
+  if [[ ${#services[@]} -gt 0 ]]; then
+    printf '%s\n' "${!services[@]}" | sort
+  fi
 }
 
 if [[ "$DO_BUILD" -eq 1 ]]; then
@@ -481,31 +501,49 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
   fi
   ok "${mem_avail_mb} MB available for the build"
 
-  info "first build takes 5-15 minutes; later ones reuse cached layers"
+  # A first build, or one after a dependency change, still takes 5-15 minutes:
+  # it re-exports the 1.5 GB dependency layer, and this daemon's containerd
+  # image store gzips every layer on the way out. A redeploy that only changed
+  # application code re-exports ~40 MB instead, because the Dockerfile keeps
+  # node_modules in a layer of its own.
+  info "changed-code redeploys are quick; a dependency change costs 5-15 minutes"
   info "turbo concurrency and Node heap are capped in the Dockerfile"
   build_services=()
+  # 0 = could not work out what changed, so build everything.
+  build_decided=0
   if [[ "$DO_PULL" -eq 1 && -f "$DEPLOY_STATE_FILE" ]]; then
     deployed_rev="$(tr -d '[:space:]' < "$DEPLOY_STATE_FILE")"
     if git -C "$REPO_ROOT" rev-parse --verify -q "${deployed_rev}^{commit}" >/dev/null; then
-      mapfile -t build_services < <(changed_build_services "$deployed_rev" "$source_rev_after") || build_services=()
-      if [[ ${#build_services[@]} -gt 0 ]]; then
-        info "building changed services only: ${build_services[*]}"
-        dc build "${build_services[@]}"
-      elif git -C "$REPO_ROOT" diff --quiet "$deployed_rev" "$source_rev_after"; then
-        ok "source is already deployed; no images need rebuilding"
-      else
-        info "shared or deployment files changed; rebuilding all service images"
-        dc build
+      # Branch on the EXIT STATUS; the output alone cannot tell "nothing to
+      # build" from "cannot tell". See changed_build_services above.
+      if changed_list="$(changed_build_services "$deployed_rev" "$source_rev_after")"; then
+        build_decided=1
+        # Spelled as a full `if` rather than `[[ ... ]] && mapfile`: an empty
+        # list is the normal docs-only case, and a && list that short-circuits
+        # ends the enclosing block on a false status. See cleanup() for the
+        # same trap biting an EXIT trap.
+        if [[ -n "$changed_list" ]]; then
+          mapfile -t build_services <<< "$changed_list"
+        fi
       fi
     else
-      warn "deployment state is invalid; rebuilding all service images"
-      dc build
+      warn "recorded baseline ${deployed_rev} is not a commit in this checkout"
     fi
-  else
-    info "no prior successful deployment state; rebuilding all service images"
-    dc build
+  elif [[ "$DO_PULL" -eq 1 ]]; then
+    info "no deployment baseline recorded yet — building everything this once"
   fi
-  ok "images built"
+
+  if [[ "$build_decided" -eq 1 && ${#build_services[@]} -eq 0 ]]; then
+    ok "nothing that reaches an image changed — skipping the build"
+  elif [[ "$build_decided" -eq 1 ]]; then
+    info "changed services only: ${build_services[*]}"
+    dc build "${build_services[@]}"
+    ok "images built"
+  else
+    info "rebuilding all service images"
+    dc build
+    ok "images built"
+  fi
 fi
 
 # --- 7. Start --------------------------------------------------------------
@@ -617,10 +655,25 @@ case "${edge_status:-000}" in
   *) warn "claimant host returned HTTP ${edge_status} — check ./deploy.sh --logs edge" ;;
 esac
 
-# Do not use the checked-out HEAD as the baseline until the replacement stack
-# is both healthy and reachable. A failed rollout must get the conservative
-# full build on its next attempt, rather than incorrectly skipping images.
-if [[ "$DO_PULL" -eq 1 && "$DO_BUILD" -eq 1 && ${#pending[@]} -eq 0 && "${edge_status:-000}" =~ ^[23] ]]; then
+# The baseline answers exactly one question: which commit are the images in
+# this daemon built from? That is settled once `dc build` and `dc up -d` have
+# both returned successfully — and `set -e` means we do not reach this line
+# unless they did.
+#
+# It deliberately does NOT depend on the health poll or the public HTTPS probe
+# above. Those describe the RUNNING stack, not the provenance of the images,
+# and they fail for reasons a rebuild cannot fix: a slow risk-analyzer, the
+# co-tenant's Traefik, a certificate not yet issued, an app bug. Rebuilding
+# identical source on the next run fixes none of them.
+#
+# That coupling had teeth: on this host the file did not exist at all, so every
+# deployment took the "no baseline" path and rebuilt all six images. Four
+# conditions had to hold at once at the very end of a long script for it ever
+# to be written, and something in that chain was not holding. The narrow
+# condition below is one that either holds or aborts the script outright.
+# A wrong baseline costs one stale image and is corrected by --no-cache; a
+# baseline never written costs ~15 minutes on every deployment.
+if [[ "$DO_PULL" -eq 1 && "$DO_BUILD" -eq 1 ]]; then
   install -d -m 700 "$(dirname "$DEPLOY_STATE_FILE")"
   state_tmp="$(mktemp "$(dirname "$DEPLOY_STATE_FILE")/.last-successful-deploy-commit.XXXXXX")"
   printf '%s\n' "$source_rev_after" > "$state_tmp"
