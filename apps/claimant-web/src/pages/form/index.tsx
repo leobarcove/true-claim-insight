@@ -30,7 +30,14 @@ import { checkMobileNumber, toE164 } from './mobile-number';
 import { copyFor } from './form-copy';
 import { ReviewStage, type ReviewRow } from './review';
 import { focusField } from './focus-field';
-import { rowClassFor, rowsFor, sectionsFor, SECTIONS, type ResolvedSection } from './sections';
+import {
+  backTargetFor,
+  rowClassFor,
+  rowsFor,
+  sectionsFor,
+  SECTIONS,
+  type ResolvedSection,
+} from './sections';
 import { missingRequired, submitSection, type TurnOutcome } from './submit-engine';
 
 /**
@@ -984,8 +991,10 @@ function FlowStage({ state }: { state: FormState }) {
 
   if (!view || !active || !state.case) return null;
 
-  const activeIndex = view.sections.findIndex(section => section.id === active.id);
-  const previous = activeIndex > 0 ? view.sections[activeIndex - 1] : null;
+  // Nearest earlier section that has fields — not simply the one before this.
+  // `claim-type` holds no steps (the server asks it before a flow exists), so
+  // stepping back by one index landed on an empty card. See backTargetFor.
+  const previous = backTargetFor(view.sections, active.id);
   const activeContext = {
     currentStepId: state.case.currentStepId,
     values,

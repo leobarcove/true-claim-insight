@@ -231,6 +231,39 @@ export interface SectionsView {
 }
 
 /**
+ * Where Back goes: the nearest earlier section that has something to show.
+ *
+ * Not simply `sections[index - 1]`. A section can sit in the list holding no
+ * steps at all, and `claim-type` always does — the server asks it before a flow
+ * exists, so it has no entry in `flow.steps` (see CLAIM_TYPE_STEP_ID) and
+ * `sectionsFor` groups nothing into it. Stepping back one index therefore
+ * landed on it and drew its heading above an empty card: no fields, no way to
+ * tell what had gone wrong, and Back the only route in.
+ *
+ * Skipped rather than shown read-only, because the claim type is the one answer
+ * that cannot be changed — it pins the flow to the case and no turn re-pins it.
+ * The review page shows it without a Change link for exactly that reason, the
+ * chosen type is already on screen as a badge in the header, and Start again is
+ * the honest way to change it. A section that can only be looked at is a dead
+ * end; "You & your trip" is genuinely the first one Back can serve.
+ *
+ * The empty check is deliberately about steps rather than about `claim-type` by
+ * name: a branch can empty any section, and each would fail the same way.
+ */
+export function backTargetFor(
+  sections: readonly ResolvedSection[],
+  activeId: string
+): ResolvedSection | null {
+  const index = sections.findIndex(section => section.id === activeId);
+  if (index <= 0) return null;
+
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (sections[i].steps.length > 0) return sections[i];
+  }
+  return null;
+}
+
+/**
  * Group a flow's steps into the six sections, and say which are finished.
  *
  * Drives three things at once — the section list, the progress bar, and where a

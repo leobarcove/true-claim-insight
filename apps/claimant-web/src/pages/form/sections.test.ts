@@ -16,6 +16,7 @@ import { missingRequired, stepsToSend } from './submit-engine';
 import {
   CLAIM_TYPE_STEP_ID,
   SECTIONS,
+  backTargetFor,
   rowClassFor,
   rowsFor,
   sectionOf,
@@ -591,5 +592,45 @@ describe('what you will need', () => {
 
     expect(needs[0]).toMatch(/policy number/i);
     expect(needs[needs.length - 1]).toMatch(/bank details/i);
+  });
+});
+
+
+/**
+ * Back landed on a blank page, and the section list is why.
+ *
+ * `claim-type` is on the list but holds no steps — the server asks it before a
+ * flow exists, so it has no entry in `flow.steps`. Back was `sections[i - 1]`,
+ * so from "You & your trip" it selected that empty section and the form drew a
+ * heading above an empty card.
+ */
+describe('backTargetFor', () => {
+  const flow = CASE_FLOWS[TravelClaimType.TRIP_CANCELLATION];
+  const view = sectionsFor(flow, {} as CaseAnswers);
+
+  it('offers no Back from the first section that has fields', () => {
+    // The reported bug: this used to return the empty `claim-type` section.
+    expect(backTargetFor(view.sections, 'you-trip')).toBeNull();
+  });
+
+  it('never returns a section with nothing to render', () => {
+    for (const section of view.sections) {
+      expect(backTargetFor(view.sections, section.id)?.steps.length ?? 1).toBeGreaterThan(0);
+    }
+  });
+
+  it('skips an empty section rather than stopping at it', () => {
+    const sections = [
+      { ...view.sections[0], id: 'a', steps: [{ id: 'x' } as FlowStep] },
+      { ...view.sections[0], id: 'b', steps: [] },
+      { ...view.sections[0], id: 'c', steps: [{ id: 'y' } as FlowStep] },
+    ] as unknown as Parameters<typeof backTargetFor>[0];
+
+    expect(backTargetFor(sections, 'c')?.id).toBe('a');
+  });
+
+  it('has no target for the first section, or an id it does not know', () => {
+    expect(backTargetFor(view.sections, 'claim-type')).toBeNull();
+    expect(backTargetFor(view.sections, 'not-a-section')).toBeNull();
   });
 });
