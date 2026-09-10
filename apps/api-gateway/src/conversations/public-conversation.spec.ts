@@ -11,10 +11,16 @@ import { PublicConversationProxyController } from './public-conversation.control
  */
 const SECRET = 'test-signing-secret';
 
-const controllerWith = () =>
-  new PublicConversationProxyController({} as never, {
+const controllerWith = (httpService: unknown = {}) =>
+  new PublicConversationProxyController(httpService as never, {
     get: (key: string) =>
-      key === 'jwt.secret' ? SECRET : key === 'INTERNAL_API_KEY' ? 'internal' : undefined,
+      key === 'jwt.secret'
+        ? SECRET
+        : key === 'INTERNAL_API_KEY'
+          ? 'internal'
+          : key === 'CASE_SERVICE_URL'
+            ? 'http://case-service:3001'
+            : undefined,
   } as never);
 
 /** The private surface, reached the way the routes reach it. */
@@ -118,5 +124,73 @@ describe('a verified payload routes to the right identity downstream', () => {
     const c = asInternals(controllerWith());
     expect(c.headers('a1b2c3')['x-internal-key']).toBe('internal');
     expect(c.headers('tg:1:1755500000')['x-internal-key']).toBe('internal');
+  });
+});
+
+/**
+ * The claimant's form calls `DELETE /public/conversation/documents/:id`. It
+ * reaches case-service only through here, so a route that exists downstream
+ * and not on this proxy is a 404 at the edge with a working implementation
+ * sitting behind it — which is exactly how removing a photo shipped broken:
+ * the endpoint was added to case-service and the proxy was not.
+ */
+describe('taking one photo back off a multi-photo step', () => {
+  /** Records what the proxy asked case-service for, and answers nothing. */
+  const recorder = () => {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const httpService = {
+      delete: (url: string, config: { headers: Record<string, string> }) => {
+        calls.push({ url, headers: config.headers });
+        return {};
+      },
+    };
+    const controller = controllerWith(httpService);
+    // `pass` turns an axios observable into a value; the stub above is not one,
+    // and what it answers is not what these tests are about.
+    jest.spyOn(controller as unknown as { pass: () => unknown }, 'pass').mockReturnValue(undefined);
+    return { controller, calls };
+  };
+
+  const refusing = () =>
+    controllerWith({
+      delete: () => {
+        throw new Error('must not reach case-service');
+      },
+    });
+
+  it('forwards the removal under this session’s identity', async () => {
+    const { controller, calls } = recorder();
+    const token = asInternals(controller).issueSession();
+
+    await controller.removeDocument(token, 'doc-1');
+
+    expect(calls[0].url).toBe('http://case-service:3001/api/v1/public/conversation/documents/doc-1');
+    expect(calls[0].headers['x-web-session-id']).toBe(token.split('.')[0]);
+    expect(calls[0].headers['x-internal-key']).toBe('internal');
+  });
+
+  it('sends a form session as a form session, not the chat’s', async () => {
+    // The two surfaces are separate channels on the server. A removal carried
+    // on the wrong one names a different conversation entirely.
+    const { controller, calls } = recorder();
+    const token = (
+      controller as unknown as { issueSession(surface: 'chat' | 'form'): string }
+    ).issueSession('form');
+
+    await controller.removeDocument(token, 'doc-1');
+
+    expect(calls[0].headers['x-web-channel']).toBe('WEB_FORM');
+  });
+
+  it('refuses when the caller holds no session', async () => {
+    await expect(refusing().removeDocument(undefined, 'doc-1')).rejects.toThrow(
+      'No conversation to remove this from.'
+    );
+  });
+
+  it('refuses a forged session rather than passing it downstream', async () => {
+    await expect(refusing().removeDocument('made-up.deadbeef', 'doc-1')).rejects.toThrow(
+      'No conversation to remove this from.'
+    );
   });
 });

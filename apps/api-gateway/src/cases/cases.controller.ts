@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpException,
   HttpStatus,
@@ -180,6 +181,27 @@ export class CasesController {
         headers: this.identityHeaders(req),
       }),
       'Failed to load case documents'
+    );
+  }
+
+  /**
+   * Take back one photo from a multi-photo step.
+   *
+   * case-service does the deciding — that the document belongs to this case,
+   * and that its step allows more than one, so a required single-file
+   * document can never be left answered with no evidence behind it. This is
+   * the proxy only; duplicating either check here would be a second opinion
+   * that can disagree with the first.
+   */
+  @Delete(':id/documents/:documentId')
+  @ApiOperation({ summary: 'Remove one photo from a multi-photo step' })
+  removeDocument(@Param('id') id: string, @Param('documentId') documentId: string, @Req() req: any) {
+    return this.unwrap(
+      this.httpService.delete(
+        `${this.caseServiceUrl}/api/v1/cases/${id}/documents/${documentId}`,
+        { headers: this.identityHeaders(req) }
+      ),
+      'Failed to remove document'
     );
   }
 

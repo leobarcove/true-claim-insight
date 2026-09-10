@@ -3,11 +3,13 @@ import { HttpService } from '@nestjs/axios';
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Headers,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   Query,
   Req,
@@ -367,5 +369,33 @@ export class PublicConversationProxyController {
           maxBodyLength: Infinity,
         })
       );
+  }
+
+  /**
+   * Take one photo back off a multi-photo step — `upload`'s counterpart.
+   *
+   * The id in the path is one case-service handed this session in the first
+   * place, and only for a step that may hold several (`publicDocument`
+   * withholds every other document's id). It is not a credential even so:
+   * case-service re-derives the case from the session behind these headers
+   * and re-checks the document belongs to it, so nothing here needs to know
+   * whose photo this is.
+   */
+  @Delete('documents/:id')
+  @Public()
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Remove one photo the visitor attached to their open claim' })
+  async removeDocument(
+    @Headers('x-web-session') token: string | undefined,
+    @Param('id') id: string
+  ) {
+    const sessionId = this.sessionIdFrom(token);
+    if (!sessionId) throw new ForbiddenException('No conversation to remove this from.');
+
+    return this.pass(
+      this.httpService.delete(this.base(`/documents/${encodeURIComponent(id)}`), {
+        headers: this.headers(sessionId),
+      })
+    );
   }
 }
