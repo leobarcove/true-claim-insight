@@ -413,18 +413,31 @@ function DocumentField({
   onRemove?: (documentId: string) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  /*
+    Uploading and removing are tracked apart, not as one `busy` flag.
+
+    They are two different sentences to be in the middle of, and sharing a flag
+    put the wrong one on screen: clicking Remove turned the add button into
+    "Uploading…", so the claimant was told a file was arriving at the moment
+    one was leaving. Removing also names *which* file, because the message
+    belongs on the row being taken back and not on the button that adds.
+  */
+  const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const files = attached ?? [];
   const hasAttached = files.length > 0;
+  // One mutation at a time: both paths refetch the case afterwards, and a
+  // second request in flight would be answered against the older picture.
+  const busy = uploading || removingId !== null;
 
   const handleRemove = async (documentId: string) => {
     if (!onRemove) return;
-    setBusy(true);
+    setRemovingId(documentId);
     try {
       await onRemove(documentId);
     } finally {
-      setBusy(false);
+      setRemovingId(null);
     }
   };
 
@@ -439,13 +452,13 @@ function DocumentField({
   const handle = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0 || !onUpload) return;
     const selected = step.allowMultiple ? Array.from(fileList) : [fileList[0]];
-    setBusy(true);
+    setUploading(true);
     try {
       for (const file of selected) {
         await onUpload(file);
       }
     } finally {
-      setBusy(false);
+      setUploading(false);
     }
   };
 
@@ -546,7 +559,7 @@ function DocumentField({
                     onClick={() => void handleRemove(file.id!)}
                     className="shrink-0 font-medium text-destructive underline-offset-2 hover:underline disabled:opacity-60"
                   >
-                    Remove
+                    {removingId === file.id ? 'Removing…' : 'Remove'}
                   </button>
                 )}
               </li>
@@ -577,8 +590,14 @@ function DocumentField({
           A multi-photo step never switches to "Replace": every tap here adds
           another photo, so the camera cue stays even once one has arrived.
         */}
-        {!busy && (!hasAttached || step.allowMultiple) && <CameraIcon className="h-4 w-4" />}
-        {busy
+        {/*
+          The button says what tapping it does, and only stops saying it while
+          it is the thing being done. A removal in progress greys it — one
+          mutation at a time — but leaves the label alone: the progress for
+          that belongs on the row it is removing.
+        */}
+        {!uploading && (!hasAttached || step.allowMultiple) && <CameraIcon className="h-4 w-4" />}
+        {uploading
           ? 'Uploading…'
           : !hasAttached
             ? 'Add'
