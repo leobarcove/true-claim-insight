@@ -8,7 +8,7 @@ import {
   MessageDirection,
 } from '@prisma/client';
 
-import { getStep, type CaseAnswers } from '@tci/shared-types';
+import { getStep, type CaseAnswers, type CaseFlow } from '@tci/shared-types';
 
 import { PrismaService } from '../config/prisma.service';
 import { ConversationGateway } from './conversation.gateway';
@@ -577,29 +577,65 @@ export class ClaimantConversationService {
     return {
       ...base,
       stage: SUBMITTED_STATUSES.has(caseDetail.status as CaseStatus) ? 'submitted' : 'flow',
-      case: { ...caseDetail, documents: caseDetail.documents.map(publicDocument) },
+      case: {
+        ...caseDetail,
+        documents: caseDetail.documents.map(document => publicDocument(document, flow)),
+      },
       flow,
     };
+  }
+
+  /**
+   * Take back one photo from a multi-photo step — the public form's side of
+   * `CasesService.removeDocument`, which does the actual work and the actual
+   * checks. This exists only to turn a session into the case it is allowed to
+   * touch, the same way `attachDocument` does: the caller never names a case,
+   * because a caseId taken from the request would be a second, unchecked route
+   * to somebody else's claim.
+   */
+  async removeDocument(identity: ConversationIdentity, documentId: string) {
+    const binding = await this.bindingFor(identity);
+    if (!binding.activeCaseId) {
+      throw new BadRequestException('No claim is open on this session.');
+    }
+    const context = {
+      tenantId: binding.tenantId ?? '',
+      userId: binding.claimantId ?? '',
+      userRole: 'CLAIMANT' as const,
+      scope: TenantScope.STRICT,
+      allowCrossTenant: false,
+    };
+    return this.cases.removeDocument(binding.activeCaseId, documentId, context);
   }
 }
 
 /**
  * A document as the claimant may see it: that it exists, what it was called,
- * and when it arrived.
+ * and when it arrived — plus, for a step that can hold several, the id that
+ * names it to `removeDocument`.
  *
- * The id is removed, not merely unused. Every document read is staff-only, so
- * an id in this payload would be a handle to an endpoint the holder cannot
- * call — useless at best, and the sort of thing a later change turns into a
- * public route by accident. The transcript has never returned one either; this
- * adds a filename and nothing more.
+ * The id is withheld everywhere else, not merely unused. Every other document
+ * read is staff-only, so an id in that payload would be a handle to an
+ * endpoint the holder cannot call — useless at best, and the sort of thing a
+ * later change turns into a public route by accident. A multi-photo step is
+ * the one place the claimant is now allowed to act on an id directly, and
+ * even there it is not a bearer credential: `removeDocument` re-derives the
+ * case from the session and re-checks the document belongs to it, so holding
+ * the id is never on its own enough to touch anything.
  */
-function publicDocument(document: {
-  fileName: string;
-  documentType: string;
-  stepId: string | null;
-  createdAt: Date;
-}) {
+function publicDocument(
+  document: {
+    id: string;
+    fileName: string;
+    documentType: string;
+    stepId: string | null;
+    createdAt: Date;
+  },
+  flow: CaseFlow
+) {
+  const step = document.stepId ? getStep(flow, document.stepId) : undefined;
   return {
+    ...(step?.allowMultiple ? { id: document.id } : {}),
     fileName: document.fileName,
     documentType: document.documentType,
     stepId: document.stepId,

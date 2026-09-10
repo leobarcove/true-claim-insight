@@ -3,8 +3,10 @@ import {
   Body,
   ForbiddenException,
   Controller,
+  Delete,
   Get,
   Headers,
+  Param,
   Post,
   Query,
   Req,
@@ -240,6 +242,28 @@ export class PublicConversationController {
     return this.service.uploadDocument(
       this.identityFrom(sessionId, channel, platformUserId, webChannel),
       file
+    );
+  }
+
+  /**
+   * Take back one photo from a multi-photo step. Only reachable for a
+   * document whose `id` this session was actually handed — see
+   * `publicDocument` in the service for why that is every other document's
+   * protection here, not a guard on this route.
+   */
+  @Delete('documents/:id')
+  @Throttle({ short: { limit: 5, ttl: 1000 }, medium: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Remove one photo the visitor attached to their open claim' })
+  removeDocument(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string,
+    @Param('id') id: string
+  ) {
+    return this.service.removeDocument(
+      this.identityFrom(sessionId, channel, platformUserId, webChannel),
+      id
     );
   }
 }
