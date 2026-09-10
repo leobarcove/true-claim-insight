@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Paperclip, Send, UserRound } from 'lucide-react';
+import { ArrowLeft, Loader2, Paperclip, Plus, Send, UserRound } from 'lucide-react';
 import { CHOICE_DISPLAY_MAX, formatDateAnswer, type FlowStep } from '@tci/shared-types';
 
 import { uploadCaseDocument } from '@/hooks/use-cases';
@@ -197,6 +197,31 @@ export function CaseIntakePage() {
               onSkip={() => send({ text: 'skip' })}
               onAttach={() => fileInputRef.current?.click()}
             />
+
+            {/*
+              A finished claim, with nobody taken over: `step` is null because
+              the flow has nothing left to ask, so `AnswerControl` above draws
+              nothing. The gateway already knows what to say here — "would you
+              like to start another claim?" — for every messaging channel,
+              because a claimant there can always just send another message
+              and the gateway notices the case is done and offers it. The web
+              chat had no equivalent: once the composer had nothing to render,
+              there was no way to send *any* message, so a claimant with a
+              second trip to claim for was stuck reading their first claim's
+              transcript forever, same shape of gap as "Talk to a person"
+              below before that button existed.
+            */}
+            {!step && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => send({ text: 'Start another claim' })}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/40 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                File another claim
+              </button>
+            )}
 
             {/*
               The way out, on every step.
