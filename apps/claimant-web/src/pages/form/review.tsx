@@ -44,13 +44,14 @@ export function ReviewStage({
   error,
   onChange,
   onUpload,
+  onRemove,
   onSubmit,
   onBack,
   locale = 'en',
 }: {
   sections: ResolvedSection[];
   answers: CaseAnswers;
-  documents: Array<{ fileName: string; stepId: string | null }>;
+  documents: Array<{ fileName: string; stepId: string | null; id?: string }>;
   /** How each answer reads on screen — dates as dates, choices as labels. */
   rowsFor: (section: ResolvedSection) => ReviewRow[];
   busy: boolean;
@@ -59,6 +60,8 @@ export function ReviewStage({
   onChange: (step: FlowStep, value: string) => Promise<boolean>;
   /** Store a replacement file and report the id a turn can name it by. */
   onUpload: (step: FlowStep, file: File) => Promise<string>;
+  /** Take back one photo from a multi-photo step. Optional: not every caller offers it. */
+  onRemove?: (documentId: string) => Promise<void>;
   onSubmit: () => Promise<void>;
   onBack: () => void;
   locale?: Locale;
@@ -103,11 +106,19 @@ export function ReviewStage({
    *
    * The editor stays open if the turn is refused, so the message lands on the
    * field it belongs to.
+   *
+   * A step with `allowMultiple` breaks the "nothing left to decide" premise:
+   * the server keeps this file alongside the earlier ones rather than
+   * retiring them, and `DocumentField` may still be uploading the rest of a
+   * multi-file pick when this first one lands. Closing on the first success
+   * would drop the editor while photos two and three are still arriving, so
+   * for that step the claimant closes it themselves with Cancel once done.
    */
   const replaceDocument = async (step: FlowStep, file: File) => {
     const storedId = await onUpload(step, file);
     setDraft(storedId);
-    if (await onChange(step, storedId)) setEditing(null);
+    const sent = await onChange(step, storedId);
+    if (sent && !step.allowMultiple) setEditing(null);
   };
 
   return (
@@ -135,19 +146,20 @@ export function ReviewStage({
                         onChange={setDraft}
                         disabled={busy}
                         error={error ?? undefined}
-                        attached={
-                          documents.find(document => document.stepId === row.step.id) ?? null
-                        }
+                        attached={documents.filter(document => document.stepId === row.step.id)}
                         onUpload={file => replaceDocument(row.step, file)}
+                        onRemove={onRemove}
                       />
                       {/*
                         No Save on a document. Choosing the file is the whole
-                        act — it stores, replaces and closes — so a Save button
-                        beside it is one that does nothing, and a claimant who
-                        reads it as the step that commits the change will press
-                        it, see the editor shut, and have no idea whether the
-                        file went. Cancel stays, because backing out without
-                        picking anything is still a thing to do.
+                        act — it stores and is sent straight away — so a Save
+                        button beside it is one that does nothing, and a
+                        claimant who reads it as the step that commits the
+                        change will press it, see the editor shut, and have no
+                        idea whether the file went. Cancel stays: it is how a
+                        claimant backs out having picked nothing, and — for a
+                        multi-photo step, which stays open across several
+                        uploads — how they say they are done adding.
                       */}
                       <div className="flex gap-2">
                         {row.step.answerType !== 'document' && (
@@ -176,7 +188,17 @@ export function ReviewStage({
                       */}
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <dt className="text-xs text-muted-foreground">{row.label}</dt>
-                        <dd className="m-0 break-words text-[15px] font-semibold">{row.value}</dd>
+                        {/*
+                          `whitespace-pre-line` rather than a wrapping <span>
+                          per line: a multi-photo step's value is several
+                          filenames joined with "\n" (see `documentAnswerFor`
+                          in the claimant and agent forms), and every other
+                          answer is one line with no newline in it, so the
+                          same class is a no-op for them.
+                        */}
+                        <dd className="m-0 whitespace-pre-line break-words text-[15px] font-semibold">
+                          {row.value}
+                        </dd>
                       </div>
                       {row.editable !== false && (
                         <button

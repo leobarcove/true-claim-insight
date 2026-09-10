@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   agentSession,
   agentUser,
+  removeAssistedDocument,
   uploadAssistedDocument,
   useAssistedCase,
   useAgentProfile,
@@ -251,6 +252,12 @@ function AssistedSections({
     return stored.id;
   };
 
+  /** Take back one photo from a multi-photo step — `uploadFor`'s counterpart. */
+  const removeFor = async (documentId: string): Promise<void> => {
+    await removeAssistedDocument(caseId, documentId);
+    await refresh();
+  };
+
   const onContinue = async () => {
     setBusy(true);
     setErrors({});
@@ -372,6 +379,27 @@ function AssistedSections({
     }
   };
 
+  /**
+   * A document step's row, as filenames rather than a count.
+   *
+   * `find`ing the first match was correct only because every document step
+   * used to hold at most one live file. A multi-photo step (`allowMultiple`)
+   * can hold several, and a bare count ("3 photos") would undo the reason
+   * this shows filenames at all — see the matching helper in the claimant's
+   * own form, `pages/form/index.tsx`, which this mirrors.
+   */
+  const documentAnswerFor = (
+    step: FlowStep,
+    documents: Array<{ fileName: string; stepId: string | null }>
+  ): string => {
+    const attached = documents.filter(document => document.stepId === step.id);
+    if (attached.length === 0) return 'Provided';
+    // One filename per line — `ReviewStage`'s row carries `whitespace-pre-line`
+    // for exactly this, since a comma-run of names is hard to scan when one
+    // step holds several.
+    return attached.map(document => document.fileName).join('\n');
+  };
+
   const reviewRowsFor = (section: ResolvedSection): ReviewRow[] => {
     if (section.id === 'claim-type') {
       return [
@@ -392,8 +420,7 @@ function AssistedSections({
         label: step.label,
         value:
           step.answerType === 'document'
-            ? (data.case.documents.find(document => document.stepId === step.id)?.fileName ??
-              'Provided')
+            ? documentAnswerFor(step, data.case.documents)
             : displayAnswer(step, answers[step.id]),
       }));
   };
@@ -462,6 +489,7 @@ function AssistedSections({
                 }
               }}
               onUpload={uploadFor}
+              onRemove={removeFor}
               onSubmit={onSubmit}
               onBack={() => previous && setActiveId(previous.id)}
             />
@@ -493,9 +521,8 @@ function AssistedSections({
                       setValues(current => ({ ...current, [step.id]: value }));
                       clearError(step.id);
                     }}
-                    attached={
-                      data.case.documents.find(document => document.stepId === step.id) ?? null
-                    }
+                    attached={data.case.documents.filter(document => document.stepId === step.id)}
+                    onRemove={removeFor}
                     onUpload={async file => {
                       const storedId = await uploadFor(step, file);
                       setValues(current => ({ ...current, [step.id]: storedId }));

@@ -705,7 +705,14 @@ export class CasesService {
     // A claimant re-sending a document means the first one was wrong. Retire it
     // rather than leaving two attached to the same requirement, which would
     // leave an adjuster guessing which one the claimant meant.
-    if (stepId) {
+    //
+    // A step marked `allowMultiple` (damage photographs, for instance) means
+    // the opposite: a second upload is another piece of evidence, not a
+    // correction of the first. Nothing is retired there, so the claimant can
+    // build up a small set of photos instead of each one discarding the last.
+    const flow = await this.flows.forCase(caseRow);
+    const step = stepId ? getStep(flow, stepId) : undefined;
+    if (stepId && !step?.allowMultiple) {
       const superseded = await this.prisma.caseDocument.updateMany({
         where: { caseId: caseRow.id, stepId, supersededAt: null },
         data: { supersededAt: new Date() },
@@ -740,6 +747,55 @@ export class CasesService {
       newValues: { documentId: stored.id, documentType, fileName: file.filename, stepId },
     });
     return stored;
+  }
+
+  /**
+   * Take back one photo from a multi-photo step, without touching the rest.
+   *
+   * Deliberately narrower than a general "delete a document" door. Every other
+   * document step holds at most one live file, and that one already has a way
+   * to correct a mistake — upload again, which retires the old file the same
+   * way this does. Opening single-file retirement here too would mean a
+   * required document could be removed with nothing to replace it, leaving a
+   * step that reads as answered (an id sits in `answers`) with no evidence
+   * behind it. `allowMultiple` is exactly the steps where "fewer than before,
+   * possibly zero" is still a sensible state to submit from.
+   *
+   * Retired, never deleted — same as every other document, for the same PD
+   * 12.8 reason: what was submitted and when is the record.
+   */
+  async removeDocument(id: string, documentId: string, tenantContext: TenantContext) {
+    const caseRow = await this.getEditableCase(id, tenantContext);
+    const flow = await this.flows.forCase(caseRow);
+
+    const document = await this.prisma.caseDocument.findFirst({
+      where: { id: documentId, caseId: caseRow.id, supersededAt: null },
+    });
+    if (!document) {
+      throw new NotFoundException('No such document on this claim.');
+    }
+
+    const step = document.stepId ? getStep(flow, document.stepId) : undefined;
+    if (!step?.allowMultiple) {
+      throw new BadRequestException(
+        'This document cannot be removed on its own — upload a replacement instead.'
+      );
+    }
+
+    await this.prisma.caseDocument.update({
+      where: { id: document.id },
+      data: { supersededAt: new Date() },
+    });
+    await this.audit(caseRow.id, 'CASE_DOCUMENT_REMOVED', tenantContext, {
+      oldValues: {
+        documentId: document.id,
+        documentType: document.documentType,
+        fileName: document.fileName,
+        stepId: document.stepId,
+      },
+    });
+
+    return this.withFlowState(await this.prisma.case.findUniqueOrThrow({ where: { id } }));
   }
 
   /**

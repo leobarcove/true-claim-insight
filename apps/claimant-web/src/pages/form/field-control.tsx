@@ -75,8 +75,17 @@ interface FieldProps {
   disabled?: boolean;
   /** Documents are stored before they are named on a turn. */
   onUpload?: (file: File) => Promise<void>;
-  /** A file already attached to this step, if any. */
-  attached?: { fileName: string } | null;
+  /**
+   * Files already attached to this step. Almost always zero or one; more
+   * than one only for a step with `allowMultiple` (damage photographs).
+   *
+   * `id` is present only on a multi-photo step's files — every other
+   * document is never given one to act on, so there is nothing `onRemove`
+   * could be called with. See `publicDocument` on the server.
+   */
+  attached?: Array<{ fileName: string; id?: string }> | null;
+  /** Take back one photo from a multi-photo step. Never called otherwise. */
+  onRemove?: (documentId: string) => Promise<void>;
 }
 
 const labelFor = (step: FlowStep) =>
@@ -96,6 +105,7 @@ export function FieldControl({
   disabled,
   onUpload,
   attached,
+  onRemove,
 }: FieldProps) {
   const describedBy = error ? `${step.id}-error` : step.hint ? `${step.id}-hint` : undefined;
 
@@ -142,6 +152,7 @@ export function FieldControl({
         disabled={disabled}
         onUpload={onUpload}
         attached={attached}
+        onRemove={onRemove}
       />
 
       {/*
@@ -171,6 +182,7 @@ function FieldInput({
   disabled,
   onUpload,
   attached,
+  onRemove,
 }: {
   step: FlowStep;
   value: string;
@@ -179,7 +191,8 @@ function FieldInput({
   describedBy?: string;
   disabled?: boolean;
   onUpload?: (file: File) => Promise<void>;
-  attached?: { fileName: string } | null;
+  attached?: Array<{ fileName: string; id?: string }> | null;
+  onRemove?: (documentId: string) => Promise<void>;
 }) {
   const base = cn(
     'w-full rounded-lg border bg-background px-3 py-2.5 text-base',
@@ -196,6 +209,7 @@ function FieldInput({
         disabled={disabled}
         onUpload={onUpload}
         attached={attached}
+        onRemove={onRemove}
       />
     );
   }
@@ -388,23 +402,48 @@ function DocumentField({
   disabled,
   onUpload,
   attached,
+  onRemove,
 }: {
   step: FlowStep;
   invalid: boolean;
   describedBy?: string;
   disabled?: boolean;
   onUpload?: (file: File) => Promise<void>;
-  attached?: { fileName: string } | null;
+  attached?: Array<{ fileName: string; id?: string }> | null;
+  onRemove?: (documentId: string) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const files = attached ?? [];
+  const hasAttached = files.length > 0;
 
-  const handle = async (file: File | undefined) => {
-    if (!file || !onUpload) return;
+  const handleRemove = async (documentId: string) => {
+    if (!onRemove) return;
     setBusy(true);
     try {
-      await onUpload(file);
+      await onRemove(documentId);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Every selected file is uploaded, in order, as its own request.
+   *
+   * A step without `allowMultiple` only ever takes the first: the picker has
+   * no `multiple` attribute on it, but a drag can still drop several at once,
+   * and taking only the first keeps a single-document step behaving exactly
+   * as it did before this could ever be reached with more than one.
+   */
+  const handle = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0 || !onUpload) return;
+    const selected = step.allowMultiple ? Array.from(fileList) : [fileList[0]];
+    setBusy(true);
+    try {
+      for (const file of selected) {
+        await onUpload(file);
+      }
     } finally {
       setBusy(false);
     }
@@ -420,7 +459,7 @@ function DocumentField({
       onDrop={event => {
         event.preventDefault();
         setDragging(false);
-        void handle(event.dataTransfer.files?.[0]);
+        void handle(event.dataTransfer.files);
       }}
       className={cn(
         'flex flex-wrap items-center gap-3 rounded-xl border p-3.5',
@@ -436,11 +475,11 @@ function DocumentField({
       <span
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm',
-          attached ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+          hasAttached ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
         )}
         aria-hidden="true"
       >
-        {attached ? <CheckIcon className="h-4 w-4" /> : <UploadIcon className="h-4 w-4" />}
+        {hasAttached ? <CheckIcon className="h-4 w-4" /> : <UploadIcon className="h-4 w-4" />}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -460,13 +499,17 @@ function DocumentField({
         <span
           className={cn(
             'flex items-center gap-1 text-xs',
-            attached ? 'font-medium text-primary' : 'text-muted-foreground'
+            hasAttached ? 'font-medium text-primary' : 'text-muted-foreground'
           )}
         >
-          {attached ? (
+          {hasAttached ? (
             <>
               <CheckIcon className="h-3.5 w-3.5" />
-              <span className="min-w-0 truncate">Uploaded: {attached.fileName}</span>
+              <span className="min-w-0 truncate">
+                {files.length === 1
+                  ? `Uploaded: ${files[0].fileName}`
+                  : `${files.length} photos uploaded`}
+              </span>
             </>
           ) : step.optional ? (
             'Optional'
@@ -474,6 +517,42 @@ function DocumentField({
             'Required'
           )}
         </span>
+
+        {/*
+          Only a multi-photo step lists every file — a single-document step
+          already names its one file on the status line above, and repeating
+          it here would be the same word twice.
+        */}
+        {step.allowMultiple && files.length > 1 && (
+          <ul className="flex flex-col gap-0.5 pt-0.5">
+            {files.map((file, index) => (
+              <li
+                key={file.id ?? `${file.fileName}-${index}`}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              >
+                <CheckIcon className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{file.fileName}</span>
+                {/*
+                  Only a photo the server gave us an id for can be removed on
+                  its own — every other document's id is withheld, on purpose
+                  (see `publicDocument`), so there is nothing to call `onRemove`
+                  with. That is also why this never appears on a single-file
+                  step: nothing there ever carries an id either.
+                */}
+                {file.id && onRemove && (
+                  <button
+                    type="button"
+                    disabled={disabled || busy}
+                    onClick={() => void handleRemove(file.id!)}
+                    className="shrink-0 font-medium text-destructive underline-offset-2 hover:underline disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <button
@@ -483,7 +562,7 @@ function DocumentField({
         aria-describedby={describedBy}
         className={cn(
           'flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium disabled:opacity-60',
-          attached
+          hasAttached && !step.allowMultiple
             ? 'border-input hover:border-primary/40'
             : 'border-primary text-primary hover:bg-primary/5'
         )}
@@ -494,14 +573,23 @@ function DocumentField({
           opens — on a phone this is the camera or the photo library, and that
           is the moment a claimant decides whether they have the document to
           hand or are about to go and photograph it.
+
+          A multi-photo step never switches to "Replace": every tap here adds
+          another photo, so the camera cue stays even once one has arrived.
         */}
-        {!busy && !attached && <CameraIcon className="h-4 w-4" />}
-        {busy ? 'Uploading…' : attached ? 'Replace' : 'Add'}
+        {!busy && (!hasAttached || step.allowMultiple) && <CameraIcon className="h-4 w-4" />}
+        {busy
+          ? 'Uploading…'
+          : !hasAttached
+            ? 'Add'
+            : step.allowMultiple
+              ? 'Add another'
+              : 'Replace'}
       </button>
 
       {/*
         No "I do not have this".
-        
+
         It was the chat's `type "skip"` wearing a form's clothes, and on a form
         it is a control for doing nothing. An optional document left alone is
         skipped by Continue already — `stepsToSend` sends `skip` for any
@@ -513,9 +601,16 @@ function DocumentField({
       <input
         ref={inputRef}
         type="file"
+        multiple={step.allowMultiple}
         className="hidden"
         accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
-        onChange={event => void handle(event.target.files?.[0])}
+        onChange={event => {
+          void handle(event.target.files);
+          // Reset so picking the same file again still fires a change event —
+          // otherwise a claimant who selects the same photo twice in a row
+          // (e.g. after Add another) sees nothing happen the second time.
+          event.target.value = '';
+        }}
       />
     </div>
   );

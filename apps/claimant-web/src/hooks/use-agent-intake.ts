@@ -348,6 +348,13 @@ export async function uploadAssistedDocument(
   return ((data as any).data ?? data) as { id: string };
 }
 
+/** Take back one photo from a multi-photo step — see `CasesService.removeDocument`. */
+export async function removeAssistedDocument(caseId: string, documentId: string) {
+  await apiClient.delete(`/cases/${caseId}/documents/${documentId}`, {
+    headers: agentSession.headers(),
+  });
+}
+
 export function useSubmitAssistedCase() {
   const queryClient = useQueryClient();
   return useMutation({

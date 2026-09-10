@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -129,6 +130,17 @@ export class CasesController {
     const file = await req.file();
     if (!file) throw new BadRequestException('No file uploaded');
     return this.service.uploadDocument(id, file, tenantContext);
+  }
+
+  @Delete(':id/documents/:documentId')
+  @Roles(...INTAKE_ROLES)
+  @ApiOperation({ summary: 'Remove one photo from a multi-photo step (audited, never a hard delete)' })
+  removeDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Tenant() tenantContext: TenantContext
+  ) {
+    return this.service.removeDocument(id, documentId, tenantContext);
   }
 
   @Get(':id/documents')

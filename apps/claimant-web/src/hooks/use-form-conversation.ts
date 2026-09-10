@@ -40,6 +40,8 @@ export interface FormState {
     currentStepId: string | null;
     answers: Record<string, string | number | boolean>;
     documents: Array<{
+      /** Only present for a multi-photo step — see `publicDocument` on the server. */
+      id?: string;
       fileName: string;
       documentType: string;
       stepId: string | null;
@@ -135,6 +137,19 @@ export async function uploadFormDocument(file: File, documentType: string, stepI
     { headers: { ...session.headers(), 'Content-Type': 'multipart/form-data' } }
   );
   return ((data as any).data ?? data) as { id: string };
+}
+
+/**
+ * Take back one photo from a multi-photo step.
+ *
+ * Only ever called with an id the server itself handed back on this same
+ * session's own state — see `publicDocument` on the server for why every
+ * other document has no id to remove by at all.
+ */
+export async function removeFormDocument(documentId: string) {
+  await apiClient.delete(`/public/conversation/documents/${documentId}`, {
+    headers: session.headers(),
+  });
 }
 
 /** Re-read the whole picture. Called once a section has been accepted. */

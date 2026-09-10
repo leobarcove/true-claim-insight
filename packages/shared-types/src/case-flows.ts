@@ -131,6 +131,13 @@ export interface FlowStep {
   /** Present when answerType === 'document'. */
   documentType?: DocumentType;
   /**
+   * Present when answerType === 'document'. When true, a second upload adds
+   * to this step's evidence instead of retiring the first — see the comment
+   * in `documentStep` for which steps this is actually true of, and
+   * `CasesService.uploadDocument` for the retire-or-keep decision it drives.
+   */
+  allowMultiple?: boolean;
+  /**
    * Extra guidance shown under the prompt: where to find the thing, what an
    * acceptable version of it looks like.
    *
@@ -564,7 +571,12 @@ const documentStep = (
   prompt: string,
   label: string,
   hint: string,
-  optional = false
+  optional = false,
+  // True only for a step whose evidence is naturally more than one file —
+  // damage photographs, at present. Every other document step is a single
+  // specific paper (a passport, a boarding pass), where a second upload
+  // means the first was wrong rather than that there is more to show.
+  allowMultiple = false
 ): Omit<FlowStep, 'next'> => ({
   id,
   prompt,
@@ -573,6 +585,7 @@ const documentStep = (
   answerType: 'document',
   documentType,
   optional,
+  ...(allowMultiple ? { allowMultiple } : {}),
 });
 
 /**
@@ -733,7 +746,9 @@ const luggageDamageFlow = buildFlow(TravelType.LUGGAGE_DAMAGE, [
     'Please upload clear photographs of the damaged luggage.',
     'Damage photographs',
     'Take them in good light: one of the whole bag, then a close-up of each damaged part. ' +
-      'Several photos are better than one.'
+      'Several photos are better than one.',
+    false,
+    true
   ),
   documentStep(
     'doc-proof-of-ownership',

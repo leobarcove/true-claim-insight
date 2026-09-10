@@ -14,6 +14,7 @@ import {
   clearFormSession,
   hasFormSession,
   isFormChannelSession,
+  removeFormDocument,
   uploadFormDocument,
   useFormState,
   useRefreshFormState,
@@ -1037,6 +1038,15 @@ function FlowStage({ state }: { state: FormState }) {
   };
 
   /**
+   * Take back one photo from a multi-photo step — `uploadFor`'s counterpart.
+   * Shared with the review screen for the same reason `uploadFor` is.
+   */
+  const removeFor = async (documentId: string): Promise<void> => {
+    await removeFormDocument(documentId);
+    await refresh();
+  };
+
+  /**
    * One answer, moved to and sent — the Change link's whole job.
    *
    * Reports whether the server took it, so the caller can leave the editor
@@ -1104,6 +1114,28 @@ function FlowStage({ state }: { state: FormState }) {
   };
 
   /**
+   * A document step's row, as filenames rather than a count.
+   *
+   * `find`ing the first match was correct only because every document step
+   * used to hold at most one live file. A multi-photo step (`allowMultiple`)
+   * can hold several, and a bare count ("3 photos") would undo the reason
+   * this shows filenames at all: at the point of submitting, "did I attach
+   * the right ones?" is the question, and neither "provided" nor a count
+   * answers it.
+   */
+  const documentAnswerFor = (
+    step: FlowStep,
+    documents: Array<{ fileName: string; stepId: string | null }>
+  ): string => {
+    const attached = documents.filter(document => document.stepId === step.id);
+    if (attached.length === 0) return 'Provided';
+    // One filename per line — `ReviewStage`'s row carries `whitespace-pre-line`
+    // for exactly this, since a comma-run of names is hard to scan when one
+    // step holds several.
+    return attached.map(document => document.fileName).join('\n');
+  };
+
+  /**
    * How each answer reads on the review page.
    *
    * Documents show their filename rather than "provided": at the point of
@@ -1146,8 +1178,7 @@ function FlowStage({ state }: { state: FormState }) {
         label: step.label,
         value:
           step.answerType === 'document'
-            ? (state.case!.documents.find(document => document.stepId === step.id)?.fileName ??
-              'Provided')
+            ? documentAnswerFor(step, state.case!.documents)
             : displayAnswer(step, answers[step.id]),
       }));
   };
@@ -1294,6 +1325,7 @@ function FlowStage({ state }: { state: FormState }) {
           error={Object.values(errors)[0] ?? null}
           onChange={changeOne}
           onUpload={uploadFor}
+          onRemove={removeFor}
           onSubmit={onSubmit}
           onBack={() => previous && setActiveId(previous.id)}
           locale={state.locale}
@@ -1313,9 +1345,8 @@ function FlowStage({ state }: { state: FormState }) {
                     setValues(current => ({ ...current, [step.id]: value }));
                     clearError(step.id);
                   }}
-                  attached={
-                    state.case!.documents.find(document => document.stepId === step.id) ?? null
-                  }
+                  attached={state.case!.documents.filter(document => document.stepId === step.id)}
+                  onRemove={removeFor}
                   onUpload={async file => {
                     const storedId = await uploadFor(step, file);
                     setValues(current => ({ ...current, [step.id]: storedId }));
