@@ -299,7 +299,7 @@ function DeclarationStep({
     >
       <NoticeExtract />
 
-      <div className="flex flex-col gap-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+      <div className="flex flex-col gap-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-900">
         {/*
           Not pre-ticked, and it gates everything below it. The platform cannot
           see whether the conversation happened; what it can do is require a

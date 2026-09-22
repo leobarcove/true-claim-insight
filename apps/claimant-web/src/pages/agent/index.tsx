@@ -500,7 +500,7 @@ function AssistedSections({
               this submission lawful, and an agent about to send somebody else's
               claim should be reminded of whose claim it is.
             */}
-            <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+            <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
               You are submitting this claim request on behalf of{' '}
               <strong>{claimant?.fullName ?? 'the claimant'}</strong>, on the verbal agreement you
               recorded at {consent ? asTime(consent.attestedAt) : 'the start of this claim'}.

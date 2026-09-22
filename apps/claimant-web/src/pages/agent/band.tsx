@@ -71,7 +71,7 @@ export function AgentBand({
     : 'Consent not yet recorded. No claim details can be entered';
 
   return (
-    <div className="flex flex-col gap-1.5 border-b border-amber-300 bg-amber-50 px-4 py-2 text-amber-900 sm:flex-row sm:items-center sm:gap-4 sm:px-16 sm:py-3 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+    <div className="flex flex-col gap-1.5 border-b border-amber-300 bg-amber-50 px-4 py-2 text-amber-900 sm:flex-row sm:items-center sm:gap-4 sm:px-16 sm:py-3">
       {/*
         One row at 1440, two on a phone, and the split is not cosmetic.
 
@@ -121,7 +121,7 @@ export function AgentBand({
               aria-expanded={accountOpen}
               aria-haspopup="dialog"
               onClick={() => setAccountOpen(open => !open)}
-              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-background text-xs font-bold after:absolute after:-inset-1.5 after:content-[''] sm:hidden dark:border-amber-700/60"
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-background text-xs font-bold after:absolute after:-inset-1.5 after:content-[''] sm:hidden"
             >
               {initialsOf(agent.fullName)}
             </button>
@@ -148,7 +148,7 @@ export function AgentBand({
         <div
           role="dialog"
           aria-label="Account"
-          className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-background p-3 sm:hidden dark:border-amber-700/60"
+          className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-background p-3 sm:hidden"
         >
           <div className="flex min-w-0 flex-col">
             <span className="text-[13px] font-semibold text-foreground">{agent.fullName}</span>
@@ -186,7 +186,7 @@ export function AgentBand({
       <span
         className={cn(
           'flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] leading-snug sm:hidden',
-          consent ? 'bg-background/70 dark:bg-amber-950/40' : 'bg-amber-100 dark:bg-amber-900/40'
+          consent ? 'bg-background/70' : 'bg-amber-100'
         )}
       >
         {consent ? (

@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
 import { ClaimFormPage } from '@/pages/form';
@@ -30,23 +29,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 import { AssessmentTrackerPage } from '@/pages/tracker';
 
 function App() {
-  useEffect(() => {
-    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = (isDark: boolean) => {
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    applyTheme(darkModeMediaQuery.matches);
-    const listener = (e: MediaQueryListEvent) => applyTheme(e.matches);
-    darkModeMediaQuery.addEventListener('change', listener);
-
-    return () => darkModeMediaQuery.removeEventListener('change', listener);
-  }, []);
-
+  // No theme effect here on purpose: the app is light in every browser,
+  // whatever the OS prefers. See the note on `:root` in styles/globals.css.
   return (
     <BrowserRouter>
       {/*
@@ -109,7 +93,7 @@ function SurfaceRoute() {
 /** Everything that belongs inside the phone column. */
 function FramedRoutes() {
   return (
-      <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:items-center sm:p-2">
+      <div className="flex h-dvh justify-center bg-zinc-200 sm:items-center sm:p-2">
         <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:h-[min(900px,calc(100dvh-1rem))] sm:w-auto sm:aspect-[71.5/149.6] sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain safe-area-top safe-area-bottom">
             <Routes>

@@ -4,6 +4,23 @@
 
 @layer base {
   :root {
+    /*
+      One theme, always light — the browser's preference is not consulted.
+
+      These two forms are the product's face to people outside the firm, and
+      the light palette is the one the brand is drawn for. The dark variant
+      inverted the surfaces but kept the green, so the section cards, the
+      paper-like form shell and the primary button all landed somewhere
+      nobody designed; half the visitors were seeing a screen that had never
+      been reviewed. A theme worth shipping is a theme worth drawing, so
+      until there is a dark palette someone has signed off on, there is one.
+
+      `color-scheme: light` is the other half of it. Without the declaration
+      a browser in dark mode still draws its own parts dark — scrollbars,
+      the date and select popups, autofill backgrounds — over a light page.
+    */
+    color-scheme: light;
+
     --background: 150 24% 98%;
     --foreground: 164 44% 10%;
     --card: 0 0% 100%;
@@ -24,52 +41,6 @@
     --input: 156 17% 84%;
     --ring: 158 82% 25%;
     --radius: 0.75rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 158 82% 35%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 150 80% 40%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 158 82% 35%;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: 222.2 84% 4.9%;
-      --foreground: 210 40% 98%;
-      --card: 222.2 84% 4.9%;
-      --card-foreground: 210 40% 98%;
-      --popover: 222.2 84% 4.9%;
-      --popover-foreground: 210 40% 98%;
-      --primary: 158 82% 35%;
-      --primary-foreground: 210 40% 98%;
-      --secondary: 217.2 32.6% 17.5%;
-      --secondary-foreground: 210 40% 98%;
-      --muted: 217.2 32.6% 17.5%;
-      --muted-foreground: 215 20.2% 65.1%;
-      --accent: 150 80% 40%;
-      --accent-foreground: 210 40% 98%;
-      --destructive: 0 62.8% 30.6%;
-      --destructive-foreground: 210 40% 98%;
-      --border: 217.2 32.6% 17.5%;
-      --input: 217.2 32.6% 17.5%;
-      --ring: 158 82% 35%;
-    }
   }
 }
 
