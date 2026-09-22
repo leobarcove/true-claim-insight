@@ -77,6 +77,34 @@ docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 there is nothing new. (Migrations are still **authored** locally, never on
 this box.)
 
+## Telegram on staging
+
+The channel is off until staging has a bot of its own. Three facts decide the
+setup, and each is enforced by the code rather than by convention:
+
+- **One bot per environment.** Long-polling is a singleton per token: two
+  pollers each receive half the updates, and claimants appear intermittently
+  ignored. Create a staging-only bot with @BotFather and put its token in
+  `TELEGRAM_BOT_TOKEN`. The development bot stays on the developer's machine.
+- **Polling is opt-in.** `TELEGRAM_POLLING_ENABLED=true` is the template
+  default for staging because it runs exactly one case-service. Polling is
+  outbound only, so the edge needs no route and the security group no change.
+- **The Mini App origin is derived, not typed.** Compose sets
+  `CLAIMANT_WEB_URL` from `CLAIMANT_ORIGIN`, and the bot offers the
+  *Open the form* button only for an `https://` origin. On a local dry-run with
+  `http://claim.localhost` the button simply does not appear.
+
+```bash
+# after filling TELEGRAM_BOT_TOKEN in .env.staging:
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d case-service
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs case-service | grep -i telegram
+# expect: "Telegram long-polling started."
+# a 409 in the log means another poller holds this token — the wrong token was used.
+```
+
+WhatsApp is a separate step: Meta delivers to one callback URL per app, and
+that URL is set in Meta's console, not here.
+
 ## Local dry-run of this stack
 
 Works on a dev machine without DNS or sudo ports:

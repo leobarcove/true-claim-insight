@@ -7,18 +7,19 @@ import { TelegramAdapter } from './telegram.adapter';
 import type { TelegramUpdate } from './telegram.types';
 
 /**
- * Long-polling ingress for Telegram, for development.
+ * Long-polling ingress for Telegram — development and staging alike.
  *
  * Telegram offers two ways in: `getUpdates` long-polling, which needs no
  * inbound network path at all, and webhooks, which need a public HTTPS URL.
  * Polling is what makes local development work without a tunnel, and it is why
  * this module lives inside case-service rather than behind the public edge —
- * there is nothing public about it.
+ * there is nothing public about it. Staging runs one case-service on its own
+ * bot token, so polling serves it too; the edge needs no route for Telegram.
  *
- * A webhook implementation belongs here too when staging needs it, proxied in
- * through api-gateway like every other route. The adapter is unchanged either
- * way: ingress is a transport detail, the same separation InboundMailSource
- * draws for FNOL email.
+ * A webhook implementation belongs here when an environment runs more than
+ * one case-service on one token, proxied in through api-gateway like every
+ * other route. The adapter is unchanged either way: ingress is a transport
+ * detail, the same separation InboundMailSource draws for FNOL email.
  *
  * Inert without a bot token. `TELEGRAM_POLLING_ENABLED=false` also stops it,
  * so a deployment can hold a token for sending without competing for updates —

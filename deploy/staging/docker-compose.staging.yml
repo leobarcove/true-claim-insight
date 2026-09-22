@@ -95,6 +95,12 @@ services:
     environment:
       <<: *node-env
       CASE_SERVICE_PUBLIC_URL: ${ADJUSTER_ORIGIN:?}/case-files
+      # The Telegram Mini App opens <this>/tg. Derived here rather than set in
+      # .env.staging because it IS the claimant origin — a second copy of the
+      # same hostname is a second thing to get wrong. The adapter offers the
+      # button only for an https:// value, so a local http:// dry-run simply
+      # shows no button rather than a broken one.
+      CLAIMANT_WEB_URL: ${CLAIMANT_ORIGIN:?}
     volumes:
       - case_storage:/app/apps/case-service/storage
     depends_on:

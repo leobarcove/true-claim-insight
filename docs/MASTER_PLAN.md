@@ -2771,6 +2771,68 @@ Guarded by a test that reads `details.tsx` and fails if the case detail formats
 a choice itself again; mutation-tested by restoring the title-caser. 835
 case-service tests, 16 claimant-web, 117 gateway; 13 packages typecheck.
 
+### Telegram on staging: the channel was never wired (22 September 2026)
+
+Both messaging channels were silent on the staging host — the shared Singapore
+VPS that `deploy.sh` records as a deviation from the AWS target — and the reason
+was the same for each: `deploy/staging/.env.staging.example` never carried their
+credentials, so the bootstrap produced an environment in which both adapters
+took their designed fail-closed path. Telegram is fixed here; WhatsApp is not,
+and the difference is who owns the fix.
+
+**What was wrong for Telegram.** The template had no `TELEGRAM_BOT_TOKEN`, no
+`TELEGRAM_POLLING_ENABLED` and no `CLAIMANT_WEB_URL`, so case-service logged
+"TELEGRAM_BOT_TOKEN not set — Telegram channel is off" at boot (confirmed in the
+container's log from 10 September), exactly as the 5 Aug entry above warned —
+"staging needs its own bot or the flag set" — and the warning had stayed a
+warning. The one live bot was polled from the developer machine, which also
+holds the `tci-app` tunnel hostname the Mini App button opens.
+
+**What changed in the repository.** Three variables, one of them derived rather
+than typed:
+
+- `CLAIMANT_WEB_URL` is now composed in `docker-compose.staging.yml` from
+  `CLAIMANT_ORIGIN`, which staging already has. The hostname lives in one place;
+  the adapter's `https://`-only rule means a local `http://` dry-run shows no
+  button rather than a broken one. Verified by rendering the Compose file, with
+  the Traefik overlay, against a placeholder env.
+- `TELEGRAM_BOT_TOKEN=` and `TELEGRAM_POLLING_ENABLED=true` are in the staging
+  template with the one-bot-per-environment rule stated above them, and the
+  bootstrap's "before first boot" checklist gained a fourth item: create a
+  staging-only bot. The root `.env.example` had never listed the token variable
+  at all, although the architecture doc's table did; it does now.
+- The poller's own comment called itself "for development" and deferred staging
+  to a webhook that was never built. Staging runs one case-service on one token,
+  so polling serves it too; the comment now says so, and reserves the webhook
+  for the day an environment runs more than one instance.
+
+**What was done on the host, and the temporary state it leaves.** The
+principal chose to point staging at the *development* bot
+(`@true_claim_insight_bot`) for now rather than create a second one. So:
+`.env.staging` gained the token, the polling flag and (until the Compose change
+is pulled) the Mini App origin; case-service was recreated alone with
+`--no-deps`; its log reads "Telegram long-polling started." and the container is
+healthy. Because exactly one poller may hold a token, the developer machine's
+`.env` now has `TELEGRAM_POLLING_ENABLED=false`, with a comment saying why and
+when to flip it back. **Local development cannot receive Telegram messages
+until staging gets its own bot** — that is the cost of the shortcut, accepted
+knowingly, and it is the next thing to undo: create the staging bot, put its
+token on the host, set the local flag back to true.
+
+**WhatsApp, deliberately not touched.** Meta delivers to one callback URL per
+app, and that URL is the developer machine's `tci-wa` tunnel. Repointing it to
+staging silences local development; a second Meta app or test number keeps both.
+That is a decision, not a defect, and it is recorded here so the next person
+does not spend the afternoon the controller's comments describe. A note on the
+allowlist, corrected after reading the live host rather than the template: the
+base template sets `NODE_ENV=production`, under which the controller bypasses
+`WHATSAPP_ALLOWED_SENDERS` entirely, but the Traefik overlay this host runs sets
+`NODE_ENV=staging` for exactly this reason, so the allowlist is live there. The
+base template's comment is only true once the overlay is applied; on the
+decided AWS target, which runs the base file alone, it would not be.
+
+The user-flow site is unchanged: no flow, state or screen moved.
+
 ---
 
 ## 9. Feasibility check

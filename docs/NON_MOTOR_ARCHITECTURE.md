@@ -274,8 +274,9 @@ a claim. Unscoped, a guessed id could offer another claimant's document as proof
 
 | Setting | Effect |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Unset ⇒ the Telegram channel is off entirely. Web chat needs no token; its transport is the claimant's own session. |
+| `TELEGRAM_BOT_TOKEN` | Unset ⇒ the Telegram channel is off entirely. Web chat needs no token; its transport is the claimant's own session. **One bot per environment**: staging has its own token (`deploy/staging/.env.staging.example`), never the development bot's. |
 | `TELEGRAM_POLLING_ENABLED` | Must be `true` on **exactly one** instance per bot token. Two pollers each receive half the updates, which presents as claimants being *intermittently ignored* rather than as an outage — the hardest class of fault to diagnose from a bug report. Staging needs its own bot, not a second poller on the same one. |
+| `CLAIMANT_WEB_URL` | Public `https://` origin of claimant-web; the bot offers the *Open the form* Mini App button only when it is set and is https. Locally it is the tunnel hostname; on staging Compose derives it from `CLAIMANT_ORIGIN`, so it is never typed twice. |
 | `CHAT_LLM_NORMALISER_ENABLED` | Off by default. Fallback-only interpretation of an answer that failed deterministic parsing; the model returns a value, never a decision, and every call writes a `TransferRecord` with no lawful basis (MASTER_PLAN §6.3, §6.18–6.19). **Date steps now reach it too** — they used to return before the fallback could run, so the one place a human is most likely to write something no grammar covers was the one place the model could not help. That widens what reaches Gemini to include free text typed at a date step. |
 
 **Binding in development.** On Telegram, tap *Share my number*: no code is sent
