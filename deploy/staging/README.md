@@ -102,8 +102,39 @@ docker compose --env-file .env.staging -f docker-compose.staging.yml logs case-s
 # a 409 in the log means another poller holds this token — the wrong token was used.
 ```
 
-WhatsApp is a separate step: Meta delivers to one callback URL per app, and
-that URL is set in Meta's console, not here.
+## WhatsApp on staging
+
+Meta delivers to **one callback URL per app**, so the WhatsApp Business Account
+can feed either the developer's tunnel or staging, never both. Three steps, in
+this order — the second fails if the first has not happened:
+
+1. Fill the `WHATSAPP_*` block in `.env.staging` (both `case-service` and
+   `api-gateway` read it; the gateway then sends real login codes by WhatsApp
+   instead of printing them to its log) and recreate those two services.
+2. Prove the handshake from outside before touching Meta:
+   `curl "https://<adjuster-host>/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=<WHATSAPP_WEBHOOK_VERIFY_TOKEN>&hub.challenge=12345"`
+   must return `12345`; a wrong token must return 403.
+3. Repoint the subscription. The console works; so does the Graph API, which
+   is reproducible and preserves the event fields:
+
+   ```bash
+   # AT is the app access token: "<app-id>|<WHATSAPP_APP_SECRET>"
+   curl -s "https://graph.facebook.com/v21.0/<app-id>/subscriptions?access_token=$AT"   # read current fields
+   curl -s -X POST "https://graph.facebook.com/v21.0/<app-id>/subscriptions" \
+     --data-urlencode object=whatsapp_business_account \
+     --data-urlencode callback_url=https://<adjuster-host>/api/webhooks/whatsapp \
+     --data-urlencode verify_token=<WHATSAPP_WEBHOOK_VERIFY_TOKEN> \
+     --data-urlencode "fields=<the comma-separated list read above>" \
+     --data-urlencode access_token=$AT
+   ```
+
+   Meta performs the GET handshake against the new URL inside that call and
+   answers `{"success":true}` only if it passed. Pointing back at the tunnel is
+   the same call with the old URL.
+
+With `NODE_ENV=staging` (the Traefik overlay) the sender allowlist is live, so
+`WHATSAPP_ALLOWED_SENDERS` must name the tester numbers or inbound messages are
+dropped with an error in the case-service log.
 
 ## Local dry-run of this stack
 

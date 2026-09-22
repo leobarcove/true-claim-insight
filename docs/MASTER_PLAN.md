@@ -2771,14 +2771,15 @@ Guarded by a test that reads `details.tsx` and fails if the case detail formats
 a choice itself again; mutation-tested by restoring the title-caser. 835
 case-service tests, 16 claimant-web, 117 gateway; 13 packages typecheck.
 
-### Telegram on staging: the channel was never wired (22 September 2026)
+### Telegram and WhatsApp on staging: neither channel was ever wired (22 September 2026)
 
 Both messaging channels were silent on the staging host — the shared Singapore
 VPS that `deploy.sh` records as a deviation from the AWS target — and the reason
 was the same for each: `deploy/staging/.env.staging.example` never carried their
 credentials, so the bootstrap produced an environment in which both adapters
-took their designed fail-closed path. Telegram is fixed here; WhatsApp is not,
-and the difference is who owns the fix.
+took their designed fail-closed path. Both are now live on the host, both on
+borrowed development resources — the durable per-environment versions remain
+to be provisioned.
 
 **What was wrong for Telegram.** The template had no `TELEGRAM_BOT_TOKEN`, no
 `TELEGRAM_POLLING_ENABLED` and no `CLAIMANT_WEB_URL`, so case-service logged
@@ -2819,17 +2820,32 @@ until staging gets its own bot** — that is the cost of the shortcut, accepted
 knowingly, and it is the next thing to undo: create the staging bot, put its
 token on the host, set the local flag back to true.
 
-**WhatsApp, deliberately not touched.** Meta delivers to one callback URL per
-app, and that URL is the developer machine's `tci-wa` tunnel. Repointing it to
-staging silences local development; a second Meta app or test number keeps both.
-That is a decision, not a defect, and it is recorded here so the next person
-does not spend the afternoon the controller's comments describe. A note on the
-allowlist, corrected after reading the live host rather than the template: the
-base template sets `NODE_ENV=production`, under which the controller bypasses
-`WHATSAPP_ALLOWED_SENDERS` entirely, but the Traefik overlay this host runs sets
-`NODE_ENV=staging` for exactly this reason, so the allowlist is live there. The
-base template's comment is only true once the overlay is applied; on the
-decided AWS target, which runs the base file alone, it would not be.
+**WhatsApp, done the same afternoon, the same way.** The template's `WHATSAPP_*`
+block was empty on the host, so the adapter was inert and the webhook refused
+Meta's handshake with 403. The principal chose, as for Telegram, to reuse the
+development resources rather than provision a second Meta app or test number:
+the development credentials (same WABA, same number, `+60 13-428 6995`) were
+copied into `.env.staging`, case-service and api-gateway recreated, the
+handshake proven from outside (`12345` echoed; a wrong token 403), and then the
+app-level subscription repointed through the Graph API —
+`POST /{app-id}/subscriptions` with the same 27 event fields — from the
+developer machine's `tci-wa` tunnel to `https://tci.smitherytech.com/api/webhooks/whatsapp`.
+Meta answered `success: true`, which it only does after its own GET against the
+new URL passed. **Consequences, stated plainly:** local development no longer
+receives WhatsApp deliveries (the tunnel ingress is idle, not broken); staging's
+api-gateway now sends real login codes by WhatsApp template instead of printing
+them to its log, so a tester logs in with their own allowlisted number; and the
+allowlist is live because the overlay sets `NODE_ENV=staging`. Reverting is the
+same API call with the tunnel URL. The durable answer remains a second Meta app
+or test number for staging, exactly as a second bot is for Telegram.
+
+A note on the allowlist, corrected after reading the live host rather than the
+template: the base template sets `NODE_ENV=production`, under which the
+controller bypasses `WHATSAPP_ALLOWED_SENDERS` entirely, but the Traefik overlay
+this host runs sets `NODE_ENV=staging` for exactly this reason, so the allowlist
+is live there. The base template's comment is only true once the overlay is
+applied; on the decided AWS target, which runs the base file alone, it would not
+be.
 
 The user-flow site is unchanged: no flow, state or screen moved.
 
