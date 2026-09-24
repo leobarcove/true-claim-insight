@@ -2,21 +2,23 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@n
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { SlaService } from './sla.service';
 import { RecordExceptionalDto } from './dto/record-exceptional.dto';
 import { AuditService } from '../common/audit/audit.service';
+import { TenantService } from '../tenant/tenant.service';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
 
 @ApiTags('sla')
 @Controller({ path: 'sla', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class SlaController {
   constructor(
     private readonly sla: SlaService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly tenants: TenantService
   ) {}
 
   /**
@@ -36,6 +38,11 @@ export class SlaController {
     @Body() dto: RecordExceptionalDto,
     @Tenant() tenantContext: TenantContext
   ) {
+    // The firm excusing its own lateness: it must be the firm, and the claim
+    // one it can see. Until 24 Sep 2026 neither was checked — any tenant could
+    // extend any claim's deadline by id.
+    assertMayAuthorAdjusterWork(tenantContext, 'Recording an exceptional circumstance');
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     const clock = await this.sla.recordExceptionalCircumstance(claimId, dto.stage, {
       ground: dto.ground,
       reason: dto.reason,

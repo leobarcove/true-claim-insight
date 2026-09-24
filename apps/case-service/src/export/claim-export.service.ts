@@ -11,6 +11,7 @@ import {
   type BundleSection,
   type ClaimFileBundle,
 } from './claim-bundle';
+import { TenantService } from '../tenant/tenant.service';
 
 /**
  * Assembles the complete file for one claim (FSA s.143 / s.146).
@@ -36,7 +37,8 @@ export class ClaimExportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly tenants: TenantService
   ) {}
 
   async exportClaimFile(claimId: string, tenantContext: TenantContext): Promise<ClaimFileBundle> {
@@ -47,6 +49,10 @@ export class ClaimExportService {
 
   /** Assemble without recording — the caller decides which export act to audit. */
   async assembleBundle(claimId: string, tenantContext: TenantContext): Promise<ClaimFileBundle> {
+    // The bundle carries the decrypted NRIC. Only a tenant that can see the
+    // claim may produce it — until September 2026 any compliance officer with
+    // a claim id could export any firm's file.
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
       omit: { nricEncrypted: false },

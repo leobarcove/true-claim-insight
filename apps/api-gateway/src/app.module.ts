@@ -5,6 +5,8 @@ import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
 import { UsersModule } from './users/users.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './config/prisma.module';
@@ -108,6 +110,17 @@ import configuration from './config/configuration';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Authentication, then authorisation — both global and in this order, so
+    // no controller can forget either. The roles guard denies any route that
+    // declares no access rule (see auth/decorators/access.decorator.ts).
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     // Global response transformation
     {

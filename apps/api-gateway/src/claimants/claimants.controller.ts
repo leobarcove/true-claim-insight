@@ -13,6 +13,7 @@ import { PrismaService } from '../config/prisma.service';
 import { ClaimantsService } from './claimants.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/g, '0') || '';
 
@@ -28,6 +29,7 @@ export class ClaimantsController {
   ) {}
 
   @Post('verify-nric')
+  @Public()
   // Deliberately unauthenticated: the claimant proves identity here as part of
   // the magic-link video join, before any login exists. Hardened against use
   // as an NRIC/phone confirmation oracle: strict per-route throttle and

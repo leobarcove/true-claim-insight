@@ -26,8 +26,8 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResolveIntakeClaimantDto } from './dto/resolve-intake-claimant.dto';
 import { ResolveChannelClaimantDto } from './dto/resolve-channel-claimant.dto';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
+import { Authenticated, InternalRoute } from './decorators/access.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 
 @ApiTags('auth')
@@ -107,7 +107,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Logout and invalidate tokens' })
@@ -131,7 +131,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @Authenticated()
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
@@ -155,7 +155,7 @@ export class AuthController {
   }
 
   @Post('switch-tenant')
-  @UseGuards(JwtAuthGuard)
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Switch to a different tenant context' })
@@ -177,7 +177,7 @@ export class AuthController {
   }
 
   @Post('change-password')
-  @UseGuards(JwtAuthGuard)
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Change user password' })
@@ -189,7 +189,7 @@ export class AuthController {
   }
 
   @Delete('account')
-  @UseGuards(JwtAuthGuard)
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Delete current user account' })
@@ -222,7 +222,7 @@ export class AuthController {
    * case-service → claimant ownership exception.
    */
   @Post('channel/resolve-claimant')
-  @Public()
+  @InternalRoute()
   @UseGuards(InternalAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resolve a claimant from a platform-verified phone (internal)' })
@@ -248,7 +248,7 @@ export class AuthController {
    * record can later claim about how the contact was obtained.
    */
   @Post('intake/resolve-claimant')
-  @Public()
+  @InternalRoute()
   @UseGuards(InternalAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resolve a claimant from unverified intake details (internal)' })
@@ -279,7 +279,7 @@ export class AuthController {
    * conversation, which is rate limited at the edge.
    */
   @Post('channel/send-code')
-  @Public()
+  @InternalRoute()
   @UseGuards(InternalAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a verification code for a channel binding (internal)' })
@@ -302,7 +302,7 @@ export class AuthController {
    * translate back into speech.
    */
   @Post('channel/verify-code')
-  @Public()
+  @InternalRoute()
   @UseGuards(InternalAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify a channel binding code (internal)' })

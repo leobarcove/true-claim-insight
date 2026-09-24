@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { TenantScope } from '../common/decorators/tenant.decorator';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 /**
  * TenantService provides utilities for multi-tenant data access.
@@ -87,8 +88,15 @@ export class TenantService {
         };
       }
 
-      // Strict Tenant Isolation: Only show records where tenantId matches
-      const tenantConditions = [{ tenantId: tenantContext.tenantId }];
+      // Strict Tenant Isolation: a tenant sees the claims it owns. An insurer
+      // also sees the claims it appointed a firm to handle — the customer is
+      // the insurer's, and it may read the adjuster's file (FSA Sch 11 item
+      // 17); what it may not do is write the adjuster's work, which is
+      // enforced where that work is written, not here.
+      const tenantConditions: Record<string, string>[] = [{ tenantId: tenantContext.tenantId }];
+      if (tenantContext.tenantType === 'INSURER') {
+        tenantConditions.push({ insurerTenantId: tenantContext.tenantId });
+      }
 
       if (existingWhere.OR) {
         const { OR: existingOR, ...rest } = existingWhere;
@@ -144,54 +152,9 @@ export class TenantService {
    * Validate claim access based on adjuster's tenant or insurer tenant
    */
   async validateClaimAccess(claimId: string, tenantContext: TenantContext): Promise<void> {
-    if (tenantContext.scope === TenantScope.NONE || this.canAccessCrossTenant(tenantContext)) {
-      return;
-    }
-
-    const claim = await this.prisma.claim.findUnique({
-      where: { id: claimId },
-      include: {
-        adjuster: { select: { tenantId: true } },
-      },
-    });
-
-    if (!claim) {
-      throw new NotFoundException(`Claim with ID ${claimId} not found`);
-    }
-
-    // Claimant isolation check
-    if (tenantContext.userRole === 'CLAIMANT') {
-      if (claim.claimantId !== tenantContext.userId) {
-        this.logger.warn(
-          `Claim access violation: Claimant ${tenantContext.userId} attempted to access claim ${claimId} belonging to another claimant`
-        );
-        throw new NotFoundException(`Claim with ID ${claimId} not found`); // Obfuscate existence
-      }
-      return;
-    }
-
-    const hasAccess =
-      claim.adjuster?.tenantId === tenantContext.tenantId ||
-      claim.insurerTenantId === tenantContext.tenantId ||
-      (claim as any).tenantId === tenantContext.tenantId;
-
-    if (!hasAccess) {
-      // Logged as the violation it is, answered as absence.
-      //
-      // A 403 tells the asker the claim exists — which is a disclosure, and
-      // the one an enumerating attacker wants: walk ids, keep the 403s, and
-      // you have a map of another firm's book without reading a single claim.
-      // Case reads have always answered 404 here (`assertAccess`, "cross-tenant
-      // reads must look like a 404"), and claims disagreed with them until an
-      // audit on 18 Aug 2026 put the two side by side. Unified on the safer
-      // of the two, deliberately: a claimant reaching for another's claim
-      // already got this answer, and staff of another tenant now get the same.
-      this.logger.warn(
-        `Claim access violation: User ${tenantContext.userId} (tenant: ${tenantContext.tenantId}) ` +
-          `attempted to access claim ${claimId}`
-      );
-      throw new NotFoundException(`Claim with ID ${claimId} not found`);
-    }
+    // The rule itself lives in one function so services that hold only a
+    // Prisma client apply exactly the same one (common/access/claim-access.ts).
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
   }
 
   /**
@@ -200,6 +163,26 @@ export class TenantService {
    */
   private canAccessCrossTenant(tenantContext: TenantContext): boolean {
     return tenantContext.allowCrossTenant && ['SUPER_ADMIN'].includes(tenantContext.userRole);
+  }
+
+  /** Tenant types never change after creation, so they are cached for the process. */
+  private readonly tenantTypes = new Map<string, string>();
+
+  /**
+   * The type of a tenant (ADJUSTING_FIRM | INSURER), or null when it does not
+   * exist. Read on every tenant-scoped request, hence the cache.
+   */
+  async getTenantType(tenantId: string | null | undefined): Promise<string | null> {
+    if (!tenantId) return null;
+    const cached = this.tenantTypes.get(tenantId);
+    if (cached) return cached;
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { type: true },
+    });
+    if (!tenant) return null;
+    this.tenantTypes.set(tenantId, tenant.type);
+    return tenant.type;
   }
 
   /**
@@ -261,7 +244,7 @@ export class TenantService {
       if (redacted.claimant.nric && !isHighPrivilege) {
         redacted.claimant.nric = maskNric(redacted.claimant.nric);
       }
-      if (role === 'CLAIMANT' || role === 'SUPPORT_DESK') {
+      if (['CLAIMANT', 'SUPPORT_DESK', 'SHARIAH_REVIEWER'].includes(role)) {
         delete redacted.claimant.dateOfBirth;
       }
     }
@@ -275,10 +258,12 @@ export class TenantService {
       delete redacted.trinityChecks;
     }
 
-    // 2b. Behavioural/fraud analysis never reaches claimants or support desk.
-    // FSA Sch 7 (misleading/deceptive conduct) and basic fairness: deception
-    // scores and fraud signals are internal work product, not consumer output.
-    if (['SUPPORT_DESK', 'CLAIMANT'].includes(role)) {
+    // 2b. Behavioural/fraud analysis never reaches claimants, support desk or
+    // a Shariah reviewer. FSA Sch 7 (misleading/deceptive conduct) and basic
+    // fairness: deception scores and fraud signals are internal work product,
+    // not consumer output — and outside a Shariah review's need-to-know
+    // (MCIPD 10.25; ROLE_PROFILES in @tci/shared-types).
+    if (['SUPPORT_DESK', 'CLAIMANT', 'SHARIAH_REVIEWER'].includes(role)) {
       delete redacted.deceptionData;
       delete redacted.riskAssessments;
       delete redacted.fraudSignals;

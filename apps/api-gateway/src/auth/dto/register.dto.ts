@@ -1,25 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsString,
-  MinLength,
-  MaxLength,
-  IsOptional,
-  IsEnum,
-  Matches,
-} from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsOptional, Matches } from 'class-validator';
 
-export enum UserRole {
-  ADJUSTER = 'ADJUSTER',
-  FIRM_ADMIN = 'FIRM_ADMIN',
-  CLAIMANT = 'CLAIMANT',
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  SIU_INVESTIGATOR = 'SIU_INVESTIGATOR',
-  COMPLIANCE_OFFICER = 'COMPLIANCE_OFFICER',
-  SUPPORT_DESK = 'SUPPORT_DESK',
-  SHARIAH_REVIEWER = 'SHARIAH_REVIEWER',
-}
-
+/**
+ * Self-registration. Deliberately carries no role and no tenant: a person
+ * registers, an organisation grants access. See AuthService.register.
+ */
 export class RegisterDto {
   @ApiProperty({
     example: 'ahmad@adjustingfirm.com',
@@ -59,14 +44,6 @@ export class RegisterDto {
   })
   phoneNumber!: string;
 
-  @ApiProperty({
-    enum: UserRole,
-    example: UserRole.ADJUSTER,
-    description: 'User role',
-  })
-  @IsEnum(UserRole)
-  role!: UserRole;
-
   @ApiPropertyOptional({
     example: 'LA-2025-001234',
     description: 'License number (required for adjusters)',
@@ -74,12 +51,4 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   licenseNumber?: string;
-
-  @ApiPropertyOptional({
-    example: 'tenant-uuid-here',
-    description: 'Tenant ID (adjusting firm or insurer)',
-  })
-  @IsOptional()
-  @IsString()
-  tenantId?: string;
 }

@@ -3,31 +3,52 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AssignmentStatus } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { AssignmentsService, type ReceiveAssignmentInput } from './assignments.service';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
 
 @ApiTags('assignments')
 @Controller({ path: 'assignments', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class AssignmentsController {
   constructor(private readonly service: AssignmentsService) {}
 
   @Get()
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Appointments for this organisation' })
   findAll(@Tenant() tenantContext: TenantContext, @Query('status') status?: AssignmentStatus) {
     return this.service.findAll(tenantContext, status);
   }
 
   @Get('outstanding')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Appointments awaiting acknowledgement (CSP: 1 working day)' })
   outstanding(@Tenant() tenantContext: TenantContext) {
     return this.service.outstanding(tenantContext);
   }
 
   @Get(':id')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'One appointment' })
   findOne(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
     return this.service.findOne(id, tenantContext);
@@ -37,6 +58,8 @@ export class AssignmentsController {
   @ApiOperation({ summary: 'Log an insurer appointment; starts the acknowledgement clock' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.SUPPORT_DESK)
   receive(@Body() body: ReceiveAssignmentInput, @Tenant() tenantContext: TenantContext) {
+    // The caller's tenant becomes the handling firm, so it must be one.
+    assertMayAuthorAdjusterWork(tenantContext, 'Recording an appointment');
     return this.service.receive(body, tenantContext.tenantId);
   }
 

@@ -18,6 +18,8 @@ import {
   resolveAssessmentMode,
   type ModeDecision,
 } from './assessment-mode';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 /** Signals at or above this severity block the fast track. */
 const BLOCKING_SEVERITIES: SignalSeverity[] = ['MEDIUM', 'HIGH', 'CRITICAL'];
@@ -40,6 +42,7 @@ export class AssessmentService {
    * not fill the history with identical rows.
    */
   async decide(claimId: string, tenantContext: TenantContext): Promise<ModeDecision> {
+    assertMayAuthorAdjusterWork(tenantContext, 'Deciding the assessment mode');
     const claim = await this.loadClaim(claimId, tenantContext);
 
     const tenant = await this.prisma.tenant.findUnique({
@@ -80,6 +83,7 @@ export class AssessmentService {
     trigger: EscalationTrigger,
     tenantContext: TenantContext
   ): Promise<ModeDecision & { changed: boolean }> {
+    assertMayAuthorAdjusterWork(tenantContext, 'Escalating the assessment mode');
     const claim = await this.loadClaim(claimId, tenantContext);
     const current = claim.assessmentMode ?? AssessmentMode.VIDEO;
 
@@ -238,11 +242,8 @@ export class AssessmentService {
       },
     });
 
-    // Absence and refusal are answered identically — see the quantum service.
     if (!claim) throw new NotFoundException('Claim not found');
-    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new NotFoundException('Claim not found');
-    }
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
     return claim;
   }
 }

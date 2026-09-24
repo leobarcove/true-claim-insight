@@ -6,10 +6,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
 import { passThroughDownstreamError } from '../common/proxy-error';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Edge proxy for the claimant's own conversation in the PWA.
@@ -26,7 +26,8 @@ import { passThroughDownstreamError } from '../common/proxy-error';
  */
 @ApiTags('Claimant conversation')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('conversation')
 export class ClaimantConversationProxyController {
   private readonly caseServiceUrl: string;

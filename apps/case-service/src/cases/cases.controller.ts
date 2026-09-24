@@ -20,7 +20,6 @@ import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto, LinkPolicyDto, ReviewCaseDto } from './dto/review-case.dto';
 import { RecordExpertOutcomeDto, ReferToExpertDto } from './dto/expert-outcome.dto';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -35,7 +34,7 @@ const INTAKE_ROLES = [UserRole.CLAIMANT, ...STAFF_ROLES] as const;
 @ApiTags('cases')
 @ApiBearerAuth()
 @Controller({ path: 'cases', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class CasesController {
   constructor(private readonly service: CasesService) {}

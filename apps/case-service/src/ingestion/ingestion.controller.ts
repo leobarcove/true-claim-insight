@@ -4,8 +4,7 @@ import { InboundMessageStatus } from '@prisma/client';
 
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { IngestionReviewService } from './ingestion-review.service';
 
@@ -19,7 +18,7 @@ import { IngestionReviewService } from './ingestion-review.service';
  */
 @ApiTags('ingestion')
 @Controller({ path: 'ingestion', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class IngestionController {
   constructor(private readonly service: IngestionReviewService) {}

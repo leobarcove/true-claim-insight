@@ -783,3 +783,23 @@ export type {
   OverlayProblem,
   StepOverride,
 } from './flow-resolver';
+
+// Access policy — which roles may exist in which kind of tenant, who may author
+// the adjuster's work, and the MCIPD 10.25 role profiles. Same explicit
+// re-export rule as above.
+export {
+  CLAIMANT_ROLE,
+  holdsAdjusterDuties,
+  isRoleAllowedInTenant,
+  isSelfAction,
+  mayAuthorAdjusterWork,
+  PLATFORM_ROLE,
+  ROLE_PROFILES,
+  TENANT_ROLES,
+} from './access-policy';
+export type {
+  CustomerInformationAccess,
+  RoleName,
+  RoleProfile,
+  TenantTypeName,
+} from './access-policy';

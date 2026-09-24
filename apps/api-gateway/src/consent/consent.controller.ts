@@ -5,10 +5,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
 import { passThroughDownstreamError } from '../common/proxy-error';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Edge proxy for consent, so the claimant app can show the approved notice and
@@ -19,7 +19,8 @@ import { passThroughDownstreamError } from '../common/proxy-error';
  */
 @ApiTags('Consent')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('consent')
 export class ConsentProxyController {
   private readonly caseServiceUrl: string;

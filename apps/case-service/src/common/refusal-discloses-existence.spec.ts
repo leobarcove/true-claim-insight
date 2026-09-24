@@ -41,6 +41,26 @@ const SERVICES = ['case-service', 'video-service', 'risk-engine', 'api-gateway']
 const GUARD_PATHS = /guards[/\\]|-webhook\.guard\.ts$/;
 
 const DECLARED: Record<string, { count: number; reason: string }> = {
+  'apps/api-gateway/src/users/users.service.ts': {
+    count: 3,
+    reason:
+      'Membership grants (TENANT_ROLES). Two refuse on the role alone before any lookup; the ' +
+      "third reads the tenant only after confirming it is the caller's own organisation (or " +
+      'the caller is the platform operator, who sees every tenant), so it discloses nothing',
+  },
+  'apps/case-service/src/common/access/access-rules.ts': {
+    count: 3,
+    reason:
+      'Tenant-type and separation-of-duties rules. The first two read no id and are called ' +
+      'before any lookup; the third runs only after the record was confirmed visible to the ' +
+      'caller, so what is refused is the act, not knowledge of the record',
+  },
+  'apps/case-service/src/consent/consent.controller.ts': {
+    count: 1,
+    reason:
+      "Consent wording is approved by the operating adjusting firm — a rule about the caller's " +
+      'tenant type, decided before the notice is looked up',
+  },
   'apps/api-gateway/src/conversations/public-conversation.controller.ts': {
     count: 1,
     reason: 'No conversation session on the request at all — nothing has been named yet',

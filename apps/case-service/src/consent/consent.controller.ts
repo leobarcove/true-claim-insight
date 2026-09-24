@@ -16,6 +16,10 @@ import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { ConsentService } from './consent.service';
+import { InternalRoute } from '../common/decorators/access.decorator';
+import { InternalKeyGuard } from '../common/guards/internal-key.guard';
+import { holdsAdjusterDuties } from '@tci/shared-types';
+import { ForbiddenException } from '@nestjs/common';
 
 /**
  * Claimants act on their own record only (enforced per-route below); staff see
@@ -32,7 +36,7 @@ const CONSENT_ROLES = [
 
 @ApiTags('consent')
 @Controller({ path: 'consent', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ConsentController {
   constructor(private readonly service: ConsentService) {}
@@ -46,6 +50,10 @@ export class ConsentController {
    * whether processing may proceed, nothing about the consent record itself.
    */
   @Get('check')
+  // A service asking on behalf of no person: the internal key is the whole of
+  // its authority, so it declares that rather than borrowing a role.
+  @InternalRoute()
+  @UseGuards(InternalKeyGuard)
   @ApiOperation({ summary: 'Internal: is there a live consent for this claimant and purpose?' })
   @TenantIsolation(TenantScope.NONE)
   async check(
@@ -56,6 +64,7 @@ export class ConsentController {
   }
 
   @Get('notice')
+  @Roles(...CONSENT_ROLES)
   @ApiOperation({ summary: 'Current approved notice for a purpose and locale' })
   notice(@Query('purpose') purpose: ConsentPurpose, @Query('locale') locale = 'en') {
     return this.service.currentNotice(purpose, locale);
@@ -77,14 +86,21 @@ export class ConsentController {
     @Param('version') version: string,
     @Tenant() tenantContext: TenantContext
   ) {
+    // The notice is the data controller's wording — the operating firm's, not
+    // a panel insurer's, whose compliance officer holds the same role name.
+    if (!holdsAdjusterDuties(tenantContext.tenantType)) {
+      throw new ForbiddenException(
+        'Consent wording is approved by the operating adjusting firm, not by an insurer.'
+      );
+    }
     return this.service.approveNotice(purpose, Number(version), tenantContext.userId);
   }
 
   /**
    * A claimant may only ever act on their own record.
    *
-   * These routes carried no `@Roles`, and RolesGuard treats missing metadata as
-   * allow-all — which was harmless while nothing outside the firm could reach
+   * These routes once carried no `@Roles`, and RolesGuard then treated missing
+   * metadata as allow-all (it denies by default since September 2026) — which was harmless while nothing outside the firm could reach
    * them, and became a hole the moment the claimant app needed to grant its own
    * consent. Without this check a claimant could grant, read or withdraw
    * consent for any other claimant by changing the id in the URL.

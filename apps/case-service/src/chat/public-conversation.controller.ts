@@ -22,6 +22,7 @@ import {
 } from './claimant-conversation.service';
 import { ClaimantTurnDto } from './dto/claimant-turn.dto';
 import { TelegramAdapter } from './telegram/telegram.adapter';
+import { InternalRoute } from '../common/decorators/access.decorator';
 
 /**
  * The intake conversation for someone who has not logged in.
@@ -51,6 +52,7 @@ import { TelegramAdapter } from './telegram/telegram.adapter';
 @ApiExcludeController()
 @Controller({ path: 'public/conversation', version: '1' })
 @UseGuards(InternalKeyGuard)
+@InternalRoute()
 export class PublicConversationController {
   constructor(
     private readonly service: ClaimantConversationService,

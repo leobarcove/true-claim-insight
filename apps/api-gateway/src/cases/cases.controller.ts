@@ -22,16 +22,20 @@ import { catchError, map } from 'rxjs/operators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { ClaimantsService } from '../claimants/claimants.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Proxy for the travel intake Case + Policy endpoints on case-service.
  *
- * NOTE: guards MUST be mounted here explicitly — gateway controllers are
- * public by default (JwtAuthGuard is per-controller in this codebase).
+ * Authentication and the roles guard are global; case-service authorises
+ * each route (and denies by default), so this proxy declares
+ * `@DelegatedAuthorisation`.
  */
 @ApiTags('Cases')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('cases')
 export class CasesController {
   private caseServiceUrl: string;
@@ -66,6 +70,10 @@ export class CasesController {
   }
 
   @Post()
+  // Declared here as well as in case-service because this route finds or
+  // creates a claimant *before* forwarding — a side effect the downstream
+  // refusal would come too late to prevent.
+  @Roles('CLAIMANT', 'ADJUSTER', 'FIRM_ADMIN')
   @ApiOperation({ summary: 'Create a travel intake case' })
   async create(@Body() body: any, @Req() req: any) {
     // Staff capture: resolve the claimant by phone/NRIC before proxying, the
@@ -326,7 +334,8 @@ export class CasesController {
 
 @ApiTags('Policies')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('policies')
 export class PoliciesController {
   private caseServiceUrl: string;

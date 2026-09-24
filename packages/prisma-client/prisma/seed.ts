@@ -314,12 +314,28 @@ async function main() {
     '+60100000002',
     adjusterTenant.id
   );
-  const adjusterUserAllianz = await upsertUser(
-    'adjuster@pacific.com',
-    'Ahmad Adjuster',
-    UserRole.ADJUSTER,
-    '+60100000002',
-    insurerTenant.id
+  // The adjuster once also held an ADJUSTER membership inside Allianz so the
+  // demo claim (then owned by the insurer) was visible. That is precisely the
+  // arrangement the PD's independence rule forbids — an adjusting employee
+  // working inside the client — and TENANT_ROLES now refuses it. The claim
+  // below belongs to Pacific instead; remove any membership an older seed left.
+  await prisma.userTenant.deleteMany({
+    where: { userId: adjusterUser.id, tenantId: insurerTenant.id },
+  });
+  await prisma.user.update({
+    where: { id: adjusterUser.id },
+    data: { currentTenantId: adjusterTenant.id },
+  });
+
+  // Firm-side compliance: the adjusting firm's own officer, who runs the PD 10,
+  // 11.2(d) and 13 registers. compliance@allianz.com is the insurer's, and
+  // cannot see them.
+  await upsertUser(
+    'compliance@pacific.com',
+    'Farah Compliance',
+    UserRole.COMPLIANCE_OFFICER,
+    '+60100000008',
+    adjusterTenant.id
   );
 
   const firmAdminAllianz = await upsertUser(
@@ -391,8 +407,11 @@ async function main() {
   // 5. Create Sample Claim
   await prisma.claim.upsert({
     where: { claimNumber: 'CLM-2025-000001' },
+    // Handled by Pacific, appointed by Allianz: the firm owns its working file
+    // and the insurer reads it through insurerTenantId.
     update: {
-      tenantId: insurerTenant.id,
+      tenantId: adjusterTenant.id,
+      insurerTenantId: insurerTenant.id,
       userId: firmAdmin.id,
     } as any,
     create: {
@@ -400,7 +419,7 @@ async function main() {
       claimantId: claimant.id,
       adjusterId: adjusterProfile.id,
       insurerTenantId: insurerTenant.id,
-      tenantId: insurerTenant.id,
+      tenantId: adjusterTenant.id,
       userId: firmAdmin.id,
       policyNumber: 'POL-667788',
       claimType: ClaimType.OWN_DAMAGE,

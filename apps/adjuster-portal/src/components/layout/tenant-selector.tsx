@@ -34,7 +34,7 @@ export function TenantSelector({
   const setOpen = setControlledOpen !== undefined ? setControlledOpen : setInternalOpen;
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const { data: tenantsData } = useTenants({ limit: 10 });
+  const { data: tenantsData } = useTenants({ limit: 10 }, { enabled: isSuperAdmin });
   const allTenants = tenantsData?.tenants || [];
 
   // For SUPER_ADMIN, create temporary UserTenant objects for each tenant to reuse the switcher logic

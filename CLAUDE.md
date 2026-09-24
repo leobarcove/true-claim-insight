@@ -242,12 +242,38 @@ async findOne(id: string, tenantContext?: TenantContext) {
 }
 ```
 
+### Roles and access (September 2026)
+
+- **A role belongs to a membership, not a person.** The gateway resolves it from
+  `UserTenant` for the active tenant and forwards it as `X-User-Role`;
+  `users.role` only says whether someone is `SUPER_ADMIN`. Self-registration
+  creates a person with no access.
+- **`TENANT_ROLES`** (`packages/shared-types/src/access-policy.ts`) fixes which
+  roles may exist in an `ADJUSTING_FIRM` and which in an `INSURER` — no
+  `ADJUSTER` inside an insurer. Enforced at the gateway, in case-service's
+  `TenantGuard` and at every grant.
+- **Deny by default.** Auth and roles guards are global in both the gateway and
+  case-service; a route with no `@Roles` / `@Public` / `@InternalRoute` /
+  `@Authenticated` / `@DelegatedAuthorisation` is refused, and
+  `access-rule-coverage.spec.ts` fails the build on one. Never mount
+  `JwtAuthGuard`, `InternalAuthGuard` or `RolesGuard` on a controller.
+- **Rules `@Roles` cannot express** live in
+  `apps/case-service/src/common/access/access-rules.ts`: an insurer never writes
+  the adjuster's work (`assertMayAuthorAdjusterWork`), the PD 10/11/13 registers
+  are the firm's (`assertAdjusterDuties`), and nobody acts on themselves
+  (`assertNotSelf`). A new write path for adjuster findings must call the first.
+- **Reaching a claim is one rule:** `assertClaimAccess`
+  (`common/access/claim-access.ts`) — owner, assigned adjuster's firm, appointing
+  insurer, claimant for their own. Never compare `claim.tenantId` by hand;
+  `claim-access-coverage.spec.ts` fails on a method that takes a `claimId`
+  without reaching it.
+
 ### Key Rules
 
 - **Never** access data without tenant context in protected routes
 - **Always** validate resource ownership before returning data
 - Adjusters can only see claims assigned to their organisation
-- Cross-tenant access is blocked with `ForbiddenException`
+- Cross-tenant access answers as absence (`NotFoundException`, 404), never `ForbiddenException` — a 403 would confirm the record exists (`refusal-discloses-existence.spec.ts`)
 
 ## Documentation References
 
@@ -384,10 +410,11 @@ All seeded users share the same password: `DemoPass123!`
 | ADJUSTER            | adjuster@pacific.com     | Pacific (adjusting firm)  |
 | FIRM_ADMIN          | admin@allianz.com        | Allianz (insurer)         |
 | SIU_INVESTIGATOR    | siu@allianz.com          | Allianz                   |
+| COMPLIANCE_OFFICER  | compliance@pacific.com   | Pacific (adjusting firm)  |
 | COMPLIANCE_OFFICER  | compliance@allianz.com   | Allianz                   |
 | SUPPORT_DESK        | support@allianz.com      | Allianz                   |
 | SHARIAH_REVIEWER    | shariah@allianz.com      | Allianz                   |
 
 Use `adjuster@pacific.com` to log in to the adjuster-portal (http://localhost:4300).
 
-**Source of truth:** `packages/prisma-client/prisma/seed.ts`. To register additional users, use `POST /api/v1/auth/register` or Swagger docs at http://localhost:3300/docs.
+**Source of truth:** `packages/prisma-client/prisma/seed.ts`. `POST /api/v1/auth/register` creates an account with **no access**; access is a membership granted by a firm admin (`POST /api/v1/users` with `role`, own organisation only) or the operator (`POST /api/v1/user-tenants`). Swagger: http://localhost:3300/docs.

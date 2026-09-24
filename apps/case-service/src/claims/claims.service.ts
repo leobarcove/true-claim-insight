@@ -28,6 +28,15 @@ import { ConsentService } from '../consent/consent.service';
 import { isLicensedMode } from '../tenant/tenant-settings';
 import { NotificationsService } from '../notifications/notifications.service';
 import { render } from '../notifications/templates';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
+import { assertClaimAccess } from '../common/access/claim-access';
+
+/** Claim fields that record the adjuster's findings rather than the notified facts. */
+const ADJUSTER_ASSESSMENT_FIELDS = [
+  'estimatedLossAmount',
+  'estimatedRepairCost',
+  'sstAmount',
+] as const;
 
 /**
  * Statuses a claim may not reach on an unverified claimant.
@@ -537,6 +546,15 @@ export class ClaimsService {
    * Update a claim with tenant validation
    */
   async update(id: string, updateClaimDto: UpdateClaimDto, tenantContext?: TenantContext) {
+    // The loss figures are the adjuster's findings. The insurer may correct the
+    // claim facts it notified; it may not set the quantum (PD 1.1, 12.1(c)).
+    const assessmentFields = ADJUSTER_ASSESSMENT_FIELDS.filter(
+      field => updateClaimDto[field] !== undefined
+    );
+    if (assessmentFields.length && tenantContext) {
+      assertMayAuthorAdjusterWork(tenantContext, `Setting ${assessmentFields.join(', ')}`);
+    }
+
     const existingClaim = await this.findOne(id, tenantContext);
 
     // Unredacted pre-image, captured BEFORE the write so the audit trail records
@@ -947,10 +965,8 @@ export class ClaimsService {
       },
     });
     if (!claim) throw new NotFoundException('Claim not found');
-    // Absence and refusal answered identically — see the quantum service.
-    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new NotFoundException('Claim not found');
-    }
+    await assertClaimAccess(this.prisma, id, tenantContext);
+    assertMayAuthorAdjusterWork(tenantContext, 'Booking the appointment');
 
     if (Number.isNaN(when.getTime())) {
       throw new BadRequestException('An appointment needs a valid date and time.');
@@ -1022,10 +1038,8 @@ export class ClaimsService {
       select: { id: true, claimNumber: true, tenantId: true, assessmentMode: true },
     });
     if (!claim) throw new NotFoundException('Claim not found');
-    // Absence and refusal answered identically — see the quantum service.
-    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new NotFoundException('Claim not found');
-    }
+    await assertClaimAccess(this.prisma, id, tenantContext);
+    assertMayAuthorAdjusterWork(tenantContext, 'Recording site-visit findings');
     if (claim.assessmentMode !== 'SITE_VISIT') {
       throw new BadRequestException(
         'Findings can only be recorded on a claim in site-visit mode.'

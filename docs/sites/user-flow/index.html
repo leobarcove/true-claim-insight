@@ -1287,51 +1287,74 @@ video → site → expert`"]
       <section id="s11">
         <div class="head"><span class="num">11</span><h3>Who may do what</h3></div>
         <p class="lede">
-          Roles are tenant-scoped. Adjusting firms and insurers are separate tenants, and a
-          record belonging to another tenant is indistinguishable from one that does not exist.
+          A role belongs to a membership in a tenant, not to the person. Adjusting firms and
+          insurers are separate tenants with different roles, every route states who may call it,
+          and a record belonging to another tenant is indistinguishable from one that does not exist.
         </p>
         <div class="plate"><pre class="mermaid">
 flowchart LR
-    subgraph EXT["Outside the firm"]
+    subgraph EXT["Outside every tenant"]
         CLM["`CLAIMANT
 own case only`"]
+        SA["`SUPER_ADMIN
+tenants · memberships`"]
     end
 
-    subgraph FIRM["Adjusting firm"]
+    subgraph FIRM["Adjusting firm — writes the adjuster's work"]
         SUP["`SUPPORT_DESK
 answer conversations · FNOL triage
 never vets a case · no fraud data`"]
         ADJ["`ADJUSTER
 assess · author reports`"]
         FA["`FIRM_ADMIN
-config · audited reveals
+config · grants access
 cannot sign reports`"]
+        FCO["`COMPLIANCE_OFFICER
+fit and proper · Board · BNM`"]
     end
 
-    subgraph INS["Insurer tenant"]
-        SIU["SIU_INVESTIGATOR"]
-        CO["`COMPLIANCE_OFFICER
-legal holds`"]
-        SR["SHARIAH_REVIEWER"]
+    subgraph INS["Insurer tenant — reads the adjuster's work, never writes it"]
+        IFA["`FIRM_ADMIN
+decides settlement`"]
+        SIU["`SIU_INVESTIGATOR
+fraud review`"]
+        ICO["`COMPLIANCE_OFFICER
+legal holds · s.143 export`"]
+        SR["`SHARIAH_REVIEWER
+read-only`"]
     end
-
-    SA["SUPER_ADMIN"]
 
     CLM -->|"submit · amend · upload"| CASE["Case"]
     SUP -->|"answer · triage intake"| CONV["Conversation"]
     FA -->|"link policy · reveal payout"| CASE
-    ADJ -->|"assess"| CLAIM["Claim"]
-    SIU -->|"escalated only"| CLAIM
-    CO -->|"hold · compliance events"| CLAIM
-    SA -->|"cross-tenant"| CLAIM
+    ADJ -->|"assess · quantum · report"| CLAIM["Claim"]
+    FCO -->|"the firm's own"| REG["PD 10 · 11.2(d) · 13 registers"]
+    IFA -->|"read · approve / reject"| CLAIM
+    SIU -->|"read · fraud signals"| CLAIM
+    ICO -->|"hold · export"| CLAIM
+    SR -->|"read"| CLAIM
+    SA -->|"cross-tenant, audited"| CLAIM
 
     style CLM stroke:#5C7FCB,stroke-width:2.5px
+    style IFA stroke:#5C7FCB,stroke-width:2.5px
     style SIU stroke:#5C7FCB,stroke-width:2.5px
-    style CO stroke:#5C7FCB,stroke-width:2.5px
+    style ICO stroke:#5C7FCB,stroke-width:2.5px
     style SR stroke:#5C7FCB,stroke-width:2.5px
     style CASE stroke:#17966A,stroke-width:2.5px
     style CLAIM stroke:#17966A,stroke-width:2.5px
         </pre></div>
+        <p class="note">
+          <strong>The insurer reads; the firm writes.</strong> Which roles may exist where is
+          fixed (<code>TENANT_ROLES</code>): no adjuster inside an insurer, SIU and Shariah review
+          on the insurer side only. The same role name on the two sides is two different jobs — the
+          firm's compliance officer runs the registers the Adjuster PD makes the firm's own, and
+          the insurer's cannot see them. The insurer reads the file it appointed out — the claim,
+          documents, reports, quantum, assessment mode, SLA history and the fee note addressed to
+          it — and decides settlement. It never writes the adjuster's findings, quantum, report or
+          site-visit record, and never records the firm's time, fees or deadline extensions
+          (PD 1.1, 12.1(c)). Who may reach a claim at all is one rule in one place
+          (<code>assertClaimAccess</code>). Redrawn 24 Sep 2026.
+        </p>
         <p class="note">
           <strong>The support desk answers; it does not vet.</strong> This diagram read
           <em>"vet · request info"</em> against <code>SUPPORT_DESK</code> until 18 Aug 2026,

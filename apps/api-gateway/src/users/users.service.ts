@@ -1,7 +1,18 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  CLAIMANT_ROLE,
+  isRoleAllowedInTenant,
+  PLATFORM_ROLE,
+  TENANT_ROLES,
+} from '@tci/shared-types';
 
 import { PrismaService } from '../config/prisma.service';
-import { RegisterDto } from '../auth/dto/register.dto';
 import { UserRole } from '@prisma/client';
 
 @Injectable()
@@ -10,36 +21,58 @@ export class UsersService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: RegisterDto & { password: string }) {
+  /**
+   * Create a person, optionally with a membership.
+   *
+   * The membership carries the role. Without one — self-registration — the
+   * account is inert: it can sign in and read its own profile, and nothing
+   * else, until a firm administrator grants it a membership. The `role` column
+   * is kept in step with the first membership for older readers, but it grants
+   * nothing on its own; only `SUPER_ADMIN` is read from it, and that is never
+   * written here.
+   *
+   * Callers granting a membership must have checked it with
+   * `assertMembershipGrantable` first.
+   */
+  async create(data: {
+    email: string;
+    password: string;
+    fullName: string;
+    phoneNumber: string;
+    licenseNumber?: string;
+    isVerified?: boolean;
+    membership?: { tenantId: string; role: UserRole };
+  }) {
+    const membership = data.membership;
     const userData: any = {
       email: data.email,
       password: data.password,
       fullName: data.fullName,
       phoneNumber: data.phoneNumber,
-      role: data.role,
+      role: membership?.role ?? UserRole.ADJUSTER,
       licenseNumber: data.licenseNumber,
-      tenantId: data.tenantId,
-      currentTenantId: data.tenantId, // Set current tenant on registration
-      isVerified: (data as any).isVerified ?? false,
+      tenantId: membership?.tenantId,
+      currentTenantId: membership?.tenantId,
+      isVerified: data.isVerified ?? false,
     };
 
-    // If role is ADJUSTER, we need to create an Adjuster record too
-    if (data.role === 'ADJUSTER' && data.licenseNumber && data.tenantId) {
+    // An adjusting employee gets the professional profile the PD controls hang on.
+    if (membership?.role === UserRole.ADJUSTER && data.licenseNumber) {
       userData.adjuster = {
         create: {
           licenseNumber: data.licenseNumber,
-          tenantId: data.tenantId,
+          tenantId: membership.tenantId,
           status: 'ACTIVE',
         },
       };
     }
 
-    // Create UserTenant relationship if tenantId is provided
-    if (data.tenantId) {
+    if (membership) {
       userData.userTenants = {
         create: {
-          tenantId: data.tenantId,
-          role: data.role,
+          tenantId: membership.tenantId,
+          role: membership.role,
+          isDefault: true,
           status: 'ACTIVE',
         },
       };
@@ -83,9 +116,52 @@ export class UsersService {
         tenant: true,
         currentTenant: true,
         adjuster: true,
-        userTenants: true,
+        // The tenant type decides which roles a membership may carry.
+        userTenants: { include: { tenant: { select: { type: true } } } },
       },
     });
+  }
+
+  /**
+   * May `actor` grant `role` in `tenantId`?
+   *
+   * - The role must be able to exist in that kind of tenant (TENANT_ROLES).
+   *   An adjuster inside an insurer is refused — that is the independence
+   *   the PD requires, not a preference.
+   * - `SUPER_ADMIN` and `CLAIMANT` are never granted through the API: the
+   *   first is provisioned by the operator out of band, the second is a
+   *   separate identity with no membership at all.
+   * - A firm administrator grants only inside their own active tenant.
+   */
+  async assertMembershipGrantable(
+    grant: { tenantId: string | null | undefined; role: string | null | undefined },
+    actor: { role: string | null | undefined; activeTenantId: string | null | undefined }
+  ): Promise<{ tenantId: string; role: UserRole }> {
+    const { tenantId, role } = grant;
+    if (!tenantId || !role) {
+      throw new BadRequestException('A membership needs both a tenant and a role.');
+    }
+    if (role === PLATFORM_ROLE || role === CLAIMANT_ROLE) {
+      throw new ForbiddenException(`The ${role} role cannot be granted through a membership.`);
+    }
+    if (actor.role !== PLATFORM_ROLE && actor.activeTenantId !== tenantId) {
+      throw new ForbiddenException('You can only grant access within your own organisation.');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { type: true },
+    });
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+    if (!isRoleAllowedInTenant(role, tenant.type)) {
+      throw new ForbiddenException(
+        `A ${role} cannot exist in a ${tenant.type} organisation (roles allowed there: ${TENANT_ROLES[
+          tenant.type as keyof typeof TENANT_ROLES
+        ].join(', ')}).`
+      );
+    }
+    return { tenantId, role: role as UserRole };
   }
 
   async findAll(tenantId?: string) {
@@ -163,7 +239,10 @@ export class UsersService {
     });
   }
 
-  async update(id: string, data: Partial<RegisterDto>) {
+  async update(
+    id: string,
+    data: { fullName?: string; phoneNumber?: string; licenseNumber?: string }
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -375,6 +454,13 @@ export class UsersService {
     role: string;
     isDefault?: boolean;
   }) {
+    // The operator grants these, but the role must still be able to exist in
+    // that kind of tenant — the rule does not bend for the platform.
+    await this.assertMembershipGrantable(
+      { tenantId: data.tenantId, role: data.role },
+      { role: PLATFORM_ROLE, activeTenantId: null }
+    );
+
     // If setting as default, unset other defaults for this user
     if (data.isDefault) {
       await this.prisma.userTenant.updateMany({
@@ -417,6 +503,13 @@ export class UsersService {
   async updateUserTenant(id: string, data: { role?: string; isDefault?: boolean }) {
     const ut = await this.prisma.userTenant.findUnique({ where: { id } });
     if (!ut) throw new NotFoundException('Association not found');
+
+    if (data.role) {
+      await this.assertMembershipGrantable(
+        { tenantId: ut.tenantId, role: data.role },
+        { role: PLATFORM_ROLE, activeTenantId: null }
+      );
+    }
 
     if (data.isDefault) {
       // Unset other defaults for this user

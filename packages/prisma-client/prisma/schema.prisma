@@ -131,6 +131,9 @@ model Tenant {
   feeScales            FeeScale[]
   feeNotesAsInsurer    FeeNote[]             @relation("FeeNoteInsurer")
   flowDefinitions      FlowDefinition[]
+  complianceEvents     ComplianceEvent[]     @relation("ComplianceEventTenant")
+  keyPersons           KeyPerson[]           @relation("KeyPersonTenant")
+  bnmNotifications     BnmNotification[]     @relation("BnmNotificationTenant")
 
   @@map("tenants")
 }
@@ -361,7 +364,7 @@ model SiteVisit {
   tenantId String
 
   /// When the adjuster actually attended — not the appointment slot.
-  attendedAt DateTime
+  attendedAt       DateTime
   /// Who stood on the ground. Attendance is a claims-handling act and must
   /// be attributable to a person, not a firm.
   attendedByUserId String
@@ -1706,10 +1709,10 @@ model SlaClock {
   /// never automatic: a firm that excused itself silently would be marking
   /// its own homework, and the ground and reason are what an examiner asks
   /// for. Absent on almost every clock.
-  exceptionalGround   SlaExceptionalGround?
-  exceptionalReason   String?
-  exceptionalAt       DateTime?
-  exceptionalByUserId String?
+  exceptionalGround      SlaExceptionalGround?
+  exceptionalReason      String?
+  exceptionalAt          DateTime?
+  exceptionalByUserId    String?
   /// Working days added when the ground was recorded. Kept beside the ground
   /// so the extension is a number someone chose and can be asked about,
   /// rather than an open-ended suspension.
@@ -2396,9 +2399,14 @@ model ComplianceEvent {
   /// When this event was included in a Board report — the 11.2(d) act itself.
   boardReportedAt DateTime?
 
+  // Owning adjusting firm. These are the registered adjuster's own PD duties
+  // (10, 11.2(d), 13), so they are scoped to it and never read across tenants.
+  tenantId  String
+  tenant    Tenant   @relation("ComplianceEventTenant", fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([status, severity])
   @@index([boardReportedAt])
   @@map("compliance_events")
@@ -2432,11 +2440,16 @@ model KeyPerson {
   ceasedAt    DateTime?
   notes       String?
 
+  // Owning adjusting firm. These are the registered adjuster's own PD duties
+  // (10, 11.2(d), 13), so they are scoped to it and never read across tenants.
+  tenantId  String
+  tenant    Tenant   @relation("KeyPersonTenant", fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   attestations FitProperAttestation[]
 
+  @@index([tenantId])
   @@index([type, ceasedAt])
   @@map("key_persons")
 }
@@ -2538,9 +2551,14 @@ model BnmNotification {
   /// The KeyPerson change that drafted this row, when automatic.
   keyPersonId String?
 
+  // Owning adjusting firm. These are the registered adjuster's own PD duties
+  // (10, 11.2(d), 13), so they are scoped to it and never read across tenants.
+  tenantId  String
+  tenant    Tenant   @relation("BnmNotificationTenant", fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([notifiedAt, dueAt])
   @@map("bnm_notifications")
 }
@@ -2809,7 +2827,7 @@ model ConversationBinding {
   /// flow's wording. Null means the platform did not say — fall back to the
   /// default rather than guess, because guessing a language is worse than
   /// defaulting to one.
-  locale String?
+  locale         String?
   id             String      @id @default(uuid())
   channel        CaseChannel
   /// Telegram chat id, WhatsApp wa_id, Messenger PSID. Opaque, per channel.
@@ -2844,9 +2862,9 @@ model ConversationBinding {
   resolvedAt     DateTime?
 
   /// Work state, independent of who is talking. See ConversationStatus.
-  status       ConversationStatus @default(BOT)
+  status           ConversationStatus @default(BOT)
   /// When a snoozed conversation should come back. Null unless SNOOZED.
-  snoozedUntil DateTime?
+  snoozedUntil     DateTime?
   /// When a human first replied after this conversation needed one.
   ///
   /// The first-response clock every support operation is measured on. Written
@@ -2909,21 +2927,21 @@ model ConversationMessage {
   /// a tapped button, a shared contact — this holds the human-readable
   /// description of what the claimant did, so a transcript reads as a
   /// conversation rather than a column of blanks.
-  text     String?
+  text           String?
   /// The exact value behind a tapped button, when the turn was a tap.
   ///
   /// Stored as well as the readable text because the two answer different
   /// questions: `text` is what the claimant saw themselves choose, this is
   /// what the flow actually received. A label can be reworded later; the value
   /// is what drove the decision, and a dispute is about the decision.
-  callbackValue String?
+  callbackValue  String?
   /// Platform reference for an attachment, resolved lazily — media is fetched
   /// only when a document step is actually expecting one.
   ///
   /// This is the *platform's* id (a Telegram file_id), not ours: it points at
   /// their servers, is short-lived, and cannot be served to an operator. The
   /// file we keep is `caseDocumentId`.
-  mediaRef String?
+  mediaRef       String?
   /// The document this turn produced, once a step consumed the attachment.
   ///
   /// Stored rather than inferred from (case, step): a claimant may file more
@@ -2932,7 +2950,7 @@ model ConversationMessage {
   caseDocumentId String?
   /// Step this message answered or asked, once known. Null when the turn was
   /// consumed by identity binding (phone share, OTP) rather than by the flow.
-  stepId   String?
+  stepId         String?
 
   /// Set on an outbound message a human sent. Null means the bot said it.
   ///

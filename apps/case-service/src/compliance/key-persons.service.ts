@@ -44,7 +44,7 @@ export class KeyPersonsService {
     }
 
     const person = await this.prisma.keyPerson.create({
-      data: { ...data, appointedAt },
+      data: { ...data, appointedAt, tenantId: tenantContext.tenantId },
     });
 
     await this.audit.record({
@@ -66,6 +66,7 @@ export class KeyPersonsService {
         occurredAt: appointedAt,
         keyPersonId: person.id,
       },
+      tenantContext.tenantId,
       tenantContext.userId
     );
     return person;
@@ -73,7 +74,7 @@ export class KeyPersonsService {
 
   /** Cessation is a dated act — and, later, the PD 13.1 notification trigger. */
   async cease(id: string, tenantContext: TenantContext) {
-    const person = await this.load(id);
+    const person = await this.load(id, tenantContext);
     if (person.ceasedAt) throw new BadRequestException('This person has already ceased.');
 
     const ceased = await this.prisma.keyPerson.update({
@@ -97,15 +98,19 @@ export class KeyPersonsService {
         occurredAt: ceased.ceasedAt!,
         keyPersonId: person.id,
       },
+      tenantContext.tenantId,
       tenantContext.userId
     );
     return ceased;
   }
 
   /** The register with each person's current standing. */
-  async list(includeCeased = false) {
+  async list(tenantContext: TenantContext, includeCeased = false) {
     const persons = await this.prisma.keyPerson.findMany({
-      where: includeCeased ? {} : { ceasedAt: null },
+      where: {
+        tenantId: tenantContext.tenantId,
+        ...(includeCeased ? {} : { ceasedAt: null }),
+      },
       include: { attestations: { orderBy: { attestedAt: 'desc' }, take: 1 } },
       orderBy: { fullName: 'asc' },
     });
@@ -124,8 +129,8 @@ export class KeyPersonsService {
   }
 
   /** The criteria this person must answer — for the attestation form. */
-  async criteriaFor(id: string) {
-    const person = await this.load(id);
+  async criteriaFor(id: string, tenantContext: TenantContext) {
+    const person = await this.load(id, tenantContext);
     return applicableCriteria(person.type);
   }
 
@@ -135,7 +140,7 @@ export class KeyPersonsService {
     notes: string | undefined,
     tenantContext: TenantContext
   ) {
-    const person = await this.load(id);
+    const person = await this.load(id, tenantContext);
     if (person.ceasedAt) {
       throw new BadRequestException('Cannot attest for a person who has ceased.');
     }
@@ -188,21 +193,25 @@ export class KeyPersonsService {
         dedupeKey: `fit-proper:${id}:${attestation.id}`,
         source: 'fit-and-proper-attestation',
         raisedByUserId: tenantContext.userId,
+        tenantId: tenantContext.tenantId,
       });
     }
     return attestation;
   }
 
-  async attestations(id: string) {
-    await this.load(id);
+  async attestations(id: string, tenantContext: TenantContext) {
+    await this.load(id, tenantContext);
     return this.prisma.fitProperAttestation.findMany({
       where: { keyPersonId: id },
       orderBy: { attestedAt: 'desc' },
     });
   }
 
-  private async load(id: string) {
-    const person = await this.prisma.keyPerson.findUnique({ where: { id } });
+  /** Another firm's key person reads as absent, never as "not yours". */
+  private async load(id: string, tenantContext: TenantContext) {
+    const person = await this.prisma.keyPerson.findFirst({
+      where: { id, tenantId: tenantContext.tenantId },
+    });
     if (!person) throw new NotFoundException('Key person not found');
     return person;
   }

@@ -31,12 +31,15 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('No tenant context available. Please select a tenant.');
     }
 
-    // Validate user has access to this tenant
-    // Check main tenantId or the list of accessible tenantIds from JWT
+    // Staff act in a tenant only through an active membership whose role may
+    // exist there — resolved per request by the JWT strategy, which read the
+    // same header. A null role means that resolution refused. The legacy
+    // `users.tenantId` column no longer grants access on its own.
     const hasAccess =
       user.role === 'SUPER_ADMIN' ||
-      user.tenantId === currentTenantId ||
-      (user.tenantIds && user.tenantIds.includes(currentTenantId));
+      (user.role === 'CLAIMANT'
+        ? user.tenantId === currentTenantId
+        : !!user.role && user.activeTenantId === currentTenantId);
 
     if (!hasAccess) {
       throw new ForbiddenException('You do not have access to the requested tenant context.');

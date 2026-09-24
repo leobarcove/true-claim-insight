@@ -32,6 +32,12 @@ export class TenantService {
       return;
     }
 
+    // The insurer that appointed the firm reads the file (case-service applies
+    // the same rule; the two services must agree on who can see a claim).
+    if (claim.insurerTenantId === tenantContext.tenantId) {
+      return;
+    }
+
     // Role-based escalation (e.g. Super Admin)
     if (tenantContext.userRole === 'SUPER_ADMIN') {
       return;
