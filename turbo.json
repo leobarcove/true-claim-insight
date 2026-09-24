@@ -9,7 +9,14 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "build/**"],
-      "env": ["NODE_ENV"]
+      // VITE_* is part of the key because Vite INLINES these values into the
+      // bundle: two builds of identical source with different VITE_AGENT_HOSTS
+      // produce different output, and only this line says so. Without it a warm
+      // cache returns the earlier bundle — the right source, the wrong
+      // hostname, and no error anywhere. Harmless while every build starts
+      // cold; a silent wrong answer as soon as the cache persists, which it
+      // now does in deploy/staging/Dockerfile.
+      "env": ["NODE_ENV", "VITE_*"]
     },
     "dev": {
       "cache": false,

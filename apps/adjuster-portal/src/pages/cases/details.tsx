@@ -161,11 +161,20 @@ export function CaseDetailPage() {
    *
    * So: show what the claimant stated, and label it as stated rather than
    * verified. The database rule is untouched.
+   *
+   * Taken from the server's `statedClaimantName` rather than re-derived from
+   * `answers` here. The server ranks two sources — the `claimant-name` answer
+   * first, then the name the agent confirmed at the consent declaration — and
+   * an assisted case sits in DRAFT with no answers at all between those two
+   * moments. Reading only `answers` meant such a case fell through to the
+   * shared identity record and named a different person from the one the agent
+   * had just entered, while the case list (which does read the server field)
+   * named them correctly. One rule, computed once, in `statedClaimantNameOf`.
    */
-  const statedName = useMemo(() => {
-    const value = caseData?.answers?.['claimant-name'];
-    return typeof value === 'string' && value.trim() ? value.trim() : null;
-  }, [caseData]);
+  const statedName = useMemo(
+    () => caseData?.statedClaimantName?.trim() || null,
+    [caseData?.statedClaimantName]
+  );
 
   /**
    * Whether the person claiming is the person being paid. Never blocks — the
@@ -277,9 +286,7 @@ export function CaseDetailPage() {
           )}
           {caseData.convertedClaim && (
             <Link to={`/claims/${caseData.convertedClaim.id}`}>
-              <Badge variant="success">
-                Converted → {caseData.convertedClaim.claimNumber}
-              </Badge>
+              <Badge variant="success">Converted → {caseData.convertedClaim.claimNumber}</Badge>
             </Link>
           )}
         </div>
@@ -335,8 +342,8 @@ export function CaseDetailPage() {
                   <span>Evidence checklist</span>
                   {caseData.completeness && (
                     <span className="text-sm font-normal text-muted-foreground">
-                      {caseData.completeness.mandatoryUploaded}/{caseData.completeness.mandatoryTotal}{' '}
-                      mandatory uploaded
+                      {caseData.completeness.mandatoryUploaded}/
+                      {caseData.completeness.mandatoryTotal} mandatory uploaded
                     </span>
                   )}
                 </CardTitle>
@@ -352,9 +359,7 @@ export function CaseDetailPage() {
                         <Circle className="h-4 w-4 text-muted-foreground mt-0.5" />
                       )}
                       <div>
-                        <span className="font-medium">
-                          {convertToTitleCase(req.documentType)}
-                        </span>
+                        <span className="font-medium">{convertToTitleCase(req.documentType)}</span>
                         {!req.isMandatory && (
                           <span className="text-muted-foreground"> (optional)</span>
                         )}
@@ -439,15 +444,30 @@ export function CaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-1">
-                {caseData.claimant?.fullName ? (
-                  <p className="font-medium">{caseData.claimant.fullName}</p>
-                ) : statedName ? (
+                {/*
+                  What this claimant typed, in preference to the linked record.
+
+                  The two can differ: a claimant who has claimed before is
+                  matched on their verified phone number, and that match carries
+                  a name from the earlier claim — possibly stale, possibly a
+                  spelling nobody corrected. This case is about what they told
+                  us *this time*, and that is what has to match the documents
+                  they upload and the account they ask to be paid into. Showing
+                  the older name here would leave an adjuster vetting a
+                  different string from the one two inches to the left.
+
+                  The record is still the fallback, for a case opened by staff
+                  where nobody was asked the question.
+                */}
+                {statedName ? (
                   <>
                     <p className="font-medium">{statedName}</p>
                     <Badge variant="outline" className="font-normal">
                       Stated at intake · not verified
                     </Badge>
                   </>
+                ) : caseData.claimant?.fullName ? (
+                  <p className="font-medium">{caseData.claimant.fullName}</p>
                 ) : (
                   <p className="font-medium text-muted-foreground">Unknown</p>
                 )}
@@ -557,8 +577,8 @@ export function CaseDetailPage() {
                           : 'Check the payee against the claimant'}
                       </p>
                       <p className="text-muted-foreground">
-                        Claim is in the name of {payeeCheck.claimantName}; the account
-                        is held by {payeeCheck.payeeName}.
+                        Claim is in the name of {payeeCheck.claimantName}; the account is held by{' '}
+                        {payeeCheck.payeeName}.
                       </p>
                     </div>
                   </div>
@@ -670,10 +690,7 @@ export function CaseDetailPage() {
                       <Button
                         disabled={!canConvert || convertCase.isPending}
                         onClick={() =>
-                          runAction(
-                            () => convertCase.mutateAsync(id),
-                            'Case converted to a claim'
-                          )
+                          runAction(() => convertCase.mutateAsync(id), 'Case converted to a claim')
                         }
                       >
                         Convert to claim

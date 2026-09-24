@@ -96,6 +96,21 @@ export function DashboardPage() {
     createdById,
   });
 
+  const sessionsFilters = useMemo(
+    () => ({
+      limit: 5,
+      page: sessionsPage,
+      status: 'SCHEDULED' as any,
+      sortBy: 'scheduledAssessmentTime',
+      sortOrder: 'asc' as const,
+      scheduledFrom: new Date().toISOString(),
+      createdById,
+    }),
+    [sessionsPage, createdById]
+  );
+
+  const { data: sessionsData, isLoading: sessionsLoading } = useClaims(sessionsFilters);
+
   if (isAwaitingActivation) {
     return (
       <div className="flex flex-col h-full bg-background/50">
@@ -124,21 +139,6 @@ export function DashboardPage() {
       </div>
     );
   }
-
-  const sessionsFilters = useMemo(
-    () => ({
-      limit: 5,
-      page: sessionsPage,
-      status: 'SCHEDULED' as any,
-      sortBy: 'scheduledAssessmentTime',
-      sortOrder: 'asc' as const,
-      scheduledFrom: new Date().toISOString(),
-      createdById,
-    }),
-    [sessionsPage, createdById]
-  );
-
-  const { data: sessionsData, isLoading: sessionsLoading } = useClaims(sessionsFilters);
 
   const stats = [
     {

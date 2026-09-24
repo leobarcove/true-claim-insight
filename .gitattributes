@@ -1,0 +1,24 @@
+# Line endings.
+#
+# Everything here runs on Linux — in a container, or on the staging host. A
+# CRLF shell script fails as `/usr/bin/env: 'bash\r': No such file or
+# directory`, and a CRLF env file is worse than that: it fails silently.
+# generate-staging-secrets.sh matches `^JWT_SECRET=$` to fill a secret in, and
+# against a CRLF line the content is `JWT_SECRET=\r`, which matches nothing.
+# The secret is never substituted, every downstream presence check passes
+# because `\r` is not empty, and the stack boots with one-byte keys.
+#
+# Developers work on Windows, so this cannot be left to core.autocrlf.
+
+*.sh            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
+Caddyfile       text eol=lf
+.env.example    text eol=lf
+.env.*.example  text eol=lf
+
+# The deploy tree is executed verbatim on the staging host; nothing in it may
+# carry a carriage return.
+deploy/**       text eol=lf

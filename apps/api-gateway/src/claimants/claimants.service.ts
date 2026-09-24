@@ -152,6 +152,30 @@ export class ClaimantsService {
   /**
    * Find or create claimant by NRIC (preferred) or phone number
    */
+  /**
+   * Who we already hold for this number or IC — and nothing else.
+   *
+   * The read half of `findOrCreate`, split out because the agent-assisted form
+   * needs to *ask* before anybody has agreed to anything. Same matching order
+   * as the write: an IC identifies a person, a phone number identifies a
+   * handset, so the IC wins where one is given.
+   *
+   * Returning null is an ordinary answer, not a miss to be corrected. It means
+   * this person is new, and creating them is a decision for the screen where
+   * consent is recorded rather than a side effect of typing a number.
+   */
+  async lookup(
+    data: { phoneNumber: string; nric?: string },
+    tenant?: TenantContext
+  ): Promise<ClaimantRow | null> {
+    if (data.nric) {
+      const byNric = await this.findByNric(data.nric, tenant);
+      if (byNric) return byNric;
+    }
+
+    return this.findByPhone(data.phoneNumber, tenant);
+  }
+
   async findOrCreate(data: {
     nric?: string;
     phoneNumber: string;

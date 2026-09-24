@@ -1,0 +1,245 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Start (mobile number)",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "Code.dc.html",
+      "title": "Code",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "Consent.dc.html",
+      "title": "PDPA consent (gate)",
+      "x": 0,
+      "y": 1040,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "ClaimType.dc.html",
+      "title": "1 · Claim type",
+      "x": 1560,
+      "y": 1040,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "YouTrip.dc.html",
+      "title": "2 · You & your trip",
+      "x": 3120,
+      "y": 1040,
+      "w": 1440,
+      "h": 1000
+    },
+    {
+      "file": "WhatHappened.dc.html",
+      "title": "3 · What happened",
+      "x": 0,
+      "y": 2180,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "Evidence.dc.html",
+      "title": "4 · Evidence",
+      "x": 1560,
+      "y": 2180,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "Payout.dc.html",
+      "title": "5 · Payout",
+      "x": 3120,
+      "y": 2180,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "Review.dc.html",
+      "title": "6 · Review & submit",
+      "x": 0,
+      "y": 3220,
+      "w": 1440,
+      "h": 1360
+    },
+    {
+      "file": "Submitted.dc.html",
+      "title": "Submitted",
+      "x": 1560,
+      "y": 3220,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "PhoneEntry.dc.html",
+      "title": "Phone · Start",
+      "x": 0,
+      "y": 4920,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PhoneCode.dc.html",
+      "title": "Phone · Code",
+      "x": 480,
+      "y": 4920,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PhoneConsent.dc.html",
+      "title": "Phone · Consent",
+      "x": 960,
+      "y": 4920,
+      "w": 390,
+      "h": 900
+    },
+    {
+      "file": "PhoneClaimType.dc.html",
+      "title": "Phone · 1 Claim type",
+      "x": 1440,
+      "y": 4920,
+      "w": 390,
+      "h": 900
+    },
+    {
+      "file": "PhoneYouTrip.dc.html",
+      "title": "Phone · 2 You & trip",
+      "x": 1920,
+      "y": 4920,
+      "w": 390,
+      "h": 1180
+    },
+    {
+      "file": "PhoneEvidence.dc.html",
+      "title": "Phone · 4 Evidence",
+      "x": 2880,
+      "y": 4920,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PhoneWhatHappened.dc.html",
+      "title": "Phone · 3 What happened",
+      "x": 2400,
+      "y": 4920,
+      "w": 390,
+      "h": 1000
+    },
+    {
+      "file": "PhoneReview.dc.html",
+      "title": "Phone · 6 Review",
+      "x": 3360,
+      "y": 4920,
+      "w": 390,
+      "h": 1380
+    },
+    {
+      "file": "PhonePayout.dc.html",
+      "title": "Phone · 5 Payout",
+      "x": 3840,
+      "y": 4920,
+      "w": 390,
+      "h": 1060
+    },
+    {
+      "file": "PhoneSubmitted.dc.html",
+      "title": "Phone · Submitted",
+      "x": 4320,
+      "y": 4920,
+      "w": 390,
+      "h": 900
+    },
+    {
+      "file": "AgentSignIn.dc.html",
+      "title": "Agent · Sign in (mobile)",
+      "x": 0,
+      "y": 7420,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "AgentCode.dc.html",
+      "title": "Agent · Code",
+      "x": 1560,
+      "y": 7420,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "AgentLookup.dc.html",
+      "title": "Agent · 1 Who is this for",
+      "x": 3120,
+      "y": 7420,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "AgentDeclaration.dc.html",
+      "title": "Agent · 2 Verbal consent",
+      "x": 4680,
+      "y": 7420,
+      "w": 1440,
+      "h": 1120
+    },
+    {
+      "file": "AgentSection.dc.html",
+      "title": "Agent · the same six sections",
+      "x": 6240,
+      "y": 7420,
+      "w": 1440,
+      "h": 1000
+    },
+    {
+      "file": "AgentSubmitted.dc.html",
+      "title": "Agent · Submitted",
+      "x": 7800,
+      "y": 7420,
+      "w": 1440,
+      "h": 900
+    }
+  ],
+  "annotations": [
+    {
+      "id": "site-note",
+      "x": 0,
+      "y": -190,
+      "w": 720,
+      "text": "Order matches the conversation gateway exactly: mobile → code → PDPA consent gate → claim type → name, policy, trip dates, destination, incident date → per-type questions → per-type documents → bank → review.\nNo separate home page: the first screen is the mobile-number step, with the have-these-ready list beside it. The pre-form pages have no section list because no Case exists yet: the server has not chosen a flow."
+    },
+    {
+      "id": "consent-note",
+      "x": 0,
+      "y": 920,
+      "w": 560,
+      "text": "Consent shows the approved notice text and records \"I agree\" against that wording. The approval mechanism itself is still the open gap in docs/PDPA_NOTICE_APPROVAL_GAP.md."
+    },
+    {
+      "id": "agent-note",
+      "x": 0,
+      "y": 7240,
+      "w": 900,
+      "text": "Agent-assisted: the same form, reached from a staff address. The agent signs in with their own mobile and a WhatsApp code — the same mechanism the claimant uses, so there is no password anywhere on this site — and stays signed in for 30 days. A claimant cannot open these screens and an agent cannot skip the phone code on the public one — the door decides, never a field on the page. Only the two pre-claim screens differ: look up the claimant, then record the verbal consent. Everything from Claim type to Review is byte-identical to the customer flow. The amber band is on every assisted screen and on none of the customer ones."
+    },
+    {
+      "id": "phone-note",
+      "x": 0,
+      "y": 4780,
+      "w": 640,
+      "text": "The same pages in a phone browser. Section list becomes the \"Step n of 6\" bar, the summary rail folds into Review, two-column grids stack, actions pin to the bottom."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

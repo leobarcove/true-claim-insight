@@ -3,8 +3,10 @@ import {
   Body,
   ForbiddenException,
   Controller,
+  Delete,
   Get,
   Headers,
+  Param,
   Post,
   Query,
   Req,
@@ -77,10 +79,28 @@ export class PublicConversationController {
    * the public surface is the gateway's edge route, which owns the signed
    * token and does the verification.
    */
+  /**
+   * Which web channel a session belongs to.
+   *
+   * Only the two surfaces that reach this door are accepted. `x-web-channel` is
+   * set by api-gateway from the signed session payload, but narrowing here as
+   * well is deliberate: if that header ever became settable, the worst it could
+   * do is move a visitor between two anonymous, code-gated web threads — not
+   * open a WhatsApp or Telegram binding, which carry a platform's attestation
+   * that this door has no way to check.
+   */
+  private webChannelFrom(header: string | undefined): CaseChannel | undefined {
+    if (!header) return undefined;
+    if (header === CaseChannel.WEB_FORM) return CaseChannel.WEB_FORM;
+    if (header === CaseChannel.WEB_CHAT) return CaseChannel.WEB_CHAT;
+    throw new BadRequestException(`Unknown web channel ${header}.`);
+  }
+
   private identityFrom(
     sessionId: string | undefined,
     channel: string | undefined,
-    platformUserId: string | undefined
+    platformUserId: string | undefined,
+    webChannel?: string | undefined
   ): ConversationIdentity {
     if (channel && platformUserId?.trim()) {
       // Narrowed against the enum's *values*, not with `in`. `in` walks the
@@ -93,7 +113,7 @@ export class PublicConversationController {
       }
       return { channel: channel as CaseChannel, platformUserId };
     }
-    return { sessionId: sessionId as string };
+    return { sessionId: sessionId as string, webChannel: this.webChannelFrom(webChannel) };
   }
 
   /**
@@ -149,9 +169,10 @@ export class PublicConversationController {
     @Headers('x-web-session-id') sessionId: string,
     @Headers('x-channel') channel: string,
     @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string,
     @Query('locale') locale?: string
   ) {
-    return this.service.start(this.identityFrom(sessionId, channel, platformUserId), locale);
+    return this.service.start(this.identityFrom(sessionId, channel, platformUserId, webChannel), locale);
   }
 
   @Get()
@@ -159,9 +180,33 @@ export class PublicConversationController {
   transcript(
     @Headers('x-web-session-id') sessionId: string,
     @Headers('x-channel') channel: string,
-    @Headers('x-channel-user-id') platformUserId: string
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string
   ) {
-    return this.service.transcript(this.identityFrom(sessionId, channel, platformUserId));
+    return this.service.transcript(this.identityFrom(sessionId, channel, platformUserId, webChannel));
+  }
+
+  /**
+   * The whole picture at once, for a surface that shows more than one question.
+   *
+   * The transcript is enough for the chat, where the last bubble *is* the
+   * state. A form needs the answers so far, the flow it is walking and which
+   * stage it is at — the same pair a logged-in claimant gets from
+   * `GET /cases/:id` and `GET /cases/:id/flow`, mirrored for a session that has
+   * no case id and no login.
+   *
+   * Same throttle class as the transcript: it is a read of the caller's own
+   * conversation and costs a database round trip, not a WhatsApp message.
+   */
+  @Get('state')
+  @ApiOperation({ summary: 'Everything the form needs to render, for this session' })
+  state(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string
+  ) {
+    return this.service.state(this.identityFrom(sessionId, channel, platformUserId, webChannel));
   }
 
   @Post('turn')
@@ -171,9 +216,10 @@ export class PublicConversationController {
     @Headers('x-web-session-id') sessionId: string,
     @Headers('x-channel') channel: string,
     @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string,
     @Body() dto: ClaimantTurnDto
   ) {
-    const identity = this.identityFrom(sessionId, channel, platformUserId);
+    const identity = this.identityFrom(sessionId, channel, platformUserId, webChannel);
     await this.service.handleTurn(identity, dto);
     return this.service.transcript(identity);
   }
@@ -190,13 +236,36 @@ export class PublicConversationController {
     @Headers('x-web-session-id') sessionId: string,
     @Headers('x-channel') channel: string,
     @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string,
     @Req() req: any
   ) {
     const file = await req.file();
     if (!file) throw new BadRequestException('No file uploaded');
     return this.service.uploadDocument(
-      this.identityFrom(sessionId, channel, platformUserId),
+      this.identityFrom(sessionId, channel, platformUserId, webChannel),
       file
+    );
+  }
+
+  /**
+   * Take back one photo from a multi-photo step. Only reachable for a
+   * document whose `id` this session was actually handed — see
+   * `publicDocument` in the service for why that is every other document's
+   * protection here, not a guard on this route.
+   */
+  @Delete('documents/:id')
+  @Throttle({ short: { limit: 5, ttl: 1000 }, medium: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Remove one photo the visitor attached to their open claim' })
+  removeDocument(
+    @Headers('x-web-session-id') sessionId: string,
+    @Headers('x-channel') channel: string,
+    @Headers('x-channel-user-id') platformUserId: string,
+    @Headers('x-web-channel') webChannel: string,
+    @Param('id') id: string
+  ) {
+    return this.service.removeDocument(
+      this.identityFrom(sessionId, channel, platformUserId, webChannel),
+      id
     );
   }
 }

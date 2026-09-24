@@ -46,7 +46,16 @@ COPY packages/crypto/package.json packages/crypto/
 
 # HUSKY=0: the prepare hook must not run against a context with no .git.
 ENV HUSKY=0
-RUN pnpm install --frozen-lockfile
+
+# The pnpm store on a BuildKit cache mount, so a rebuild re-uses packages it has
+# already downloaded instead of fetching the whole workspace again. The store
+# lives OUTSIDE /app deliberately: `COPY . .` below would otherwise bury it.
+#
+# pnpm normally hardlinks from the store into node_modules; across a mount
+# boundary it cannot, and copies instead. That is still far cheaper than
+# downloading, and it is why the store is not simply left in its default place.
+RUN --mount=type=cache,id=tci-pnpm-store,target=/pnpm/store,sharing=locked \
+  pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 COPY . .
 
@@ -54,7 +63,48 @@ COPY . .
 # api clients already default to /api/v1, this pins the one localhost fallback.
 ENV VITE_API_URL=/api/v1
 
-RUN pnpm prisma:generate && pnpm build
+# Which hostname serves the agent-assisted surface, decided at build time
+# because the bundle must not be able to change its mind at runtime — see
+# apps/claimant-web/src/lib/surface.ts.
+#
+# Empty is the normal case: the app then falls back to the `agent.` prefix
+# convention. Set it only when DNS names the host some other way, e.g.
+# --build-arg VITE_AGENT_HOSTS=tci-agent.example.com
+ARG VITE_AGENT_HOSTS=
+ENV VITE_AGENT_HOSTS=${VITE_AGENT_HOSTS}
+
+# Ceilings for the build itself — the highest-memory phase of a deploy by a wide
+# margin, and the one no container mem_limit covers, because it happens before
+# any container exists.
+#
+# turbo's default concurrency is 10: on a small host that means four nest builds
+# and two Vite builds compiling at once, each an unbounded Node heap. On a host
+# with no swap the kernel resolves that by killing whatever is largest, which on
+# a shared box is somebody else's database, not this build.
+#
+# Both are overridable per environment, so a large dedicated builder can raise
+# them: --build-arg TURBO_CONCURRENCY=10 --build-arg NODE_BUILD_HEAP_MB=4096
+ARG TURBO_CONCURRENCY=3
+ARG NODE_BUILD_HEAP_MB=2048
+ENV TURBO_CONCURRENCY=${TURBO_CONCURRENCY}
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB}
+
+# turbo's cache, kept across builds on a mount of its own.
+#
+# `COPY . .` above invalidates this layer on any source change, so Docker always
+# re-runs the command below — but turbo then compares its own input hashes per
+# package and restores the untouched ones instead of compiling them. Change one
+# service and only that service builds.
+#
+# Correctness depends on turbo.json listing VITE_* in the build task's env: Vite
+# inlines those values, so they change the output without changing a single
+# input file. A cache that does not know that returns the previous bundle and
+# reports a hit.
+# Pass the cache directory directly to Turbo, so task artefacts are retained
+# in the persistent BuildKit cache mount between deployments.
+ENV TURBO_CACHE_DIR=/turbo-cache
+RUN --mount=type=cache,id=tci-turbo,target=/turbo-cache,sharing=locked \
+  pnpm prisma:generate && pnpm exec turbo run build --cache-dir=/turbo-cache
 
 # ---------------------------------------------------------------------------
 # Shared Node runtime base — the built workspace, verbatim.
@@ -65,7 +115,34 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
 ENV NODE_ENV=production
-COPY --from=build /app /app
+
+# The built tree arrives in FOUR layers rather than one, and the split is the
+# single largest saving in a redeploy. /app/node_modules is 1.5 GB and changes
+# only when the lockfile does; the compiled apps and packages together are
+# ~40 MB and change on every commit. As one `COPY /app /app`, editing a single
+# line re-hashed and re-exported the whole 1.5 GB, because a layer is
+# invalidated as a unit.
+#
+# node_modules must come FIRST: layer caching is positional, so a hit on a
+# later layer is worthless once an earlier one has missed.
+#
+# This deliberately does not copy the whole tree. deploy/, .github/, the root
+# docker-compose.yml, CLAUDE.md and README were all being shipped inside every
+# service image; none is read at runtime. Leaving them out keeps the image
+# honest about what it actually runs. Anything a service DOES need at runtime
+# has to be named here explicitly — that is the trade for the speed.
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/packages /app/packages
+COPY --from=build /app/apps /app/apps
+# scripts/ is small and referenced by root package.json ("telegram:terminal").
+COPY --from=build /app/scripts /app/scripts
+COPY --from=build \
+  /app/package.json \
+  /app/pnpm-lock.yaml \
+  /app/pnpm-workspace.yaml \
+  /app/turbo.json \
+  /app/tsconfig.base.json \
+  /app/
 
 FROM node-runtime AS api-gateway
 WORKDIR /app/apps/api-gateway

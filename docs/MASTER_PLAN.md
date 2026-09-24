@@ -613,6 +613,68 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Web-form microsite — complete, 2 September 2026 (`1ec6198`, `5db71b6`, `3fa61d5`, `f1e03a8`)
+
+A fourth way to lodge a claim: a form at `/form` on claimant-web, alongside the
+web chat, WhatsApp and Telegram. Plan and decisions in
+`docs/WEB_FORM_MICROSITE_PLAN.md`; the manual walk-through that stands in for an
+e2e suite is `docs/WEB_FORM_MANUAL_TEST.md`. Tagged `phase-0`…`phase-3` so any
+phase can be reverted on its own.
+
+**It is not a second intake.** Every answer goes through the same
+`POST /public/conversation/turn` the chat uses, so redaction, policy matching,
+deadline tracking, audit rows and access checks are the ones that already
+existed. What the form adds is a way to *read* the whole picture at once —
+`GET /public/conversation/state`, which mirrors the two endpoints a logged-in
+claimant already has, using the same service methods rather than new
+serialisation.
+
+Verified end to end in a browser against the running stack: number → code →
+consent → claim type → five sections → three uploads → review → submit, landing
+in the adjuster's queue as `SUBMITTED` on channel `WEB_FORM`.
+
+| | |
+|---|---|
+| **Own channel** | `CaseChannel.WEB_FORM`. D1 was reversed: `/form` and `/chat` are separate conversations, so switching starts a fresh claim request. The surface rides inside the *signed* session payload, so it cannot be forged; case-service narrows the header to the two web channels, so this door can never name a messaging binding it cannot vouch for |
+| **Submit-only** | Take-over is refused on a `WEB_FORM` binding and a bare "human" in a field is treated as text. The form has no thread for a reply to appear in, so both guards are what make the missing handover screen safe rather than an oversight. Staff follow up on WhatsApp |
+| **Agent-assisted** | Staff sign in with their own mobile and a WhatsApp code — no password exists anywhere on the claimant-facing product. The endpoint answers identically for an unknown number, because "is this person one of yours?" is what anyone phishing an adjusting firm wants. An assisted claim routes to the handling firm exactly as the claimant's own would, which forces one narrow rule: the person who created a draft may finish it, until it is submitted |
+| **Consent** | `ConsentChannel.WEB_FORM` for the form; `VERBAL_AGENT_ATTESTED` added and kept distinct from `STAFF_CAPTURED`, which reads equally as "staff typed it while the claimant watched". An attested consent is refused if it names nobody |
+| **Blockers cleared** | Consent-notice approval was reachable from nowhere and blocked *all* intake on a fresh database; uploads were guarded only by the browser's `accept` attribute; two settings failed silently at a claimant rather than loudly at a deployment |
+
+**Four defects that only running it could find**, each recorded in the commit
+that fixed it: no adapter registered for the new channel (every form turn
+dropped); a DTO allowlist rejecting `WEB_FORM` *after* the code verified; an
+optional field left blank never skipped, so the flow silently never reached
+Review; and a turn cap of 20/minute sized for a claimant typing one message at
+a time, which an ordinary claimant filling a ~30-turn form crossed. The cap is
+now 60 — the burst defence is the edge throttle and is untouched.
+
+**The agent-assisted path is built and driven end to end.** An agent signs in
+with their own mobile, finds or creates the claimant, attests the verbal
+consent, fills in the same five sections and submits — landing in Pacific's
+queue as `SUBMITTED`, `channel: STAFF`, with the consent recorded as
+`VERBAL_AGENT_ATTESTED` naming who attested and how they spoke. It is the
+claimant's own form: two screens swapped at the front, an amber band across the
+top, and the six sections reused unchanged. The surface is chosen by the
+**host** (`AGENT_HOST`, one more Caddy block over the same build), never by
+anything the browser sends.
+
+Two more defects found by running it: an uploaded document was attached to the
+case but never recorded as the *answer*, so the section would not advance with
+the file plainly on screen; and an assisted claim arrived already marked
+`UNDER_REVIEW`, because the agent's own read after submitting tripped the
+auto-transition meant for an operator picking a case out of a queue.
+
+**Still outstanding:** the portal's existing staff capture page captures no
+consent, so it cannot open a case for a new claimant — a separate, smaller fix,
+and unrelated to the agent form.
+
+**Not done, deliberately:** no Malay wording for the questions (D5 — the switch
+works and carries the language; the flow copy is untranslated), no claimant
+email anywhere in the system, no claim-status page, no e2e harness. The launch
+gates in the plan's §7 — captcha on "Send code" and an SMS alternative to
+WhatsApp — remain open, and SMS is the long pole.
+
 ### Phase 0 — complete ✅ (`e404fc5`)
 All nine items done and verified: `@Roles` on every Cases endpoint (SUPPORT_DESK → 403 confirmed), bank details and answers omitted from the queue listing, `verify-nric` throttled with non-enumerating errors, `complete-signature` restricted to firm admins, `redactClaim` extended (nested claimant NRIC fail-closed, session deception/fraud data stripped for claimant + support desk), NRIC removed from logs, Cases audit rows on every transition incl. `convert()`, false-comfort assertions corrected, branch committed and pushed.
 
@@ -2886,6 +2948,84 @@ has no route to that tailnet, so the rewrite is proven against the recorded
 contract, not against the machine. The contract was captured from the machine,
 which is a materially stronger position than the guesswork it replaced — but a
 first live call is still a first live call.
+
+### Telegram and WhatsApp on staging: neither channel was ever wired (22 September 2026)
+
+Both messaging channels were silent on the staging host — the shared Singapore
+VPS that `deploy.sh` records as a deviation from the AWS target — and the reason
+was the same for each: `deploy/staging/.env.staging.example` never carried their
+credentials, so the bootstrap produced an environment in which both adapters
+took their designed fail-closed path. Both are now live on the host, both on
+borrowed development resources — the durable per-environment versions remain
+to be provisioned.
+
+**What was wrong for Telegram.** The template had no `TELEGRAM_BOT_TOKEN`, no
+`TELEGRAM_POLLING_ENABLED` and no `CLAIMANT_WEB_URL`, so case-service logged
+"TELEGRAM_BOT_TOKEN not set — Telegram channel is off" at boot (confirmed in the
+container's log from 10 September), exactly as the 5 Aug entry above warned —
+"staging needs its own bot or the flag set" — and the warning had stayed a
+warning. The one live bot was polled from the developer machine, which also
+holds the `tci-app` tunnel hostname the Mini App button opens.
+
+**What changed in the repository.** Three variables, one of them derived rather
+than typed:
+
+- `CLAIMANT_WEB_URL` is now composed in `docker-compose.staging.yml` from
+  `CLAIMANT_ORIGIN`, which staging already has. The hostname lives in one place;
+  the adapter's `https://`-only rule means a local `http://` dry-run shows no
+  button rather than a broken one. Verified by rendering the Compose file, with
+  the Traefik overlay, against a placeholder env.
+- `TELEGRAM_BOT_TOKEN=` and `TELEGRAM_POLLING_ENABLED=true` are in the staging
+  template with the one-bot-per-environment rule stated above them, and the
+  bootstrap's "before first boot" checklist gained a fourth item: create a
+  staging-only bot. The root `.env.example` had never listed the token variable
+  at all, although the architecture doc's table did; it does now.
+- The poller's own comment called itself "for development" and deferred staging
+  to a webhook that was never built. Staging runs one case-service on one token,
+  so polling serves it too; the comment now says so, and reserves the webhook
+  for the day an environment runs more than one instance.
+
+**What was done on the host, and the temporary state it leaves.** The
+principal chose to point staging at the *development* bot
+(`@true_claim_insight_bot`) for now rather than create a second one. So:
+`.env.staging` gained the token, the polling flag and (until the Compose change
+is pulled) the Mini App origin; case-service was recreated alone with
+`--no-deps`; its log reads "Telegram long-polling started." and the container is
+healthy. Because exactly one poller may hold a token, the developer machine's
+`.env` now has `TELEGRAM_POLLING_ENABLED=false`, with a comment saying why and
+when to flip it back. **Local development cannot receive Telegram messages
+until staging gets its own bot** — that is the cost of the shortcut, accepted
+knowingly, and it is the next thing to undo: create the staging bot, put its
+token on the host, set the local flag back to true.
+
+**WhatsApp, done the same afternoon, the same way.** The template's `WHATSAPP_*`
+block was empty on the host, so the adapter was inert and the webhook refused
+Meta's handshake with 403. The principal chose, as for Telegram, to reuse the
+development resources rather than provision a second Meta app or test number:
+the development credentials (same WABA, same number, `+60 13-428 6995`) were
+copied into `.env.staging`, case-service and api-gateway recreated, the
+handshake proven from outside (`12345` echoed; a wrong token 403), and then the
+app-level subscription repointed through the Graph API —
+`POST /{app-id}/subscriptions` with the same 27 event fields — from the
+developer machine's `tci-wa` tunnel to `https://tci.smitherytech.com/api/webhooks/whatsapp`.
+Meta answered `success: true`, which it only does after its own GET against the
+new URL passed. **Consequences, stated plainly:** local development no longer
+receives WhatsApp deliveries (the tunnel ingress is idle, not broken); staging's
+api-gateway now sends real login codes by WhatsApp template instead of printing
+them to its log, so a tester logs in with their own allowlisted number; and the
+allowlist is live because the overlay sets `NODE_ENV=staging`. Reverting is the
+same API call with the tunnel URL. The durable answer remains a second Meta app
+or test number for staging, exactly as a second bot is for Telegram.
+
+A note on the allowlist, corrected after reading the live host rather than the
+template: the base template sets `NODE_ENV=production`, under which the
+controller bypasses `WHATSAPP_ALLOWED_SENDERS` entirely, but the Traefik overlay
+this host runs sets `NODE_ENV=staging` for exactly this reason, so the allowlist
+is live there. The base template's comment is only true once the overlay is
+applied; on the decided AWS target, which runs the base file alone, it would not
+be.
+
+The user-flow site is unchanged: no flow, state or screen moved.
 
 ### Roles are memberships, and every route says who may call it (24 September 2026)
 

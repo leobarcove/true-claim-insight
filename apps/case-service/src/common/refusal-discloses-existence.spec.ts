@@ -55,15 +55,11 @@ const DECLARED: Record<string, { count: number; reason: string }> = {
       'before any lookup; the third runs only after the record was confirmed visible to the ' +
       'caller, so what is refused is the act, not knowledge of the record',
   },
-  'apps/case-service/src/consent/consent.controller.ts': {
-    count: 1,
-    reason:
-      "Consent wording is approved by the operating adjusting firm — a rule about the caller's " +
-      'tenant type, decided before the notice is looked up',
-  },
   'apps/api-gateway/src/conversations/public-conversation.controller.ts': {
-    count: 1,
-    reason: 'No conversation session on the request at all — nothing has been named yet',
+    count: 2,
+    reason:
+      'No conversation session on the request at all — nothing has been named yet (upload, ' +
+      'and removing a photo)',
   },
   'apps/case-service/src/adjusters/adjusters.service.ts': {
     count: 1,
@@ -96,6 +92,17 @@ const DECLARED: Record<string, { count: number; reason: string }> = {
     reason:
       'The conversation is in the caller’s own tenant and visible to them; what is refused ' +
       'is speaking over the agent who holds it',
+  },
+  'apps/case-service/src/consent/consent.controller.ts': {
+    count: 2,
+    reason:
+      'A claimant asking to record an *agent-attested* verbal consent on their own record. ' +
+      '`assertOwnRecord` has already 404’d anyone naming somebody else’s id, so the caller ' +
+      'is the subject and plainly knows their own record exists; what is refused is the ' +
+      'claim that a staff member vouched for a conversation — which only a staff member ' +
+      'can make about themselves. Second: consent wording is approved by the operating ' +
+      "adjusting firm — a rule about the caller's tenant type, decided before the notice " +
+      'is looked up',
   },
   'apps/case-service/src/chat/whatsapp/whatsapp.controller.ts': {
     count: 2,

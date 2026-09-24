@@ -68,3 +68,24 @@
 		file_server
 	}
 }
+
+# The agent-assisted form. The same build as the claimant host — same files,
+# same bundle — served under a different name, because the *name* is what tells
+# the app which surface it is on (see apps/claimant-web/src/lib/surface.ts).
+#
+# A separate host rather than a path, and the difference matters: the agent
+# surface skips the code sent to a claimant's phone, so the way in must not be
+# something a claimant can type. On a public host the path decides nothing;
+# here the hostname does, and this is the only hostname that says so.
+#
+# It also leaves room to lock this side down without touching the public form —
+# `remote_ip` here, or a VPN in front of it — which is not possible when both
+# surfaces answer on one name.
+{$AGENT_HOST} {
+	import app_common
+	handle {
+		root * /srv/claimant
+		try_files {path} /index.html
+		file_server
+	}
+}

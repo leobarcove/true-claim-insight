@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // Kept on the class strategy even though nothing adds the class: this app
+  // is light in every browser (see styles/globals.css). Dropping the setting
+  // would hand `dark:` back to `prefers-color-scheme`, so a stray variant
+  // would quietly start firing again on someone's dark-mode machine.
   darkMode: ['class'],
   content: [
     './index.html',

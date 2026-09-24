@@ -55,19 +55,19 @@ export function ClaimDetailsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'SUBMITTED':
-        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+        return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
       case 'ASSIGNED':
-        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+        return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
       case 'SCHEDULED':
-        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+        return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
       case 'IN_ASSESSMENT':
-        return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20';
+        return 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20';
       case 'APPROVED':
-        return 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20';
+        return 'bg-green-500/10 text-green-600 border-green-500/20';
       case 'REJECTED':
-        return 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20';
+        return 'bg-red-500/10 text-red-600 border-red-500/20';
       case 'CLOSED':
-        return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20';
+        return 'bg-slate-500/10 text-slate-600 border-slate-500/20';
       default:
         return 'bg-muted text-muted-foreground border-border';
     }
@@ -117,7 +117,7 @@ export function ClaimDetailsPage() {
                   className={cn(
                     'w-6 h-6',
                     activeSession.status === 'IN_PROGRESS' || activeSession.status === 'WAITING'
-                      ? 'text-green-600 dark:text-green-400 animate-pulse'
+                      ? 'text-green-600 animate-pulse'
                       : 'text-primary'
                   )}
                 />

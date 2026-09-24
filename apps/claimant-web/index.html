@@ -7,6 +7,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
+    <!-- Light only, and stated before the stylesheet loads: a browser in dark
+         mode paints its own default surfaces dark on the very first frame,
+         which shows up as a black flash ahead of the app. -->
+    <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#0b754e" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

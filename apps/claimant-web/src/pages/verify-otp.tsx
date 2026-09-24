@@ -177,7 +177,7 @@ export function VerifyOtpPage() {
 
             <div className="space-y-2">
               <Label className="text-base block w-full">Verification Code</Label>
-              <div className="flex justify-between gap-2" onPaste={handlePaste}>
+              <div className="grid w-full grid-cols-6 gap-2" onPaste={handlePaste}>
                 {otp.map((digit, index) => (
                   <Input
                     key={index}
@@ -188,7 +188,7 @@ export function VerifyOtpPage() {
                     value={digit}
                     onChange={e => handleChange(index, e.target.value)}
                     onKeyDown={e => handleKeyDown(index, e)}
-                    className="w-8 h-10 sm:w-14 sm:h-14 text-lg sm:text-2xl text-center font-bold bg-muted/20 border-2 focus:border-primary transition-all p-0"
+                    className="h-14 min-w-0 w-full p-0 text-center text-2xl font-bold bg-muted/20 border-2 focus:border-primary transition-all"
                     disabled={verifyOtp.isPending}
                   />
                 ))}

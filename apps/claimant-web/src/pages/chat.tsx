@@ -36,6 +36,9 @@ import { useQueryClient } from '@tanstack/react-query';
  * Uploads go through a session-authorised endpoint that reads the case off the
  * binding, so evidence works here exactly as it does for a signed-in claimant.
  */
+/** The language to ask in, until a switch exists to say otherwise. */
+const browserLocale = (): string | undefined => navigator.language?.split('-')[0];
+
 export function PublicChatPage() {
   const queryClient = useQueryClient();
 
@@ -59,7 +62,7 @@ export function PublicChatPage() {
     if (started.current || isLoading) return;
     started.current = true;
     if (!conversation || conversation.messages.length === 0) {
-      start.mutate(navigator.language?.split('-')[0]);
+      start.mutate(browserLocale());
     }
   }, [conversation, isLoading, start]);
 
@@ -69,7 +72,17 @@ export function PublicChatPage() {
 
   const send = (turn: { text?: string; callbackValue?: string }) => {
     if (busy) return;
-    sendTurn.mutate({ clientMessageId: newTurnId(), ...turn, callbackStepId: step?.id });
+    // Carried on every turn, not only at `start`. One language setting lives on
+    // the conversation and only `start` ever wrote it, so a switch made
+    // mid-claim changed nothing after it. The chat has no switch yet, so this
+    // is the same value `start` sent — the point is that the last thing the
+    // claimant chose is what the server hears.
+    sendTurn.mutate({
+      clientMessageId: newTurnId(),
+      ...turn,
+      callbackStepId: step?.id,
+      locale: browserLocale(),
+    });
   };
 
   const sendTyped = () => {
@@ -88,7 +101,11 @@ export function PublicChatPage() {
       // visitor has no token to prove which claim is theirs. Same two-step
       // shape as the authenticated app — store, then name it on a turn.
       const document = await uploadPublicDocument(file, step.documentType, step.id);
-      sendTurn.mutate({ clientMessageId: newTurnId(), storedDocumentId: document.id });
+      sendTurn.mutate({
+        clientMessageId: newTurnId(),
+        storedDocumentId: document.id,
+        locale: browserLocale(),
+      });
     } catch {
       setUploadError('We could not upload that file. Please try again, or use a smaller photo.');
     } finally {

@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Inbox,
   MailQuestion,
+  ShieldCheck,
   MessagesSquare,
   Receipt,
 } from 'lucide-react';
@@ -138,6 +139,16 @@ const masterDataNavigation: NavItem[] = [
 ];
 
 const secondaryNavigation: NavItem[] = [
+  {
+    // Sits here rather than under a claims heading because approving notice
+    // wording is a compliance act, not an operational one — and because on a
+    // fresh deployment it is the first thing someone has to do: until a notice
+    // is approved, no claim can be opened on any channel.
+    name: 'Consent notices',
+    href: '/consent-notices',
+    icon: ShieldCheck,
+    roles: ['COMPLIANCE_OFFICER', 'FIRM_ADMIN', 'SUPER_ADMIN'],
+  },
   {
     name: 'Tenants',
     href: '/tenants',

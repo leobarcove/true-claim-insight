@@ -97,8 +97,9 @@ describe('web chat', () => {
         } as never,
         { forCase } as never,
         // CasesService — only the public upload path uses it.
-        {} as never
-      );
+        {} as never,
+      {} as never
+    );
     });
 
     it('binds a browser session to the claimant, not to a device', async () => {
@@ -215,6 +216,47 @@ describe('web chat', () => {
     });
 
     describe('the question the PWA renders a control for', () => {
+      it('shows the edit menu after the claimant asks to change something', async () => {
+        const editMenu = {
+          id: '__edit-menu',
+          answerType: 'choice',
+          choices: [{ value: '__edit:airline', label: 'Airline: Example Air' }],
+        };
+        const synthesiseStep = jest.fn().mockResolvedValue(editMenu);
+        const flow = {
+          steps: [{ id: 'review', answerType: 'confirm', prompt: 'Submit this claim?' }],
+        };
+        const answers = { airline: 'Example Air' };
+        findFirst.mockResolvedValue({ stepId: '__edit-menu' });
+        forCase.mockResolvedValue(flow);
+        service = new ClaimantConversationService(
+          {
+            conversationBinding: { upsert },
+            conversationMessage: { findMany, count, findFirst },
+            case: {
+              findUnique: jest.fn().mockResolvedValue({
+                currentStepId: 'review',
+                travelClaimType: 'FLIGHT_DELAY',
+                flowDefinitionId: 'flow-1',
+                answers,
+              }),
+            },
+          } as never,
+          { handleTurn, synthesiseStep } as never,
+          { forCase } as never,
+          {} as never,
+          {} as never
+        );
+
+        const result = await service.transcript(context);
+
+        expect(result.currentStep).toEqual(editMenu);
+        expect(synthesiseStep).toHaveBeenCalledWith('__edit-menu', undefined, {
+          flow,
+          answers,
+        });
+      });
+
       it('is resolved from the pinned flow, not the built-in one', async () => {
         const step = { id: 'airline', answerType: 'text', prompt: 'Which airline?' };
         forCase.mockResolvedValue({ steps: [step] });
@@ -233,8 +275,9 @@ describe('web chat', () => {
           { handleTurn } as never,
           { forCase } as never,
           // CasesService — only the public upload path uses it.
-          {} as never
-        );
+          {} as never,
+      {} as never
+    );
 
         const result = await service.transcript(context);
         expect(result.currentStep).toEqual(step);
@@ -274,8 +317,9 @@ describe('web chat', () => {
           { handleTurn, synthesiseStep } as never,
           { forCase } as never,
           // CasesService — only the public upload path uses it.
-          {} as never
-        );
+          {} as never,
+      {} as never
+    );
 
         const result = await service.transcript(context);
         expect(result.currentStep).toEqual(expect.objectContaining({ id: '__consent' }));

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  CaseChannel,
   ConversationMessageStatus,
   ConversationMode,
   ConversationStatus,
@@ -227,6 +228,19 @@ export class ConversationsService {
    */
   async takeOver(id: string, reason: string, tenantContext: TenantContext) {
     const binding = await this.getBinding(id, tenantContext);
+
+    // The web form is submit-only: it draws a form, not a thread, and it has no
+    // screen on which a colleague's reply could appear. Taking one over would
+    // stand the bot down and strand the claimant mid-section with no
+    // explanation and no way forward — the operator would type into a window
+    // nobody is watching. Contact them on the number they verified instead.
+    if (binding.channel === CaseChannel.WEB_FORM) {
+      throw new BadRequestException(
+        'This claim request came from the web form, which has no message view — taking it ' +
+          'over would leave the claimant stuck with no way to reply. Contact them on ' +
+          'WhatsApp on the number they verified.'
+      );
+    }
 
     // Only refuse when somebody else genuinely holds it. An *unassigned*
     // handover is the common case, not a conflict: the bot hands over on its

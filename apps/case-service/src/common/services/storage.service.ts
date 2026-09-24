@@ -23,6 +23,24 @@ export class StorageService {
       this.configService.get<string>('CASE_SERVICE_PUBLIC_URL') || 'http://localhost:3001';
 
     if (this.localStorageEnabled) {
+      // The fallback is a development convenience and must never run in
+      // production. It writes claimant evidence — passports, medical reports,
+      // bank statements — to the container's own disk: unbacked, unencrypted at
+      // rest, and gone with the container. Worse, it fails quietly. Everything
+      // keeps working, an adjuster can open the files all day, and the loss is
+      // discovered at the first redeploy, by which point the documents a claim
+      // was assessed on no longer exist.
+      //
+      // So it degrades outside production and refuses to start inside it,
+      // rather than being the kind of setting somebody means to change later.
+      if (this.configService.get<string>('NODE_ENV') === 'production') {
+        throw new Error(
+          'Supabase storage is not configured. Set SUPABASE_URL and ' +
+            'SUPABASE_SERVICE_ROLE_KEY — the local-filesystem fallback stores claimant ' +
+            'evidence on the container disk, where a redeploy destroys it.'
+        );
+      }
+
       this.logger.log(
         `Supabase not configured; using local filesystem fallback at ${this.localStorageRoot}`
       );

@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 150 22% 97%;
+    --foreground: 164 44% 10%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
@@ -14,14 +14,14 @@
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 152 18% 94%;
+    --muted-foreground: 164 12% 42%;
     --accent: 150 90% 35%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 156 17% 87%;
+    --input: 156 17% 84%;
     --ring: 158 82% 25%;
     --radius: 0.75rem;
   }
@@ -55,6 +55,30 @@
   }
   body {
     @apply bg-background text-foreground text-sm;
+    background-image:
+      radial-gradient(circle at 88% -10%, hsl(var(--primary) / 0.08), transparent 28rem),
+      linear-gradient(180deg, hsl(var(--background)), hsl(150 24% 96%));
+    background-attachment: fixed;
+    letter-spacing: -0.004em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.65);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .bg-card.rounded-xl,
+  [class*='rounded-xl'].border.bg-card {
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.025),
+      0 12px 34px hsl(164 34% 15% / 0.045);
   }
 }
 

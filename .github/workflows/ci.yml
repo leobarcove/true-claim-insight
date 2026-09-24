@@ -58,6 +58,9 @@ jobs:
           done
           exit $failed
 
+      - name: Lint TypeScript workspaces
+        run: pnpm lint
+
   compliance:
     runs-on: ubuntu-latest
     steps:

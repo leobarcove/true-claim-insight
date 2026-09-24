@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Paperclip, Send, UserRound } from 'lucide-react';
+import { ArrowLeft, Loader2, Paperclip, Plus, Send, UserRound } from 'lucide-react';
 import { CHOICE_DISPLAY_MAX, formatDateAnswer, type FlowStep } from '@tci/shared-types';
 
 import { uploadCaseDocument } from '@/hooks/use-cases';
@@ -31,7 +31,12 @@ import { cn } from '@/lib/utils';
 export function CaseIntakePage() {
   const navigate = useNavigate();
 
-  const { data: conversation, isLoading } = useConversation();
+  const {
+    data: conversation,
+    isLoading,
+    isError: conversationFailed,
+    refetch: retryConversation,
+  } = useConversation();
   const start = useStartConversation();
   const sendTurn = useSendTurn();
 
@@ -110,6 +115,36 @@ export function CaseIntakePage() {
     );
   }
 
+  if (conversationFailed || start.isError) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
+        <PageHeader onBack={() => navigate('/tracker')} title="Make a claim" />
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div className="max-w-sm space-y-4 text-center">
+            <p className="font-semibold text-foreground">We could not open your claim form.</p>
+            <p className="text-sm text-muted-foreground">
+              Check your connection and try again. If this keeps happening, return to your cases and
+              contact our team.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (conversationFailed) {
+                  void retryConversation();
+                } else {
+                  start.mutate(navigator.language?.split('-')[0]);
+                }
+              }}
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <PageHeader
@@ -162,6 +197,31 @@ export function CaseIntakePage() {
               onSkip={() => send({ text: 'skip' })}
               onAttach={() => fileInputRef.current?.click()}
             />
+
+            {/*
+              A finished claim, with nobody taken over: `step` is null because
+              the flow has nothing left to ask, so `AnswerControl` above draws
+              nothing. The gateway already knows what to say here — "would you
+              like to start another claim?" — for every messaging channel,
+              because a claimant there can always just send another message
+              and the gateway notices the case is done and offers it. The web
+              chat had no equivalent: once the composer had nothing to render,
+              there was no way to send *any* message, so a claimant with a
+              second trip to claim for was stuck reading their first claim's
+              transcript forever, same shape of gap as "Talk to a person"
+              below before that button existed.
+            */}
+            {!step && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => send({ text: 'Start another claim' })}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/40 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                File another claim
+              </button>
+            )}
 
             {/*
               The way out, on every step.
@@ -248,17 +308,22 @@ export function AnswerControl({
 
     return (
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {options?.map(choice => (
-            <button
-              key={choice.value}
-              disabled={busy}
-              onClick={() => onChoose(choice.value)}
-              className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
-            >
-              {choice.label}
-            </button>
-          ))}
+        <div
+          aria-label="Answer choices"
+          className="max-h-[45dvh] overflow-y-auto overscroll-contain pr-1"
+        >
+          <div className="flex flex-wrap gap-2">
+            {options?.map(choice => (
+              <button
+                key={choice.value}
+                disabled={busy}
+                onClick={() => onChoose(choice.value)}
+                className="rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-60"
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {step.allowOther && (

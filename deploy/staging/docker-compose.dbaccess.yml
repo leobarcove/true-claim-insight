@@ -1,0 +1,39 @@
+# Optional: reach the staging database from your own machine.
+#
+# Enable it with `./deploy.sh --db-access`, which records the choice in
+# .env.staging so it survives every later deployment. Turn it off again with
+# `./deploy.sh --no-db-access`. Never add this file to `dc()` by hand — the
+# whole point is that the setting outlives a `git pull`.
+#
+# WHY THIS FILE IS IN THE REPO
+#   It replaces an untracked override that had to be re-created after every
+#   deploy. `stash_server_changes_before_pull` sweeps untracked files into a
+#   stash and never pops them, so a local copy of this silently disappeared on
+#   each run and the database became unreachable again. Tracked, it cannot.
+#
+# WHY 127.0.0.1 IS LOAD-BEARING
+#   UFW's default incoming policy on this host is ALLOW and Docker publishes
+#   ports below UFW, so `5432:5432` would put the claims database on the public
+#   internet with a password as the only control. Bound to loopback it is
+#   reachable only from the host itself, which means an SSH tunnel and therefore
+#   the server's SSH key.
+#
+#   deploy.sh's port guard enforces exactly that distinction: it permits a
+#   published port only when it is bound to 127.0.0.1, and still refuses
+#   0.0.0.0 or a bare `5432:5432`. Widening the bind here does not widen the
+#   guard — it aborts the deployment instead.
+#
+# HOW TO CONNECT
+#   From your machine, open the tunnel:
+#     ssh -N -L 5432:127.0.0.1:5432 -i ~/.ssh/id_rsa_fitarch root@89.233.105.237
+#   then point the client at localhost:5432, database true_claim_insight, user
+#   tci, password POSTGRES_PASSWORD from deploy/staging/.env.staging.
+#
+# STAGING HOLDS SYNTHETIC DATA ONLY (docs/MASTER_PLAN.md §8) — but it is still
+# encrypted personal-data shaped, so treat a dump of it as you would the real
+# thing and never copy it anywhere unencrypted.
+
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:5432:5432'

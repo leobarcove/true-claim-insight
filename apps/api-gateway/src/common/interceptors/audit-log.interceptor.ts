@@ -67,7 +67,16 @@ export class AuditLogInterceptor implements NestInterceptor {
         ...auditTarget(method, url),
         actorId: request.user?.id ?? null,
         actorType: actorTypeFor(request.user?.role),
-        userId: request.user?.id ?? null,
+        // `userId` is the *staff* user column and carries a foreign key to
+        // `users`; a claimant id is not one, so writing it there violated the
+        // constraint and the whole row was lost. Every authenticated claimant
+        // action was therefore unaudited — visible only as a logged failure,
+        // which is the §3.6 shape again: a control that exists, reads as
+        // working, and does not run.
+        //
+        // The actor is still recorded: `actorId` names whoever acted, staff or
+        // claimant. This is the same split `CasesService.audit` already makes.
+        userId: request.user?.role === 'CLAIMANT' ? null : (request.user?.id ?? null),
         tenantId: request.tenantContext?.tenantId ?? request.user?.currentTenantId ?? null,
         ipAddress: request.ip || request.headers['x-forwarded-for'] || null,
         userAgent: request.headers['user-agent'] ?? null,

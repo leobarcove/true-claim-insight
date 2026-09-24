@@ -45,6 +45,7 @@ import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { DocumentValidationService } from './document-validation.service';
 import { isInlineRenderable, resolveMimeType } from './document-media';
+import { assertAllowedUpload } from './upload-allowlist';
 import { EncryptionService } from '@tci/crypto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ClaimsService } from '../claims/claims.service';
@@ -55,6 +56,35 @@ import { render } from '../notifications/templates';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto } from './dto/review-case.dto';
+
+/** Name supplied in intake, kept separate from a verified claimant record. */
+export function statedClaimantNameFromAnswers(answers: unknown): string | null {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return null;
+  const value = (answers as Record<string, unknown>)['claimant-name'];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * The name this claim was stated to be for, from whichever source has it.
+ *
+ * Two sources, deliberately ranked. `claimant-name` is step one of every flow
+ * and asks for the name as it appears on the IC or passport — the name AMLA
+ * screening screens and documents are matched against — so it wins as soon as
+ * it exists. `claimantNameDeclared` is what the agent confirmed at the consent
+ * declaration, which happens before step one; it is the only name a case has
+ * while it sits in DRAFT with no answers.
+ *
+ * Null when neither is set, which is the caller's cue to fall back to the
+ * claimant identity record. Composed here rather than at each call site: the
+ * list and the detail page disagreeing about whose claim it is was the
+ * original defect, and two independent expressions would let it back in.
+ */
+export function statedClaimantNameOf(
+  answers: unknown,
+  claimantNameDeclared?: string | null
+): string | null {
+  return statedClaimantNameFromAnswers(answers) ?? (claimantNameDeclared?.trim() || null);
+}
 
 /**
  * Allowed case lifecycle transitions. Conversion of MEDICAL cases is
@@ -227,7 +257,11 @@ export class CasesService {
     // default. So the tenant has to be known before the flow can be chosen,
     // which is why promotion runs ahead of answer validation rather than after.
     const promoted = await this.promoteAnswers(answers);
-    const tenantId = await this.resolveCaseTenant(tenantContext, promoted.policyId as string | null);
+    const tenantId = await this.resolveCaseTenant(
+      tenantContext,
+      promoted.policyId as string | null,
+      dto.routeAsClaimant === true
+    );
 
     // Chosen once, here, and pinned onto the row below. Every later turn reads
     // the pin instead of re-selecting.
@@ -256,7 +290,7 @@ export class CasesService {
     const currentStepId =
       answers[flow.entryStepId] === undefined
         ? flow.entryStepId
-        : resolveNextStep(flow, flow.entryStepId, answers) ?? flow.entryStepId;
+        : (resolveNextStep(flow, flow.entryStepId, answers) ?? flow.entryStepId);
 
     const created = await this.prisma.case.create({
       data: {
@@ -267,6 +301,11 @@ export class CasesService {
         category: ClaimCategory.TRAVEL,
         travelClaimType: dto.travelClaimType,
         claimantId,
+        // What this intake declared, recorded against the case rather than
+        // written back onto the shared Claimant row — see the field's note in
+        // schema.prisma. Blank-or-whitespace becomes null, not an empty string,
+        // so display can fall back to the identity record with a plain `??`.
+        claimantNameDeclared: dto.claimantFullName?.trim() || null,
         createdByUserId: isClaimant ? null : tenantContext.userId,
         currentStepId,
         flowDefinitionId,
@@ -332,7 +371,6 @@ export class CasesService {
           bankAccountNumberEncrypted: true,
           bankAccountLast4: true,
           bankAccountHolderName: true,
-          answers: true,
         },
         include: {
           claimant: { select: { id: true, fullName: true, phoneNumber: true } },
@@ -345,9 +383,11 @@ export class CasesService {
     ]);
 
     const data = cases.map(caseRow => {
+      const { answers, ...safeCaseRow } = caseRow;
       const applicable = this.requirementsFor(requirements, caseRow);
       return {
-        ...caseRow,
+        ...safeCaseRow,
+        statedClaimantName: statedClaimantNameOf(answers, caseRow.claimantNameDeclared),
         // Null means "this line has no published checklist", which is a
         // different thing from "nothing uploaded" and reads as a dash.
         completeness: applicable.length
@@ -413,9 +453,17 @@ export class CasesService {
     this.assertAccess(caseRow, tenantContext);
 
     // Operator opening a freshly submitted case moves it into vetting.
+    //
+    // Not the person who submitted it, though. An agent who fills a claim in on
+    // a claimant's behalf reads the case back the moment they submit — and
+    // without this guard that read moved it straight to UNDER_REVIEW, so every
+    // assisted claim arrived in the handling firm's queue already marked as
+    // being looked at when nobody had looked at it. Opening a case you created
+    // is not the same act as picking one out of a queue.
     if (
       caseRow.status === CaseStatus.SUBMITTED &&
-      tenantContext.userRole !== 'CLAIMANT'
+      tenantContext.userRole !== 'CLAIMANT' &&
+      caseRow.createdByUserId !== tenantContext.userId
     ) {
       await this.prisma.case.update({
         where: { id },
@@ -429,10 +477,31 @@ export class CasesService {
       caseRow.status = CaseStatus.UNDER_REVIEW;
     }
 
-    const requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
+    let requirements = this.requirementsFor(await this.evidenceRequirements(), caseRow);
+
+    // A subtype checklist is still too broad when the intake flow branches.
+    // Trip cancellation, for example, can ask for a medical report OR death
+    // evidence OR neither. Show only document types on this case's actual path
+    // so the adjuster is not prompted to collect evidence for a reason the
+    // claimant did not give.
+    if (caseRow.travelClaimType) {
+      const flow = await this.flows.forCase(caseRow);
+      const onPath = pathSteps(flow, caseRow.answers as CaseAnswers);
+      const documentTypesOnPath = new Set(
+        flow.steps
+          .filter(step => step.answerType === 'document' && onPath.has(step.id))
+          .flatMap(step => (step.documentType ? [String(step.documentType)] : []))
+      );
+      requirements = requirements.filter(req => documentTypesOnPath.has(req.documentType));
+    }
 
     return {
       ...(await this.withFlowState(caseRow)),
+      // The same field the case list has always sent. Its absence here is why
+      // the two screens could name different people for one claim: the list
+      // showed the name given at intake, the detail page had nothing to show
+      // but the shared identity record.
+      statedClaimantName: statedClaimantNameOf(caseRow.answers, caseRow.claimantNameDeclared),
       evidenceRequirements: requirements,
       completeness: requirements.length
         ? computeCompleteness(
@@ -488,7 +557,7 @@ export class CasesService {
     }
     if (dto.stepId === 'policy-number' && promoted.needsPolicyReview) {
       warnings.push(
-        'We could not find that policy number in our records. You can continue — our team will verify the policy manually.'
+        'We could not find that policy number in our records. You can continue. Our team will verify the policy manually.'
       );
     }
 
@@ -497,8 +566,7 @@ export class CasesService {
       data: {
         answers: this.redactSensitiveAnswers(answers) as Prisma.InputJsonValue,
         currentStepId: nextStepId,
-        status:
-          caseRow.status === CaseStatus.DRAFT ? CaseStatus.IN_PROGRESS : caseRow.status,
+        status: caseRow.status === CaseStatus.DRAFT ? CaseStatus.IN_PROGRESS : caseRow.status,
         ...promoted,
       },
       include: { policy: true },
@@ -611,16 +679,22 @@ export class CasesService {
   ) {
     const caseRow = await this.getEditableCase(id, tenantContext);
 
-    const documentType =
-      (file.fields?.type?.value as DocumentType) || DocumentType.OTHER_DOCUMENT;
-    const stepId = (file.fields?.stepId?.value as string) || null;
-
+    // Fastify parses multipart parts in order. Browser clients historically
+    // appended the file before `type` and `stepId`, so those fields were not
+    // populated until the file stream had been consumed. Reading them first
+    // silently filed every piece of evidence as OTHER_DOCUMENT and left the
+    // checklist at 0/n even though the attachments were visible below it.
     const buffer = await file.toBuffer();
+    const documentType = (file.fields?.type?.value as DocumentType) || DocumentType.OTHER_DOCUMENT;
+    const stepId = (file.fields?.stepId?.value as string) || null;
     // Resolved rather than trusted: Telegram's file download returns an
     // unhelpful content-type, so every upload from that channel was stored as
     // application/octet-stream — which serves back as a download prompt
     // instead of the photo an operator is trying to look at.
     const mimeType = resolveMimeType(file.filename, file.mimetype);
+    // Checked against the bytes, not the name or the header — both of which the
+    // uploader controls. Before storage, so nothing we refuse is ever written.
+    assertAllowedUpload(buffer, file.filename, mimeType);
     const storagePath = await this.storageService.uploadFile(
       buffer,
       file.filename,
@@ -631,7 +705,14 @@ export class CasesService {
     // A claimant re-sending a document means the first one was wrong. Retire it
     // rather than leaving two attached to the same requirement, which would
     // leave an adjuster guessing which one the claimant meant.
-    if (stepId) {
+    //
+    // A step marked `allowMultiple` (damage photographs, for instance) means
+    // the opposite: a second upload is another piece of evidence, not a
+    // correction of the first. Nothing is retired there, so the claimant can
+    // build up a small set of photos instead of each one discarding the last.
+    const flow = await this.flows.forCase(caseRow);
+    const step = stepId ? getStep(flow, stepId) : undefined;
+    if (stepId && !step?.allowMultiple) {
       const superseded = await this.prisma.caseDocument.updateMany({
         where: { caseId: caseRow.id, stepId, supersededAt: null },
         data: { supersededAt: new Date() },
@@ -666,6 +747,55 @@ export class CasesService {
       newValues: { documentId: stored.id, documentType, fileName: file.filename, stepId },
     });
     return stored;
+  }
+
+  /**
+   * Take back one photo from a multi-photo step, without touching the rest.
+   *
+   * Deliberately narrower than a general "delete a document" door. Every other
+   * document step holds at most one live file, and that one already has a way
+   * to correct a mistake — upload again, which retires the old file the same
+   * way this does. Opening single-file retirement here too would mean a
+   * required document could be removed with nothing to replace it, leaving a
+   * step that reads as answered (an id sits in `answers`) with no evidence
+   * behind it. `allowMultiple` is exactly the steps where "fewer than before,
+   * possibly zero" is still a sensible state to submit from.
+   *
+   * Retired, never deleted — same as every other document, for the same PD
+   * 12.8 reason: what was submitted and when is the record.
+   */
+  async removeDocument(id: string, documentId: string, tenantContext: TenantContext) {
+    const caseRow = await this.getEditableCase(id, tenantContext);
+    const flow = await this.flows.forCase(caseRow);
+
+    const document = await this.prisma.caseDocument.findFirst({
+      where: { id: documentId, caseId: caseRow.id, supersededAt: null },
+    });
+    if (!document) {
+      throw new NotFoundException('No such document on this claim.');
+    }
+
+    const step = document.stepId ? getStep(flow, document.stepId) : undefined;
+    if (!step?.allowMultiple) {
+      throw new BadRequestException(
+        'This document cannot be removed on its own — upload a replacement instead.'
+      );
+    }
+
+    await this.prisma.caseDocument.update({
+      where: { id: document.id },
+      data: { supersededAt: new Date() },
+    });
+    await this.audit(caseRow.id, 'CASE_DOCUMENT_REMOVED', tenantContext, {
+      oldValues: {
+        documentId: document.id,
+        documentType: document.documentType,
+        fileName: document.fileName,
+        stepId: document.stepId,
+      },
+    });
+
+    return this.withFlowState(await this.prisma.case.findUniqueOrThrow({ where: { id } }));
   }
 
   /**
@@ -857,12 +987,7 @@ export class CasesService {
     return updated;
   }
 
-  async referToExpert(
-    id: string,
-    note: string,
-    tenantContext: TenantContext,
-    expertName?: string
-  ) {
+  async referToExpert(id: string, note: string, tenantContext: TenantContext, expertName?: string) {
     const caseRow = await this.getStaffCase(id, tenantContext);
     if (caseRow.travelClaimType !== TravelClaimType.MEDICAL) {
       throw new BadRequestException('Only medical cases can be referred to an expert');
@@ -968,12 +1093,7 @@ export class CasesService {
    * offered back.
    */
   async abandon(id: string, note: string, tenantContext: TenantContext) {
-    const updated = await this.transitionWithNote(
-      id,
-      CaseStatus.ABANDONED,
-      note,
-      tenantContext
-    );
+    const updated = await this.transitionWithNote(id, CaseStatus.ABANDONED, note, tenantContext);
     await this.prisma.conversationBinding.updateMany({
       where: { activeCaseId: id },
       data: { activeCaseId: null },
@@ -1115,7 +1235,7 @@ export class CasesService {
         });
         if (isLicensedMode(tenant?.settings)) {
           throw new BadRequestException(
-            "No expert outcome is recorded on this case. Record what the expert answered " +
+            'No expert outcome is recorded on this case. Record what the expert answered ' +
               'before converting — the report will cite it.'
           );
         }
@@ -1183,8 +1303,7 @@ export class CasesService {
           userId: tenantContext.userId,
           createdById: tenantContext.userId,
           updatedById: tenantContext.userId,
-          estimatedLossAmount:
-            estimatedAmount !== undefined ? Number(estimatedAmount) : null,
+          estimatedLossAmount: estimatedAmount !== undefined ? Number(estimatedAmount) : null,
         },
       });
 
@@ -1207,8 +1326,7 @@ export class CasesService {
           hospitalName: this.answerString(answers['hospital-name']),
           referredToExpert: caseRow.status === CaseStatus.REFERRED_TO_EXPERT,
           cancellationReason: this.answerString(answers['cancellation-reason']),
-          estimatedAmountRm:
-            estimatedAmount !== undefined ? Number(estimatedAmount) : null,
+          estimatedAmountRm: estimatedAmount !== undefined ? Number(estimatedAmount) : null,
         },
       });
 
@@ -1262,10 +1380,7 @@ export class CasesService {
       // a routing failure would be the worse outcome. An unrouted claim is
       // visible — it has no mode — where a refused conversion is a dead end.
       try {
-        const decision = await this.assessment.decide(
-          converted.convertedClaimId,
-          tenantContext
-        );
+        const decision = await this.assessment.decide(converted.convertedClaimId, tenantContext);
         this.logger.log(
           `Claim ${converted.convertedClaim?.claimNumber} routed to ${decision.mode}` +
             (decision.fastTracked ? ' (fast-tracked)' : '')
@@ -1311,7 +1426,12 @@ export class CasesService {
    * binding and needs exactly this.
    */
   assertAccess(
-    caseRow: { tenantId: string; claimantId: string | null },
+    caseRow: {
+      tenantId: string;
+      claimantId: string | null;
+      status?: CaseStatus;
+      createdByUserId?: string | null;
+    },
     tenantContext: TenantContext
   ) {
     if (tenantContext.userRole === 'SUPER_ADMIN') return;
@@ -1322,6 +1442,31 @@ export class CasesService {
       return;
     }
     if (caseRow.tenantId !== tenantContext.tenantId) {
+      // A staff member may finish the request they are in the middle of
+      // filling in, even though it belongs to another tenant.
+      //
+      // Not an exception to tenant isolation so much as the consequence of
+      // routing. An assisted claim is routed to the handling adjusting firm at
+      // the moment it is created (WEB_FORM_MICROSITE_PLAN §1.4, Routing), so an
+      // insurer's agent typing one in loses access at the *second section* —
+      // not after submitting. Without this the feature cannot work at all: the
+      // agent creates a case and is then locked out of the claim they are on
+      // the phone about.
+      //
+      // Narrow on purpose, and each clause is load-bearing:
+      //  - `createdByUserId` — this one person, not their colleagues and not
+      //    their tenant. Nobody gains sight of another firm's queue.
+      //  - `DRAFT`/`IN_PROGRESS` — it lapses the moment the request is
+      //    submitted, which is the handover the confirmation screen describes.
+      //    An agent cannot read back a case the handling firm is working.
+      // Everything else about cross-tenant access is unchanged.
+      const isOwnUnsubmittedDraft =
+        caseRow.createdByUserId != null &&
+        caseRow.createdByUserId === tenantContext.userId &&
+        (caseRow.status === CaseStatus.DRAFT || caseRow.status === CaseStatus.IN_PROGRESS);
+
+      if (isOwnUnsubmittedDraft) return;
+
       // Defence-in-depth: cross-tenant reads must look like a 404.
       throw new NotFoundException('Case not found');
     }
@@ -1492,9 +1637,23 @@ export class CasesService {
    */
   private async resolveCaseTenant(
     tenantContext: TenantContext,
-    policyId?: string | null
+    policyId?: string | null,
+    /**
+     * Set by the agent-assisted form. A staff member filling a claim in on a
+     * claimant's behalf is not opening one of their own organisation's cases:
+     * it is the claimant's claim, and it belongs in the handling adjusting
+     * firm's queue exactly as if they had used the form themselves.
+     *
+     * Read as intent, not as permission. The claimant arm below still refuses
+     * anything that is not an adjusting firm, so this cannot route a case
+     * somewhere it could not otherwise go — it only stops the *typist's*
+     * organisation deciding where the work lands.
+     */
+    routeAsClaimant = false
   ): Promise<string> {
-    if (tenantContext.userRole !== 'CLAIMANT') return tenantContext.tenantId;
+    if (tenantContext.userRole !== 'CLAIMANT' && !routeAsClaimant) {
+      return tenantContext.tenantId;
+    }
 
     // 1. Panel routing: the insurer that issued the policy nominates the
     //    handling firm via its tenant settings.
@@ -1574,7 +1733,10 @@ export class CasesService {
    */
   private requirementsFor<
     R extends { category: ClaimCategory; travelClaimType: TravelClaimType | null },
-  >(requirements: R[], caseRow: { category: ClaimCategory; travelClaimType: TravelClaimType | null }): R[] {
+  >(
+    requirements: R[],
+    caseRow: { category: ClaimCategory; travelClaimType: TravelClaimType | null }
+  ): R[] {
     return requirements.filter(
       req =>
         req.category === caseRow.category &&
@@ -1610,9 +1772,23 @@ export class CasesService {
    * next; the list and per-answer responses do not, and embedding eighteen step
    * definitions in each of them would cost far more than the extra request.
    */
-  async getFlowForCase(id: string, tenantContext: TenantContext): Promise<CaseFlow> {
+  async getFlowForCase(
+    id: string,
+    tenantContext: TenantContext,
+    /**
+     * The language to dress the wording in. The channel is the Case's own.
+     *
+     * Passed at all because this path used to pass nothing: the authenticated
+     * surfaces — the claimant app and the agent's assisted form — got base
+     * wording whatever the overlays said, and no locale at all, so a Malay
+     * claimant would have read English questions on one surface and Malay ones
+     * on another for the same claim. The conversation gateway has always
+     * resolved both; this brings the per-case endpoint into line with it.
+     */
+    locale = 'en'
+  ): Promise<CaseFlow> {
     const caseRow = await this.findOne(id, tenantContext);
-    return this.flows.forCase(caseRow);
+    return this.flows.forCase(caseRow, { channel: caseRow.channel, locale });
   }
 
   private buildClaimDescription(type: TravelClaimType, answers: CaseAnswers): string {
@@ -1623,7 +1799,7 @@ export class CasesService {
       this.answerString(answers['diagnosis-description']) ??
       this.answerString(answers['cancellation-reason']) ??
       '';
-    return detail ? `Travel claim — ${label}: ${detail}` : `Travel claim — ${label}`;
+    return detail ? `Travel claim: ${label}: ${detail}` : `Travel claim: ${label}`;
   }
 
   private computeDelayHours(answers: CaseAnswers): number | null {
@@ -1654,6 +1830,3 @@ export class CasesService {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 }
-
-
-

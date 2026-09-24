@@ -12,8 +12,10 @@
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
     "seed": "tsx --env-file-if-exists=../../.env prisma/seed.ts",
+    "refresh-flows": "tsx --env-file-if-exists=../../.env prisma/refresh-flows.ts",
     "clean": "rm -rf dist node_modules/.prisma",
-    "seed:volume": "tsx --env-file-if-exists=../../.env prisma/seed-volume.ts"
+    "seed:volume": "tsx --env-file-if-exists=../../.env prisma/seed-volume.ts",
+    "import:piam": "tsx --env-file-if-exists=../../.env prisma/import-piam-agents.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",

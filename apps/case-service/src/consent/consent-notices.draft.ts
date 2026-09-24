@@ -40,7 +40,7 @@ export const DRAFT_CONSENT_NOTICES: DraftNotice[] = [
     locale: 'en',
     title: 'Processing your claim',
     body: [
-      'We collect and process your personal data — including your name, identity card number, contact details, bank account details and the documents you provide — in order to assess and administer your insurance claim on behalf of your insurer.',
+      'We collect and process your personal data, including your name, identity card number, contact details, bank account details and the documents you provide, in order to assess and administer your insurance claim on behalf of your insurer.',
       'We may share this data with your insurer, and with third parties instructed for your claim such as repairers, medical providers or experts, where doing so is necessary to assess it.',
       'Providing this data is necessary to process your claim. If you do not provide it, we may be unable to assess your claim.',
       'You may ask us for a copy of the personal data we hold about you, ask us to correct it, or withdraw this consent at any time by contacting us. Withdrawing consent may mean we can no longer process your claim.',
@@ -54,7 +54,7 @@ export const DRAFT_CONSENT_NOTICES: DraftNotice[] = [
     locale: 'ms',
     title: 'Pemprosesan tuntutan anda',
     body: [
-      'Kami mengumpul dan memproses data peribadi anda — termasuk nama, nombor kad pengenalan, maklumat perhubungan, butiran akaun bank dan dokumen yang anda berikan — untuk menilai dan mentadbir tuntutan insurans anda bagi pihak penanggung insurans anda.',
+      'Kami mengumpul dan memproses data peribadi anda, termasuk nama, nombor kad pengenalan, maklumat perhubungan, butiran akaun bank dan dokumen yang anda berikan, untuk menilai dan mentadbir tuntutan insurans anda bagi pihak penanggung insurans anda.',
       'Kami mungkin berkongsi data ini dengan penanggung insurans anda, dan dengan pihak ketiga yang diarahkan untuk tuntutan anda seperti pembaiki, penyedia perubatan atau pakar, apabila ia perlu untuk menilai tuntutan tersebut.',
       'Pemberian data ini adalah perlu untuk memproses tuntutan anda. Jika anda tidak memberikannya, kami mungkin tidak dapat menilai tuntutan anda.',
       'Anda boleh meminta salinan data peribadi yang kami simpan mengenai anda, meminta kami membetulkannya, atau menarik balik persetujuan ini pada bila-bila masa dengan menghubungi kami. Penarikan balik persetujuan mungkin bermakna kami tidak lagi boleh memproses tuntutan anda.',

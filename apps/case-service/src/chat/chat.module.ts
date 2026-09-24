@@ -15,6 +15,7 @@ import { PublicConversationController } from './public-conversation.controller';
 import { PHONE_VERIFIER } from './phone-verifier.interface';
 import { TelegramAdapter } from './telegram/telegram.adapter';
 import { WebChatAdapter } from './web-chat/web-chat.adapter';
+import { WebFormAdapter } from './web-chat/web-form.adapter';
 import { WhatsAppAdapter } from './whatsapp/whatsapp.adapter';
 import { WhatsAppWebhookController } from './whatsapp/whatsapp.controller';
 import { ClaimantConversationController } from './claimant-conversation.controller';
@@ -56,6 +57,7 @@ import { TelegramPoller } from './telegram/telegram.poller';
     TelegramAdapter,
     TelegramPoller,
     WebChatAdapter,
+    WebFormAdapter,
     WhatsAppAdapter,
     ClaimantConversationService,
     { provide: CLAIMANT_RESOLVER, useClass: HttpClaimantResolver },
@@ -68,9 +70,10 @@ import { TelegramPoller } from './telegram/telegram.poller';
       useFactory: (
         telegram: TelegramAdapter,
         webChat: WebChatAdapter,
+        webForm: WebFormAdapter,
         whatsapp: WhatsAppAdapter
-      ) => [telegram, webChat, whatsapp],
-      inject: [TelegramAdapter, WebChatAdapter, WhatsAppAdapter],
+      ) => [telegram, webChat, webForm, whatsapp],
+      inject: [TelegramAdapter, WebChatAdapter, WebFormAdapter, WhatsAppAdapter],
     },
   ],
   exports: [ConversationGateway, ConversationsService],

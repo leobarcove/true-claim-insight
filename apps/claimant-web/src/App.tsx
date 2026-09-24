@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
 import { WelcomePage } from '@/pages/welcome';
 import { PublicChatPage } from '@/pages/chat';
+import { ClaimFormPage } from '@/pages/form';
+import { AgentFormPage } from '@/pages/agent';
+import { currentSurface } from '@/lib/surface';
 import { TelegramMiniAppPage } from '@/pages/telegram';
 import { LoginPage } from '@/pages/login';
 import { VerifyOtpPage } from '@/pages/verify-otp';
@@ -27,23 +29,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 import { AssessmentTrackerPage } from '@/pages/tracker';
 
 function App() {
-  useEffect(() => {
-    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = (isDark: boolean) => {
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    applyTheme(darkModeMediaQuery.matches);
-    const listener = (e: MediaQueryListEvent) => applyTheme(e.matches);
-    darkModeMediaQuery.addEventListener('change', listener);
-
-    return () => darkModeMediaQuery.removeEventListener('change', listener);
-  }, []);
-
+  // No theme effect here on purpose: the app is light in every browser,
+  // whatever the OS prefers. See the note on `:root` in styles/globals.css.
   return (
     <BrowserRouter>
       {/*
@@ -69,9 +56,46 @@ function App() {
         Only from `sm:` up. On a real phone the app IS the device; a bezel
         drawn around a screen that is already a screen just eats it.
       */}
-      <div className="flex h-dvh justify-center bg-zinc-200 dark:bg-black sm:py-8">
-        <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
-          <div className="flex min-h-0 flex-1 flex-col safe-area-top safe-area-bottom">
+      <Routes>
+        {/*
+          The form is a website, not an app-in-a-frame.
+
+          Every other page renders inside the 430px phone column above, because
+          every other page *is* a phone app. The form is desktop-first — six
+          fields at once, a section list beside them, a summary rail — and
+          drawing that inside a phone bezel would be a website pretending to be
+          an app pretending to be a website. So it sits outside the frame and
+          brings its own full-width shell.
+
+          Declared before the framed routes and outside them, rather than
+          adding a `layout` flag threaded through the shell: one route that
+          needs a different frame is a route, not a configuration system.
+        */}
+        <Route path="/form" element={<SurfaceRoute />} />
+        <Route path="*" element={<FramedRoutes />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+/**
+ * Which form to draw, decided by where this was served from.
+ *
+ * One build, two surfaces. The claimant's form asks for a mobile number and
+ * proves it with a code; the agent's asks the agent to sign in and then who
+ * they are filling in for. Nothing the browser sends chooses between them —
+ * see `surfaceFor`.
+ */
+function SurfaceRoute() {
+  return currentSurface() === 'agent' ? <AgentFormPage /> : <ClaimFormPage />;
+}
+
+/** Everything that belongs inside the phone column. */
+function FramedRoutes() {
+  return (
+      <div className="flex h-dvh justify-center bg-zinc-200 sm:items-center sm:p-2">
+        <div className="relative flex h-full w-full max-w-[430px] flex-col overflow-hidden bg-background sm:h-[min(900px,calc(100dvh-1rem))] sm:w-auto sm:aspect-[71.5/149.6] sm:rounded-[2.25rem] sm:border-4 sm:border-zinc-800 sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] sm:ring-1 sm:ring-black/60">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain safe-area-top safe-area-bottom">
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<WelcomePage />} />
@@ -153,7 +177,6 @@ function App() {
           </div>
         </div>
       </div>
-    </BrowserRouter>
   );
 }
 

@@ -22,6 +22,14 @@ import {
   type FlowStep,
 } from '@tci/shared-types';
 import { useCreateCase } from '@/hooks/use-cases';
+import {
+  hasLiveClaimConsent,
+  useAttestVerbalConsent,
+  useClaimantConsent,
+  useResolveClaimant,
+  type ResolvedClaimant,
+} from '@/hooks/use-claimant-consent';
+import { ConsentCapture, type ConsentCaptureState } from '@/components/cases/consent-capture';
 import { cn } from '@/lib/utils';
 
 const TYPE_ICONS: Record<TravelClaimType, any> = {
@@ -60,6 +68,58 @@ export function NewCasePage() {
   const [emailSubject, setEmailSubject] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /**
+   * Consent, which this page never captured and without which
+   * `CasesService.create` refuses to open a Case at all.
+   *
+   * The claimant is resolved before the case is created, because consent is
+   * recorded against a claimant and the case cannot exist until it is. That
+   * ordering is the whole reason this is a separate step rather than another
+   * field on the form.
+   */
+  const [claimant, setClaimant] = useState<ResolvedClaimant | null>(null);
+  const [consentState, setConsentState] = useState<ConsentCaptureState>({
+    confirmed: false,
+    interactionChannel: 'PHONE',
+    interactionReference: '',
+  });
+
+  const resolveClaimant = useResolveClaimant();
+  const attest = useAttestVerbalConsent();
+  const { data: consents, isLoading: loadingConsent } = useClaimantConsent(claimant?.id ?? null);
+  const hasConsent = claimant ? (loadingConsent ? null : hasLiveClaimConsent(consents)) : null;
+
+  const lookUpClaimant = async () => {
+    try {
+      const resolved = await resolveClaimant.mutateAsync({
+        phoneNumber: claimantPhone.trim(),
+        fullName: claimantFullName.trim() || undefined,
+        nric: claimantNric.trim() || undefined,
+      });
+      setClaimant(resolved);
+      if (resolved.fullName && !claimantFullName) setClaimantFullName(resolved.fullName);
+    } catch (error: any) {
+      toast({
+        title: 'Could not look that number up',
+        description: error?.response?.data?.error?.message || error?.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  /** Whether the form may open a case yet, and why not when it may not. */
+  const consentBlocker = (): string | null => {
+    if (!claimant) return 'Check the claimant’s consent before creating the case.';
+    if (hasConsent === null) return 'Checking consent…';
+    if (hasConsent) return null;
+    if (intakeSource === 'EMAIL') {
+      return 'This claimant has no consent on file. An emailed claim cannot be attested to — call them first.';
+    }
+    return consentState.confirmed
+      ? null
+      : 'Confirm the verbal consent declaration before creating the case.';
+  };
 
   const formSteps = useMemo(() => {
     if (!claimType) return [];
@@ -117,8 +177,26 @@ export function NewCasePage() {
       return;
     }
 
+    const blocker = consentBlocker();
+    if (blocker) {
+      toast({ title: blocker, variant: 'destructive' });
+      return;
+    }
+
     try {
+      // Recorded before the case, not after: `create` refuses without a live
+      // consent, so attesting afterwards would be attesting to something that
+      // had already been allowed to happen.
+      if (hasConsent === false) {
+        await attest.mutateAsync({
+          claimantId: claimant!.id,
+          interactionChannel: consentState.interactionChannel,
+          interactionReference: consentState.interactionReference,
+        });
+      }
+
       const created = await createCase.mutateAsync({
+        claimantId: claimant!.id,
         travelClaimType: claimType,
         channel: intakeSource,
         claimantPhone: claimantPhone.trim(),
@@ -349,13 +427,28 @@ export function NewCasePage() {
                 id="claimant-phone"
                 placeholder="+60123456789"
                 value={claimantPhone}
-                onChange={e => setClaimantPhone(e.target.value)}
+                onChange={e => {
+                  setClaimantPhone(e.target.value);
+                  // A resolved claimant belongs to the number that resolved
+                  // them. Editing the number without clearing it would leave
+                  // the consent check — and the attestation about to be
+                  // recorded — attached to somebody else.
+                  setClaimant(null);
+                  setConsentState(current => ({ ...current, confirmed: false }));
+                }}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="claimant-name">Full name</Label>
+              {/*
+                Not `claimant-name`: every travel flow has a step with exactly
+                that id, so this card and the flow-driven fields below rendered
+                two elements sharing one id. The label pointed at whichever came
+                first, and `getElementById` — which the error-focus helper uses —
+                could only ever find one of them.
+              */}
+              <Label htmlFor="claimant-record-name">Full name</Label>
               <Input
-                id="claimant-name"
+                id="claimant-record-name"
                 value={claimantFullName}
                 onChange={e => setClaimantFullName(e.target.value)}
               />
@@ -371,6 +464,24 @@ export function NewCasePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/*
+          Between the claimant and the claim details on purpose. Consent is
+          recorded against a claimant and has to exist before a case can be
+          opened, so it belongs after the person is identified and before
+          anything about their claim is typed — which is also the order the
+          declaration itself asserts.
+        */}
+        <ConsentCapture
+          intakeSource={intakeSource}
+          claimant={claimant}
+          resolving={resolveClaimant.isPending || loadingConsent}
+          hasConsent={hasConsent}
+          state={consentState}
+          onChange={setConsentState}
+          onLookUp={() => void lookUpClaimant()}
+          canLookUp={Boolean(claimantPhone.trim())}
+        />
 
         {/* Flow-driven fields */}
         {claimType && (
@@ -390,8 +501,12 @@ export function NewCasePage() {
           <Button variant="outline" onClick={() => navigate('/cases')}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!claimType || createCase.isPending}>
-            {createCase.isPending ? 'Creating…' : 'Create case'}
+          <Button
+            onClick={handleSave}
+            disabled={!claimType || createCase.isPending || attest.isPending || Boolean(consentBlocker())}
+            title={consentBlocker() ?? undefined}
+          >
+            {createCase.isPending || attest.isPending ? 'Creating…' : 'Create case'}
           </Button>
         </div>
       </div>

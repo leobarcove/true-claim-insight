@@ -143,7 +143,10 @@ describe('RolesGuard — deny by default', () => {
 });
 
 describe('TenantGuard — access to a tenant is a membership', () => {
-  const guard = new TenantGuard({ get: () => undefined } as unknown as Reflector);
+  const guard = new TenantGuard(
+    { get: () => undefined } as unknown as Reflector,
+    { get: () => undefined } as never
+  );
   const run = async (user: Record<string, unknown>, header?: string) => {
     const request: Record<string, any> = { user, headers: header ? { 'x-tenant-id': header } : {} };
     await guard.canActivate(contextFor(request));

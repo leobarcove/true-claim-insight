@@ -132,6 +132,25 @@ export class ConsentService {
     capturedVia?: ConsentChannel;
     capturedByUserId?: string | null;
     ipAddress?: string | null;
+    /**
+     * How an agent-attested verbal consent was obtained.
+     *
+     * Only meaningful with `capturedVia: VERBAL_AGENT_ATTESTED`. Stored in the
+     * row's `metadata` rather than in new columns because the `Consent` model
+     * already carries everything that identifies the act — who captured it
+     * (`capturedByUserId`), when (`grantedAt`), and against exactly which
+     * wording (`noticeId`). What is missing is only the shape of the
+     * conversation, which is the firm's operational record, not the platform's
+     * evidence.
+     *
+     * `interactionReference` is a call or appointment reference we can trace
+     * back — never the recording itself.
+     */
+    attestation?: {
+      interactionChannel: 'PHONE' | 'IN_PERSON' | 'VIDEO' | 'OTHER';
+      interactionReference?: string;
+      attestedByTenantId?: string;
+    };
   }) {
     const { claimantId, purpose, locale = 'en' } = params;
 
@@ -139,7 +158,7 @@ export class ConsentService {
     if (!notice) {
       throw new BadRequestException(
         `No approved ${locale} consent notice exists for ${purpose}. ` +
-          'Consent cannot be recorded against unapproved wording — have the notice ' +
+          'Consent cannot be recorded against unapproved wording. Have the notice ' +
           'reviewed and approved first.'
       );
     }
@@ -151,14 +170,28 @@ export class ConsentService {
     });
     if (existing) return existing;
 
+    const capturedVia = params.capturedVia ?? ConsentChannel.WEB_FORM;
+
+    // An attested verbal consent rests entirely on a staff member's word about
+    // a conversation the platform cannot see. The one thing it must never do is
+    // arrive anonymously: without a capturer there is nobody whose account the
+    // attestation belongs to, and the record would assert that consent was
+    // obtained while naming nobody who says so.
+    if (capturedVia === ConsentChannel.VERBAL_AGENT_ATTESTED && !params.capturedByUserId) {
+      throw new BadRequestException(
+        'An agent-attested verbal consent must name the staff member who attested it.'
+      );
+    }
+
     const consent = await this.prisma.consent.create({
       data: {
         claimantId,
         purpose,
         noticeId: notice.id,
-        capturedVia: params.capturedVia ?? ConsentChannel.WEB_FORM,
+        capturedVia,
         capturedByUserId: params.capturedByUserId ?? undefined,
         ipAddress: params.ipAddress ?? undefined,
+        metadata: params.attestation ? { ...params.attestation } : undefined,
       },
     });
 

@@ -115,7 +115,7 @@ describe('flow authoring', () => {
       expect(evaluateNext(rule, {})).toBe('generic-loss');
     });
 
-    it('drives the real trip-cancellation branch both ways', () => {
+    it('drives the real trip-cancellation branch every way', () => {
       const flow = getFlow(TravelClaimType.TRIP_CANCELLATION);
       const base = { 'estimated-amount': 1200 };
 
@@ -125,6 +125,13 @@ describe('flow authoring', () => {
           'cancellation-reason': 'ILLNESS',
         })
       ).toBe('doc-medical-report');
+
+      expect(
+        resolveNextStep(flow, 'estimated-amount', {
+          ...base,
+          'cancellation-reason': 'DEATH_OF_RELATIVE',
+        })
+      ).toBe('deceased-relationship');
 
       expect(
         resolveNextStep(flow, 'estimated-amount', {

@@ -72,7 +72,7 @@ services:
     env_file: .env.staging
     environment:
       <<: *node-env
-      CORS_ORIGINS: ${ADJUSTER_ORIGIN:?}, ${CLAIMANT_ORIGIN:?}
+      CORS_ORIGINS: ${ADJUSTER_ORIGIN:?}, ${CLAIMANT_ORIGIN:?}, ${AGENT_ORIGIN:?}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -95,6 +95,12 @@ services:
     environment:
       <<: *node-env
       CASE_SERVICE_PUBLIC_URL: ${ADJUSTER_ORIGIN:?}/case-files
+      # The Telegram Mini App opens <this>/tg. Derived here rather than set in
+      # .env.staging because it IS the claimant origin — a second copy of the
+      # same hostname is a second thing to get wrong. The adapter offers the
+      # button only for an https:// value, so a local http:// dry-run simply
+      # shows no button rather than a broken one.
+      CLAIMANT_WEB_URL: ${CLAIMANT_ORIGIN:?}
     volumes:
       - case_storage:/app/apps/case-service/storage
     depends_on:
@@ -168,6 +174,9 @@ services:
     environment:
       ADJUSTER_HOST: ${ADJUSTER_HOST:?}
       CLAIMANT_HOST: ${CLAIMANT_HOST:?}
+      # Same build as CLAIMANT_HOST, different name — the name is what selects
+      # the agent-assisted surface. See deploy/staging/Caddyfile.
+      AGENT_HOST: ${AGENT_HOST:?}
     volumes:
       - caddy_data:/data
       - caddy_config:/config

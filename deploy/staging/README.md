@@ -23,7 +23,8 @@ the KMS/SES paths, are rehearsed rather than deferred (decision recorded in
 | `postgres`, `redis` | stock images | compose network only |
 
 The edge serves the adjuster portal on `ADJUSTER_HOST`, the claimant PWA on
-`CLAIMANT_HOST`, proxies `/api/*` to the gateway, and exposes locally-stored
+`CLAIMANT_HOST`, the same claimant build again on `AGENT_HOST` for the
+agent-assisted form, proxies `/api/*` to the gateway, and exposes locally-stored
 files under `/case-files/*` and `/risk-files/*`. Both frontends are built
 with `VITE_API_URL=/api/v1`, so API traffic is same-origin — no CORS in the
 normal path.
@@ -36,7 +37,7 @@ normal path.
    **gp3 EBS ≥100 GB**, an Elastic IP.
 2. **Security group**: inbound 22 (your IP only), 80, 443. Nothing else —
    Postgres/Redis are never published.
-3. **DNS**: A records for the two hosts (e.g. `adjuster.staging.…` and
+3. **DNS**: A records for the three hosts (e.g. `adjuster.staging.…`, `agent.staging.…` and
    `claim.staging.…`) → the Elastic IP. Caddy then obtains TLS certificates
    automatically on first request.
 4. **Docker**: install Docker Engine + compose plugin (`apt-get install
@@ -50,7 +51,7 @@ normal path.
 cd true-claim-insight/deploy/staging
 ./generate-staging-secrets.sh          # writes .env.staging, mode 600
 # → store ENCRYPTION_MASTER_KEY + NRIC_INDEX_PEPPER in the password manager
-# → set ADJUSTER_HOST / CLAIMANT_HOST / *_ORIGIN to the real domains
+# → set ADJUSTER_HOST / CLAIMANT_HOST / AGENT_HOST / *_ORIGIN to the real domains
 
 docker compose --env-file .env.staging -f docker-compose.staging.yml build
 docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
@@ -76,6 +77,65 @@ docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 there is nothing new. (Migrations are still **authored** locally, never on
 this box.)
 
+## Telegram on staging
+
+The channel is off until staging has a bot of its own. Three facts decide the
+setup, and each is enforced by the code rather than by convention:
+
+- **One bot per environment.** Long-polling is a singleton per token: two
+  pollers each receive half the updates, and claimants appear intermittently
+  ignored. Create a staging-only bot with @BotFather and put its token in
+  `TELEGRAM_BOT_TOKEN`. The development bot stays on the developer's machine.
+- **Polling is opt-in.** `TELEGRAM_POLLING_ENABLED=true` is the template
+  default for staging because it runs exactly one case-service. Polling is
+  outbound only, so the edge needs no route and the security group no change.
+- **The Mini App origin is derived, not typed.** Compose sets
+  `CLAIMANT_WEB_URL` from `CLAIMANT_ORIGIN`, and the bot offers the
+  *Open the form* button only for an `https://` origin. On a local dry-run with
+  `http://claim.localhost` the button simply does not appear.
+
+```bash
+# after filling TELEGRAM_BOT_TOKEN in .env.staging:
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d case-service
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs case-service | grep -i telegram
+# expect: "Telegram long-polling started."
+# a 409 in the log means another poller holds this token — the wrong token was used.
+```
+
+## WhatsApp on staging
+
+Meta delivers to **one callback URL per app**, so the WhatsApp Business Account
+can feed either the developer's tunnel or staging, never both. Three steps, in
+this order — the second fails if the first has not happened:
+
+1. Fill the `WHATSAPP_*` block in `.env.staging` (both `case-service` and
+   `api-gateway` read it; the gateway then sends real login codes by WhatsApp
+   instead of printing them to its log) and recreate those two services.
+2. Prove the handshake from outside before touching Meta:
+   `curl "https://<adjuster-host>/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=<WHATSAPP_WEBHOOK_VERIFY_TOKEN>&hub.challenge=12345"`
+   must return `12345`; a wrong token must return 403.
+3. Repoint the subscription. The console works; so does the Graph API, which
+   is reproducible and preserves the event fields:
+
+   ```bash
+   # AT is the app access token: "<app-id>|<WHATSAPP_APP_SECRET>"
+   curl -s "https://graph.facebook.com/v21.0/<app-id>/subscriptions?access_token=$AT"   # read current fields
+   curl -s -X POST "https://graph.facebook.com/v21.0/<app-id>/subscriptions" \
+     --data-urlencode object=whatsapp_business_account \
+     --data-urlencode callback_url=https://<adjuster-host>/api/webhooks/whatsapp \
+     --data-urlencode verify_token=<WHATSAPP_WEBHOOK_VERIFY_TOKEN> \
+     --data-urlencode "fields=<the comma-separated list read above>" \
+     --data-urlencode access_token=$AT
+   ```
+
+   Meta performs the GET handshake against the new URL inside that call and
+   answers `{"success":true}` only if it passed. Pointing back at the tunnel is
+   the same call with the old URL.
+
+With `NODE_ENV=staging` (the Traefik overlay) the sender allowlist is live, so
+`WHATSAPP_ALLOWED_SENDERS` must name the tester numbers or inbound messages are
+dropped with an error in the case-service log.
+
 ## Local dry-run of this stack
 
 Works on a dev machine without DNS or sudo ports:
@@ -83,8 +143,12 @@ Works on a dev machine without DNS or sudo ports:
 ```ini
 ADJUSTER_HOST=http://adjuster.localhost
 CLAIMANT_HOST=http://claim.localhost
+# The agent-assisted form. Same build as CLAIMANT_HOST — the hostname is what
+# selects the surface, so this must be its own name and not a path.
+AGENT_HOST=http://agent.localhost
 ADJUSTER_ORIGIN=http://adjuster.localhost:8088
 CLAIMANT_ORIGIN=http://claim.localhost:8088
+AGENT_ORIGIN=http://agent.localhost:8088
 CADDY_HTTP_PORT=8088
 CADDY_HTTPS_PORT=8443
 ```

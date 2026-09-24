@@ -53,6 +53,8 @@ export interface CaseSummary {
   category: ClaimCategory | string;
   travelClaimType?: TravelClaimType | string | null;
   claimant?: { id: string; fullName?: string | null; phoneNumber: string } | null;
+  /** Name supplied during intake; it may not have been identity-verified. */
+  statedClaimantName?: string | null;
   policy?: { id: string; policyNumber: string; insuredName?: string } | null;
   policyNumberRaw?: string | null;
   needsPolicyReview: boolean;
@@ -139,6 +141,14 @@ export interface CreateCaseInput {
   claimantPhone?: string;
   claimantFullName?: string;
   claimantNric?: string;
+  /**
+   * Set once the claimant has been resolved, which the capture form now does
+   * before creating the case — consent is recorded against a claimant, and
+   * `create` refuses without a live one. Supplying the id skips the gateway's
+   * own findOrCreate, so the record consent was attached to is provably the
+   * record the case is opened for.
+   */
+  claimantId?: string;
   answers?: Record<string, string | number | boolean>;
   sourceMeta?: Record<string, unknown>;
 }

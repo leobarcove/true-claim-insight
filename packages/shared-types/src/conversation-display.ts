@@ -23,6 +23,7 @@ import { TRAVEL_CLAIM_TYPE_LABELS } from './case-flows';
 /** Buttons the gateway renders itself, rather than from a flow step. */
 export const PAGE_CALLBACK_PREFIX = '__page:';
 export const EDIT_CALLBACK_PREFIX = '__edit:';
+export const EDIT_CANCEL_VALUE = '__edit-cancel';
 export const CONSENT_AGREED_VALUE = '__consent:agree';
 
 /**
@@ -82,6 +83,7 @@ export function describeCallbackValue(
 
   if (value === CONSENT_AGREED_VALUE) return 'Agreed to the privacy notice';
   if (value.startsWith(PAGE_CALLBACK_PREFIX)) return 'Asked for more options';
+  if (value === EDIT_CANCEL_VALUE) return 'Cancelled changing an answer';
   if (value.startsWith(EDIT_CALLBACK_PREFIX)) {
     return `Chose to change "${value.slice(EDIT_CALLBACK_PREFIX.length)}"`;
   }
