@@ -46,7 +46,7 @@ export class ClaimantsController {
    * agent actually needs in order not to re-key a name already on file.
    */
   @Post('lookup')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INTAKE_AGENT', 'SUPER_ADMIN')
   @SkipTenantCheck()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiBearerAuth()
@@ -110,7 +110,7 @@ export class ClaimantsController {
    * before there is a lawful basis for storing it.
    */
   @Post('resolve')
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INTAKE_AGENT', 'SUPER_ADMIN')
   @SkipTenantCheck()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiBearerAuth()

@@ -224,3 +224,35 @@ describe('granting a membership', () => {
     ).resolves.toEqual({ tenantId: 'firm-a', role: 'ADJUSTER' });
   });
 });
+
+describe('a PIAM agent signs in as an intake agent', () => {
+  it('holds INTAKE_AGENT in its linked agency, never ADJUSTER', async () => {
+    const { AuthService } = await import('./auth.service');
+    const agent = {
+      id: 'agent-1',
+      registrationNumber: '999999-01',
+      agentName: 'An Agent',
+      agencyName: 'An Agency',
+      phoneNumber: '+60199990201',
+      tenantId: 'insurer-x',
+      tenantName: 'Insurer X',
+    };
+    const service = new AuthService(
+      { findPiamRegisteredAgentById: jest.fn(async () => agent) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
+    const user: any = await service.validateJwtPayload({
+      sub: 'agent-1',
+      role: 'INTAKE_AGENT',
+      tenantId: 'insurer-x',
+      currentTenantId: 'insurer-x',
+      identityType: 'PIAM_AGENT',
+    } as never);
+    expect(user.role).toBe('INTAKE_AGENT');
+    expect(user.activeTenantId).toBe('insurer-x');
+  });
+});

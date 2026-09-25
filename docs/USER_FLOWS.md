@@ -765,9 +765,12 @@ fraud review`"]
 legal holds · s.143 export`"]
         SR["`SHARIAH_REVIEWER
 read-only`"]
+        AGT["`INTAKE_AGENT
+PIAM agent · takes a claim in`"]
     end
 
     CLM -->|"submit · amend · upload"| CASE["Case"]
+    AGT -->|"assisted intake · routed to the firm"| CASE
     SUP -->|"answer · triage intake"| CONV["Conversation"]
     FA -->|"link policy · reveal payout"| CASE
     ADJ -->|"assess · quantum · report"| CLAIM["Claim"]
@@ -793,6 +796,13 @@ note addressed to it — and decides settlement. It never writes the adjuster's
 findings, quantum, report or site-visit record, and never records the firm's
 time, fees or deadline extensions (PD 1.1, 12.1(c)). Who may reach a claim at
 all is one rule in one place (`assertClaimAccess`).
+
+A PIAM-registered agent signs in as `INTAKE_AGENT`: it finds or creates the
+claimant, attests their verbal consent and fills in the assisted case — and
+reaches nothing else. The case always routes to the handling firm, and the
+agent loses sight of it at submission. It signed in as `ADJUSTER` until
+25 Sep 2026, which gave an agent adjusting work PD 5.2 reserves for adjusting
+employees, or, inside an insurer, no access at all.
 
 Every route states who may call it, and one that states nothing is refused.
 A record belonging to another tenant answers as one that does not exist (404) —

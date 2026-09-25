@@ -63,15 +63,23 @@ export const CLAIMANT_ROLE: RoleName = 'CLAIMANT';
  * functions. `COMPLIANCE_OFFICER`, `FIRM_ADMIN` and `SUPPORT_DESK` exist on
  * both sides; because roles are read from the membership for the *active*
  * tenant, an insurer's compliance officer is simply nobody inside the firm.
+ *
+ * `INTAKE_AGENT` exists on both sides because the job is the same wherever the
+ * agent sits: take a claim in for a claimant, and hand it to the handling firm.
+ * It reaches only the intake routes, so where it sits grants it nothing more.
+ * PIAM-registered agents sign in with it; the agent-assisted design
+ * (WEB_FORM_MICROSITE_PLAN §1.4) has them typing for the insurer they
+ * represent, where ADJUSTER could not exist.
  */
 export const TENANT_ROLES: Readonly<Record<TenantTypeName, readonly RoleName[]>> = {
-  ADJUSTING_FIRM: ['ADJUSTER', 'FIRM_ADMIN', 'COMPLIANCE_OFFICER', 'SUPPORT_DESK'],
+  ADJUSTING_FIRM: ['ADJUSTER', 'FIRM_ADMIN', 'COMPLIANCE_OFFICER', 'SUPPORT_DESK', 'INTAKE_AGENT'],
   INSURER: [
     'FIRM_ADMIN',
     'SIU_INVESTIGATOR',
     'COMPLIANCE_OFFICER',
     'SUPPORT_DESK',
     'SHARIAH_REVIEWER',
+    'INTAKE_AGENT',
   ],
 };
 
@@ -191,6 +199,14 @@ export const ROLE_PROFILES: Readonly<Record<RoleName, RoleProfile>> = {
     customerInformation: 'REDACTED',
     needToKnow:
       "The claim facts, amounts and the adjuster's report. No identity numbers, dates of birth, documents or fraud data.",
+  },
+  INTAKE_AGENT: {
+    purpose:
+      "Takes a claim in on a claimant's behalf: finds or creates the claimant, attests verbal consent, fills and submits the assisted case.",
+    heldIn: ['ADJUSTING_FIRM', 'INSURER'],
+    customerInformation: 'CASE_SCOPED',
+    needToKnow:
+      'The claimant on the call and the draft they are filling in — and only until it is submitted, when the handling firm takes it over.',
   },
   CLAIMANT: {
     purpose: 'The person claiming.',

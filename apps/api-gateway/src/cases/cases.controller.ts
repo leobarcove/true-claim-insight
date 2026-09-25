@@ -74,7 +74,7 @@ export class CasesController {
   // Declared here as well as in case-service because this route finds or
   // creates a claimant *before* forwarding — a side effect the downstream
   // refusal would come too late to prevent.
-  @Roles('CLAIMANT', 'ADJUSTER', 'FIRM_ADMIN')
+  @Roles('CLAIMANT', 'INTAKE_AGENT', 'ADJUSTER', 'FIRM_ADMIN')
   @ApiOperation({ summary: 'Create a travel intake case' })
   async create(@Body() body: any, @Req() req: any) {
     // Staff capture: resolve the claimant by phone/NRIC before proxying, the

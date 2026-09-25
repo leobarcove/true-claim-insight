@@ -1651,7 +1651,11 @@ export class CasesService {
      */
     routeAsClaimant = false
   ): Promise<string> {
-    if (tenantContext.userRole !== 'CLAIMANT' && !routeAsClaimant) {
+    // An intake agent never opens a case in its own organisation: whatever it
+    // takes in is the claimant's claim and goes to the handling firm, so the
+    // flag is not the agent's to leave off.
+    const routedForClaimant = routeAsClaimant || tenantContext.userRole === 'INTAKE_AGENT';
+    if (tenantContext.userRole !== 'CLAIMANT' && !routedForClaimant) {
       return tenantContext.tenantId;
     }
 

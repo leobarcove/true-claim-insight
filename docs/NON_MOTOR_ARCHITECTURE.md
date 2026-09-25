@@ -516,11 +516,15 @@ server-side and each pinned by tests in `apps/case-service/src/common/access/`.
 
    | Tenant type | Roles |
    | --- | --- |
-   | ADJUSTING_FIRM | ADJUSTER, FIRM_ADMIN, COMPLIANCE_OFFICER, SUPPORT_DESK |
-   | INSURER | FIRM_ADMIN, SIU_INVESTIGATOR, COMPLIANCE_OFFICER, SUPPORT_DESK, SHARIAH_REVIEWER |
+   | ADJUSTING_FIRM | ADJUSTER, FIRM_ADMIN, COMPLIANCE_OFFICER, SUPPORT_DESK, INTAKE_AGENT |
+   | INSURER | FIRM_ADMIN, SIU_INVESTIGATOR, COMPLIANCE_OFFICER, SUPPORT_DESK, SHARIAH_REVIEWER, INTAKE_AGENT |
 
    `SUPER_ADMIN` is the platform operator's, outside every tenant; `CLAIMANT` is
-   a separate identity with no membership.
+   a separate identity with no membership. `INTAKE_AGENT` — what a
+   PIAM-registered agent signs in as — reaches only the intake routes (find or
+   create the claimant, attest verbal consent, fill and submit the assisted
+   case), and a case it opens always routes to the handling firm. A test pins
+   that route list, so widening it is a visible decision.
 3. **Rules `@Roles` cannot express** (`common/access/access-rules.ts`):
    - *Who may reach a claim at all* is one rule, `assertClaimAccess`
      (`common/access/claim-access.ts`): the owning tenant, the assigned

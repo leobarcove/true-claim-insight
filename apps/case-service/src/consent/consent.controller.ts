@@ -34,6 +34,13 @@ const CONSENT_ROLES = [
   UserRole.SUPER_ADMIN,
 ] as const;
 
+/**
+ * The intake agent reads the notice it must read out and records the consent
+ * it attested — and nothing else of the consent record (no history, no
+ * withdrawal).
+ */
+const ATTESTING_ROLES = [...CONSENT_ROLES, UserRole.INTAKE_AGENT] as const;
+
 @ApiTags('consent')
 @Controller({ path: 'consent', version: '1' })
 @UseGuards(TenantGuard)
@@ -64,7 +71,7 @@ export class ConsentController {
   }
 
   @Get('notice')
-  @Roles(...CONSENT_ROLES)
+  @Roles(...ATTESTING_ROLES)
   @ApiOperation({ summary: 'Current approved notice for a purpose and locale' })
   notice(@Query('purpose') purpose: ConsentPurpose, @Query('locale') locale = 'en') {
     return this.service.currentNotice(purpose, locale);
@@ -122,7 +129,7 @@ export class ConsentController {
   }
 
   @Post('claimant/:claimantId/grant')
-  @Roles(...CONSENT_ROLES)
+  @Roles(...ATTESTING_ROLES)
   @ApiOperation({ summary: 'Record consent against the approved notice' })
   grant(
     @Param('claimantId') claimantId: string,

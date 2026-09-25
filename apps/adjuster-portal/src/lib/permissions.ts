@@ -105,6 +105,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   // implemented; a permission that grants nothing implies a control that does
   // not exist, so it went until a real Shariah review function is specified.
   SHARIAH_REVIEWER: [PERMISSIONS.CLAIMS_VIEW_ALL],
+  // Works in the claimant app's agent screens, not here: taking a claim in is
+  // the whole of the role, and nothing in the portal is part of it.
+  INTAKE_AGENT: [],
   SUPER_ADMIN: [
     PERMISSIONS.BILLING_MANAGE,
     PERMISSIONS.CLAIMS_VIEW_OWN,

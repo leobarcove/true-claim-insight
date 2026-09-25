@@ -1262,6 +1262,11 @@ enum UserRole {
   COMPLIANCE_OFFICER
   SUPPORT_DESK
   SHARIAH_REVIEWER
+  /// Takes a claim in on a claimant's behalf and nothing else: finds or
+  /// creates the claimant, attests verbal consent, fills and submits the
+  /// assisted case. Not an adjusting employee (PD 5.2) — PIAM-registered
+  /// agents sign in with this role, never ADJUSTER.
+  INTAKE_AGENT
 }
 
 enum TenantType {
@@ -1520,6 +1525,7 @@ enum ActorType {
   COMPLIANCE_OFFICER
   SUPPORT_DESK
   SHARIAH_REVIEWER
+  INTAKE_AGENT
   SYSTEM
 }
 

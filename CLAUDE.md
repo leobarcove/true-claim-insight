@@ -252,6 +252,9 @@ async findOne(id: string, tenantContext?: TenantContext) {
   roles may exist in an `ADJUSTING_FIRM` and which in an `INSURER` — no
   `ADJUSTER` inside an insurer. Enforced at the gateway, in case-service's
   `TenantGuard` and at every grant.
+- **PIAM agents sign in as `INTAKE_AGENT`**, never `ADJUSTER`: intake routes
+  only (pinned by `intake-agent.spec.ts`), and what they open always routes to
+  the handling firm. An agent is not an adjusting employee (PD 5.2).
 - **Deny by default.** Auth and roles guards are global in both the gateway and
   case-service; a route with no `@Roles` / `@Public` / `@InternalRoute` /
   `@Authenticated` / `@DelegatedAuthorisation` is refused, and

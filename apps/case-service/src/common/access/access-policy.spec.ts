@@ -20,13 +20,20 @@ const PRISMA = join(REPO_ROOT, 'packages', 'prisma-client', 'prisma');
 describe('which roles may exist in which kind of tenant', () => {
   it('pins the matrix', () => {
     expect(TENANT_ROLES).toEqual({
-      ADJUSTING_FIRM: ['ADJUSTER', 'FIRM_ADMIN', 'COMPLIANCE_OFFICER', 'SUPPORT_DESK'],
+      ADJUSTING_FIRM: [
+        'ADJUSTER',
+        'FIRM_ADMIN',
+        'COMPLIANCE_OFFICER',
+        'SUPPORT_DESK',
+        'INTAKE_AGENT',
+      ],
       INSURER: [
         'FIRM_ADMIN',
         'SIU_INVESTIGATOR',
         'COMPLIANCE_OFFICER',
         'SUPPORT_DESK',
         'SHARIAH_REVIEWER',
+        'INTAKE_AGENT',
       ],
     });
   });
@@ -67,8 +74,12 @@ describe('which roles may exist in which kind of tenant', () => {
       );
       return match![1].split(',').map(role => role.trim().replace(/'/g, ''));
     };
-    expect(listFor('ADJUSTING_FIRM')).toEqual([...TENANT_ROLES.ADJUSTING_FIRM]);
-    expect(listFor('INSURER')).toEqual([...TENANT_ROLES.INSURER]);
+    // INTAKE_AGENT arrived a day later (25 Sep 2026); no membership could hold
+    // it when this migration ran, so its absence from the lists suspended
+    // nothing. Every other role must match.
+    const atTheTime = (roles: readonly string[]) => roles.filter(role => role !== 'INTAKE_AGENT');
+    expect(listFor('ADJUSTING_FIRM')).toEqual(atTheTime(TENANT_ROLES.ADJUSTING_FIRM));
+    expect(listFor('INSURER')).toEqual(atTheTime(TENANT_ROLES.INSURER));
   });
 });
 
@@ -98,7 +109,7 @@ describe('role profiles (BNM MCIPD 10.25)', () => {
     const roles = block
       .split('\n')
       .map(line => line.trim())
-      .filter(Boolean);
+      .filter(line => line && !line.startsWith('//'));
     expect(Object.keys(ROLE_PROFILES).sort()).toEqual(roles.sort());
   });
 

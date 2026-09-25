@@ -12,6 +12,15 @@ import { OtpService } from './otp.service';
 import { AuditService } from '../common/audit/audit.service';
 import { MembershipLike, resolveEffectiveRole } from './effective-role';
 
+/**
+ * The role a PIAM-registered agent signs in with. Not ADJUSTER: an agent takes
+ * a claim in on a claimant's behalf and is not an adjusting employee (PD 5.2),
+ * and the agent-assisted design has agents typing for the insurer they
+ * represent, where ADJUSTER cannot exist (TENANT_ROLES). INTAKE_AGENT reaches
+ * the intake routes and nothing else.
+ */
+const PIAM_AGENT_ROLE = 'INTAKE_AGENT';
+
 export interface JwtPayload {
   sub: string;
   email?: string;
@@ -325,7 +334,7 @@ export class AuthService {
       {
         tenantId: activeTenantId,
         tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         isDefault: true,
         status: 'ACTIVE',
       },
@@ -334,7 +343,7 @@ export class AuthService {
     const tokens = await this.generateTokens(
       {
         id: registeredAgent.id,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         tenantId: activeTenantId,
         currentTenantId: activeTenantId,
         userTenants,
@@ -349,7 +358,7 @@ export class AuthService {
       action: 'STAFF_LOGIN_SUCCEEDED',
       actorId: registeredAgent.id,
       tenantId: activeTenantId ?? null,
-      metadata: { role: 'ADJUSTER', method: 'mobile-code', keepSignedIn },
+      metadata: { role: PIAM_AGENT_ROLE, method: 'mobile-code', keepSignedIn },
     });
 
     this.logger.log(`PIAM agent signed in by mobile: ${registeredAgent.id}`);
@@ -360,7 +369,7 @@ export class AuthService {
         email: '',
         fullName:
           registeredAgent.agentName ?? registeredAgent.tenantName ?? registeredAgent.agencyName,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         phoneNumber: `+${registeredAgent.phoneNumber.replace(/^\+/, '')}`,
         licenseNumber: registeredAgent.registrationNumber,
         avatarUrl: null,
@@ -444,7 +453,7 @@ export class AuthService {
         if (!agent) throw new UnauthorizedException('PIAM agent not found');
         return this.generateTokens({
           id: agent.id,
-          role: 'ADJUSTER',
+          role: PIAM_AGENT_ROLE,
           tenantId: agent.tenantId,
           currentTenantId: agent.tenantId,
           identityType: 'PIAM_AGENT',
@@ -532,7 +541,7 @@ export class AuthService {
         fullName: agent.agentName ?? agent.tenantName ?? agent.agencyName,
         phoneNumber: `+${agent.phoneNumber.replace(/^\+/, '')}`,
         licenseNumber: agent.registrationNumber,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         tenantId: agent.tenantId,
         currentTenantId: agent.tenantId,
         tenantName: agent.tenantName ?? agent.agencyName,
