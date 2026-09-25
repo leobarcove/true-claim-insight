@@ -3,8 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { CreateWorksheetDto } from './dto/create-worksheet.dto';
 import { QuantumService } from './quantum.service';
@@ -19,7 +18,7 @@ import { QuantumService } from './quantum.service';
  */
 @ApiTags('quantum')
 @Controller({ path: 'claims/:claimId/quantum', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class QuantumController {
   constructor(private readonly service: QuantumService) {}

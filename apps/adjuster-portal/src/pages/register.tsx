@@ -95,7 +95,6 @@ export function RegisterPage() {
         password: data.password,
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
-        role: 'ADJUSTER',
         licenseNumber: data.licenseNumber || undefined,
       });
 

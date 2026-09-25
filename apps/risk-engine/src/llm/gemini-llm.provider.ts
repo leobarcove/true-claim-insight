@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { LlmProvider } from './llm-provider.interface';
+import { LlmProvider, OcrResult } from './llm-provider.interface';
 
 /**
  * LlmProvider impl backed by Google Gemini via @google/genai.
@@ -12,12 +12,14 @@ import { LlmProvider } from './llm-provider.interface';
  *  - Routes document data (incl. MyKad images and NRIC values) through
  *    Google's API, outside Malaysia.
  *
- * ⚠️ THIS IS CURRENTLY THE LIVE DEFAULT whenever GEMINI_API_KEY is set — the
- * caveat below was written as a pre-condition but the default was flipped
- * anyway. Until Phase 2 of docs/MASTER_PLAN.md makes an in-country provider
- * the default for documents containing personal data, do not process real
- * claimant documents through this provider; a cross-border transfer basis
- * under PDPA has not been established.
+ * NOT SELECTED BY DEFAULT, as of 19 August 2026. It used to win automatically
+ * whenever GEMINI_API_KEY was set, so a key left in a .env file was enough to
+ * route claimant documents offshore without anyone choosing it. Reaching this
+ * provider now requires LLM_PROVIDER=gemini explicitly — see LlmModule.
+ *
+ * Do not process real claimant documents through it: a cross-border transfer
+ * basis under PDPA has not been established (docs/MASTER_PLAN.md §3.4). The
+ * platform runs on local models for now.
  *
  * One model handles all four LlmProvider methods (text, vision, OCR,
  * reasoning) — Gemini Flash is multimodal. Override per call site via
@@ -28,7 +30,19 @@ export class GeminiLlmProvider implements LlmProvider {
   private readonly logger = new Logger(GeminiLlmProvider.name);
   private readonly client: GoogleGenAI;
   readonly name = 'Gemini';
+
+  /** Every call crosses a border. Callers must record a TransferRecord. */
+  readonly offshore = true;
   readonly defaultModel: string;
+
+  /**
+   * Gemini Flash is multimodal, so one model serves text and vision alike and
+   * this is deliberately the same id. The interface separates them because the
+   * Ollama path splits the jobs across different models.
+   */
+  get visionModel(): string {
+    return this.defaultModel;
+  }
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -103,10 +117,17 @@ export class GeminiLlmProvider implements LlmProvider {
 
   /**
    * "Pure OCR" path — Ollama uses Surya; Gemini just asks the vision
-   * model to return text. Returns the same {text} shape so consumers
-   * don't care which provider answered.
+   * model to return text. Returns the same shape so consumers don't care which
+   * provider answered.
+   *
+   * No `pages`, and that is not an omission to be filled in later. Grounding
+   * has to come from an engine that cannot invent text which is not on the
+   * page; asking a generative model for bounding boxes would produce
+   * plausible coordinates with nothing holding them to the document. A caller
+   * that needs the page-and-bbox evidence required by
+   * CASE_VERIFICATION_ENGINE.md §8 must use the Surya path and check for it.
    */
-  async ocr(fileBuffer: Buffer, filename: string): Promise<{ text: string }> {
+  async ocr(fileBuffer: Buffer, filename: string): Promise<OcrResult> {
     const response = await this.client.models.generateContent({
       model: this.defaultModel,
       contents: [

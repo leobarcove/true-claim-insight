@@ -3,8 +3,10 @@ import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { LocationService } from './location.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('location')
+@Public()
 @Controller('location')
 @UseGuards(TenantGuard)
 @SkipTenantCheck()

@@ -18,16 +18,15 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
+import { Authenticated } from '../auth/decorators/access.decorator';
 
 @ApiTags('users')
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @ApiBearerAuth('access-token')
 export class UsersController {
   private videoServiceUrl: string;
@@ -54,25 +53,43 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'User created' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async create(@Body() body: any, @CurrentTenant() tenantId: string) {
-    const { password, ...rest } = body;
-    const resolvedTenantId =
-      rest.tenantId && rest.tenantId !== 'SUPER_ADMIN'
-        ? rest.tenantId
-        : tenantId !== 'SUPER_ADMIN'
-          ? tenantId
-          : undefined;
+  async create(
+    @Body() body: any,
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() currentUser: Express.User
+  ) {
+    const { password, email, fullName, phoneNumber, licenseNumber } = body;
+    // Without a role this creates a person and no access — the operator's
+    // screen adds the membership as a separate act. With one, a firm
+    // administrator grants inside their own organisation only, and only a role
+    // that can exist in it; the operator may name any tenant. Both are
+    // checked, never taken from the body on trust.
+    const membership = body.role
+      ? await this.usersService.assertMembershipGrantable(
+          {
+            tenantId: body.tenantId && body.tenantId !== 'SUPER_ADMIN' ? body.tenantId : tenantId,
+            role: body.role,
+          },
+          {
+            role: currentUser.role,
+            activeTenantId: (currentUser as any).activeTenantId ?? tenantId,
+          }
+        )
+      : undefined;
     const bcrypt = await import('bcrypt');
     const hashedPassword = await bcrypt.hash(password || Math.random().toString(36), 10);
     return this.usersService.create({
-      ...rest,
+      email,
+      fullName,
+      phoneNumber,
+      licenseNumber,
       password: hashedPassword,
-      tenantId: resolvedTenantId,
-      role: rest.role || 'ADJUSTER',
+      membership,
     });
   }
 
   @Get(':id')
+  @Authenticated()
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User found' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -110,6 +127,7 @@ export class UsersController {
   }
 
   @Post('avatar')
+  @Authenticated()
   @ApiOperation({ summary: 'Upload a user avatar profile image' })
   async uploadAvatar(@Req() req: any, @CurrentUser() currentUser: Express.User) {
     if (typeof req.isMultipart !== 'function' || !req.isMultipart()) {
@@ -160,6 +178,7 @@ export class UsersController {
   }
 
   @Delete('avatar')
+  @Authenticated()
   @ApiOperation({ summary: 'Delete user avatar' })
   async deleteAvatar(@Req() req: any, @CurrentUser() currentUser: Express.User) {
     const headers = {
@@ -187,6 +206,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Authenticated()
   @ApiOperation({ summary: 'Update user' })
   @ApiResponse({ status: 200, description: 'User updated' })
   @ApiResponse({ status: 404, description: 'User not found' })

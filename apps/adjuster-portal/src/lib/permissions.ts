@@ -36,9 +36,6 @@ export const PERMISSIONS = {
   SIU_ESCALATE: 'siu:escalate',
   SIU_INVESTIGATE: 'siu:investigate',
 
-  // Shariah
-  SHARIAH_REVIEW: 'shariah:review',
-
   // Privacy & PII
   PII_VIEW_UNMASKED: 'pii:view:unmasked',
 
@@ -103,7 +100,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.PII_VIEW_UNMASKED,
   ],
   SUPPORT_DESK: [PERMISSIONS.CLAIMS_VIEW_ALL, PERMISSIONS.CLAIMS_VIEW_BASIC],
-  SHARIAH_REVIEWER: [PERMISSIONS.CLAIMS_VIEW_ALL, PERMISSIONS.SHARIAH_REVIEW],
+  // Read-only, insurer-side (takaful) only — TENANT_ROLES in @tci/shared-types.
+  // A `shariah:review` permission used to sit here that no screen or route
+  // implemented; a permission that grants nothing implies a control that does
+  // not exist, so it went until a real Shariah review function is specified.
+  SHARIAH_REVIEWER: [PERMISSIONS.CLAIMS_VIEW_ALL],
+  // Works in the claimant app's agent screens, not here: taking a claim in is
+  // the whole of the role, and nothing in the portal is part of it.
+  INTAKE_AGENT: [],
   SUPER_ADMIN: [
     PERMISSIONS.BILLING_MANAGE,
     PERMISSIONS.CLAIMS_VIEW_OWN,
@@ -121,7 +125,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.COMPLIANCE_FLAG,
     PERMISSIONS.SIU_ESCALATE,
     PERMISSIONS.SIU_INVESTIGATE,
-    PERMISSIONS.SHARIAH_REVIEW,
     PERMISSIONS.PII_VIEW_UNMASKED,
     PERMISSIONS.CLAIMS_NOTE_PRIVATE,
     PERMISSIONS.SYSTEM_ADMIN,

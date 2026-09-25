@@ -13,16 +13,17 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { UsersService } from '../users.service';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
 import { TenantGuard } from '../../auth/guards/tenant.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 
 @ApiTags('tenants')
 @Controller('tenants')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @ApiBearerAuth('access-token')
-@Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN', 'SUPPORT_DESK')
+// Platform provisioning. Listing every tenant would tell one insurer who the
+// others are; creating or deleting one is the operator's act. Members see their
+// own tenants through their memberships (/auth/me), not here.
+@Roles('SUPER_ADMIN')
 export class TenantsController {
   constructor(private readonly usersService: UsersService) {}
 

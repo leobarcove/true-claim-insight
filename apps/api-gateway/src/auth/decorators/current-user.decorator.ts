@@ -2,7 +2,7 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
  * Extract the current user from the request
- * Use with @UseGuards(JwtAuthGuard)
+ * (authentication is global; `@Public()` routes have no user)
  */
 export const CurrentUser = createParamDecorator(
   (data: string | undefined, ctx: ExecutionContext) => {

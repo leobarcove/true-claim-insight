@@ -6,6 +6,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { INTERNAL_ROUTE_KEY } from '../decorators/access.decorator';
 
 /**
  * Authenticates internal (gateway → service) requests.
@@ -22,14 +25,28 @@ import { ConfigService } from '@nestjs/config';
  *
  * Shared secret is adequate for services on a private network under one
  * operator; migrate to mTLS when deployment artefacts exist (§4.3 A5).
+ *
+ * Registered globally (APP_GUARD) ahead of the roles guard, so no controller
+ * can omit it. `@Public()` routes skip it, and `@InternalRoute()` routes —
+ * service calls made on behalf of no person — use `InternalKeyGuard` instead.
  */
 @Injectable()
 export class InternalAuthGuard implements CanActivate {
   private readonly logger = new Logger(InternalAuthGuard.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly reflector: Reflector
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const skip = [IS_PUBLIC_KEY, INTERNAL_ROUTE_KEY].some(key =>
+      this.reflector.getAllAndOverride<boolean>(key, [context.getHandler(), context.getClass()])
+    );
+    if (skip) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest();
 
     const userId = request.headers['x-user-id'];
@@ -68,7 +85,9 @@ export class InternalAuthGuard implements CanActivate {
     request.user = {
       sub: userId,
       tenantId: tenantId || userRole,
-      role: userRole || 'ADJUSTER',
+      // No role header means no role — never a default one. This once read
+      // `|| 'ADJUSTER'`, which turned a missing header into adjuster access.
+      role: userRole || null,
       internal: true,
     };
 

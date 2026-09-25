@@ -17,6 +17,7 @@ import {
   type SlaTarget,
 } from './sla.calculator';
 import { UnverifiedHolidayYearError } from './working-days';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 /** Live states — a clock in either is still the firm's problem. */
 const LIVE: SlaClockState[] = [SlaClockState.RUNNING, SlaClockState.PAUSED];
@@ -391,16 +392,7 @@ export class SlaService {
   /** Every clock for a claim, newest first — the per-claim SLA history. */
   async forClaim(claimId: string, tenantContext?: TenantContext) {
     if (tenantContext) {
-      const claim = await this.prisma.claim.findUnique({
-        where: { id: claimId },
-        select: { id: true, tenantId: true },
-      });
-      // Confirming a claim exists in another tenant is itself a disclosure,
-      // so absence and refusal are answered identically — see the quantum service.
-      if (!claim) throw new NotFoundException('Claim not found');
-      if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-        throw new NotFoundException('Claim not found');
-      }
+      await assertClaimAccess(this.prisma, claimId, tenantContext);
     }
 
     return this.prisma.slaClock.findMany({
@@ -420,7 +412,9 @@ export class SlaService {
       where: { state: SlaClockState.RUNNING },
       include: {
         policy: true,
-        claim: { select: { claimNumber: true, tenantId: true } },
+        claim: {
+          select: { claimNumber: true, tenantId: true, adjuster: { select: { tenantId: true } } },
+        },
         assignment: { select: { externalRef: true, handlingTenantId: true } },
       },
       orderBy: { dueAt: 'asc' },

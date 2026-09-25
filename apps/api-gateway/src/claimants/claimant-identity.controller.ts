@@ -5,24 +5,22 @@ import { CurrentTenantContext } from '../auth/decorators/current-tenant.decorato
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantContext, TenantGuard } from '../auth/guards/tenant.guard';
 import { ClaimantsService } from './claimants.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Recording a claimant's identity standing.
  *
- * Its own controller rather than a method on `ClaimantsController`, for a
- * reason that cost an hour: that controller's `verify-nric` is deliberately
- * unauthenticated, so its class-level guard is `TenantGuard` alone. Guards run
- * class-level first, so a method-level `JwtAuthGuard` runs *after* the tenant
- * guard has already looked for a user and found none — leaving
- * `tenantContext` undefined and every check that depended on it silently
- * skipped. Verification succeeded with no basis recorded and no audit row.
- *
- * `JwtAuthGuard, TenantGuard` in that order, at class level, is the pattern the
- * rest of the gateway uses. Follow it.
+ * Its own controller rather than a method on `ClaimantsController`, whose
+ * `verify-nric` is deliberately `@Public()`. Authentication is global now
+ * (Sept 2026) and runs before any controller guard, so the tenant guard always
+ * sees the user — the ordering trap that once left `tenantContext` undefined
+ * here, and verification unrecorded, cannot recur. The separation stays
+ * because the two routes have opposite access rules.
  */
 @ApiTags('claimants')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@Roles('ADJUSTER', 'FIRM_ADMIN')
 @Controller('claimants')
 export class ClaimantIdentityController {
   constructor(private readonly claimants: ClaimantsService) {}

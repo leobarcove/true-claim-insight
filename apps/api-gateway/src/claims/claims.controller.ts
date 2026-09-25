@@ -18,15 +18,17 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { CurrentTenant } from '../auth/decorators/current-tenant.decorator';
 import { ClaimantsService } from '../claimants/claimants.service';
 import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 @ApiTags('Claims')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('claims')
 export class ClaimsController {
   private caseServiceUrl: string;
@@ -40,6 +42,9 @@ export class ClaimsController {
   }
 
   @Post()
+  // Mirrors case-service: this route finds or creates a claimant before
+  // forwarding, so it must refuse first rather than rely on the downstream 403.
+  @Roles('ADJUSTER', 'FIRM_ADMIN')
   @ApiOperation({ summary: 'Create a new claim' })
   async create(@Body() createClaimDto: any, @Req() req: any) {
     const headers = {
@@ -396,6 +401,8 @@ export class ClaimsController {
   // ============================================================
 
   @Post('flood')
+  // Same reason as create(): a claimant is found or created before forwarding.
+  @Roles('ADJUSTER', 'FIRM_ADMIN')
   @ApiOperation({ summary: 'Create a new flood claim' })
   async createFlood(@Body() body: any, @Req() req: any) {
     const headers = {

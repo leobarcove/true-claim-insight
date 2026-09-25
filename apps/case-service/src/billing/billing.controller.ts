@@ -2,14 +2,13 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { BillingService } from './billing.service';
 
 @ApiTags('billing')
 @Controller({ path: 'billing', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class BillingController {
   constructor(private readonly service: BillingService) {}
@@ -93,7 +92,7 @@ export class BillingController {
   @Get('statement')
   @ApiOperation({ summary: 'Outstanding fee notes per insurer, aged — the CSP 11.16–11.18 evidence' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
-  statement() {
-    return this.service.insurerStatement();
+  statement(@Tenant() tenantContext: TenantContext) {
+    return this.service.insurerStatement(tenantContext);
   }
 }

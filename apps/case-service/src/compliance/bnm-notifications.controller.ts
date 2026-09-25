@@ -3,14 +3,14 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BnmChangeType } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { BnmNotificationsService } from './bnm-notifications.service';
+import { assertAdjusterDuties } from '../common/access/access-rules';
 
 @ApiTags('bnm-notifications')
 @Controller({ path: 'bnm-notifications', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Roles(UserRole.COMPLIANCE_OFFICER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
 export class BnmNotificationsController {
@@ -18,8 +18,9 @@ export class BnmNotificationsController {
 
   @Get()
   @ApiOperation({ summary: 'The PD 13.1 register, outstanding first, overdue flagged' })
-  list() {
-    return this.service.list();
+  list(@Tenant() tenantContext: TenantContext) {
+    assertAdjusterDuties(tenantContext);
+    return this.service.list(tenantContext);
   }
 
   @Post()
@@ -28,8 +29,10 @@ export class BnmNotificationsController {
     @Body() body: { changeType: BnmChangeType; description: string; occurredAt: string },
     @Tenant() tenantContext: TenantContext
   ) {
+    assertAdjusterDuties(tenantContext);
     return this.service.draft(
       { ...body, occurredAt: new Date(body.occurredAt) },
+      tenantContext.tenantId,
       tenantContext.userId
     );
   }
@@ -41,6 +44,7 @@ export class BnmNotificationsController {
     @Body('reference') reference: string,
     @Tenant() tenantContext: TenantContext
   ) {
+    assertAdjusterDuties(tenantContext);
     return this.service.markNotified(id, reference, tenantContext);
   }
 }

@@ -8,6 +8,7 @@ import { PrismaService } from '../config/prisma.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { CreateFloodClaimDto } from './dto/create-flood-claim.dto';
 import { EncryptionService } from '@tci/crypto';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 /**
  * Flood-specific claim service. Creates both the base Claim row (with
@@ -93,16 +94,9 @@ export class FloodClaimsService {
     if (claim.category !== ClaimCategory.FLOOD) {
       throw new NotFoundException('Claim is not a flood claim');
     }
-    if (
-      tenantContext.tenantId &&
-      claim.tenantId &&
-      claim.tenantId !== tenantContext.tenantId
-    ) {
-      // Defence-in-depth — TenantGuard should already block this, but the
-      // service must enforce it on its own. Cross-tenant data leaks are the
-      // single most expensive bug class in multi-tenant SaaS.
-      throw new NotFoundException('Claim not found');
-    }
+    // The shared rule (common/access/claim-access.ts). The check this replaced
+    // let a claim with no tenant through to anyone.
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
 
     return claim;
   }

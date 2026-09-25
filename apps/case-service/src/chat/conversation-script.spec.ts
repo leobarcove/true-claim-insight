@@ -191,7 +191,13 @@ describe('a claimant is told where to find what we ask for', () => {
     // `parseTextDate` has always taken "16 June 2026" and "today". Only the
     // recovery message said so, so the generous wording was reserved for
     // claimants who had already failed once.
-    expect(codeOnly()).toMatch(/For example 16\/06\/2026, or 16 June 2026/);
+    //
+    // A date step offers the relative words; a date-and-time step does not,
+    // because `parseTextDate` refuses them there rather than invent a clock
+    // reading the claimant never gave. The prompt split in two on main and
+    // this assertion was left checking the old single sentence.
+    expect(codeOnly()).toMatch(/For example 16\/06\/2026, 16 June 2026, "today", or "yesterday"\./);
+    expect(codeOnly()).toMatch(/For example 16\/06\/2026 14:30, or 16 June 2026 2:30pm\./);
   });
 });
 

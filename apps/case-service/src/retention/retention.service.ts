@@ -4,6 +4,7 @@ import { StorageService } from '../common/services/storage.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
 import { RETENTION_FLOOR_YEARS, assertRetentionYears, canPurge } from './retention-rules';
+import { TenantService } from '../tenant/tenant.service';
 
 /**
  * Retention: the seven-year floor, legal holds, and the only purge path.
@@ -21,7 +22,8 @@ export class RetentionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly tenants: TenantService
   ) {}
 
   /** The retention period for a kind of record. Absent row → the floor. */
@@ -53,6 +55,7 @@ export class RetentionService {
     if (!reason?.trim()) {
       throw new BadRequestException('A legal hold requires a reason.');
     }
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
     if (!claim) throw new NotFoundException('Claim not found');
     if (claim.legalHoldAt) {
@@ -86,6 +89,7 @@ export class RetentionService {
     if (!reason?.trim()) {
       throw new BadRequestException('Lifting a legal hold requires a reason.');
     }
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
     if (!claim) throw new NotFoundException('Claim not found');
     if (!claim.legalHoldAt) {

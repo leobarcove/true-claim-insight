@@ -7,14 +7,14 @@ import {
 } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { ComplianceEventsService } from './compliance-events.service';
+import { assertAdjusterDuties } from '../common/access/access-rules';
 
 @ApiTags('compliance-events')
 @Controller({ path: 'compliance-events', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Roles(UserRole.COMPLIANCE_OFFICER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
 export class ComplianceEventsController {
@@ -22,8 +22,9 @@ export class ComplianceEventsController {
 
   @Get()
   @ApiOperation({ summary: 'The register, open and unresolved first' })
-  list(@Query('status') status?: ComplianceEventStatus) {
-    return this.service.list(status);
+  list(@Tenant() tenantContext: TenantContext, @Query('status') status?: ComplianceEventStatus) {
+    assertAdjusterDuties(tenantContext);
+    return this.service.list(tenantContext, status);
   }
 
   @Post()
@@ -40,8 +41,10 @@ export class ComplianceEventsController {
     },
     @Tenant() tenantContext: TenantContext
   ) {
+    assertAdjusterDuties(tenantContext);
     return this.service.raise({
       ...body,
+      tenantId: tenantContext.tenantId,
       source: 'manual',
       raisedByUserId: tenantContext.userId,
     });
@@ -50,6 +53,7 @@ export class ComplianceEventsController {
   @Post(':id/acknowledge')
   @ApiOperation({ summary: 'Acknowledge an open event' })
   acknowledge(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    assertAdjusterDuties(tenantContext);
     return this.service.acknowledge(id, tenantContext);
   }
 
@@ -60,12 +64,14 @@ export class ComplianceEventsController {
     @Body('note') note: string,
     @Tenant() tenantContext: TenantContext
   ) {
+    assertAdjusterDuties(tenantContext);
     return this.service.resolve(id, note, tenantContext);
   }
 
   @Post('board-report')
   @ApiOperation({ summary: 'Generate the Board report; stamps every included event (PD 11.2(d))' })
   boardReport(@Tenant() tenantContext: TenantContext) {
+    assertAdjusterDuties(tenantContext);
     return this.service.boardReport(tenantContext);
   }
 }

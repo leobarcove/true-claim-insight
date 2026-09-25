@@ -5,8 +5,7 @@ import { IsEnum } from 'class-validator';
 
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { AssessmentService } from './assessment.service';
 
@@ -24,7 +23,7 @@ export class EscalateDto {
  */
 @ApiTags('assessment')
 @Controller({ path: 'claims/:claimId/assessment-mode', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class AssessmentController {
   constructor(private readonly service: AssessmentService) {}
