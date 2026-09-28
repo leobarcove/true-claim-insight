@@ -4,8 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { ClaimantConversationService } from './claimant-conversation.service';
 import { ClaimantTurnDto } from './dto/claimant-turn.dto';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
@@ -25,7 +24,7 @@ import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenan
 @ApiTags('claimant-conversation')
 @ApiBearerAuth()
 @Controller({ path: 'conversation', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimantConversationController {
   constructor(private readonly service: ClaimantConversationService) {}

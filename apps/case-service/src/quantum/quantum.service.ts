@@ -6,6 +6,8 @@ import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
 import { CreateWorksheetDto } from './dto/create-worksheet.dto';
 import { calculateQuantum, formatWorksheet, QuantumInput } from './quantum.calculator';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 const D = Prisma.Decimal;
 const dec = (value?: string | null) => (value === undefined || value === null ? undefined : new D(value));
@@ -28,6 +30,7 @@ export class QuantumService {
    * changed and why" gets both figures rather than the latest.
    */
   async create(claimId: string, dto: CreateWorksheetDto, tenantContext: TenantContext) {
+    assertMayAuthorAdjusterWork(tenantContext, 'Preparing a quantum worksheet');
     const claim = await this.loadClaim(claimId, tenantContext);
 
     const input: QuantumInput = {
@@ -143,17 +146,10 @@ export class QuantumService {
       select: { id: true, tenantId: true, category: true },
     });
 
-    // Confirming a claim exists in another tenant is itself a disclosure, so
-    // absence and refusal are answered identically: one message, one status,
-    // for "there is no such claim" and "there is, and it is not yours". This
-    // comment used to sit above a 403 that said the opposite (18 Aug 2026).
     if (!claim) throw new NotFoundException('Claim not found');
-    if (
-      claim.tenantId !== tenantContext.tenantId &&
-      tenantContext.userRole !== 'SUPER_ADMIN'
-    ) {
-      throw new NotFoundException('Claim not found');
-    }
+    // The shared rule: owner, the assigned adjuster's firm, or the appointing
+    // insurer — which reads the worksheet and never writes it.
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
     return claim;
   }
 }

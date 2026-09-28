@@ -13,8 +13,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentTenant, CurrentTenantRole } from '../auth/decorators/current-tenant.decorator';
@@ -24,7 +22,7 @@ import { CreateRoomDto, JoinRoomDto, EndRoomDto, SaveClientInfoDto } from './dto
 
 @ApiTags('video')
 @Controller('video')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @ApiBearerAuth('access-token')
 export class VideoController {
   constructor(private readonly videoService: VideoService) {}
@@ -69,6 +67,7 @@ export class VideoController {
   }
 
   @Get('rooms/:id')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR', 'CLAIMANT')
   @ApiOperation({ summary: 'Get room details' })
   async getRoom(
     @Param('id') id: string,
@@ -84,6 +83,7 @@ export class VideoController {
   }
 
   @Post('rooms/:id/join')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR', 'CLAIMANT')
   @ApiOperation({ summary: 'Join a video room and get Daily.co token' })
   async joinRoom(
     @Param('id') id: string,
@@ -100,6 +100,7 @@ export class VideoController {
   }
 
   @Post('rooms/:id/client-info')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR', 'CLAIMANT')
   @ApiOperation({ summary: 'Save client information for a session' })
   async saveClientInfo(
     @Param('id') id: string,
@@ -139,6 +140,7 @@ export class VideoController {
   }
 
   @Get('claims/:claimId/sessions')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR', 'CLAIMANT')
   @ApiOperation({ summary: 'Get all video sessions for a claim' })
   async getSessions(
     @Param('claimId') claimId: string,
@@ -159,6 +161,7 @@ export class VideoController {
   }
 
   @Get('status')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Check video provider status' })
   async getStatus() {
     try {
@@ -194,6 +197,7 @@ export class VideoController {
   }
 
   @Get('uploads')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get all video uploads' })
   async getAllUploads(
     @Query('page') page?: number,
@@ -216,6 +220,7 @@ export class VideoController {
   }
 
   @Get('uploads/:uploadId')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get video upload details' })
   async getUpload(
     @Param('uploadId') uploadId: string,
@@ -231,6 +236,7 @@ export class VideoController {
   }
 
   @Get('uploads/:uploadId/segments')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get all analyzed segments for an upload' })
   async getUploadSegments(
     @Param('uploadId') uploadId: string,
@@ -251,6 +257,7 @@ export class VideoController {
   }
 
   @Get('uploads/:uploadId/stream')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Stream video from local storage' })
   async streamUpload(@Param('uploadId') uploadId: string, @Res() res: any, @Req() req: any) {
     try {
@@ -305,6 +312,7 @@ export class VideoController {
   }
 
   @Get('uploads/:uploadId/deception-score')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get deception score for uploaded video' })
   async getDeceptionScore(
     @Param('uploadId') uploadId: string,
@@ -347,6 +355,7 @@ export class VideoController {
   }
 
   @Get('uploads/claim/:claimId')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
   @ApiOperation({ summary: 'Get all video uploads for a claim' })
   async getClaimUploads(
     @Param('claimId') claimId: string,

@@ -64,6 +64,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useListParams } from '@/hooks/use-list-params';
 import { InfoTooltip, ListTabs, ListPagination } from '@/components/ui';
 import { useLayout } from '@/components/layout';
+import { TENANT_ROLES } from '@tci/shared-types';
 
 export function TenantsPage() {
   // Tab, search and page live in the URL — see useListParams. One page param
@@ -1200,6 +1201,15 @@ const UserTenantsTable = forwardRef(
   }
 );
 
+/**
+ * Roles a membership may carry in a tenant of this type — TENANT_ROLES, the
+ * same rule the API enforces. SUPER_ADMIN and CLAIMANT never appear: neither
+ * is granted through a membership.
+ */
+function rolesFor(tenantType: string | undefined): string[] {
+  return tenantType ? [...(TENANT_ROLES[tenantType as keyof typeof TENANT_ROLES] ?? [])] : [];
+}
+
 function AssociationFormDialog({
   open,
   onOpenChange,
@@ -1309,7 +1319,13 @@ function AssociationFormDialog({
               disabled={!!association}
               value={formData.tenantId}
               onValueChange={v => {
-                setFormData({ ...formData, tenantId: v });
+                // Keep the role only if it can exist in the newly chosen tenant.
+                const allowed = rolesFor(tenants.find((t: any) => t.id === v)?.type);
+                setFormData({
+                  ...formData,
+                  tenantId: v,
+                  role: allowed.includes(formData.role) ? formData.role : (allowed[0] ?? ''),
+                });
                 setErrors(p => ({ ...p, tenantId: '' }));
               }}
             >
@@ -1336,14 +1352,11 @@ function AssociationFormDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ADJUSTER">Adjuster</SelectItem>
-                <SelectItem value="FIRM_ADMIN">Firm Admin</SelectItem>
-                <SelectItem value="CLAIMANT">Claimant</SelectItem>
-                <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
-                <SelectItem value="SIU_INVESTIGATOR">SIU Investigator</SelectItem>
-                <SelectItem value="COMPLIANCE_OFFICER">Compliance Officer</SelectItem>
-                <SelectItem value="SUPPORT_DESK">Support Desk</SelectItem>
-                <SelectItem value="SHARIAH_REVIEWER">Shariah Reviewer</SelectItem>
+                {rolesFor(tenants.find((t: any) => t.id === formData.tenantId)?.type).map(role => (
+                  <SelectItem key={role} value={role}>
+                    {convertToTitleCase(role)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

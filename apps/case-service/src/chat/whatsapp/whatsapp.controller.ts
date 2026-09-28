@@ -19,6 +19,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { NoEnvelope } from '../../common/decorators/no-envelope.decorator';
 import { ConversationGateway } from '../conversation.gateway';
 import { WhatsAppAdapter, type WhatsAppInboundMessage } from './whatsapp.adapter';
+import { Public } from '../../common/decorators/public.decorator';
 
 /**
  * Meta's inbound webhook.
@@ -43,6 +44,7 @@ import { WhatsAppAdapter, type WhatsAppInboundMessage } from './whatsapp.adapter
  * bumping an internal API version must not silently stop a third party
  * reaching us, and repointing it is a manual step in someone else's dashboard.
  */
+@Public()
 @Controller({ path: 'webhooks/whatsapp', version: VERSION_NEUTRAL })
 export class WhatsAppWebhookController {
   private readonly logger = new Logger(WhatsAppWebhookController.name);

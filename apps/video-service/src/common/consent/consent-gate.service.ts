@@ -39,14 +39,12 @@ export class ConsentGateService {
           claimantId
         )}&purpose=BIOMETRIC_ANALYSIS`,
         {
-          // The guard requires an identity as well as the key. This is a
-          // service, not a person: it identifies itself as such, with
-          // SUPER_ADMIN role only to satisfy the no-tenant path — the route is
-          // TenantScope.NONE and returns a boolean, so the role grants nothing.
+          // An internal route (`@InternalRoute` in case-service): the key is
+          // the whole of the caller's authority. It once had to claim
+          // SUPER_ADMIN to get past the identity check — a service borrowing
+          // the platform operator's role to ask a yes/no question.
           headers: {
             'x-internal-key': this.internalKey,
-            'X-User-Id': 'service:video-service',
-            'X-User-Role': 'SUPER_ADMIN',
           },
         }
       );

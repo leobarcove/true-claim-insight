@@ -5,10 +5,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { firstValueFrom } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { unwrapEnvelope } from '../common/unwrap-envelope';
 import { passThroughDownstreamError } from '../common/proxy-error';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Edge proxy for the conversations inbox.
@@ -19,7 +19,8 @@ import { passThroughDownstreamError } from '../common/proxy-error';
  */
 @ApiTags('Conversations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('conversations')
 export class ConversationsProxyController {
   private readonly caseServiceUrl: string;

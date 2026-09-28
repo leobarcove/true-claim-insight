@@ -7,8 +7,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SignaturesService } from './signatures.service';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
@@ -25,7 +24,7 @@ import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenan
  */
 @ApiTags('signatures')
 @Controller({ path: 'documents', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
 export class SignaturesController {

@@ -29,8 +29,6 @@ import { RecordSiteVisitDto } from './dto/record-site-visit.dto';
 import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 import { AssignAdjusterDto } from './dto/assign-adjuster.dto';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
 import { UserRole } from '../common/guards/roles.guard';
@@ -46,7 +44,7 @@ import { UserRole } from '../common/guards/roles.guard';
 @ApiTags('claims')
 @ApiBearerAuth()
 @Controller('claims')
-@UseGuards(InternalAuthGuard, TenantGuard, RolesGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimsController {
   constructor(private readonly claimsService: ClaimsService,
@@ -68,6 +66,16 @@ export class ClaimsController {
   }
 
   @Get()
+  @Roles(
+    UserRole.CLAIMANT,
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SHARIAH_REVIEWER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get all claims with filters (tenant-scoped)' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -83,6 +91,16 @@ export class ClaimsController {
   }
 
   @Get(':id')
+  @Roles(
+    UserRole.CLAIMANT,
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SHARIAH_REVIEWER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get a claim by ID (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -215,6 +233,14 @@ export class ClaimsController {
   }
 
   @Get(':id/timeline')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get claim timeline/history (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -233,6 +259,13 @@ export class ClaimsController {
   }
 
   @Get(':id/evidence-checklist')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({
     summary:
       'Get evidence checklist for a claim — required documents for its category plus upload status',
@@ -268,6 +301,7 @@ export class ClaimsController {
   }
 
   @Post(':id/notes')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SIU_INVESTIGATOR, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Add a note to a claim (tenant-validated)' })
   @ApiParam({ name: 'id', description: 'Claim UUID' })
   @ApiResponse({
@@ -286,7 +320,16 @@ export class ClaimsController {
   ) {
     return this.claimsService.addNote(id, content, authorId, tenantContext);
   }
+
   @Get('stats')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPPORT_DESK,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get tenant-wide claim statistics' })
   @ApiResponse({
     status: HttpStatus.OK,

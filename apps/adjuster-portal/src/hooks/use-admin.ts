@@ -66,8 +66,17 @@ export interface UserTenantListResponse {
 }
 
 // Tenants
-export function useTenants(params: { page?: number; limit?: number; search?: string } = {}) {
+/**
+ * Every tenant on the platform — the operator's view. The API refuses anyone
+ * else (one insurer must not learn who the others are), so callers that render
+ * for all users pass `enabled` rather than firing a request that will fail.
+ */
+export function useTenants(
+  params: { page?: number; limit?: number; search?: string } = {},
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
+    enabled: options.enabled ?? true,
     queryKey: adminKeys.tenants(params),
     queryFn: async () => {
       const { data } = await apiClient.get<ApiResponse<any>>('/tenants', {

@@ -64,7 +64,7 @@ export class ClaimArchiveService {
         const content =
           entry.source.kind === 'document'
             ? await this.storage.readFile(entry.source.storageUrl)
-            : (await this.reports.render(entry.source.id)).pdf;
+            : (await this.reports.render(entry.source.id, tenantContext)).pdf;
         zip.append(content, { name: entry.archivePath });
       } catch (error) {
         // Declared, never silent: the examiner sees the gap inside the archive

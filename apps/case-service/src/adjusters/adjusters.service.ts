@@ -13,6 +13,29 @@ export class AdjustersService {
   /**
    * Get adjuster's case queue with tenant validation
    */
+  /**
+   * The adjuster, when they belong to the caller's firm; otherwise absent.
+   *
+   * Every per-adjuster record — competency, seniority, licence, conflicts,
+   * CPD, screening — hangs off this. Until September 2026 those routes looked
+   * the adjuster up by id alone, so any firm could read or write another's.
+   * Answered as absence rather than refusal, like claims: a 403 would confirm
+   * the id names someone real in another firm.
+   */
+  async requireInTenant(adjusterId: string, tenantContext: TenantContext) {
+    const adjuster = await this.prisma.adjuster.findUnique({
+      where: { id: adjusterId },
+      select: { id: true, userId: true, tenantId: true },
+    });
+    if (
+      !adjuster ||
+      (adjuster.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN')
+    ) {
+      throw new NotFoundException(`Adjuster with ID ${adjusterId} not found`);
+    }
+    return adjuster;
+  }
+
   async getQueue(adjusterId: string, status?: string, tenantContext?: TenantContext) {
     const adjuster = await this.prisma.adjuster.findUnique({
       where: { id: adjusterId },

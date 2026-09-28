@@ -21,22 +21,22 @@ import { CreateCaseDto } from './dto/create-case.dto';
 import { PatchAnswerDto } from './dto/patch-answer.dto';
 import { CaseQueryDto, LinkPolicyDto, ReviewCaseDto } from './dto/review-case.dto';
 import { RecordExpertOutcomeDto, ReferToExpertDto } from './dto/expert-outcome.dto';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { RolesGuard, UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 
 const STAFF_ROLES = [UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN] as const;
-// Intake endpoints: claimant self-serve plus adjusting staff. RolesGuard treats
-// missing @Roles metadata as allow-all, so every route must declare its list —
-// otherwise support/compliance roles reach claimant PII and bank details.
-const INTAKE_ROLES = [UserRole.CLAIMANT, ...STAFF_ROLES] as const;
+// Intake endpoints: claimant self-serve, adjusting staff, and the intake agent
+// who fills a claim in on a claimant's behalf. The agent is here and in no
+// other list on this controller — it takes a claim in; it does not work one.
+// (RolesGuard denies a route with no @Roles, so every route declares its list.)
+const INTAKE_ROLES = [UserRole.CLAIMANT, UserRole.INTAKE_AGENT, ...STAFF_ROLES] as const;
 
 @ApiTags('cases')
 @ApiBearerAuth()
 @Controller({ path: 'cases', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class CasesController {
   constructor(private readonly service: CasesService) {}

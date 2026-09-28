@@ -14,9 +14,7 @@ export interface RegisterInput {
   password: string;
   fullName: string;
   phoneNumber: string;
-  role: 'ADJUSTER' | 'FIRM_ADMIN';
   licenseNumber?: string;
-  tenantId?: string;
 }
 
 export interface TokenPair {

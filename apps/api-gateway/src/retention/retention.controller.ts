@@ -1,8 +1,8 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
+import { Controller, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ClaimantRetentionService } from './claimant-retention.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Manual trigger for the claimant anonymisation sweep.
@@ -13,7 +13,7 @@ import { ClaimantRetentionService } from './claimant-retention.service';
  */
 @ApiTags('Retention')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@Roles('SUPER_ADMIN')
 @Controller('retention/claimants')
 export class RetentionController {
   constructor(private readonly retention: ClaimantRetentionService) {}

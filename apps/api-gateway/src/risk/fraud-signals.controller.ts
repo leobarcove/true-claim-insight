@@ -12,8 +12,8 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { catchError, map } from 'rxjs/operators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Proxy controller for risk-engine's fraud-signals endpoints. Keeps the
@@ -21,7 +21,8 @@ import { TenantGuard } from '../auth/guards/tenant.guard';
  */
 @ApiTags('Fraud Signals')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@Roles('ADJUSTER', 'FIRM_ADMIN', 'SIU_INVESTIGATOR')
 @Controller('fraud-signals')
 export class FraudSignalsController {
   private readonly riskEngineUrl: string;

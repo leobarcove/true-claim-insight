@@ -90,6 +90,12 @@ export class SlaProcessor extends WorkerHost {
 
             // Level 3 is where PD 11.2(d) Board escalation attaches. Idempotent
             // by clock id, so repeat sweeps observe the same breach once.
+            // A clock hangs on a claim or an assignment, so the owning tenant
+            // comes from whichever it has. The platform-default policy carries
+            // no tenant, so it cannot stand in for one.
+            const owningTenantId =
+              clock.claim?.tenantId ?? clock.assignment?.handlingTenantId ?? clock.policy.tenantId;
+
             const draft = slaBreachEvent({
               id: clock.id,
               stage: clock.stage,
@@ -97,24 +103,32 @@ export class SlaProcessor extends WorkerHost {
               monitorOnly: clock.policy.monitorOnly,
               claimNumber: clock.claim?.claimNumber ?? null,
             });
-            if (draft) {
+            // The register is the handling firm's Board's (PD 11.2(d)), so the
+            // row goes to the firm doing the work — the appointed firm, else the
+            // assigned adjuster's — before the claim's owning tenant.
+            const firmTenantId =
+              clock.assignment?.handlingTenantId ??
+              clock.claim?.adjuster?.tenantId ??
+              owningTenantId;
+            if (draft && firmTenantId) {
               await this.compliance.raiseQuietly({
                 ...draft,
                 claimId: clock.claimId ?? undefined,
+                tenantId: firmTenantId,
                 source: 'sla-sweep',
               });
+            } else if (draft) {
+              // Every register row belongs to a firm; a breach with no owner
+              // cannot be filed against one, so say so rather than guess.
+              this.logger.error(
+                `COMPLIANCE EVENT NOT RAISED for ${subject}: no owning tenant — the 11.2(d) register is incomplete`
+              );
             }
 
             // Until this existed the sweep's only output was this log line and
             // a database row — recorded evidence that a deadline was missed,
             // reaching nobody who could act on it. Firm-owned stages only:
             // an insurer-side delay is measured, never escalated against us.
-            // A clock hangs on a claim or an assignment, so the owning tenant
-            // comes from whichever it has. The platform-default policy carries
-            // no tenant, so it cannot stand in for one.
-            const owningTenantId =
-              clock.claim?.tenantId ?? clock.assignment?.handlingTenantId ?? clock.policy.tenantId;
-
             if (!clock.policy.monitorOnly && owningTenantId) {
               await this.notifications.enqueue({
                 tenantId: owningTenantId,

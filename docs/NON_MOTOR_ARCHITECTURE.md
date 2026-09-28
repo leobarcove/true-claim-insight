@@ -500,6 +500,60 @@ sub-limit, say — it belongs in the *inputs* handed to the calculator
 branch inside it. The moment the arithmetic forks per category, the
 orderings drift apart and the figures stop being comparable.
 
+## Access control (added 24 Sep 2026)
+
+Who may do what to a non-motor claim is decided in three layers, each enforced
+server-side and each pinned by tests in `apps/case-service/src/common/access/`.
+
+1. **Every route declares a rule.** The gateway and case-service both deny by
+   default: a route with no `@Roles`, `@Public`, `@InternalRoute`,
+   `@Authenticated` or (gateway proxies) `@DelegatedAuthorisation` is refused.
+   A new endpoint for a new peril is closed until someone states who may call it.
+2. **A role is a membership in a tenant.** The gateway resolves it from
+   `UserTenant` for the active tenant and forwards it; `TENANT_ROLES`
+   (`@tci/shared-types`) decides which roles may exist in an `ADJUSTING_FIRM`
+   and which in an `INSURER`:
+
+   | Tenant type | Roles |
+   | --- | --- |
+   | ADJUSTING_FIRM | ADJUSTER, FIRM_ADMIN, COMPLIANCE_OFFICER, SUPPORT_DESK, INTAKE_AGENT |
+   | INSURER | FIRM_ADMIN, SIU_INVESTIGATOR, COMPLIANCE_OFFICER, SUPPORT_DESK, SHARIAH_REVIEWER, INTAKE_AGENT |
+
+   `SUPER_ADMIN` is the platform operator's, outside every tenant; `CLAIMANT` is
+   a separate identity with no membership. `INTAKE_AGENT` — what a
+   PIAM-registered agent signs in as — reaches only the intake routes (find or
+   create the claimant, attest verbal consent, fill and submit the assisted
+   case), and a case it opens always routes to the handling firm. A test pins
+   that route list, so widening it is a visible decision.
+3. **Rules `@Roles` cannot express** (`common/access/access-rules.ts`):
+   - *Who may reach a claim at all* is one rule, `assertClaimAccess`
+     (`common/access/claim-access.ts`): the owning tenant, the assigned
+     adjuster's firm, the appointing insurer, and a claimant for their own claim.
+     So the appointing insurer reads the claim, its documents, reports, quantum,
+     assessment mode, SLA history and the fee note addressed to it, and its claim
+     list includes claims where it is `insurerTenantId`. A service method that
+     takes a claim id without reaching this rule fails the build
+     (`claim-access-coverage.spec.ts`).
+   - *Independence* — only an adjusting firm writes the adjuster's work:
+     reports, quantum worksheets, assessment-mode decisions, site-visit bookings
+     and findings, the loss figures on a claim, quality reviews, answers to
+     appointments (PD 1.1, 12.1(c)) — and its own business with the insurer:
+     time, disbursements, fee notes, and CSP 10.13 exceptional circumstances.
+   - *The firm's own duties* — the compliance-event, key-person and BNM
+     notification registers are tenant-scoped and refused to insurers.
+   - *Separation of duties* — nobody acts on themselves (seniority, licence,
+     competency, screening, conflict resolution).
+
+What each role may see of the customer's information — the MCIPD 10.25 role
+profile — is `ROLE_PROFILES` in the same module, and the claim redaction in
+`tenant.service.ts` follows it: support desk and Shariah reviewer never receive
+identity numbers, dates of birth, documents or fraud and behavioural data.
+
+A new peril adds no access code if it reuses these objects. A new object hung
+off a claim must reach `assertClaimAccess` (the coverage test enforces it), and
+one that records the adjuster's findings must also call
+`assertMayAuthorAdjusterWork` on write.
+
 ## What's deferred (intentionally)
 
 - **Site visit scheduling** — would extend `Session` with a `mode` enum

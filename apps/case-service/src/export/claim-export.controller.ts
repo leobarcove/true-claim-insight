@@ -3,15 +3,14 @@ import type { FastifyReply } from 'fastify';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { ClaimArchiveService } from './claim-archive.service';
 import { ClaimExportService } from './claim-export.service';
 
 @ApiTags('claim-export')
 @Controller({ path: 'claims', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ClaimExportController {
   constructor(

@@ -18,6 +18,8 @@ import { SlaService } from '../sla/sla.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { render } from '../notifications/templates';
 import { acknowledgementOutstanding, canOpenClaim, canTransition } from './assignment-lifecycle';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
+import { assertClaimAccess } from '../common/access/claim-access';
 
 export interface ReceiveAssignmentInput {
   insurerTenantId: string;
@@ -126,6 +128,25 @@ export class AssignmentsService {
     return assignment;
   }
 
+  /**
+   * An appointment the caller's firm is answering. Acknowledging, declining,
+   * opening and completing are the appointed firm's acts — the insurer made
+   * the appointment and can see it, but does not answer it on the firm's
+   * behalf (PD 1.1). Until September 2026 an insurer administrator could
+   * decline or complete the firm's appointments.
+   */
+  private async loadAsHandler(id: string, tenantContext: TenantContext, act: string) {
+    assertMayAuthorAdjusterWork(tenantContext, act);
+    const assignment = await this.load(id, tenantContext);
+    if (
+      assignment.handlingTenantId !== tenantContext.tenantId &&
+      tenantContext.userRole !== 'SUPER_ADMIN'
+    ) {
+      throw new NotFoundException('Assignment not found');
+    }
+    return assignment;
+  }
+
   private async load(id: string, tenantContext: TenantContext) {
     const assignment = await this.prisma.assignment.findUnique({ where: { id } });
     if (!assignment) throw new NotFoundException('Assignment not found');
@@ -168,7 +189,7 @@ export class AssignmentsService {
 
   /** Acknowledge to the insurer. Stops the CSP clock. */
   async acknowledge(id: string, tenantContext: TenantContext) {
-    const assignment = await this.load(id, tenantContext);
+    const assignment = await this.loadAsHandler(id, tenantContext, 'Acknowledging an appointment');
     this.assertTransition(assignment.status, AssignmentStatus.ACKNOWLEDGED);
 
     const acknowledgedAt = new Date();
@@ -218,7 +239,7 @@ export class AssignmentsService {
    * conflict of interest is exactly the kind of reason that must be on record.
    */
   async decline(id: string, reason: string, tenantContext: TenantContext) {
-    const assignment = await this.load(id, tenantContext);
+    const assignment = await this.loadAsHandler(id, tenantContext, 'Declining an appointment');
     this.assertTransition(assignment.status, AssignmentStatus.DECLINED);
 
     if (!reason?.trim()) {
@@ -247,7 +268,15 @@ export class AssignmentsService {
 
   /** Attach a claim, moving the appointment to ACCEPTED. */
   async linkClaim(id: string, claimId: string, tenantContext: TenantContext) {
-    const assignment = await this.load(id, tenantContext);
+    const assignment = await this.loadAsHandler(
+      id,
+      tenantContext,
+      'Opening the claim for an appointment'
+    );
+    // The claim must be one this firm can see. Without this an appointment could
+    // be pointed at another firm's claim — no read access follows, but its SLA
+    // clocks and fee note would then run against someone else's file.
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
 
     const eligibility = canOpenClaim(assignment.status);
     if (!eligibility.allowed) {
@@ -284,7 +313,7 @@ export class AssignmentsService {
   }
 
   async complete(id: string, tenantContext: TenantContext) {
-    const assignment = await this.load(id, tenantContext);
+    const assignment = await this.loadAsHandler(id, tenantContext, 'Completing an appointment');
     this.assertTransition(assignment.status, AssignmentStatus.COMPLETED);
 
     return this.prisma.assignment.update({

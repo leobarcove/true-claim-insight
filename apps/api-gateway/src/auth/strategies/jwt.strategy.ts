@@ -18,11 +18,20 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('jwt.secret') || 'fallback-secret',
+      passReqToCallback: true,
     });
   }
 
-  async validate(payload: JwtPayload) {
-    const user = await this.authService.validateJwtPayload(payload);
+  /**
+   * The request is passed in so the role is resolved for the tenant the
+   * request names (`X-Tenant-Id`), not only the one the token was issued for.
+   */
+  async validate(request: any, payload: JwtPayload) {
+    const requestedTenantId = request?.headers?.['x-tenant-id'];
+    const user = await this.authService.validateJwtPayload(
+      payload,
+      typeof requestedTenantId === 'string' ? requestedTenantId : undefined
+    );
 
     if (!user) {
       throw new UnauthorizedException('Invalid token');

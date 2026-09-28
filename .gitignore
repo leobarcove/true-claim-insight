@@ -82,6 +82,7 @@ deploy/staging/.keys-backed-up
 
 # Founder / corporate papers — commercially confidential, kept out of the repo
 docs/founders/
+docs/achived/
 
 # Vite writes these beside vitest.config.ts while resolving it
 *.timestamp-*.mjs

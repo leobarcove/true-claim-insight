@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { InternalAuthGuard } from './common/guards/internal-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 import { ClaimsModule } from './claims/claims.module';
 import { AdjustersModule } from './adjusters/adjusters.module';
@@ -97,6 +99,17 @@ import { AuditModule } from './common/audit/audit.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Identity (the gateway's forwarded headers, proven by the internal key),
+    // then authorisation — both global, in this order, so no controller can
+    // omit either. The roles guard denies any route that declares no rule.
+    {
+      provide: APP_GUARD,
+      useClass: InternalAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

@@ -11,8 +11,8 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { catchError, map } from 'rxjs/operators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Proxy controller for case-service signing endpoints. Mirrors the
@@ -27,7 +27,8 @@ import { TenantGuard } from '../auth/guards/tenant.guard';
  */
 @ApiTags('Signatures')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('documents')
 export class SignaturesController {
   private readonly caseServiceUrl: string;

@@ -3,6 +3,7 @@ import { AdjusterReportStatus, QualityRating } from '@prisma/client';
 import { AuditService } from '../common/audit/audit.service';
 import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
 
 /**
  * Work-quality reviews on issued reports (PD 11.2(b)) — the evidence behind
@@ -24,8 +25,18 @@ export class QualityReviewService {
     data: { rating: QualityRating; findings?: string; notes?: string },
     tenantContext: TenantContext
   ) {
-    const report = await this.prisma.adjusterReport.findUnique({ where: { id: reportId } });
-    if (!report) throw new NotFoundException('Report not found');
+    // The review is the firm's own evidence behind senior recognition (PD
+    // 12.4(b)(ii)) and rotation reviews (11.2(b)). An insurer rating the
+    // adjuster's work would let the client shape who counts as senior.
+    assertMayAuthorAdjusterWork(tenantContext, 'Quality-reviewing an adjuster report');
+    const report = await this.prisma.adjusterReport.findUnique({
+      where: { id: reportId },
+      include: { author: { select: { tenantId: true } } },
+    });
+    // Only the author's own firm reviews; another firm's report reads as absent.
+    if (!report || report.author.tenantId !== tenantContext.tenantId) {
+      throw new NotFoundException('Report not found');
+    }
     if (report.status !== AdjusterReportStatus.ISSUED) {
       throw new BadRequestException(
         'Only an issued report can be quality-reviewed — the review judges what the insurer received.'

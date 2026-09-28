@@ -2,14 +2,13 @@ import { Body, Controller, Post, Param, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantContext, TenantGuard } from '../common/guards/tenant.guard';
 import { RetentionService } from './retention.service';
 
 @ApiTags('retention')
 @Controller({ path: 'retention', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class RetentionController {
   constructor(private readonly service: RetentionService) {}

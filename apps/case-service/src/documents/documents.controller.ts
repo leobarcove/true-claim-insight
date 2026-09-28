@@ -15,8 +15,6 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -26,13 +24,14 @@ import { DocumentType } from '@prisma/client';
 @ApiTags('documents')
 @ApiBearerAuth()
 @ApiBearerAuth()
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Controller('claims/:claimId/documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Post()
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Add a document to a claim' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   @ApiResponse({
@@ -48,6 +47,7 @@ export class DocumentsController {
   }
 
   @Post('upload')
+  @Roles(UserRole.CLAIMANT, UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Upload a document file' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   async upload(
@@ -67,6 +67,7 @@ export class DocumentsController {
   }
 
   @Post(':id/replace')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Replace an existing document' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   @ApiParam({ name: 'id', description: 'Document UUID' })
@@ -84,6 +85,13 @@ export class DocumentsController {
   }
 
   @Get()
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get all documents for a claim' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   @ApiResponse({
@@ -98,6 +106,13 @@ export class DocumentsController {
   }
 
   @Get(':id')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get a document by ID' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   @ApiParam({ name: 'id', description: 'Document UUID' })
@@ -114,6 +129,13 @@ export class DocumentsController {
   }
 
   @Get(':id/download-url')
+  @Roles(
+    UserRole.ADJUSTER,
+    UserRole.FIRM_ADMIN,
+    UserRole.SIU_INVESTIGATOR,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.SUPER_ADMIN
+  )
   @ApiOperation({ summary: 'Get presigned download URL for a document' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   @ApiParam({ name: 'id', description: 'Document UUID' })
@@ -130,6 +152,7 @@ export class DocumentsController {
   }
 
   @Post('trinity-check')
+  @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SIU_INVESTIGATOR, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Trigger Trinity AI checks for all documents in a claim' })
   @ApiParam({ name: 'claimId', description: 'Claim UUID' })
   async triggerTrinityCheck(

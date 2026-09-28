@@ -13,15 +13,13 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { UsersService } from '../users.service';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
 import { TenantGuard } from '../../auth/guards/tenant.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentTenant } from '@/auth/decorators/current-tenant.decorator';
 
 @ApiTags('user-tenants')
 @Controller('user-tenants')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @ApiBearerAuth('access-token')
 @Roles('SUPER_ADMIN')
 export class UserTenantsController {

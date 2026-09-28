@@ -24,15 +24,15 @@ import { ConflictsService } from './conflicts.service';
 import { CpdService } from './cpd.service';
 import { ScreeningService } from './screening.service';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import {
   TenantIsolation,
   TenantScope,
   Tenant,
   TenantId,
 } from '../common/decorators/tenant.decorator';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { assertNotSelf } from '../common/access/access-rules';
 
 /**
  * AdjustersController with multi-tenant isolation
@@ -42,7 +42,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 @ApiTags('adjusters')
 @ApiBearerAuth()
 @Controller('adjusters')
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.ADJUSTER)
 export class AdjustersController {
@@ -122,48 +122,57 @@ export class AdjustersController {
 
   @Get(':id/competencies')
   @ApiOperation({ summary: 'Competency records per subject matter' })
-  listCompetencies(@Param('id') id: string) {
+  async listCompetencies(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.competency.list(id);
   }
 
   @Post(':id/competencies/:category')
   @ApiOperation({ summary: 'Record competency in a subject (years, cases, performance)' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  upsertCompetency(
+  async upsertCompetency(
     @Param('id') id: string,
     @Param('category') category: ClaimCategory,
     @Body() body: { yearsInSubject: number; casesHandled?: number; performanceSatisfactory?: boolean; notes?: string },
     @Tenant() tenantContext: TenantContext
   ) {
+    const adjuster = await this.adjustersService.requireInTenant(id, tenantContext);
+    assertNotSelf(tenantContext, [adjuster.userId], 'Recording competency');
     return this.competency.upsert(id, category, body, tenantContext);
   }
 
   @Post(':id/competencies/:category/recognise-senior')
   @ApiOperation({ summary: 'PD 12.4 recognition act — refused below the five-year floor' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  recogniseSenior(
+  async recogniseSenior(
     @Param('id') id: string,
     @Param('category') category: ClaimCategory,
     @Tenant() tenantContext: TenantContext
   ) {
+    const adjuster = await this.adjustersService.requireInTenant(id, tenantContext);
+    assertNotSelf(tenantContext, [adjuster.userId], 'Senior recognition (PD 12.4)');
     return this.competency.recogniseSenior(id, category, tenantContext);
   }
 
   @Post(':id/employment')
   @ApiOperation({ summary: 'Record employment type (PD 12.1(a)), start date and qualification' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  setEmployment(
+  async setEmployment(
     @Param('id') id: string,
     @Body() body: { employmentType: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT'; adjustingSince?: string; qualification?: string },
     @Tenant() tenantContext: TenantContext
   ) {
+    const adjuster = await this.adjustersService.requireInTenant(id, tenantContext);
+    assertNotSelf(tenantContext, [adjuster.userId], 'Recording employment facts');
     return this.competency.setEmployment(id, body, tenantContext);
   }
 
   @Post(':id/verify-licence')
   @ApiOperation({ summary: 'Record that the firm verified this adjuster\'s licence' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  verifyLicence(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+  async verifyLicence(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    const adjuster = await this.adjustersService.requireInTenant(id, tenantContext);
+    assertNotSelf(tenantContext, [adjuster.userId], 'Licence verification');
     return this.competency.verifyLicence(id, tenantContext);
   }
 
@@ -171,14 +180,19 @@ export class AdjustersController {
 
   @Get(':id/conflicts')
   @ApiOperation({ summary: 'Conflict declarations (live by default; ?all=true for history)' })
-  listConflicts(@Param('id') id: string, @Query('all') all?: string) {
+  async listConflicts(
+    @Param('id') id: string,
+    @Tenant() tenantContext: TenantContext,
+    @Query('all') all?: string
+  ) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.conflicts.list(id, all === 'true');
   }
 
   @Post(':id/conflicts')
   @ApiOperation({ summary: 'Declare a relation or interest — declaring is always welcome' })
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  declareConflict(
+  async declareConflict(
     @Param('id') id: string,
     @Body()
     body: {
@@ -191,6 +205,7 @@ export class AdjustersController {
     },
     @Tenant() tenantContext: TenantContext
   ) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.conflicts.declare(id, body, tenantContext);
   }
 
@@ -216,20 +231,30 @@ export class AdjustersController {
 
   @Get(':id/cpd')
   @ApiOperation({ summary: 'CPD records, optionally for one year' })
-  listCpd(@Param('id') id: string, @Query('year') year?: string) {
+  async listCpd(
+    @Param('id') id: string,
+    @Tenant() tenantContext: TenantContext,
+    @Query('year') year?: string
+  ) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.cpd.list(id, year ? Number(year) : undefined);
   }
 
   @Get(':id/cpd/standing')
   @ApiOperation({ summary: 'Standing against the 15-hour floor for a year' })
-  cpdStanding(@Param('id') id: string, @Query('year') year?: string) {
+  async cpdStanding(
+    @Param('id') id: string,
+    @Tenant() tenantContext: TenantContext,
+    @Query('year') year?: string
+  ) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.cpd.standing(id, Number(year) || new Date().getUTCFullYear());
   }
 
   @Post(':id/cpd')
   @ApiOperation({ summary: 'Record CPD attendance; only recognised providers count toward the floor' })
   @Roles(UserRole.ADJUSTER, UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  recordCpd(
+  async recordCpd(
     @Param('id') id: string,
     @Body()
     body: {
@@ -244,6 +269,7 @@ export class AdjustersController {
     },
     @Tenant() tenantContext: TenantContext
   ) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.cpd.record(id, body, tenantContext);
   }
 
@@ -252,21 +278,23 @@ export class AdjustersController {
   @Get(':id/screenings')
   @ApiOperation({ summary: 'Background checks on record' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
-  listScreenings(@Param('id') id: string) {
+  async listScreenings(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.screening.list(id);
   }
 
   @Get(':id/screenings/standing')
   @ApiOperation({ summary: 'Standing against the 11.2(e) minimum check set' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
-  screeningStanding(@Param('id') id: string) {
+  async screeningStanding(@Param('id') id: string, @Tenant() tenantContext: TenantContext) {
+    await this.adjustersService.requireInTenant(id, tenantContext);
     return this.screening.standing(id);
   }
 
   @Post(':id/screenings')
   @ApiOperation({ summary: 'Record a background check; FINDINGS requires the finding described' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN)
-  recordScreening(
+  async recordScreening(
     @Param('id') id: string,
     @Body()
     body: {
@@ -279,6 +307,8 @@ export class AdjustersController {
     },
     @Tenant() tenantContext: TenantContext
   ) {
+    const adjuster = await this.adjustersService.requireInTenant(id, tenantContext);
+    assertNotSelf(tenantContext, [adjuster.userId], 'Recording a background screening');
     return this.screening.record(id, body, tenantContext);
   }
 }

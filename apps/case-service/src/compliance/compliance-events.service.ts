@@ -27,8 +27,14 @@ export class ComplianceEventsService {
     private readonly audit: AuditService
   ) {}
 
-  /** Idempotent raise. Returns the existing event when the fact already has one. */
+  /**
+   * Idempotent raise. Returns the existing event when the fact already has one.
+   *
+   * `tenantId` is the adjusting firm whose register this belongs to — the
+   * register is PD 11.2(d), the firm's own Board's, and is never shared.
+   */
   async raise(draft: {
+    tenantId: string;
     type: ComplianceEventType;
     severity: ComplianceEventSeverity;
     title: string;
@@ -49,6 +55,7 @@ export class ComplianceEventsService {
     try {
       const event = await this.prisma.complianceEvent.create({
         data: {
+          tenantId: draft.tenantId,
           type: draft.type,
           severity: draft.severity,
           title: draft.title,
@@ -66,6 +73,7 @@ export class ComplianceEventsService {
         entityId: event.id,
         action: 'COMPLIANCE_EVENT_RAISED',
         actorId: draft.raisedByUserId ?? null,
+        tenantId: draft.tenantId,
         newValues: { type: draft.type, severity: draft.severity, title: draft.title },
       });
       this.logger.warn(`Compliance event raised (${draft.severity}): ${draft.title}`);
@@ -92,15 +100,15 @@ export class ComplianceEventsService {
     }
   }
 
-  async list(status?: ComplianceEventStatus) {
+  async list(tenantContext: TenantContext, status?: ComplianceEventStatus) {
     return this.prisma.complianceEvent.findMany({
-      where: status ? { status } : {},
+      where: { tenantId: tenantContext.tenantId, ...(status ? { status } : {}) },
       orderBy: [{ status: 'asc' }, { severity: 'desc' }, { createdAt: 'desc' }],
     });
   }
 
   async acknowledge(id: string, tenantContext: TenantContext) {
-    const event = await this.load(id);
+    const event = await this.load(id, tenantContext);
     if (event.status !== ComplianceEventStatus.OPEN) {
       throw new BadRequestException(`Only an OPEN event can be acknowledged; this one is ${event.status}.`);
     }
@@ -129,7 +137,7 @@ export class ComplianceEventsService {
         'A resolution note is required — how the issue was dealt with is what the Board reads.'
       );
     }
-    const event = await this.load(id);
+    const event = await this.load(id, tenantContext);
     if (event.status === ComplianceEventStatus.RESOLVED) {
       throw new BadRequestException('This event is already resolved.');
     }
@@ -162,8 +170,10 @@ export class ComplianceEventsService {
    * generating it is audited with the counts.
    */
   async boardReport(tenantContext: TenantContext) {
+    // This firm's Board, this firm's events. Before September 2026 the report
+    // stamped every unreported event on the platform, whoever's they were.
     const events = await this.prisma.complianceEvent.findMany({
-      where: { boardReportedAt: null },
+      where: { tenantId: tenantContext.tenantId, boardReportedAt: null },
       orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
     });
 
@@ -199,8 +209,11 @@ export class ComplianceEventsService {
     };
   }
 
-  private async load(id: string) {
-    const event = await this.prisma.complianceEvent.findUnique({ where: { id } });
+  /** Another firm's event reads as absent, never as "not yours". */
+  private async load(id: string, tenantContext: TenantContext) {
+    const event = await this.prisma.complianceEvent.findFirst({
+      where: { id, tenantId: tenantContext.tenantId },
+    });
     if (!event) throw new NotFoundException('Compliance event not found');
     return event;
   }

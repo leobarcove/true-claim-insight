@@ -9,6 +9,8 @@ import {
   computeProfessionalFee,
   type FeeScaleLike,
 } from './fee-calculation';
+import { assertClaimAccess } from '../common/access/claim-access';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
 
 /**
  * Billing: fee scales, time, disbursements and the fee note (CSP 11.16–11.18).
@@ -79,8 +81,9 @@ export class BillingService {
     if (!data.description?.trim()) {
       throw new BadRequestException('Time needs describing — "work" is not a record.');
     }
+    await this.assertFirmClaim(claimId, tenantContext, 'Recording time');
     const adjuster = await this.prisma.adjuster.findFirst({
-      where: { userId: tenantContext.userId },
+      where: { userId: tenantContext.userId, tenantId: tenantContext.tenantId },
     });
     if (!adjuster) throw new BadRequestException('Only an adjusting employee records time.');
 
@@ -102,6 +105,7 @@ export class BillingService {
     tenantContext: TenantContext
   ) {
     if (!(data.amount > 0)) throw new BadRequestException('Amount must be positive.');
+    await this.assertFirmClaim(claimId, tenantContext, 'Recording a disbursement');
     return this.prisma.disbursement.create({
       data: {
         claimId,
@@ -120,6 +124,7 @@ export class BillingService {
    * estimated amount as the SCALE input.
    */
   async draftFeeNote(claimId: string, tenantContext: TenantContext) {
+    await this.assertFirmClaim(claimId, tenantContext, 'Drafting a fee note');
     const claim = await this.prisma.claim.findUnique({
       where: { id: claimId },
       include: { timeEntries: true, disbursements: true },
@@ -213,12 +218,9 @@ export class BillingService {
       where: { id: claimId },
       select: { id: true, tenantId: true, status: true, insurerTenantId: true },
     });
-    // Confirming a claim exists in another tenant is itself a disclosure, so
-    // absence and refusal are answered identically — see the quantum service.
     if (!claim) throw new NotFoundException('Claim not found');
-    if (claim.tenantId !== tenantContext.tenantId && tenantContext.userRole !== 'SUPER_ADMIN') {
-      throw new NotFoundException('Claim not found');
-    }
+    // Read: the firm, and the insurer the note is addressed to.
+    await assertClaimAccess(this.prisma, claimId, tenantContext);
 
     const [note, timeEntries, disbursements] = await Promise.all([
       this.prisma.feeNote.findFirst({ where: { claimId }, orderBy: { createdAt: 'desc' } }),
@@ -237,7 +239,7 @@ export class BillingService {
   }
 
   async issue(noteId: string, tenantContext: TenantContext) {
-    const note = await this.load(noteId);
+    const note = await this.load(noteId, tenantContext);
     if (note.status !== FeeNoteStatus.DRAFT) {
       throw new BadRequestException(`Only a DRAFT note can be issued; this one is ${note.status}.`);
     }
@@ -270,7 +272,7 @@ export class BillingService {
     if (!reference?.trim()) {
       throw new BadRequestException('A payment reference is required.');
     }
-    const note = await this.load(noteId);
+    const note = await this.load(noteId, tenantContext);
     if (note.status !== FeeNoteStatus.ISSUED && note.status !== FeeNoteStatus.DISPUTED) {
       throw new BadRequestException(`A ${note.status} note cannot be marked paid.`);
     }
@@ -292,7 +294,7 @@ export class BillingService {
 
   async dispute(noteId: string, reason: string, tenantContext: TenantContext) {
     if (!reason?.trim()) throw new BadRequestException('A dispute reason is required.');
-    const note = await this.load(noteId);
+    const note = await this.load(noteId, tenantContext);
     if (note.status !== FeeNoteStatus.ISSUED) {
       throw new BadRequestException(`Only an ISSUED note can be disputed.`);
     }
@@ -302,10 +304,20 @@ export class BillingService {
     });
   }
 
-  /** The per-insurer statement: outstanding notes bucketed by age. */
-  async insurerStatement() {
+  /**
+   * The per-insurer statement: outstanding notes bucketed by age — this firm's
+   * receivables only. Until 24 Sep 2026 it listed every note on the platform
+   * to any firm or insurer administrator.
+   */
+  async insurerStatement(tenantContext: TenantContext) {
+    assertMayAuthorAdjusterWork(tenantContext, "The firm's fee statement");
     const notes = await this.prisma.feeNote.findMany({
-      where: { status: { in: [FeeNoteStatus.ISSUED, FeeNoteStatus.DISPUTED] } },
+      where: {
+        status: { in: [FeeNoteStatus.ISSUED, FeeNoteStatus.DISPUTED] },
+        ...(tenantContext.userRole === 'SUPER_ADMIN' && tenantContext.allowCrossTenant
+          ? {}
+          : { claim: this.handledBy(tenantContext.tenantId) }),
+      },
       include: { insurer: { select: { name: true } } },
       orderBy: { dueAt: 'asc' },
     });
@@ -332,9 +344,40 @@ export class BillingService {
     }));
   }
 
-  private async load(id: string) {
+  /**
+   * A fee note the caller's firm issued. The note carries no firm of its own,
+   * so the claim decides: another firm's note, or any insurer acting on one,
+   * reads as absent or is refused before anything is changed.
+   */
+  private async load(id: string, tenantContext: TenantContext) {
+    assertMayAuthorAdjusterWork(tenantContext, 'Acting on a fee note');
     const note = await this.prisma.feeNote.findUnique({ where: { id } });
     if (!note) throw new NotFoundException('Fee note not found');
+    await this.assertFirmClaim(note.claimId, tenantContext, 'Acting on a fee note', 'Fee note');
     return note;
+  }
+
+  /** Claims this firm handles: owned by it, or worked by its adjuster. */
+  private handledBy(tenantId: string) {
+    return { OR: [{ tenantId }, { adjuster: { tenantId } }] };
+  }
+
+  /**
+   * Billing is the adjusting firm billing the insurer: the claim must be one
+   * the caller can see, and the caller must be the firm, not the insurer.
+   */
+  private async assertFirmClaim(
+    claimId: string,
+    tenantContext: TenantContext,
+    act: string,
+    subject = 'Claim'
+  ) {
+    assertMayAuthorAdjusterWork(tenantContext, act);
+    try {
+      await assertClaimAccess(this.prisma, claimId, tenantContext);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw new NotFoundException(`${subject} not found`);
+      throw error;
+    }
   }
 }

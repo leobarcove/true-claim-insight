@@ -22,6 +22,8 @@ import { canSign, canTransition, countersignDecision, type AdjusterStanding } fr
 import { ReportPdfGenerator } from './report-pdf.generator';
 import { renderQuantumSection } from '../quantum/quantum-section';
 import { describeMode } from '../assessment/assessment-mode';
+import { TenantService } from '../tenant/tenant.service';
+import { assertMayAuthorAdjusterWork } from '../common/access/access-rules';
 
 /** Which SLA stage a report type discharges when issued. */
 const STAGE_FOR_TYPE: Partial<Record<AdjusterReportType, SlaStage>> = {
@@ -46,7 +48,8 @@ export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sla: SlaService,
-    private readonly conflicts: ConflictsService
+    private readonly conflicts: ConflictsService,
+    private readonly tenants: TenantService
   ) {}
 
   /** The Adjuster record for a user, or null when they are not one. */
@@ -94,7 +97,9 @@ export class ReportsService {
    */
   private async requireAdjuster(tenantContext: TenantContext) {
     const adjuster = await this.adjusterFor(tenantContext.userId);
-    if (!adjuster) {
+    // An adjusting employee *of this firm* (PD 5.2): a profile held in another
+    // tenant is no authority here.
+    if (!adjuster || adjuster.tenantId !== tenantContext.tenantId) {
       throw new ForbiddenException(
         'Only an adjusting employee may author or sign an adjuster report (PD 12.7). ' +
           'This account has no adjuster profile.'
@@ -103,19 +108,29 @@ export class ReportsService {
     return adjuster;
   }
 
-  private async loadClaim(claimId: string) {
+  private async loadClaim(claimId: string, tenantContext: TenantContext) {
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     const claim = await this.prisma.claim.findUnique({ where: { id: claimId } });
     if (!claim) throw new NotFoundException('Claim not found');
     return claim;
   }
 
+  /**
+   * A report the caller may read: its claim must be visible to their tenant.
+   * Until September 2026 reports carried no tenant check at all — any adjuster
+   * profile anywhere could sign, issue or withdraw any report by id.
+   */
+  private async loadVisible(reportId: string, tenantContext: TenantContext) {
+    const report = await this.prisma.adjusterReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Report not found');
+    await this.tenants.validateClaimAccess(report.claimId, tenantContext);
+    return report;
+  }
+
   /** Start a report. The template's sections are pre-created empty with guidance. */
-  async create(
-    claimId: string,
-    type: AdjusterReportType,
-    tenantContext: TenantContext
-  ) {
-    const claim = await this.loadClaim(claimId);
+  async create(claimId: string, type: AdjusterReportType, tenantContext: TenantContext) {
+    assertMayAuthorAdjusterWork(tenantContext, 'Writing an adjuster report');
+    const claim = await this.loadClaim(claimId, tenantContext);
     const author = await this.requireAdjuster(tenantContext);
 
     const sections: ReportSections = Object.fromEntries(
@@ -173,10 +188,14 @@ export class ReportsService {
     }
   }
 
-  private async loadEditable(reportId: string) {
-    const report = await this.prisma.adjusterReport.findUnique({ where: { id: reportId } });
-    if (!report) throw new NotFoundException('Report not found');
-    return report;
+  /**
+   * A report the caller may act on: visible to their tenant, and the caller in
+   * an adjusting firm — the insurer reads the report, it never writes one
+   * (PD 1.1, 12.1(c)).
+   */
+  private async loadEditable(reportId: string, tenantContext: TenantContext) {
+    assertMayAuthorAdjusterWork(tenantContext, 'Acting on an adjuster report');
+    return this.loadVisible(reportId, tenantContext);
   }
 
   /**
@@ -186,12 +205,8 @@ export class ReportsService {
    * sent back. An issued report is never edited — that is what supersession is
    * for.
    */
-  async updateSections(
-    reportId: string,
-    updates: ReportSections,
-    tenantContext: TenantContext
-  ) {
-    const report = await this.loadEditable(reportId);
+  async updateSections(reportId: string, updates: ReportSections, tenantContext: TenantContext) {
+    const report = await this.loadEditable(reportId, tenantContext);
     const adjuster = await this.requireAdjuster(tenantContext);
 
     if (report.status !== AdjusterReportStatus.DRAFT) {
@@ -228,7 +243,7 @@ export class ReportsService {
 
   /** Submit for sign-off. Refuses while PD 12.6 disclosures are incomplete. */
   async submitForReview(reportId: string, tenantContext: TenantContext) {
-    const report = await this.loadEditable(reportId);
+    const report = await this.loadEditable(reportId, tenantContext);
     const adjuster = await this.requireAdjuster(tenantContext);
 
     if (report.authorAdjusterId !== adjuster.id) {
@@ -250,7 +265,7 @@ export class ReportsService {
     // PD 12.1(d): the per-claim COI attestation. Registered mode requires it
     // before a report leaves the author's hands; as a TPA the gap is logged so
     // the habit forms before the flag flips.
-    const claim = await this.loadClaim(report.claimId);
+    const claim = await this.loadClaim(report.claimId, tenantContext);
     const attested = await this.conflicts.hasClearAttestation(report.claimId, adjuster.id);
     if (!attested) {
       if (await this.licensedModeFor(claim.tenantId)) {
@@ -272,7 +287,7 @@ export class ReportsService {
 
   /** Send a submitted report back to its author. */
   async returnToAuthor(reportId: string, reason: string, tenantContext: TenantContext) {
-    const report = await this.loadEditable(reportId);
+    const report = await this.loadEditable(reportId, tenantContext);
     await this.requireAdjuster(tenantContext);
     this.assertTransition(report.status, AdjusterReportStatus.DRAFT);
 
@@ -304,7 +319,7 @@ export class ReportsService {
    * blocks. That is the licence flip working as designed, not a loophole.
    */
   async sign(reportId: string, tenantContext: TenantContext) {
-    const report = await this.loadEditable(reportId);
+    const report = await this.loadEditable(reportId, tenantContext);
     const signer = await this.requireAdjuster(tenantContext);
     this.assertTransition(report.status, AdjusterReportStatus.SIGNED);
 
@@ -313,7 +328,7 @@ export class ReportsService {
     });
     if (!author) throw new NotFoundException('Report author no longer exists');
 
-    const claim = await this.loadClaim(report.claimId);
+    const claim = await this.loadClaim(report.claimId, tenantContext);
     const licensedMode = await this.licensedModeFor(claim.tenantId);
     const missingSections = missingMandatorySections(
       report.type,
@@ -360,7 +375,7 @@ export class ReportsService {
    * the report is the act CSP measures.
    */
   async issue(reportId: string, tenantContext: TenantContext) {
-    const report = await this.loadEditable(reportId);
+    const report = await this.loadEditable(reportId, tenantContext);
     await this.requireAdjuster(tenantContext);
     this.assertTransition(report.status, AdjusterReportStatus.ISSUED);
 
@@ -392,7 +407,7 @@ export class ReportsService {
    * insurer was told, and when, must be able to see both.
    */
   async supersede(reportId: string, tenantContext: TenantContext) {
-    const previous = await this.loadEditable(reportId);
+    const previous = await this.loadEditable(reportId, tenantContext);
     const author = await this.requireAdjuster(tenantContext);
 
     if (previous.status !== AdjusterReportStatus.ISSUED) {
@@ -415,7 +430,7 @@ export class ReportsService {
 
   /** Withdraw a report that has not been issued. */
   async withdraw(reportId: string, reason: string, tenantContext: TenantContext) {
-    const report = await this.loadEditable(reportId);
+    const report = await this.loadEditable(reportId, tenantContext);
     await this.requireAdjuster(tenantContext);
     this.assertTransition(report.status, AdjusterReportStatus.WITHDRAWN);
 
@@ -433,7 +448,8 @@ export class ReportsService {
     });
   }
 
-  async forClaim(claimId: string) {
+  async forClaim(claimId: string, tenantContext: TenantContext) {
+    await this.tenants.validateClaimAccess(claimId, tenantContext);
     return this.prisma.adjusterReport.findMany({
       where: { claimId },
       orderBy: [{ type: 'asc' }, { version: 'desc' }],
@@ -444,7 +460,8 @@ export class ReportsService {
     });
   }
 
-  async findOne(reportId: string) {
+  async findOne(reportId: string, tenantContext: TenantContext) {
+    await this.loadVisible(reportId, tenantContext);
     const report = await this.prisma.adjusterReport.findUnique({
       where: { id: reportId },
       include: {
@@ -482,8 +499,7 @@ export class ReportsService {
    * superseding this one, which is the existing mechanism.
    */
   async refreshQuantum(reportId: string, tenantContext: TenantContext) {
-    const report = await this.prisma.adjusterReport.findUnique({ where: { id: reportId } });
-    if (!report) throw new NotFoundException('Report not found');
+    const report = await this.loadEditable(reportId, tenantContext);
 
     if (report.status !== AdjusterReportStatus.DRAFT) {
       throw new BadRequestException(
@@ -523,8 +539,11 @@ export class ReportsService {
    * Available at any status: an unissued report renders watermarked so a draft
    * cannot be mistaken for something sent to the insurer.
    */
-  async render(reportId: string): Promise<{ filename: string; pdf: Buffer }> {
-    const report = await this.findOne(reportId);
+  async render(
+    reportId: string,
+    tenantContext: TenantContext
+  ): Promise<{ filename: string; pdf: Buffer }> {
+    const report = await this.findOne(reportId, tenantContext);
     const tenant = report.claim.tenantId
       ? await this.prisma.tenant.findUnique({ where: { id: report.claim.tenantId } })
       : null;

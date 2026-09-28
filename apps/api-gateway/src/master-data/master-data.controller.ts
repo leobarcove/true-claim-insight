@@ -13,15 +13,13 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { MasterDataService } from './master-data.service';
 import { CreateVehicleMakeDto } from './dto/create-vehicle-make.dto';
 import { CreateVehicleModelDto } from './dto/create-vehicle-model.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../auth/guards/tenant.guard';
 import { CurrentTenantContext } from '../auth/decorators/current-tenant.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('master-data')
 @Controller('master-data')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @ApiBearerAuth('access-token')
 export class MasterDataController {
   constructor(private readonly masterDataService: MasterDataService) {}

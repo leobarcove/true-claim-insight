@@ -15,6 +15,7 @@ import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
 import { TenantIsolation, TenantScope, Tenant } from '../common/decorators/tenant.decorator';
 import { TenantService } from '../tenant/tenant.service';
+import { publicDocumentAnalysis } from './public-document-analysis';
 
 @Controller('risk')
 @UseGuards(InternalAuthGuard, TenantGuard)
@@ -78,11 +79,6 @@ export class RiskController {
       where: { documentId },
     });
 
-    if (analysis) {
-      const { modelUsed, ...sanitized } = analysis as any;
-      return sanitized;
-    }
-
-    return null;
+    return analysis ? publicDocumentAnalysis(analysis) : null;
   }
 }

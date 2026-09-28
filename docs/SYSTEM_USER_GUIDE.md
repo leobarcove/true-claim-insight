@@ -29,10 +29,20 @@ Use these credentials to explore the system in the development environment.
 | **Adjuster**               | `adjuster@pacific.com`   | `DemoPass123!` | Pacific Adjusters |
 | **Firm Admin (Insurer)**   | `admin@allianz.com`      | `DemoPass123!` | Allianz Insurance |
 | **SIU Investigator**       | `siu@allianz.com`        | `DemoPass123!` | Allianz Insurance |
-| **Compliance Officer**     | `compliance@allianz.com` | `DemoPass123!` | Allianz Insurance |
+| **Compliance Officer (Adjusting)** | `compliance@pacific.com` | `DemoPass123!` | Pacific Adjusters |
+| **Compliance Officer (Insurer)** | `compliance@allianz.com` | `DemoPass123!` | Allianz Insurance |
 | **Support Desk**           | `support@allianz.com`    | `DemoPass123!` | Allianz Insurance |
 | **Shariah Reviewer**       | `shariah@allianz.com`    | `DemoPass123!` | Allianz Insurance |
 | **Claimant**               | `+60123456789`           | _OTP-based_    | N/A               |
+
+A role belongs to the account's membership in a tenant, and each kind of
+tenant allows different roles: an adjusting firm has adjusters, firm admins,
+compliance officers and support desk; an insurer has firm admins, SIU
+investigators, compliance officers, support desk and Shariah reviewers. The two
+compliance officers are therefore different jobs — Pacific's runs the firm's
+fit-and-proper, Board and BNM registers; Allianz's cannot see them. The sample
+claim `CLM-2025-000001` is handled by Pacific and appointed by Allianz, so both
+see it, and only Pacific writes the assessment.
 
 ---
 

@@ -220,22 +220,22 @@ Escalation to a paid modality must be **triggered** (a fraud signal ≥ MEDIUM, 
 
 ## 3. Compliance matrix (with current-state verdicts)
 
-Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 20 PASS, 10 PARTIAL, 1 FAIL** (recounted from the rows 10 August 2026 — this headline had sat at 19/11/1 since 31 July while the retention row below moved to PASS, exactly the drift the next sentence warns about; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
+Verdicts from the formal per-requirement codebase audit (verified by spot-check): **PASS** (implemented + enforced server-side) / **PARTIAL** (exists but unenforced/incomplete) / **FAIL** (absent). **Current: 20 PASS, 11 PARTIAL, 1 FAIL** (recounted from the rows 24 September 2026, when the access-control row was added as PARTIAL; before that, recounted 10 August 2026 — this headline had sat at 19/11/1 since 31 July while the retention row below moved to PASS, exactly the drift the next sentence warns about; first audit 0/7/20 against a smaller matrix, then 1/7/23). Counted from the rows below, never carried forward by hand — a summary that drifts from its own rows is the false comfort of §3.6. A row reaches PASS only with server-side enforcement *and* a CI test asserting the control; the re-audit found the CI job ran only case-service, so the gateway and crypto suites supported no verdict until that was fixed. The more serious finding is *false comfort*: schema columns, UI badges and docs assert compliance states no code produces (see §3.6). Each row should eventually link to a demonstrable screen or record.
 
 ### 3.1 BNM Adjuster PD (binding "S" paragraphs)
 
 | Ref | Requirement | Current | Target control | Phase |
 |---|---|---|---|---|
-| 8.1/13.1 | Registration lifecycle; notify BNM ≤7 wkg days of capital/office/director/CEO/shareholder changes | **PARTIAL** — the 13.1 half is machinery-complete and runs inert as a TPA, exactly per the licence-flip thesis: `BnmNotification` register with due dates at occurredAt + **7 working days** (KL calendar), director/CEO/shareholder rows **drafted automatically** from KeyPerson appointments and cessations (the change that triggers 13.1(d) *is* a KeyPerson event — a separate manual step would be a second chance to forget), capital/office changes by hand, the notified act requiring the submission reference, and late notifications recorded as late. Verified live: appointment on Tue 28 Jul auto-drafted a row due Wed 6 Aug. Remains PARTIAL: the obligation binds only on registration, and the 8.1 registration-lifecycle half (the application itself) is genuinely future | Registration application pack | 5 |
-| 10.1/10.2 | Fit & proper records for shareholders/KRPs | **PASS** — `KeyPerson` register (with appointment/cessation dates — the future PD 13.1 notification triggers) + `FitProperAttestation` against the criteria **as data**: the four 10.1 criteria for everyone, the six 10.2 criteria added for KRPs, transcribed from the paragraphs and pinned by test. **Silence is not attestation**: an attestation must answer every applicable criterion, and a shareholder's four answers cannot satisfy a KRP's ten. A NOT_MET is recorded, not blocked — the honest finding is the point — but requires the finding described, flips standing to **NOT_FIT**, and raises a **CRITICAL** event onto the Board register. Standing distinguishes FIT / DUE (the annual cycle is the firm's own policy choice, not attributed to the paragraph) / NOT_FIT / NEVER_ATTESTED. Verified live end to end. **Tests:** 12, in CI | Supporting-document slots per attestation remain to add | done |
-| 10.3, 12.1(d) | COI: staff/family ties to insurers/workshops; per-claim screening | **PASS** — `ConflictDeclaration` (party, interest type, whose interest — the PD reaches spouses, children, parents and siblings — with tenant-id linkage for automatic matching) plus the per-claim `ConflictAttestation`. The screen runs on **every** assignment and a matched, unresolved declaration **blocks in every mode**, not only registered: the licence flip governs gaps the firm might not know about, and this is a conflict it has on record. Declarations are never deleted — resolved by a named person with a mandatory reason, because "we knew and dealt with it" is the record that protects the firm. The screen outcome is audited either way, so *clear* is distinguishable from *never screened*. Registered mode additionally requires the author's clear attestation before a report can be submitted. Verified live: declare → block naming the relationship and party → resolve with reason → permitted. **Tests:** 9, in CI | Annual re-attestation cycle sits with fit & proper (10.1/10.2) | done |
+| 8.1/13.1 | Registration lifecycle; notify BNM ≤7 wkg days of capital/office/director/CEO/shareholder changes | **PARTIAL** — the 13.1 half is machinery-complete and runs inert as a TPA, exactly per the licence-flip thesis: `BnmNotification` register with due dates at occurredAt + **7 working days** (KL calendar), director/CEO/shareholder rows **drafted automatically** from KeyPerson appointments and cessations (the change that triggers 13.1(d) *is* a KeyPerson event — a separate manual step would be a second chance to forget), capital/office changes by hand, the notified act requiring the submission reference, and late notifications recorded as late. Verified live: appointment on Tue 28 Jul auto-drafted a row due Wed 6 Aug. Remains PARTIAL: the obligation binds only on registration, and the 8.1 registration-lifecycle half (the application itself) is genuinely future Since 24 Sep 2026 each notification belongs to one adjusting firm; before, the register was platform-wide and open to a panel insurer's compliance officer. | Registration application pack | 5 |
+| 10.1/10.2 | Fit & proper records for shareholders/KRPs | **PASS** — `KeyPerson` register (with appointment/cessation dates — the future PD 13.1 notification triggers) + `FitProperAttestation` against the criteria **as data**: the four 10.1 criteria for everyone, the six 10.2 criteria added for KRPs, transcribed from the paragraphs and pinned by test. **Silence is not attestation**: an attestation must answer every applicable criterion, and a shareholder's four answers cannot satisfy a KRP's ten. A NOT_MET is recorded, not blocked — the honest finding is the point — but requires the finding described, flips standing to **NOT_FIT**, and raises a **CRITICAL** event onto the Board register. Standing distinguishes FIT / DUE (the annual cycle is the firm's own policy choice, not attributed to the paragraph) / NOT_FIT / NEVER_ATTESTED. Verified live end to end. **Tests:** 12, in CI **24 Sep 2026:** the register had no tenant — an insurer's firm-admin or compliance officer could read and write the firm's key persons and attestations. Now scoped to the adjusting firm and refused to insurers (`assertAdjusterDuties`), verified live. | Supporting-document slots per attestation remain to add | done |
+| 10.3, 12.1(d) | COI: staff/family ties to insurers/workshops; per-claim screening | **PASS** — `ConflictDeclaration` (party, interest type, whose interest — the PD reaches spouses, children, parents and siblings — with tenant-id linkage for automatic matching) plus the per-claim `ConflictAttestation`. The screen runs on **every** assignment and a matched, unresolved declaration **blocks in every mode**, not only registered: the licence flip governs gaps the firm might not know about, and this is a conflict it has on record. Declarations are never deleted — resolved by a named person with a mandatory reason, because "we knew and dealt with it" is the record that protects the firm. The screen outcome is audited either way, so *clear* is distinguishable from *never screened*. Registered mode additionally requires the author's clear attestation before a report can be submitted. Verified live: declare → block naming the relationship and party → resolve with reason → permitted. **Tests:** 9, in CI **24 Sep 2026:** resolution is refused to the person who declared the conflict and to the conflicted adjuster (separation of duties), and another firm's declaration reads as absent. | Annual re-attestation cycle sits with fit & proper (10.1/10.2) | done |
 | 11.2(a) | End-to-end adjusting process embodied until report completion | **PASS** — the adjusting process is embodied end to end: insurer appointment received and acknowledged → claim opened → adjuster assigned → documents → assessment → report drafted, signed and issued. `Assignment` closed the missing front end; verified live through both halves. **Tests:** 13 (assignment lifecycle) + the report suites | The claim-journey spine itself (§2) + report engine | 1–2 |
 | 11.2(b) | Rotation of assignments + work-quality reviews | **PASS** — both named controls. **Rotation** is monitored, never blocked: an unbroken streak of 3+ assignments for one insurer puts an advisory on the assignment audit row — a hard rule would regularly force the *less* qualified adjuster onto a claim, which 12.2(b) forbids from the other direction. Assigning someone new produces no advisory, since that is what rotation wants. **Work-quality reviews** attach to *issued* reports only (the review judges what the insurer received), the author cannot review themselves, and a below-SATISFACTORY rating requires findings — these rows are the evidence behind `performanceSatisfactory` in senior recognition (12.4(b)(ii)). **Tests:** 5 rotation + service gates, in CI | Sampling policy (which reports get reviewed) is the firm's to set | done |
-| 11.2(d) | Escalation processes to Board | **PASS** — `ComplianceEvent` register with two automatic raisers wired where the controls already are: a **firm-side** SLA breach reaching escalation level 3 (insurer-side `monitorOnly` breaches never reach the firm's own Board — that would misstate whose breach it is), and an adjuster attesting a conflict on an assigned claim. System raising is **idempotent by fact** (`dedupeKey`): two sweeps observing the same breach raised one event, verified live. Acknowledge/resolve are acts by named people, resolution requires a note ("how it was dealt with" is what the Board reads), and the **Board report stamps** `boardReportedAt` on every included event — "was the Board told" has a date for an answer. Manual raising for policy breaches and audit gaps. **Tests:** 7, in CI | Restraint is the design: a feed that escalates everything is a feed the Board stops reading | done |
+| 11.2(d) | Escalation processes to Board | **PASS** — `ComplianceEvent` register with two automatic raisers wired where the controls already are: a **firm-side** SLA breach reaching escalation level 3 (insurer-side `monitorOnly` breaches never reach the firm's own Board — that would misstate whose breach it is), and an adjuster attesting a conflict on an assigned claim. System raising is **idempotent by fact** (`dedupeKey`): two sweeps observing the same breach raised one event, verified live. Acknowledge/resolve are acts by named people, resolution requires a note ("how it was dealt with" is what the Board reads), and the **Board report stamps** `boardReportedAt` on every included event — "was the Board told" has a date for an answer. Manual raising for policy breaches and audit gaps. **Tests:** 7, in CI **24 Sep 2026:** the register and the Board-report stamp were platform-wide — a Board report stamped every firm's events. Both now belong to one adjusting firm, and an insurer's compliance officer is refused (verified live). | Restraint is the design: a feed that escalates everything is a feed the Board stops reading | done |
 | 11.2(e) | Pre-employment background screening | **PASS** — `BackgroundScreening` with the paragraph's own minimum as data: bankruptcy/insolvency, employment history, academic history, criminal screening — `OTHER` never substitutes. Three honesty rules: a check performed **after** employment began still counts but is flagged `late` (the assurance exists; "prior to employment" it was not); **FINDINGS is a legitimate outcome** — "we found it, considered it and proceeded" is the protective record — but an undescribed finding is refused; and standing joins the assignment advisories (TPA: recorded; registered: blocks). Verified live incl. the late flag and the FINDINGS-without-note refusal. **Tests:** 9, in CI | Screening for KRPs/shareholders sits with fit & proper (10.1/10.2) | done |
 | 12.1(a),(b), 12.2(a) | Adjusting work only by full-time qualified adjusting employees | **PARTIAL** — `licenseVerifiedAt` is live: written only by an audited verification act (`POST /adjusters/:id/verify-licence`, named actor), and registered-mode assignment refuses when it is unset. Report authorship was already restricted to adjusting employees structurally. The employment-type field is now live: recorded by an audited act, and anything other than FULL_TIME is an assignment advisory as a TPA and blocks when registered (verified live: PART_TIME produced the 12.1(a) advisory on the audit row). `qualification` captures Schedule 2 as held. Remains PARTIAL only for Schedule 2's transcription into checkable data | Transcribe the Order's Schedule 2 | 3 |
 | 12.2(b) | Assignment commensurate with skills/qualifications/experience | **PARTIAL** — `AdjusterCompetency` (per category: years, cases handled, performance) now gates assignment. A SUSPENDED adjuster is refused in **every** mode; a missing category competency or unverified licence **blocks in registered mode** and is a recorded advisory on the assignment audit row as a TPA — the licence flip applied to people, verified live both ways. Remains PARTIAL: competency depth (level vs claim complexity) and rotation (11.2(b)) are not yet weighed | Rotation counters; QA sampling | 3 |
-| 12.3/12.4 | 12.3: *new* adjusting employees closely supervised by a senior for ≥1 year before independent work. 12.4: senior recognition = ≥5 years in the subject matter plus case volume/quality. (The <5-years *report countersign* is 12.7(b), not here) | **PASS** — both are now data-driven and enforced. **12.3:** `Adjuster.adjustingSince` derives the supervision window; an author inside it needs a senior countersign *whatever their prior experience* (a ten-year veteran newly hired is still 12.3-new — the firm has not seen their work), and an unknown start date reads as under supervision. **12.4:** senior is a *recognition act* by a named person, refused below the five-year floor, refused without recorded cases (12.4(b)(i)) or attested performance (12.4(b)(ii)), auto-revoked if years fall below the floor, and five unrecognised years do **not** make a countersigner senior. Verified live: recognition below the floor refused with the 12.4(a) citation. **Tests:** 28 across the competency and countersign suites, in CI | Rotation + QA reviews are 11.2(b), tracked separately | done |
+| 12.3/12.4 | 12.3: *new* adjusting employees closely supervised by a senior for ≥1 year before independent work. 12.4: senior recognition = ≥5 years in the subject matter plus case volume/quality. (The <5-years *report countersign* is 12.7(b), not here) | **PASS** — both are now data-driven and enforced. **12.3:** `Adjuster.adjustingSince` derives the supervision window; an author inside it needs a senior countersign *whatever their prior experience* (a ten-year veteran newly hired is still 12.3-new — the firm has not seen their work), and an unknown start date reads as under supervision. **12.4:** senior is a *recognition act* by a named person, refused below the five-year floor, refused without recorded cases (12.4(b)(i)) or attested performance (12.4(b)(ii)), auto-revoked if years fall below the floor, and five unrecognised years do **not** make a countersigner senior. Verified live: recognition below the floor refused with the 12.4(a) citation. **Tests:** 28 across the competency and countersign suites, in CI **24 Sep 2026:** an administrator can no longer recognise their own seniority, verify their own licence or record their own competency, and per-adjuster records are closed to other firms. | Rotation + QA reviews are 11.2(b), tracked separately | done |
 | 12.5 | Turnaround per internal policy honouring CSP | **PARTIAL** (vestigial) — `slaDeadline` one passthrough write, zero reads; **no scheduler in the entire monorepo** | `SlaPolicy` + `SlaClock` per stage; breach escalation | 1 |
 | 12.6 | Report discloses facts, assumptions, methods, sources, databases | **PASS** — the four disclosure sections are mandatory on every report type and enforced at *both* submit and sign, server-side; whitespace does not satisfy them. Held in a code registry, not a table, so they cannot be switched off with an UPDATE. The rendered PDF prints each section with the paragraph it satisfies and discloses AI-assisted sections. **Tests:** 13, in CI | `AdjusterReport` mandatory Methodology/Sources/Assumptions sections; AI-derived content flagged | 1 |
 | 12.7 | Reports authored by adjusting employees only; junior reports senior-signed | **PASS** — authorship enforced structurally (author and signer are `Adjuster`, not `User`; a FIRM_ADMIN without an adjuster profile is refused — verified live), and the countersign now keys off **real** standing: subject-matter years from `AdjusterCompetency`, PD 12.4 *recognition* as the senior test (five unrecognised years do not make a countersigner), and the PD 12.3 supervision window overriding experience. Blocks in registered mode, recorded as a TPA, with the basis persisted on every report. This row lagged the competency build — caught by re-audit, not by memory. **Tests:** 20 across the authority suites, in CI | — | done |
@@ -292,8 +292,9 @@ SLA cites a PIAM standard by name.
 | Ref | Constraint | Current | Target control | Phase |
 |---|---|---|---|---|
 | s.123/124 + Sch 7 | No misleading/deceptive claimant-facing statements incl. AI outputs. **Applicability:** s.121 defines "financial service provider" as an *authorized* or *registered* person, so these duties attach **on registration**. Unregistered today, the operator is bound instead by (a) its contract with the insurer, which flows down the insurer's own Sch 7 duties, (b) the CSP PD via the insurer, and (c) general consumer-protection and misrepresentation law. Practically the same bar; state it accurately rather than overstating present direct exposure | **PARTIAL** — deception and fraud data no longer reach claimants (fixed in Phase 0, asserted by 8 tests); the adjuster report states in terms that the settlement decision rests with the insurer; AI contribution is disclosed per section rather than downplayed (§6). Still absent: versioned, compliance-approved claimant-facing templates | Versioned, compliance-approved templates; LLM output never verbatim to claimants | 0 (redaction, done) / 1 (template flag) / 5 (formal approval) |
-| s.143 | Produce documents/information to BNM in specified form | **PASS** — two forms on demand, compliance roles only, both audited at the gateway. `GET /claims/:id/export`: the complete machine-readable file (claim, claimant with NRIC decrypted, appointment, documents incl. soft-deleted, reports, SLA history, consents, transfer records, audit trail, sessions, notes); completeness is data (`BUNDLE_SECTIONS`) and a partial assembly refuses. `…/export/archive`: a ZIP an examiner walks away with — the sealed bundle plus the document binaries and rendered report PDFs, soft-deleted documents visibly separated, any unfetchable binary declared in MISSING_FILES.txt and on the audit row, never silent. Every export writes a **sha256-sealed** row to the append-only trail, and the seal is **fail-closed**: an export that cannot be recorded is refused, because an unprovable production to the regulator is worse than a delayed one. **Tests:** 15, in CI | The "specified form" is ultimately BNM's at request time; both forms exist to meet it | done |
+| s.143 | Produce documents/information to BNM in specified form | **PASS** — two forms on demand, compliance roles only, both audited at the gateway. `GET /claims/:id/export`: the complete machine-readable file (claim, claimant with NRIC decrypted, appointment, documents incl. soft-deleted, reports, SLA history, consents, transfer records, audit trail, sessions, notes); completeness is data (`BUNDLE_SECTIONS`) and a partial assembly refuses. `…/export/archive`: a ZIP an examiner walks away with — the sealed bundle plus the document binaries and rendered report PDFs, soft-deleted documents visibly separated, any unfetchable binary declared in MISSING_FILES.txt and on the audit row, never silent. Every export writes a **sha256-sealed** row to the append-only trail, and the seal is **fail-closed**: an export that cannot be recorded is refused, because an unprovable production to the regulator is worse than a delayed one. **Tests:** 15, in CI **24 Sep 2026:** the bundle carries the decrypted NRIC, and assembly did not check the caller could see the claim — any compliance officer with an id could export any firm's file. It now validates claim access first. | The "specified form" is ultimately BNM's at request time; both forms exist to meet it | done |
 | s.146 | No-notice examination — audit-ready always | **PASS** — see the audit row above. An examiner arriving unannounced can be shown who did what, who accessed which personal data, which requests were refused, and that no row can have been altered after the fact | Append-only evidential audit trail + this matrix as live dashboard | 1 |
+| s.133 + Sch 11 item 17; MCIPD (31 Oct 2025) 10.25; Adjuster PD 1.1, 12.1(c) | Customer information reaches only those who need it; tenants stay apart; the insurer reads the adjuster's work and never writes it. **Applicability:** s.133 binds anyone holding a financial institution's customer information, so it reaches the firm now, through the insurer's disclosure under Sch 11 item 17; MCIPD binds the insurer directly and reaches us through the appointment | **PARTIAL** — built 24 Sep 2026 after a role audit against the Act and the Adjuster PD. A role is read from the membership in the active tenant (`UserTenant`), never from `users.role`; `TENANT_ROLES` fixes which roles may exist in an adjusting firm and which in an insurer (no ADJUSTER inside an insurer; SIU and Shariah reviewer insurer-side only) and is enforced at the gateway, in case-service's tenant guard and at every grant. Both edges **deny by default** — a route declaring no rule is refused — replacing an allow-by-default under which 35 case-service routes (reports, documents, flood claims, claim reads, assignments) admitted every role and 120 of the gateway's 153 authenticated routes carried no role rule of their own (counted from the code at the prior commit), and public registration that accepted `role: SUPER_ADMIN`. Independence is a server rule: insurer staff are refused writing reports, quantum, assessment decisions, loss figures, quality reviews and appointment answers. The MCIPD 10.25 role profiles are data (`ROLE_PROFILES`). Verified live, 25 probes. **Same-day follow-up**, found by re-checking the code rather than the summary: quantum, assessment, SLA, appointment and site-visit paths each compared only the claim's owner (the appointing insurer got a 404 on files it may read), and billing, appointment linking and CSP 10.13 extensions checked nothing — any tenant could add disbursements, draft fee notes or extend another firm's deadline by claim id. All now go through one rule, `assertClaimAccess`; billing and extensions are the firm's acts only. Verified live, 15 further probes. **25 Sep 2026:** PIAM-registered agents signed in as `ADJUSTER` — refused inside the insurer tenants the agent-assisted design puts them in, and handed adjusting work (PD 5.2) anywhere else. They now sign in as `INTAKE_AGENT`: intake routes only, pinned by test, cases always routed to the handling firm; verified live for an agent linked to an insurer and to a firm. **Tests:** 98 across eight suites, including compiler-parsed scans that every route declares a rule, every method taking a claim id reaches the shared check (each mutation-tested), and the intake agent reaches the intake routes and nothing else. Remains PARTIAL: four biometric upload routes on the gateway's risk controller are still `@Public` (declared now, not yet authenticated); no periodic access review or leaver-removal workflow (PDP Standard); video-service and risk-engine rely on the gateway for roles; recording competency and recognising seniority can still be one (non-subject) person; `FeeScale` is keyed by insurer alone, so one firm's scale would bill for every firm — latent while there is one firm, a redesign (firm × insurer) before a second onboards | Authenticate the biometric uploads; access-review cycle; maker-checker between competency entry and recognition | done / 3 |
 | s.139 | "Insurance" naming restriction | **PARTIAL** — brand clean, but the claimant-web `<title>` says "Insurance Claims Made Easy"; the 10 Aug audit corrected this row (the PWA manifest is clean — "True Claim Insight") and widened it (the claimant welcome page carries "Assessments Made Simple" and two further taglines); refer to counsel | Policy note + legal review of taglines | 0 |
 | s.240 | Director personal liability | — | Motivates ComplianceEvent/Board register | 3 |
 
@@ -309,7 +310,7 @@ SLA cites a PIAM standard by name.
 
 ### 3.6 False-comfort findings (fix the assertions, not just the gaps)
 
-The audit's most dangerous items are places where the system *claims* a control that does not run. Status as at the final 31 July 2026 audit — **10 of 10 closed** (two closed by making the assertion honest rather than by building what it falsely claimed):
+The audit's most dangerous items are places where the system *claims* a control that does not run. Status as at the final 31 July 2026 audit — **10 of 10 closed** (two closed by making the assertion honest rather than by building what it falsely claimed). An eleventh, found by the 24 September 2026 role audit, is recorded and closed as #11:
 
 | # | Finding | Status |
 |---|---|---|
@@ -323,6 +324,7 @@ The audit's most dangerous items are places where the system *claims* a control 
 | 8 | Evidence checklist UI implies gating ("3 of 5 documents") that doesn't exist | ✅ **closed** — completeness now does two real things: stamps `documentsCompleteAt` and starts the CSP final-report clock when the last mandatory item arrives, and gates the move to REPORT_PENDING (registered blocks, TPA records) |
 | 9 | Signature completion endpoint forgeable (stub provider, no role restriction) | ✅ **closed** in Phase 0 — restricted to firm admins; the provider is still a stub |
 | 10 | `validationStatus` populated by a stub that always returns SKIPPED | ✅ **closed as honest** — re-examined at the final audit: the stub is labelled NOT IMPLEMENTED in code, SKIPPED is literally true ("no validation ran"), and the value is declared in one frontend type but **rendered nowhere** — no screen presents it as validation performed. False comfort requires a false claim; there no longer is one. Real validation arrives with the eKYC/deepfake providers (not integrated) and reopens this row if its UI overstates |
+| 11 | Compliance registers (fit and proper, Board escalation, BNM notifications) marked PASS while they had no tenant and every role check defaulted to allow — an insurer's compliance officer could run the adjusting firm's Board report; public registration accepted `role: SUPER_ADMIN`; a `SHARIAH_REVIEW` permission implied a function nothing implemented | ✅ **closed** 24 Sep 2026 — registers tenant-scoped and closed to insurers, deny-by-default at both edges, roles read from memberships, registration grants no access, the permission removed. The rows stayed PASS because each control worked on its own terms; *who may operate it* was never a row. The access-control row in §3.3 is that row |
 
 The pattern worth carrying forward: every one of these was found by running the system and looking at what it actually produced, not by reading the code and reasoning about it. The NRIC that reached the audit trail through a framework error message (§8) is the same lesson learned again.
 
@@ -2771,6 +2773,182 @@ Guarded by a test that reads `details.tsx` and fails if the case detail formats
 a choice itself again; mutation-tested by restoring the title-caser. 835
 case-service tests, 16 claimant-web, 117 gateway; 13 packages typecheck.
 
+### The GPU host is real, and one model needed a newer runtime (19 August 2026)
+
+`docs/GPU_HOST_SETUP.md` executed on `DESKTOP-PQGPO49`. The three models in
+`CASE_VERIFICATION_ENGINE.md` §8 are pulled and verified on the card:
+`numind/nuextract3:q4_k_m`, `qwen3-vl:8b`, `gpt-oss:20b`. Reachable from the
+tailnet as `http://tci-gpu-host.<your-tailnet>.ts.net:11434`, with Surya on `:8002`
+(`/health`, `/ocr`, `/analyze` — its shape was undocumented until now).
+
+**NuExtract3 would not load at all**, and the reason matters more than the fix.
+Its GGUF is `qwen35`, and because it ships a vision projector Ollama routes it
+to the vendored llama.cpp runner rather than the Go engine — and that runner had
+no `qwen35`. Every tag is vision-language, so the `q6_k`/`bf16` fallbacks §8
+offers would have failed identically. The host was running Ollama **0.13.5**
+against a current **0.32.14**; 0.32.14 loads it, proved on a throwaway container
+against a read-only copy of the model store before anything was changed.
+The other stack's compose is now pinned to `ollama/ollama:0.32.14` rather than
+`:latest`, so this cannot silently regress.
+
+**The more useful finding is the calling convention.** Asked with a chat
+instruction plus Ollama's `format` schema — exactly what the runbook's §3.1 test
+does — NuExtract3 returned `{"flight_number": "string", "delay_hours": 6}`. It
+echoed the schema's *type name* into a required field. That is schema-valid,
+passes the runbook's stated check, and is wrong. Given its native template
+(`# Template:` / `# Context:`) it returns `MH168` correctly, from text and from
+an image. §8's warning that *schema-valid is not semantically right* turns out
+to describe its own recommended model under its own recommended test. Any client
+must call NuExtract3 in template mode; `qwen3-vl:8b` is the one that behaves
+correctly under instruction + `format`, and it got both fields right.
+
+The `/v3` gateway §7 of the runbook calls nonexistent does exist: it is
+an unrelated project's own backend (`loan-application/backend/routers/v3/inference.py`),
+which is why the provider addressed a tunnel. That project is halted, so TCI
+must not depend on it — §7's recommendation to call `/api/chat` and Surya
+directly stands, and is now the blocking item for using this host from code.
+
+Also done: the other stack's four models (28.7 GB) removed with the owner's
+agreement; Tailscale installed and joined; `GPU_SERVICE_URL` added to
+`.env.example`; **both** dead Cloudflare quick-tunnels removed — the runbook
+named one, there were two (`ollama-gpu-llm.provider.ts`, `test-extraction.ts`) —
+and each now fails loudly instead of addressing a dead host.
+
+**Not done, deliberately.** Port `11434` is still bound to `0.0.0.0` with no
+authentication, because closing it meant recreating a container and the decision
+was not to interrupt running services. Tailscale adds a private path; it does
+not remove the LAN exposure. **This is an accepted risk, not an oversight**, and
+firewall state could not be confirmed from an unelevated session. Still open as
+debt: `OllamaGpuLlmProvider.defaultModel` names `qwen2.5:7b`, which no longer
+exists on the host — left alone rather than patched, because the `/v3` rework
+above is the real fix. The repo has no `node_modules` and no `pnpm` on this
+machine, so **these edits are unverified by typecheck**.
+*(Both resolved the same day from a Mac — see the entry below. The model ids
+moved to configuration, and the edits typecheck and pass. Left standing rather
+than rewritten: what a step was promised to be and what it became are both part
+of the record.)*
+
+**Sovereignty is unchanged by all of this.** §3.4 stands: an office desktop on a
+tailnet is not controlled in-country infrastructure, and nothing here earns the
+claim.
+
+### What the host work broke, and what it taught (19 August 2026)
+
+Reviewed `feat/gpu-host-local-llm` from a Mac, where the toolchain the Windows
+host lacked is present. Two fixes, and one decision that reverses a
+recommendation this plan made.
+
+**risk-engine stopped booting.** Removing the dead Cloudflare default was right
+and overdue; putting the replacement check in the *constructor* was not.
+`LlmModule` lists `OllamaGpuLlmProvider` in `providers` and injects it into the
+factory that chooses between backends, so Nest instantiates it eagerly
+**whichever backend wins**. A machine with `GEMINI_API_KEY` set and no
+`GPU_SERVICE_URL` — every developer without a GPU, and staging — died at
+`Injector.instantiateClass` having reached only the fifth module. Reproduced
+before fixing, and fixed by moving the throw to first use: the loud failure
+stays, on the path that actually needs a GPU. Verified by booting the service,
+not only by test.
+
+The whole 991-test suite passed straight through that regression, because
+nothing in it instantiates the module. So the guard added is a plain
+construction — the thing that broke. Mutation-tested: returning the throw to the
+constructor fails six of seven.
+
+**Three model ids were constants that used to be true.** `qwen2.5:7b`,
+`qwen2.5vl:7b`, `deepseek-r1:14b` — and by the time the host was surveyed, not
+one was on it. Structurally the same failure as the hardcoded Cloudflare tunnel:
+true when written, silently false later, invisible to the code. They now come
+from `GPU_MODEL_TEXT`, `GPU_MODEL_VISION` and `GPU_MODEL_REASONING`, and are
+logged at construction so drift appears in a boot log rather than a support
+ticket. Defaults are defensible here where they were not for the tunnel: a wrong
+model id makes Ollama answer *model not found*, which is legible.
+
+**The vision default is `qwen3-vl:8b`, not NuExtract3, and that reverses
+`CASE_VERIFICATION_ENGINE.md` §8.** NuExtract3 is the better extraction model —
+given its own native template. The conclusion held, but measurement on the host
+narrowed the reason (`docs/gpu-api-contract.md` §3): NuExtract3 is *correct*
+under instruction-plus-schema when the prompt names every required field. What
+it does is return the schema's own type name — the literal `"string"` — for any
+required field the prompt does not name. That is the normal case for a real
+schema rather than an edge case, it is schema-valid so constrained decoding
+cannot catch it, and it is the inverse of the §8 abstention rule: a guess that
+looks deliberate where absence was required. The over-broad version of this
+claim has been corrected in the provider, `.env.example` and the engine plan.
+
+**§6.3 of the runbook is now run.** It was written on the Windows host and
+labelled unrun, every command derived from `package.json`. Executed here: Node
+24.9.0 and pnpm 9.15.0 match the pins, the risk-engine suite passes without
+Docker or a tailnet, and `setup:build && test && typecheck` completes — 17 test
+tasks, 13 typecheck tasks.
+
+**The `/v3` replacement — done, 19 August 2026.** `OllamaGpuLlmProvider` no
+longer calls an API that does not exist. It was previously the single blocker to
+any application code using this host, and was deliberately not attempted until
+the host's contract was recorded: an unverifiable network rewrite is the exact
+failure this branch spent three commits undoing — a dead tunnel, a phantom API,
+unverified model tags. `docs/gpu-api-contract.md` removed the guesswork, and the
+rewrite was written against that record.
+
+- **Two services, two URLs.** `SURYA_SERVICE_URL` is new. One base URL was
+  assumed to front both Ollama (`:11434`) and Surya (`:8002`); it never did.
+  Missing, it throws rather than silently falling back to the Ollama endpoint —
+  the same rule `GPU_SERVICE_URL` earned by spending months defaulting to a dead
+  Cloudflare tunnel.
+- **Grounding now survives the provider.** `ocr()` returns Surya's per-line
+  `text`, `confidence` and `bbox` alongside the flattened text. Discarding the
+  geometry here would have made the page-and-bounding-box evidence required by
+  `CASE_VERIFICATION_ENGINE.md` §8 unrecoverable downstream, and no LLM should
+  ever be asked for coordinates. Only `/ocr` is called: `/analyze` takes the
+  identical request and answers with a loan system's bank-statement fields.
+- **`temperature: 0` everywhere**, replacing the 0.3 the reasoning path sampled
+  at, so re-running a case cannot silently produce a different answer (§9 of the
+  engine plan). Reasoning routes to the text model rather than loading a third —
+  only one or two models fit in 24 GB.
+- **A vision extraction now records the vision model.** It recorded
+  `defaultModel`, naming a model that never saw the document.
+- **37 tests, none of which open a socket.** They assert the *request shape* —
+  the half that was wrong before, and the half that running the old code would
+  never have revealed. Each of the five points above was reverted in turn to
+  confirm the suite fails.
+
+**Document text is no longer stored in the clear — 19 August 2026.**
+`DocumentAnalysis.rawText` held the full OCR text of every analysed document. For
+a MyKad or NRIC that is the identification number in plaintext, in a column with
+neither envelope encryption nor a `SENSITIVE_FIELD_OMIT` entry — while the same
+number on `Claimant` and `Claim` has both (standing decisions 4 and 5). The
+schema-scanning test did not catch it because the column is not named
+`*Encrypted` or `*Hash`.
+
+It was also leaving the server. `GET documents/:documentId/analysis` returned the
+whole row with `modelUsed` destructured off, so the response stripped the model
+id — provenance, harmless — and published the OCR text.
+
+- **The column is dropped, not encrypted.** Nothing read it back: the extraction
+  prompt is built from the OCR result in memory before the row is written. Data
+  minimisation is a cheaper control than encryption for data nobody consumes,
+  and it removes the key-management question rather than answering it.
+- **The endpoint is now an allowlist** (`public-document-analysis.ts`). The
+  denylist made every column public by default and would have published grounding
+  — per-line text and bounding boxes, document text again — on the day it lands.
+  Five tests, one of which adds a `grounding` field to the row and asserts it
+  does not appear in the response.
+- **Not yet done:** `extractedData` and `visionData` hold the same class of data
+  (a MyKad extraction contains the NRIC as a structured field) and are read by
+  the portal and the Trinity report, so they need encryption with a decrypt path
+  rather than removal. That is the next compliance item, and it is larger.
+
+**Grounding is deliberately not built yet, and §8's second non-negotiable is
+currently satisfied nowhere.** Images go to the VLM and never reach Surya, so
+they have no bounding boxes; the PDF path calls Surya but `document-processor`
+takes only `.text` and drops the geometry. Building it before the containment
+above would have added a third plaintext copy of the same personal data.
+
+**Still unverified against the live host**, and worth saying plainly: this Mac
+has no route to that tailnet, so the rewrite is proven against the recorded
+contract, not against the machine. The contract was captured from the machine,
+which is a materially stronger position than the guesswork it replaced — but a
+first live call is still a first live call.
+
 ### Telegram and WhatsApp on staging: neither channel was ever wired (22 September 2026)
 
 Both messaging channels were silent on the staging host — the shared Singapore
@@ -2848,6 +3026,150 @@ applied; on the decided AWS target, which runs the base file alone, it would not
 be.
 
 The user-flow site is unchanged: no flow, state or screen moved.
+
+### Roles are memberships, and every route says who may call it (24 September 2026)
+
+Asked whether the role design follows the FSA 2013 and the Adjuster PD. The
+role *names* did — `ADJUSTER` is the PD 5.2 adjusting employee, seniority is a
+recognition act rather than a role (PD 12.3/12.4), the Board and KRPs are
+`KeyPerson` records rather than logins (PD 10), and insurer-side reviewers are
+lawful under FSA s.17(2)(c). The *enforcement* did not, and the gaps sat exactly
+where the Act and the PD bite:
+
+- **Deny by default, at both edges.** The roles guard admitted any route that
+  declared no `@Roles` — 35 case-service routes and 120 of the gateway's 153
+  authenticated routes relied on it. Both guards are now global and refuse a
+  route with no rule; every route declares `@Roles`, `@Public`, `@InternalRoute`,
+  `@Authenticated` or (gateway proxies) `@DelegatedAuthorisation('case-service')`.
+  A compiler-parsed test fails the build on a route with none, and was checked
+  by deleting one rule and watching it fail. OWASP A01:2025; MCIPD 10.25.
+- **A role belongs to a membership, not a person.** The JWT strategy resolves
+  the role from `UserTenant` for the tenant the request names; `users.role` now
+  says only whether someone is the platform operator. An insurer's compliance
+  officer is therefore nobody inside the adjusting firm — which is what made the
+  firm's registers safe to scope rather than to split the role in two.
+- **`TENANT_ROLES`** (`@tci/shared-types`, `access-policy.ts`) fixes which roles
+  may exist where: no ADJUSTER inside an insurer (the seed had one — the demo
+  claim is now Pacific's, appointed by Allianz); SIU and Shariah reviewer
+  insurer-side only. Enforced at the gateway, again in case-service's tenant
+  guard, at every grant, and in the portal's role picker. The migration suspends
+  memberships that break it rather than deleting them.
+- **Registration grants no access.** `POST /auth/register` accepted `role` and
+  `tenantId` from the body — anyone could register as `SUPER_ADMIN`. It now
+  creates a person; a firm administrator grants the membership.
+- **The firm's registers are the firm's.** `ComplianceEvent`, `KeyPerson` and
+  `BnmNotification` gained `tenantId` (backfilled to the handling firm, verified
+  against inserted rows before the migration ran — the first draft would have
+  filed a claim-linked event under the insurer that owned the claim) and are
+  refused to insurers. A Board report no longer stamps other firms' events.
+- **Independence as a server rule** (PD 1.1, 12.1(c)): insurer staff are refused
+  writing reports, quantum, assessment decisions, loss figures, quality reviews
+  and answers to appointments. They still read the file they appointed out —
+  insurer claim lists now include `insurerTenantId`.
+- **Separation of duties:** nobody recognises their own seniority, verifies their
+  own licence, records their own competency or screening, or resolves a conflict
+  they declared or that concerns them.
+- **Tenant checks that were missing:** reports (none at all — any adjuster
+  profile could sign or withdraw any report by id), per-adjuster records, the
+  s.143 export (decrypted NRIC), legal holds, and risk-engine fraud signals
+  (no guard of any kind).
+- **Smaller:** `InternalAuthGuard` no longer defaults a missing role to
+  `ADJUSTER`; a service asking case-service for consent no longer borrows
+  `SUPER_ADMIN`; `/tenants` is the operator's alone; the retention sweep is
+  `SUPER_ADMIN` only; a Shariah reviewer no longer receives fraud or
+  behavioural data; the portal's unused `shariah:review` permission is gone.
+
+**Verified live** against the local stack after `migrate deploy` and a re-seed:
+25 probes through the gateway and case-service, every one answering as intended,
+a check that the Shariah reviewer's claim view carries no fraud or behavioural fields,
+plus the firm-side write path (an adjuster's quantum worksheet, 201) so the
+refusals are not simply everything failing. **Tests:** 75 new across five
+suites; the full suites pass (case-service 890, gateway 137, risk-engine 49,
+video-service 4, claimant-web 16).
+
+**Not done, and recorded as the §3.3 row's PARTIAL:** four biometric upload
+routes on the gateway's risk controller remain `@Public`; there is no periodic
+access review or leaver workflow (PDP Standard); video-service and risk-engine
+take roles on trust from the gateway; and the person who records competency may
+still be the one who recognises seniority. Legacy `POST /claims` still sets the
+caller's tenant as the insurer — a claim-tenancy question, not an access one,
+left for the non-motor Case model rather than patched here.
+
+### One rule for reaching a claim — the follow-up the first pass missed (24 September 2026)
+
+Asked "are we implementing roles and permissions correctly?" straight after the
+change above, the answer from the code rather than from its summary was *not
+entirely*. The first pass had asked whether each **file** held a tenant check;
+billing held one, in one method, so its other three passed unexamined.
+
+- **Owner-only comparisons, five of them** — quantum, assessment mode, SLA
+  history, appointment booking and site-visit findings each compared
+  `claim.tenantId` by hand. The appointing insurer could open the claim and its
+  report and got a 404 on the quantum, which the docs said it could read.
+- **No check at all** — recording time and disbursements, drafting and acting
+  on fee notes, linking an appointment to a claim, and recording a CSP 10.13
+  exceptional circumstance. Any tenant could extend another firm's deadline, or
+  bill against its claim, by id. The last was found by the new test below, not
+  by review.
+- **The fix is one rule.** `assertClaimAccess` (`common/access/claim-access.ts`)
+  is the claim-visibility rule; `TenantService.validateClaimAccess` delegates to
+  it and every path above calls it. Billing, fee notes, the receivables
+  statement and exceptional circumstances are additionally the firm's acts
+  (`assertMayAuthorAdjusterWork`); the statement lists only the firm's own.
+- **The test that makes it stay fixed** parses every case-service method and
+  fails the build when one takes a `claimId` and a `TenantContext` without
+  reaching the rule, directly or through what it calls; a second forbids a
+  hand-rolled `claim.tenantId !== tenantContext.tenantId`. Mutation-checked by
+  removing billing's check and watching it fail.
+
+**Verified live**, 15 probes: the insurer now reads quantum, SLA, assessment mode
+and its fee note (each 404 before); a second adjusting firm, created for the
+probe and removed after, reaches none of them and cannot bill or extend; the
+insurer cannot bill, extend or read the firm's receivables; Pacific still can.
+**Tests:** 16 new; case-service 906, gateway 137, risk-engine 49, video-service
+4, all passing.
+
+**Still open:** `FeeScale` is keyed by insurer alone, so one firm's scale would
+govern every firm's fee notes to that insurer — latent with one firm, and a
+schema change (firm × insurer) rather than a patch, so recorded rather than
+done here.
+
+### The intake agent — PIAM agents stop signing in as adjusters (25 September 2026)
+
+Merging main brought the agent-assisted path: PIAM-registered agents sign in by
+mobile code and fill a claim in on a claimant's behalf. They signed in as
+`ADJUSTER`. Against the access rules of 24 September that was wrong both ways
+it could land. The agent-assisted design has an agent typing for the insurer it
+represents, and `ADJUSTER` cannot exist in an insurer — a local run confirmed
+the agent was refused at consent and at the case. Linked to an adjusting firm
+instead, the same agent could write reports and quantum, which PD 5.2 reserves
+for adjusting employees.
+
+- **`INTAKE_AGENT`** — a role for taking a claim in and nothing else: find or
+  create the claimant, attest verbal consent, fill and submit the assisted
+  case. Allowed in both kinds of tenant (`TENANT_ROLES`), because it grants
+  nothing on either side. Added to the `UserRole` and `ActorType` enums (the
+  audit trail records the acting role).
+- **PIAM agents sign in with it** — one constant, `PIAM_AGENT_ROLE`, replaces
+  six hard-coded `'ADJUSTER'` values across sign-in, token refresh and session
+  resolution.
+- **A case an agent opens always routes to the handling firm**, whatever the
+  request says — the agent never opens one in its own organisation.
+- **Pinned by test:** a compiler-parsed scan lists every route whose roles admit
+  the agent and requires exactly the intake set — seven case routes and two
+  consent routes in case-service, claimant lookup/resolve and case creation at
+  the gateway. Widening it is now a visible decision.
+
+**Verified live** with a synthetic registration, linked in turn to Pacific and
+to Allianz: both complete sign-in → claimant lookup → consent → assisted case,
+the case lands with Pacific either way, and both are refused the case queue,
+claims, reports, quantum and identity verification (26 probes). The claimant
+PWA and web form re-verified on the same build. **Tests:** 7 new; gateway 176,
+case-service 1015 of 1016 (the one failure is main's own, noted at the merge).
+
+**Staging note:** the merge's migration suspends memberships whose role cannot
+exist in their tenant. PIAM agents hold no membership, so they are unaffected;
+a read-only check of staging's memberships, run by hand before deploying, shows whether any staff are.
 
 ---
 

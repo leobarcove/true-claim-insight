@@ -18,8 +18,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { firstValueFrom, Observable } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { DelegatedAuthorisation } from '../auth/decorators/access.decorator';
 
 /**
  * Proxy for the adjuster-report endpoints on case-service.
@@ -31,7 +31,8 @@ import { TenantGuard } from '../auth/guards/tenant.guard';
  */
 @ApiTags('Adjuster Reports')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
+@DelegatedAuthorisation('case-service')
 @Controller('reports')
 export class ReportsController {
   private caseServiceUrl: string;

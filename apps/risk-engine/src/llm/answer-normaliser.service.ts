@@ -60,6 +60,12 @@ export class AnswerNormaliserService {
   }
 
   async normalise(request: NormaliseRequest): Promise<NormaliseResult> {
+    // Only when the active provider actually crosses a border. This used to
+    // record a Google transfer unconditionally, so every normalisation on the
+    // local models logged a cross-border transfer that never happened -- the
+    // same fault as a missing record, in the other direction, and the comment
+    // below already said why that is bad.
+    //
     // Recorded before the call, and with its own data description rather than
     // the registry default: the registry's Gemini entry describes document
     // images, and a claimant's chat message is a different kind of personal
@@ -67,15 +73,17 @@ export class AnswerNormaliserService {
     //
     // No lawful basis is claimed, because none is established for this path
     // (MASTER_PLAN §3.4). The honest record says so.
-    await this.transfers.record({
-      provider: 'GOOGLE_GEMINI',
-      dataDescription: 'Free-text message typed by a claimant during conversational intake',
-      purpose: `Interpreting a claimant's answer to an intake question (${request.answerType})`,
-      lawfulBasis: null,
-      claimId: request.claimId ?? null,
-      claimantId: request.claimantId ?? null,
-      metadata: { answerType: request.answerType, characters: request.text.length },
-    });
+    if (this.llm.offshore) {
+      await this.transfers.record({
+        provider: 'GOOGLE_GEMINI',
+        dataDescription: 'Free-text message typed by a claimant during conversational intake',
+        purpose: `Interpreting a claimant's answer to an intake question (${request.answerType})`,
+        lawfulBasis: null,
+        claimId: request.claimId ?? null,
+        claimantId: request.claimantId ?? null,
+        metadata: { answerType: request.answerType, characters: request.text.length },
+      });
+    }
 
     try {
       const raw = await this.llm.generateJson(this.buildPrompt(request));

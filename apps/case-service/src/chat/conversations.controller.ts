@@ -10,8 +10,7 @@ import {
   TakeOverDto,
   UnbindConversationDto,
 } from './dto/conversation.dto';
-import { InternalAuthGuard } from '../common/guards/internal-auth.guard';
-import { RolesGuard, UserRole } from '../common/guards/roles.guard';
+import { UserRole } from '../common/guards/roles.guard';
 import { TenantGuard, TenantContext } from '../common/guards/tenant.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Tenant, TenantIsolation, TenantScope } from '../common/decorators/tenant.decorator';
@@ -36,7 +35,7 @@ const AGENT_ROLES = [
 @ApiTags('conversations')
 @ApiBearerAuth()
 @Controller({ path: 'conversations', version: '1' })
-@UseGuards(InternalAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @TenantIsolation(TenantScope.STRICT)
 export class ConversationsController {
   constructor(private readonly service: ConversationsService) {}

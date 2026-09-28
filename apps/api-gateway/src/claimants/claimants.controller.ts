@@ -12,10 +12,9 @@ import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagg
 import { PrismaService } from '../config/prisma.service';
 import { ClaimantsService } from './claimants.service';
 import { TenantGuard } from '../auth/guards/tenant.guard';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SkipTenantCheck } from '../auth/decorators/skip-tenant-check.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 const normalizePhoneNumber = (p: string) => p?.replace(/\+/g, '')?.replace(/^60/g, '0') || '';
 
@@ -47,8 +46,7 @@ export class ClaimantsController {
    * agent actually needs in order not to re-key a name already on file.
    */
   @Post('lookup')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INTAKE_AGENT', 'SUPER_ADMIN')
   @SkipTenantCheck()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiBearerAuth()
@@ -112,8 +110,7 @@ export class ClaimantsController {
    * before there is a lawful basis for storing it.
    */
   @Post('resolve')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADJUSTER', 'FIRM_ADMIN', 'SUPER_ADMIN')
+  @Roles('ADJUSTER', 'FIRM_ADMIN', 'INTAKE_AGENT', 'SUPER_ADMIN')
   @SkipTenantCheck()
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiBearerAuth()
@@ -144,6 +141,7 @@ export class ClaimantsController {
   }
 
   @Post('verify-nric')
+  @Public()
   // Deliberately unauthenticated: the claimant proves identity here as part of
   // the magic-link video join, before any login exists. Hardened against use
   // as an NRIC/phone confirmation oracle: strict per-route throttle and

@@ -26,15 +26,24 @@ export class BnmNotificationsService {
     private readonly audit: AuditService
   ) {}
 
-  /** Draft a notifiable change. Due date = occurredAt + 7 working days (KL). */
+  /**
+   * Draft a notifiable change for the adjusting firm `tenantId`.
+   * Due date = occurredAt + 7 working days (KL).
+   */
   async draft(
-    data: { changeType: BnmChangeType; description: string; occurredAt: Date; keyPersonId?: string },
+    data: {
+      changeType: BnmChangeType;
+      description: string;
+      occurredAt: Date;
+      keyPersonId?: string;
+    },
+    tenantId: string,
     actorUserId: string | null
   ) {
     const dueAt = addWorkingDays(data.occurredAt, 7, { state: 'KUALA_LUMPUR' });
 
     const notification = await this.prisma.bnmNotification.create({
-      data: { ...data, dueAt },
+      data: { ...data, tenantId, dueAt },
     });
 
     await this.audit.record({
@@ -42,6 +51,7 @@ export class BnmNotificationsService {
       entityId: notification.id,
       action: 'BNM_NOTIFICATION_DRAFTED',
       actorId: actorUserId,
+      tenantId,
       newValues: { changeType: data.changeType, occurredAt: data.occurredAt, dueAt },
     });
 
@@ -58,7 +68,10 @@ export class BnmNotificationsService {
         'The submission reference is required — "we told BNM" needs something to point at.'
       );
     }
-    const notification = await this.prisma.bnmNotification.findUnique({ where: { id } });
+    // Another firm's notification reads as absent, never as "not yours".
+    const notification = await this.prisma.bnmNotification.findFirst({
+      where: { id, tenantId: tenantContext.tenantId },
+    });
     if (!notification) throw new NotFoundException('Notification not found');
     if (notification.notifiedAt) {
       throw new BadRequestException('Already marked notified.');
@@ -88,8 +101,9 @@ export class BnmNotificationsService {
   }
 
   /** The register: outstanding first, each row saying whether it is overdue. */
-  async list() {
+  async list(tenantContext: TenantContext) {
     const rows = await this.prisma.bnmNotification.findMany({
+      where: { tenantId: tenantContext.tenantId },
       orderBy: [{ notifiedAt: 'asc' }, { dueAt: 'asc' }],
     });
     const now = Date.now();

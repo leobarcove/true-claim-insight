@@ -100,7 +100,7 @@ export class DocumentProcessorService {
         // provider does not leave the machine, so only the offshore path is a
         // s.129 transfer. No consent gate here yet — the register records the
         // honest state: no basis established for this path (see §3.4).
-        if (this.gpu.name === 'Gemini') {
+        if (this.gpu.offshore) {
           await this.transfers.record({
             provider: 'GOOGLE_GEMINI',
             purpose: `Text extraction from a ${docType} document image`,
@@ -118,7 +118,11 @@ export class DocumentProcessorService {
           const resp = await this.gpu.visionJson(prompt, optimizedBuffer, doc.filename);
           visionData = resp.output || resp;
           resultData = this.extractionService.normalize(docType, visionData);
-          modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
+          // The vision model, not the text one. These are different models on
+          // the Ollama path, so recording defaultModel here named a model that
+          // never saw the document -- which is precisely the provenance
+          // CASE_VERIFICATION_ENGINE.md §9 needs to re-run a case later.
+          modelUsed = `${this.gpu.name}:${this.gpu.visionModel}`;
         } else {
           const ocrResp = await this.gpu.ocr(fileBuffer, doc.filename);
           rawText = ocrResp.text || '';
@@ -130,13 +134,18 @@ export class DocumentProcessorService {
           modelUsed = `${this.gpu.name}:${this.gpu.defaultModel}`;
         }
 
+        // rawText is deliberately not persisted. It is the full OCR text, which
+        // for a MyKad is the NRIC in plaintext -- the same value encrypted under
+        // a KeyProvider on Claimant. Nothing read it back, and the analysis
+        // endpoint served it, so the column was dropped rather than encrypted:
+        // the cheapest control for data nobody consumes is not keeping it. It
+        // still exists as a local above, which is all the prompt needs.
         await this.prisma.documentAnalysis.upsert({
           where: { documentId: doc.id },
           create: {
             documentId: doc.id,
             tenantId: doc.tenantId,
             userId: doc.userId,
-            rawText: rawText,
             extractedData: resultData,
             visionData: visionData,
             modelUsed: modelUsed,
@@ -144,7 +153,6 @@ export class DocumentProcessorService {
             processingTime: Date.now() - startTime,
           },
           update: {
-            rawText: rawText,
             extractedData: resultData,
             visionData: visionData,
             modelUsed: modelUsed,

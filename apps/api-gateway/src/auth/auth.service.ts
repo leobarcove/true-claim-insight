@@ -10,6 +10,16 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { OtpService } from './otp.service';
 import { AuditService } from '../common/audit/audit.service';
+import { MembershipLike, resolveEffectiveRole } from './effective-role';
+
+/**
+ * The role a PIAM-registered agent signs in with. Not ADJUSTER: an agent takes
+ * a claim in on a claimant's behalf and is not an adjusting employee (PD 5.2),
+ * and the agent-assisted design has agents typing for the insurer they
+ * represent, where ADJUSTER cannot exist (TENANT_ROLES). INTAKE_AGENT reaches
+ * the intake routes and nothing else.
+ */
+const PIAM_AGENT_ROLE = 'INTAKE_AGENT';
 
 export interface JwtPayload {
   sub: string;
@@ -34,7 +44,8 @@ export interface AuthResponse {
     id: string;
     email: string;
     fullName: string;
-    role: string;
+    /** The role in the active tenant; null until a membership is granted. */
+    role: string | null;
     phoneNumber: string;
     licenseNumber?: string | null;
     avatarUrl?: string | null;
@@ -87,7 +98,7 @@ export class AuthService {
             id: existingUser.id,
             email: existingUser.email,
             fullName: existingUser.fullName,
-            role: existingUser.role,
+            role: this.roleIn(existingUser, activeTenantId, userTenants),
             phoneNumber: existingUser.phoneNumber,
             licenseNumber:
               existingUser.licenseNumber || (existingUser as any).adjuster?.licenseNumber,
@@ -106,11 +117,18 @@ export class AuthService {
     // Hash password
     const saltRounds = this.configService.get<number>('bcrypt.saltRounds', 12);
     const hashedPassword = await bcrypt.hash(registerDto.password, saltRounds);
+    // Self-registration creates a person, never access. The account can sign in
+    // and read its own profile; a role arrives only when a firm administrator
+    // grants a membership. Until September 2026 this endpoint accepted `role`
+    // and `tenantId` from the body — any caller could register as SUPER_ADMIN.
     const user = await this.usersService.create({
-      ...registerDto,
+      email: registerDto.email,
       password: hashedPassword,
+      fullName: registerDto.fullName,
+      phoneNumber: registerDto.phoneNumber,
+      licenseNumber: registerDto.licenseNumber,
       isVerified: false,
-    } as any);
+    });
 
     const userTenants = await this.getUserTenants(user.id);
     const defaultTenant = userTenants.find(ut => ut.isDefault);
@@ -131,7 +149,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        role: this.roleIn(user, activeTenantId, userTenants),
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         avatarUrl: (user as any).avatarUrl,
@@ -206,7 +224,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        role: this.roleIn(user, activeTenantId, userTenants),
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         avatarUrl: (user as any).avatarUrl,
@@ -316,7 +334,7 @@ export class AuthService {
       {
         tenantId: activeTenantId,
         tenantName: registeredAgent.tenantName ?? registeredAgent.agencyName,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         isDefault: true,
         status: 'ACTIVE',
       },
@@ -325,7 +343,7 @@ export class AuthService {
     const tokens = await this.generateTokens(
       {
         id: registeredAgent.id,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         tenantId: activeTenantId,
         currentTenantId: activeTenantId,
         userTenants,
@@ -340,7 +358,7 @@ export class AuthService {
       action: 'STAFF_LOGIN_SUCCEEDED',
       actorId: registeredAgent.id,
       tenantId: activeTenantId ?? null,
-      metadata: { role: 'ADJUSTER', method: 'mobile-code', keepSignedIn },
+      metadata: { role: PIAM_AGENT_ROLE, method: 'mobile-code', keepSignedIn },
     });
 
     this.logger.log(`PIAM agent signed in by mobile: ${registeredAgent.id}`);
@@ -351,7 +369,7 @@ export class AuthService {
         email: '',
         fullName:
           registeredAgent.agentName ?? registeredAgent.tenantName ?? registeredAgent.agencyName,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         phoneNumber: `+${registeredAgent.phoneNumber.replace(/^\+/, '')}`,
         licenseNumber: registeredAgent.registrationNumber,
         avatarUrl: null,
@@ -395,7 +413,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        role: this.roleIn(user, activeTenantId, userTenants),
         phoneNumber: user.phoneNumber,
         licenseNumber: user.licenseNumber || (user as any).adjuster?.licenseNumber,
         avatarUrl: (user as any).avatarUrl,
@@ -435,7 +453,7 @@ export class AuthService {
         if (!agent) throw new UnauthorizedException('PIAM agent not found');
         return this.generateTokens({
           id: agent.id,
-          role: 'ADJUSTER',
+          role: PIAM_AGENT_ROLE,
           tenantId: agent.tenantId,
           currentTenantId: agent.tenantId,
           identityType: 'PIAM_AGENT',
@@ -486,7 +504,13 @@ export class AuthService {
     this.logger.log(`Account deleted: ${userId}`);
   }
 
-  async validateJwtPayload(payload: JwtPayload) {
+  /**
+   * Resolve the identity behind a token, with the role it holds *for this
+   * request*: the membership's role in the requested (or current) tenant. The
+   * user's own `role` column says only whether they are the platform operator.
+   * See `resolveEffectiveRole`.
+   */
+  async validateJwtPayload(payload: JwtPayload, requestedTenantId?: string) {
     if (payload.identityType === 'PIAM_AGENT') {
       const agent = await this.usersService.findPiamRegisteredAgentById(payload.sub);
       if (!agent) throw new UnauthorizedException('PIAM agent not found');
@@ -517,12 +541,17 @@ export class AuthService {
         fullName: agent.agentName ?? agent.tenantName ?? agent.agencyName,
         phoneNumber: `+${agent.phoneNumber.replace(/^\+/, '')}`,
         licenseNumber: agent.registrationNumber,
-        role: 'ADJUSTER',
+        role: PIAM_AGENT_ROLE,
         tenantId: agent.tenantId,
         currentTenantId: agent.tenantId,
         tenantName: agent.tenantName ?? agent.agencyName,
         tenantIds: [agent.tenantId],
         identityType: 'PIAM_AGENT',
+        // A PIAM agent has no membership row: its one tenant is the agency
+        // linked to its registration, so that is the tenant it acts in. The
+        // tenant guards still apply TENANT_ROLES to it — the agent's role must
+        // be able to exist in that kind of tenant.
+        activeTenantId: agent.tenantId,
       };
     }
 
@@ -540,12 +569,28 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Attach multi-tenant context from payload
+    const memberships = ((user as any).userTenants ?? []) as MembershipLike[];
+    const effective = resolveEffectiveRole({
+      platformRole: user.role,
+      requestedTenantId,
+      sessionTenantId: payload.currentTenantId || user.tenantId,
+      memberships,
+    });
+    if (effective.refusal) {
+      this.logger.warn(`User ${user.id} holds no role for this request: ${effective.refusal}`);
+    }
+
     return {
       ...user,
+      platformRole: user.role,
+      role: effective.role,
+      activeTenantId: effective.tenantId,
+      activeTenantType: effective.tenantType,
       currentTenantId: payload.currentTenantId,
-      tenantIds:
-        payload.tenantIds || (user as any).userTenants?.map((ut: any) => ut.tenantId) || [],
+      // Only tenants the person can act in now: a suspended membership is not access.
+      tenantIds: memberships
+        .filter(membership => membership.status === 'ACTIVE')
+        .map(membership => membership.tenantId),
     };
   }
 
@@ -592,7 +637,7 @@ export class AuthService {
         id: updatedUser.id,
         email: updatedUser.email,
         fullName: updatedUser.fullName,
-        role: updatedUser.role,
+        role: this.roleIn(updatedUser, tenantId, userTenants),
         phoneNumber: updatedUser.phoneNumber,
         licenseNumber: updatedUser.licenseNumber || (updatedUser as any).adjuster?.licenseNumber,
         avatarUrl: (updatedUser as any).avatarUrl,
@@ -603,6 +648,28 @@ export class AuthService {
       userTenants,
       tokens,
     };
+  }
+
+  /**
+   * The role to present for the active tenant — what the portal shows and
+   * gates its screens on. Resolved exactly as a request is, so the screen and
+   * the server cannot disagree about who someone is.
+   */
+  private roleIn(
+    user: { role: string },
+    activeTenantId: string | null | undefined,
+    userTenants: Array<{ tenantId: string; role: string; status: string; tenantType?: string }>
+  ): string | null {
+    return resolveEffectiveRole({
+      platformRole: user.role,
+      sessionTenantId: activeTenantId,
+      memberships: userTenants.map(membership => ({
+        tenantId: membership.tenantId,
+        role: membership.role,
+        status: membership.status,
+        tenant: membership.tenantType ? { type: membership.tenantType } : null,
+      })),
+    }).role;
   }
 
   async getUserTenants(userId: string) {

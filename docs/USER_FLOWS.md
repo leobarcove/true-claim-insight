@@ -736,46 +736,79 @@ which one produced the figure.
 
 ```mermaid
 flowchart LR
-    subgraph EXT["Outside the firm"]
+    subgraph EXT["Outside every tenant"]
         CLM["`CLAIMANT
 own case only`"]
+        SA["`SUPER_ADMIN
+tenants · memberships`"]
     end
 
-    subgraph FIRM["Adjusting firm — tenant scoped"]
+    subgraph FIRM["Adjusting firm — writes the adjuster's work"]
         SUP["`SUPPORT_DESK
-vet · request info
-no fraud or behavioural data`"]
+answer conversations · FNOL triage
+never vets a case · no fraud data`"]
         ADJ["`ADJUSTER
 assess · author reports`"]
         FA["`FIRM_ADMIN
-config · audited reveals
+config · grants access
 cannot sign reports`"]
+        FCO["`COMPLIANCE_OFFICER
+fit and proper · Board · BNM`"]
     end
 
-    subgraph INS["Insurer tenant"]
-        SIU["SIU_INVESTIGATOR"]
-        CO["`COMPLIANCE_OFFICER
-legal holds`"]
-        SR["SHARIAH_REVIEWER"]
+    subgraph INS["Insurer tenant — reads the adjuster's work, never writes it"]
+        IFA["`FIRM_ADMIN
+decides settlement`"]
+        SIU["`SIU_INVESTIGATOR
+fraud review`"]
+        ICO["`COMPLIANCE_OFFICER
+legal holds · s.143 export`"]
+        SR["`SHARIAH_REVIEWER
+read-only`"]
+        AGT["`INTAKE_AGENT
+PIAM agent · takes a claim in`"]
     end
-
-    SA["SUPER_ADMIN"]
 
     CLM -->|"submit · amend · upload"| CASE["Case"]
-    SUP -->|"vet"| CASE
-    ADJ -->|"assess"| CLAIM["Claim"]
+    AGT -->|"assisted intake · routed to the firm"| CASE
+    SUP -->|"answer · triage intake"| CONV["Conversation"]
     FA -->|"link policy · reveal payout"| CASE
-    SIU -->|"escalated only"| CLAIM
-    CO -->|"hold · compliance events"| CLAIM
-    SA -->|"cross-tenant"| CLAIM
+    ADJ -->|"assess · quantum · report"| CLAIM["Claim"]
+    FCO -->|"the firm's own"| REG["PD 10 · 11.2(d) · 13 registers"]
+    IFA -->|"read · approve / reject"| CLAIM
+    SIU -->|"read · fraud signals"| CLAIM
+    ICO -->|"hold · export"| CLAIM
+    SR -->|"read"| CLAIM
+    SA -->|"cross-tenant, audited"| CLAIM
 
     style EXT fill:#fdf0e3,stroke:#b5651d
     style INS fill:#eef2fb,stroke:#3b5bA9
 ```
 
-Cross-tenant access raises `ForbiddenException`. A record belonging to another
-tenant is indistinguishable from one that does not exist — an existence check,
-not merely an access check.
+A role belongs to a **membership in a tenant**, not to the person, and which
+roles may exist in which kind of tenant is fixed (`TENANT_ROLES`): there is no
+adjuster inside an insurer, and SIU and Shariah review are insurer functions.
+The same role name on the two sides is two different jobs — the firm's
+compliance officer runs the registers the Adjuster PD makes the firm's own; the
+insurer's cannot see them. The insurer reads the file it appointed out — the
+claim, documents, reports, quantum, assessment mode, SLA history and the fee
+note addressed to it — and decides settlement. It never writes the adjuster's
+findings, quantum, report or site-visit record, and never records the firm's
+time, fees or deadline extensions (PD 1.1, 12.1(c)). Who may reach a claim at
+all is one rule in one place (`assertClaimAccess`).
+
+A PIAM-registered agent signs in as `INTAKE_AGENT`: it finds or creates the
+claimant, attests their verbal consent and fills in the assisted case — and
+reaches nothing else. The case always routes to the handling firm, and the
+agent loses sight of it at submission. It signed in as `ADJUSTER` until
+25 Sep 2026, which gave an agent adjusting work PD 5.2 reserves for adjusting
+employees, or, inside an insurer, no access at all.
+
+Every route states who may call it, and one that states nothing is refused.
+A record belonging to another tenant answers as one that does not exist (404) —
+an existence check, not merely an access check. *(Redrawn 24 Sep 2026; this
+diagram had also missed the 18 Aug correction to the support desk that the site
+copy carried.)*
 
 ---
 

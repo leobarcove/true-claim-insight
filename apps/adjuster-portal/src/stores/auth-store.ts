@@ -9,6 +9,7 @@ export type UserRole =
   | 'COMPLIANCE_OFFICER'
   | 'SUPPORT_DESK'
   | 'SHARIAH_REVIEWER'
+  | 'INTAKE_AGENT'
   | 'SUPER_ADMIN';
 
 export interface User {

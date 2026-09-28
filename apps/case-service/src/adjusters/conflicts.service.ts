@@ -5,6 +5,7 @@ import { TenantContext } from '../common/guards/tenant.guard';
 import { PrismaService } from '../config/prisma.service';
 import { ComplianceEventsService } from '../compliance/compliance-events.service';
 import { coiConflictEvent } from '../compliance/compliance-triggers';
+import { assertNotSelf } from '../common/access/access-rules';
 
 /**
  * Conflict declarations and per-claim attestations (PD 10.3, 12.1(d)).
@@ -79,8 +80,23 @@ export class ConflictsService {
     }
     const declaration = await this.prisma.conflictDeclaration.findUnique({
       where: { id: declarationId },
+      include: { adjuster: { select: { tenantId: true, userId: true } } },
     });
-    if (!declaration) throw new NotFoundException('Declaration not found');
+    // Another firm's declaration reads as absent.
+    if (
+      !declaration ||
+      (declaration.adjuster.tenantId !== tenantContext.tenantId &&
+        tenantContext.userRole !== 'SUPER_ADMIN')
+    ) {
+      throw new NotFoundException('Declaration not found');
+    }
+    // "We knew and dealt with it" protects the firm only if someone other than
+    // the conflicted person, or the person who declared it, dealt with it.
+    assertNotSelf(
+      tenantContext,
+      [declaration.declaredByUserId, declaration.adjuster.userId],
+      'Resolving a conflict of interest'
+    );
     if (declaration.resolvedAt) {
       throw new BadRequestException('This declaration is already resolved.');
     }
@@ -156,6 +172,8 @@ export class ConflictsService {
         ...coiConflictEvent({ claimId, adjusterId: adjuster.id, note: note ?? null }),
         claimId,
         adjusterId: adjuster.id,
+        // The adjuster's firm owns the register the Board reads.
+        tenantId: adjuster.tenantId,
         source: 'coi-attestation',
       });
     }

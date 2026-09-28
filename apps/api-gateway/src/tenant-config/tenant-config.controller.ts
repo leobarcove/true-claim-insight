@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard, type TenantContext } from '../auth/guards/tenant.guard';
 import { UpdateTenantSettingsDto } from './dto/update-settings.dto';
 import { TenantConfigService } from './tenant-config.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 /**
  * Per-tenant configuration.
@@ -16,7 +16,7 @@ import { TenantConfigService } from './tenant-config.service';
  */
 @ApiTags('Tenant configuration')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(TenantGuard)
 @Controller('tenants/:tenantId/settings')
 export class TenantConfigController {
   constructor(private readonly service: TenantConfigService) {}
@@ -30,12 +30,21 @@ export class TenantConfigController {
   }
 
   @Get()
+  @Roles(
+    'ADJUSTER',
+    'FIRM_ADMIN',
+    'COMPLIANCE_OFFICER',
+    'SUPPORT_DESK',
+    'SIU_INVESTIGATOR',
+    'SHARIAH_REVIEWER'
+  )
   @ApiOperation({ summary: 'Effective settings, with defaults made explicit' })
   read(@Param('tenantId', ParseUUIDPipe) tenantId: string, @Req() req: any) {
     return this.service.read(tenantId, this.context(req));
   }
 
   @Patch()
+  @Roles('FIRM_ADMIN')
   @ApiOperation({ summary: 'Merge a partial change; licensed mode requires a reason' })
   update(
     @Param('tenantId', ParseUUIDPipe) tenantId: string,
