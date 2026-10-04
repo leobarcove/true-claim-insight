@@ -15,9 +15,18 @@
 ARG NODE_IMAGE=node:22-bookworm-slim
 
 # ---------------------------------------------------------------------------
-# Build stage: install workspace, generate Prisma client, turbo build.
+# Deps stage: install the workspace and generate the Prisma client — and
+# nothing else. Its /app/node_modules is what every Node image ships.
+#
+# It is a stage of its own so that node_modules is decided by the lockfile and
+# the Prisma schema ALONE. `prisma generate` writes into node_modules
+# (.pnpm/@prisma+client…/node_modules/.prisma/client); when it ran after
+# `COPY . .`, every source edit produced a byte-different 1.5 GB tree, and the
+# runtime's `COPY --from` of it missed the cache and re-exported and unpacked
+# the whole thing — measured at ~7 minutes of a 35-minute deploy on 4 Oct 2026.
+# Now a code-only change leaves this stage, and that layer, untouched.
 # ---------------------------------------------------------------------------
-FROM ${NODE_IMAGE} AS build
+FROM ${NODE_IMAGE} AS deps
 
 # openssl for Prisma engine detection; ca-certificates for postinstall
 # downloads (ffmpeg-static, Prisma engines, bcrypt prebuilds).
@@ -56,6 +65,16 @@ ENV HUSKY=0
 # downloading, and it is why the store is not simply left in its default place.
 RUN --mount=type=cache,id=tci-pnpm-store,target=/pnpm/store,sharing=locked \
   pnpm install --frozen-lockfile --store-dir=/pnpm/store
+
+# The schema is the only input `prisma generate` reads. Copied on its own so a
+# schema change re-generates, and nothing else does.
+COPY packages/prisma-client/prisma/schema.prisma packages/prisma-client/prisma/
+RUN pnpm prisma:generate
+
+# ---------------------------------------------------------------------------
+# Build stage: the source on top of the installed workspace, turbo build.
+# ---------------------------------------------------------------------------
+FROM deps AS build
 
 COPY . .
 
@@ -104,7 +123,7 @@ ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB}
 # in the persistent BuildKit cache mount between deployments.
 ENV TURBO_CACHE_DIR=/turbo-cache
 RUN --mount=type=cache,id=tci-turbo,target=/turbo-cache,sharing=locked \
-  pnpm prisma:generate && pnpm exec turbo run build --cache-dir=/turbo-cache
+  pnpm exec turbo run build --cache-dir=/turbo-cache
 
 # ---------------------------------------------------------------------------
 # Shared Node runtime base — the built workspace, verbatim.
@@ -124,14 +143,17 @@ ENV NODE_ENV=production
 # invalidated as a unit.
 #
 # node_modules must come FIRST: layer caching is positional, so a hit on a
-# later layer is worthless once an earlier one has missed.
+# later layer is worthless once an earlier one has missed. It is taken from
+# `deps`, not `build`: anything the build writes into node_modules (a tool
+# cache, a generated file) would otherwise make this 1.5 GB layer differ on
+# every commit — which is exactly the miss the deps stage exists to prevent.
 #
 # This deliberately does not copy the whole tree. deploy/, .github/, the root
 # docker-compose.yml, CLAUDE.md and README were all being shipped inside every
 # service image; none is read at runtime. Leaving them out keeps the image
 # honest about what it actually runs. Anything a service DOES need at runtime
 # has to be named here explicitly — that is the trade for the speed.
-COPY --from=build /app/node_modules /app/node_modules
+COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=build /app/packages /app/packages
 COPY --from=build /app/apps /app/apps
 # scripts/ is small and referenced by root package.json ("telegram:terminal").
