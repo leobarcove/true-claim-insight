@@ -16,7 +16,7 @@ name: staging-images
 #  - turbo's cache and the pnpm store persist between runs.
 on:
   push:
-    branches: [main]
+    branches: [main, perf/ci-built-slim-images]  # TEMP: remove before merge
   workflow_dispatch:
     inputs:
       rebuild_all:
@@ -37,7 +37,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io/leobarcove
   HEAD_SHA: ${{ github.sha }}
-  PUBLISH_MAIN: ${{ github.ref == 'refs/heads/main' }}
+  PUBLISH_MAIN: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/perf/ci-built-slim-images' }}  # TEMP
 
 jobs:
   plan:
