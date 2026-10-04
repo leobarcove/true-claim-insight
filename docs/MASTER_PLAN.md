@@ -613,6 +613,42 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Portal uploads answer their step — 4 October 2026
+
+Reported from staging on CSE-2026-000203 (flight delay, staff intake): the
+evidence checklist read **3/3 mandatory uploaded** and *Submit for vetting* was
+refused with all three documents named as missing. Two definitions of
+"uploaded" disagreed. The checklist matches live `CaseDocument`s by type; the
+submit guard (`missingSteps`) counts a document step only when
+`answers[stepId]` holds the file's id. The conversation and agent intake upload
+*and then* answer the step; the portal's Upload button sent a type and nothing
+else, so its files had no `stepId` and answered nothing.
+
+- **Portal:** the upload picker lists the document steps on the claimant's path
+  through the case's *pinned* flow (`GET /cases/:id/flow`, not the built-in
+  `CASE_FLOWS`), files the upload against the chosen step, then attaches it.
+  A case with no flow (property lines) still uploads by type, since it has no
+  step to answer.
+- **Server:** `PATCH /cases/:id/corrections` now accepts a document step,
+  but only with the id of a live upload already filed against that step on
+  that case — anything else would mark a step answered with evidence that is
+  not there. Audited as `CASE_ANSWER_CORRECTED`; the cursor does not move, so
+  a claimant mid-conversation is not skipped past anything. Pinned by
+  `attach-document-correction.spec.ts`.
+- **Backfill:** `pnpm --filter @tci/prisma-client backfill:document-steps`
+  (dry run; `-- --apply` to write) links step-less uploads on editable cases to
+  the open step asking for their type, with a `CASE_DOCUMENT_STEP_BACKFILLED`
+  audit row each. It refuses to guess: two candidate files for a single-file
+  step, or one type asked for by two open steps, is reported for an operator to
+  re-upload. Dry run locally: 23 steps across 7 seeded cases, none ambiguous.
+  **Not yet run on staging.** CSE-2026-000203 itself has two files typed
+  *Airline Delay Confirmation* — one of them is the itinerary, mislabelled — so
+  the backfill will link its boarding pass and itinerary and leave the delay
+  confirmation for an operator to re-upload through the fixed picker.
+
+All 331 case-service `cases` + `common` tests pass; portal and case-service
+typecheck clean. Not yet clicked through in a browser.
+
 ### Web-form microsite — complete, 2 September 2026 (`1ec6198`, `5db71b6`, `3fa61d5`, `f1e03a8`)
 
 A fourth way to lodge a claim: a form at `/form` on claimant-web, alongside the
