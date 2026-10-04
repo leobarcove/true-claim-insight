@@ -13,7 +13,12 @@
 set -euo pipefail
 
 IFS= read -r -t 10 token || { echo "ci-deploy: expected a registry token on stdin" >&2; exit 2; }
-[[ "$token" =~ ^[A-Za-z0-9_]+$ ]] || { echo "ci-deploy: malformed token" >&2; exit 2; }
+# Shape check only — the registry is what validates it, and GitHub's token
+# format is not fixed (the first version of this check assumed ghs_… and
+# refused the real one). It only ever reaches `docker login` quoted, on stdin,
+# so what matters is a single printable word.
+[[ "$token" =~ ^[[:graph:]]{20,}$ ]] || {
+  echo "ci-deploy: token is not one printable word (length ${#token})" >&2; exit 2; }
 
 DOCKER_CONFIG="$(mktemp -d)"
 export DOCKER_CONFIG
