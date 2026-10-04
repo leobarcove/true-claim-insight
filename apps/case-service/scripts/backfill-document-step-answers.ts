@@ -20,8 +20,16 @@
  * Dry run unless `--apply` is passed. The cursor is never moved, nothing is
  * superseded, and nothing is deleted.
  *
- *   pnpm --filter @tci/prisma-client backfill:document-steps            # report
- *   pnpm --filter @tci/prisma-client backfill:document-steps -- --apply # write
+ *   pnpm --filter @tci/case-service backfill:document-steps            # report
+ *   pnpm --filter @tci/case-service backfill:document-steps -- --apply # write
+ *
+ * Lives in case-service, not in a shared package: it reads and writes only
+ * case-service's own tables, and a file under packages/ makes the staging
+ * deploy rebuild every image, while one here rebuilds case-service alone.
+ *
+ * On staging, inside the running container (its WORKDIR is this package):
+ *   docker exec tci-staging-case-service-1 \
+ *     node -r ts-node/register/transpile-only scripts/backfill-document-step-answers.ts
  */
 import { CaseStatus, Prisma, PrismaClient } from '@prisma/client';
 import {
