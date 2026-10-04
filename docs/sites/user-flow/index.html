@@ -1007,7 +1007,10 @@ from the pinned flow`"]
           a claimant's turns leave the conversation transcript, which is their record;
           a <em>staff</em> correction has no transcript, so it goes through a separate,
           audited endpoint that records actor and before/after values and never moves the
-          conversational cursor (MASTER_PLAN §6 item 21).
+          conversational cursor (MASTER_PLAN §6 item 21). Evidence a staff member uploads
+          is attached through that same endpoint: the file is filed against its step, and the
+          step is answered with the stored id — the answer, not the file's type, is what
+          submitting checks.
         </p>
         <p class="note">
           Binding is the platform's own verified contact — <em>Share my number</em> — and a

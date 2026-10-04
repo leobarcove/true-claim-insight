@@ -630,8 +630,30 @@ export class CasesService {
         'Payout details are corrected through their own gated path, not here.'
       );
     }
-    if (step.answerType === 'document' || step.isReview) {
+    if (step.isReview) {
       throw new BadRequestException('This step is not a typed answer.');
+    }
+    // A document step is answered with the id of the file that satisfies it —
+    // the same value the conversation stores. Staff attach evidence through
+    // here rather than through `patchAnswer` so the attachment is audited and
+    // a claimant mid-conversation is not moved on a step. The id must name a
+    // live upload already filed against this step on this case: anything else
+    // would mark the step answered with evidence that is not there.
+    if (step.answerType === 'document') {
+      const document = await this.prisma.caseDocument.findFirst({
+        where: {
+          id: String(dto.value),
+          caseId: caseRow.id,
+          stepId: step.id,
+          supersededAt: null,
+        },
+        select: { id: true },
+      });
+      if (!document) {
+        throw new BadRequestException(
+          'Upload the document against this step first, then attach it.'
+        );
+      }
     }
 
     const previousAnswers = caseRow.answers as CaseAnswers;

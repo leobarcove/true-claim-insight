@@ -135,6 +135,18 @@ for the same `(category, documentType)`. The `/claims/:id/evidence-
 checklist` endpoint joins each requirement against uploaded `Document`s
 and returns `satisfied: true/false`.
 
+**On a Case the checklist is a display, not the gate** (added 4 Oct 2026). The
+case screen ticks a requirement when any live `CaseDocument` carries its type;
+`POST /cases/:id/submit` instead runs `missingSteps(flow, answers)`, which counts
+a document step only once `answers[stepId]` holds the id of the file that
+satisfies it. Every upload path therefore makes two calls — file the bytes
+against the step (`stepId` on the multipart upload), then answer the step with
+the stored id. The conversation and agent intake always did; the portal's
+Upload button did only the first, so a case could read "3/3 mandatory
+uploaded" and be refused with all three named. Staff attach through the audited
+`PATCH /cases/:id/corrections`, which accepts a document step only when the id
+names a live upload already filed against that step on that case.
+
 ### Retention and anonymisation (added 6 Aug 2026)
 
 Retention splits along the same ownership line as everything else: the claims

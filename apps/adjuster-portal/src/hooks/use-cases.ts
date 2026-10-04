@@ -6,6 +6,7 @@ import type {
   ClaimCategory,
   CompletenessSummary,
   DocumentValidationStatus,
+  CaseFlow,
   FlowStep,
   TravelClaimType,
 } from '@tci/shared-types';
@@ -17,6 +18,7 @@ export const caseKeys = {
   list: (filters: CaseFilters) => [...caseKeys.lists(), filters] as const,
   details: () => [...caseKeys.all, 'detail'] as const,
   detail: (id: string) => [...caseKeys.details(), id] as const,
+  flow: (id: string) => [...caseKeys.detail(id), 'flow'] as const,
   policies: (search: string) => ['policies', 'list', search] as const,
 };
 
@@ -132,6 +134,71 @@ export function useCase(caseId: string) {
       return data.data;
     },
     enabled: !!caseId,
+  });
+}
+
+/**
+ * The flow version this case is pinned to, as the server walks it.
+ *
+ * Fetched rather than taken from the built-in `CASE_FLOWS`: a document upload
+ * is filed against a step id, and the submit guard checks the *pinned* flow's
+ * steps — a step id read from a different version would answer nothing.
+ */
+export function useCaseFlow(caseId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: caseKeys.flow(caseId),
+    queryFn: async () => {
+      const { data } = await apiClient.get<ApiResponse<CaseFlow>>(`/cases/${caseId}/flow`);
+      return data.data;
+    },
+    enabled: !!caseId && (options?.enabled ?? true),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Upload one piece of evidence against a document step, then attach it.
+ *
+ * Two calls, the same pair the agent's assisted intake makes: the upload files
+ * the bytes against the step (retiring any earlier file there), and the
+ * correction records the stored id as the step's answer. The second call is
+ * what the submit guard reads — an upload alone ticks the type-based checklist
+ * but leaves the step unanswered, which is how a case showing 3/3 mandatory
+ * uploaded was refused with all three named as missing.
+ *
+ * The corrections endpoint rather than `PATCH :id/answers`, so the attachment
+ * is audited as a staff action and a claimant mid-conversation is not moved.
+ */
+export function useUploadStepDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      step,
+      file,
+    }: {
+      caseId: string;
+      step: FlowStep;
+      file: File;
+    }) => {
+      const formData = new FormData();
+      // Fields before the file: Fastify reads multipart parts in order, and
+      // fields after the file are not populated when the service reads them.
+      formData.append('type', String(step.documentType ?? 'OTHER_DOCUMENT'));
+      formData.append('stepId', step.id);
+      formData.append('file', file);
+      const { data: uploaded } = await apiClient.post<ApiResponse<{ id: string }>>(
+        `/cases/${caseId}/documents/upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      const { data: attached } = await apiClient.patch<
+        ApiResponse<{ accepted: boolean; error?: string }>
+      >(`/cases/${caseId}/corrections`, { stepId: step.id, value: uploaded.data.id });
+      return attached.data;
+    },
+    onSettled: (_result, _error, { caseId }) =>
+      queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) }),
   });
 }
 
