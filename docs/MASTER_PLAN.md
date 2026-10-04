@@ -613,6 +613,40 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Staging builds only what changed — 4 October 2026
+
+The deploy of the portal-upload fix (below) took ~35 minutes for a change to
+two services. The image layer history showed why, in two parts:
+
+- **The 1.5 GB `node_modules` layer was rewritten on every build.**
+  `prisma generate` ran after `COPY . .` and writes into `node_modules`, so the
+  runtime's `COPY --from=build /app/node_modules` never matched its cache and
+  re-exported and unpacked the whole tree (~7 minutes). Install and generate now
+  run in a `deps` stage that sees only the manifests, the lockfile and
+  `schema.prisma`; the runtime copies `node_modules` from there. Verified
+  locally: across two code-only rebuilds the layer digest is identical and the
+  export takes 0.4 s. A lockfile, manifest or schema change still pays the full
+  cost, once.
+- **Any change under `packages/` rebuilt all seven images**, including the
+  Python risk-analyzer (apt + a 1.19 GB pip install) which reads nothing from
+  the workspace. `deploy.sh` now maps each shared package to the images whose
+  apps depend on it (`ui-components` → edge; `crypto`/`prisma-client` → the
+  four Node services + migrate; `shared-types` → every workspace image), and
+  risk-analyzer builds only for its own folder or Dockerfile. Unplaceable paths
+  (compose files, new directories) still fall back to a full build.
+
+The selection was exercised against real ranges under bash 5: the fix's own
+range now builds 6 images not 7; a UI-package change builds edge only; a Python
+change risk-analyzer only; docs nothing.
+
+**Incident during the investigation (07:35–07:45 UTC).** Running
+`docker buildx history ls` on the shared staging host hit a dockerd panic in
+BuildKit's history code (`llbsolver.filterHistoryEvents`). The daemon restarted
+and every container on the host stopped — TCI, and the co-tenant ERPNext's
+Traefik proxy and Redis — so staging login returned connection refused. Restored
+with `docker start` on the co-tenant containers and `deploy.sh --no-build`.
+BuildKit introspection commands are not to be run on that host.
+
 ### Portal uploads answer their step — 4 October 2026
 
 Reported from staging on CSE-2026-000203 (flight delay, staff intake): the

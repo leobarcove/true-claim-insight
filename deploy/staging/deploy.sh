@@ -513,8 +513,12 @@ ok "nothing published to a public interface — traffic arrives via Traefik"
 # element, so redeploying an unchanged commit ran `dc build ""` and aborted the
 # whole deployment on "no such service".
 changed_build_services() {
-  local previous_rev="$1" current_rev="$2" path
+  local previous_rev="$1" current_rev="$2" path svc
   local -A services=()
+  # Every image built from deploy/staging/Dockerfile — the Node workspace.
+  # risk-analyzer is NOT here: it is Python, has its own Dockerfile, and reads
+  # nothing from the workspace, so no shared-package change can reach it.
+  local workspace_images=(migrate api-gateway case-service video-service risk-engine edge)
 
   while IFS= read -r path; do
     case "$path" in
@@ -522,7 +526,10 @@ changed_build_services() {
       # not read by anything at runtime. Rebuilding for these is pure waiting.
       docs/*|screenshots/*|.github/*|*.md|.gitignore|.gitattributes|.prettierrc)
         ;;
-      apps/claimant-web/*|apps/adjuster-portal/*)
+      # Read by the host at deploy time, never copied into an image.
+      deploy/staging/deploy.sh|deploy/staging/README*|deploy/staging/*.example)
+        ;;
+      apps/claimant-web/*|apps/adjuster-portal/*|deploy/staging/Caddyfile)
         services[edge]=1 ;;
       apps/api-gateway/*)
         services[api-gateway]=1 ;;
@@ -532,11 +539,28 @@ changed_build_services() {
         services[video-service]=1 ;;
       apps/risk-engine/*)
         services[risk-engine]=1 ;;
-      apps/risk-analyzer/*)
+      apps/risk-analyzer/*|deploy/staging/risk-analyzer.Dockerfile)
         services[risk-analyzer]=1 ;;
-      # Shared packages, root manifests, the Dockerfile and the compose files
-      # all cross service boundaries. Falling back to a full build here is
-      # deliberate: a fast deployment must never serve a stale shared package.
+      # Shared packages go to exactly the images whose apps depend on them
+      # (the @tci/* workspace dependencies in each package.json). A wider
+      # list is safe and slow; a narrower one serves a stale package, so
+      # keep these in step with those manifests.
+      packages/ui-components/*)
+        services[edge]=1 ;;
+      packages/crypto/*)
+        # prisma-client depends on crypto, so its consumers come along.
+        for svc in migrate api-gateway case-service video-service risk-engine; do services[$svc]=1; done ;;
+      packages/prisma-client/*)
+        for svc in migrate api-gateway case-service video-service risk-engine; do services[$svc]=1; done ;;
+      packages/shared-types/*)
+        for svc in "${workspace_images[@]}"; do services[$svc]=1; done ;;
+      # Root manifests, the lockfile and the Node Dockerfile shape every
+      # workspace image — but still none of them is the Python one.
+      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|tsconfig.base.json|.dockerignore|deploy/staging/Dockerfile)
+        for svc in "${workspace_images[@]}"; do services[$svc]=1; done ;;
+      # Anything else (the compose files, a new top-level directory) cannot
+      # be placed from its path alone. Falling back to a full build is
+      # deliberate: a fast deployment must never serve a stale image.
       *)
         return 1 ;;
     esac
