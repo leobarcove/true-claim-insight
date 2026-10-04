@@ -49,9 +49,15 @@ services:
       timeout: 5s
       retries: 5
 
+  # Images: built by GitHub Actions and pulled by deploy.sh, tagged
+  # sha-<commit> (TCI_IMAGE_TAG, recorded in .env.staging by each deploy).
+  # The `build:` sections remain only for `deploy.sh --build-local`, which
+  # tags what it builds :local.
+  #
   # One-shot: applies committed Prisma migrations, then exits. Seeding is a
   # deliberate manual step (see README) — never automatic.
   migrate:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-migrate:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
@@ -64,6 +70,7 @@ services:
     restart: 'no'
 
   api-gateway:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-api-gateway:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
@@ -86,6 +93,7 @@ services:
       start_period: 20s
 
   case-service:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-case-service:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
@@ -116,6 +124,7 @@ services:
       start_period: 20s
 
   video-service:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-video-service:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
@@ -136,6 +145,7 @@ services:
       start_period: 20s
 
   risk-engine:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-risk-engine:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
@@ -154,6 +164,7 @@ services:
         condition: service_healthy
 
   risk-analyzer:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-risk-analyzer:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/risk-analyzer.Dockerfile
@@ -163,6 +174,7 @@ services:
       - analyzer_storage:/srv/risk-analyzer/storage
 
   edge:
+    image: ${TCI_REGISTRY:-ghcr.io/leobarcove}/tci-staging-edge:${TCI_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
