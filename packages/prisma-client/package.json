@@ -15,8 +15,7 @@
     "refresh-flows": "tsx --env-file-if-exists=../../.env prisma/refresh-flows.ts",
     "clean": "rm -rf dist node_modules/.prisma",
     "seed:volume": "tsx --env-file-if-exists=../../.env prisma/seed-volume.ts",
-    "import:piam": "tsx --env-file-if-exists=../../.env prisma/import-piam-agents.ts",
-    "backfill:document-steps": "tsx --env-file-if-exists=../../.env prisma/backfill-document-step-answers.ts"
+    "import:piam": "tsx --env-file-if-exists=../../.env prisma/import-piam-agents.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",

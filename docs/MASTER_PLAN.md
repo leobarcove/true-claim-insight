@@ -635,7 +635,7 @@ else, so its files had no `stepId` and answered nothing.
   not there. Audited as `CASE_ANSWER_CORRECTED`; the cursor does not move, so
   a claimant mid-conversation is not skipped past anything. Pinned by
   `attach-document-correction.spec.ts`.
-- **Backfill:** `pnpm --filter @tci/prisma-client backfill:document-steps`
+- **Backfill:** `pnpm --filter @tci/case-service backfill:document-steps`
   (dry run; `-- --apply` to write) links step-less uploads on editable cases to
   the open step asking for their type, with a `CASE_DOCUMENT_STEP_BACKFILLED`
   audit row each. It refuses to guess: two candidate files for a single-file
