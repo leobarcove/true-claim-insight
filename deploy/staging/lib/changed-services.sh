@@ -44,7 +44,7 @@ changed_build_services() {
       docs/*|screenshots/*|.github/*|*.md|.gitignore|.gitattributes|.prettierrc)
         ;;
       # Read by the host at deploy time, never copied into an image.
-      deploy/staging/deploy.sh|deploy/staging/README*|deploy/staging/*.example)
+      deploy/staging/deploy.sh|deploy/staging/ci-deploy.sh|deploy/staging/README*|deploy/staging/*.example)
         ;;
       apps/claimant-web/*|apps/adjuster-portal/*|deploy/staging/Caddyfile)
         services[edge]=1 ;;

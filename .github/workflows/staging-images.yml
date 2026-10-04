@@ -16,7 +16,7 @@ name: staging-images
 #  - turbo's cache and the pnpm store persist between runs.
 on:
   push:
-    branches: [main, perf/ci-built-slim-images]  # TEMP: remove before merge
+    branches: [main]
   workflow_dispatch:
     inputs:
       rebuild_all:
@@ -37,7 +37,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io/leobarcove
   HEAD_SHA: ${{ github.sha }}
-  PUBLISH_MAIN: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/perf/ci-built-slim-images' }}  # TEMP
+  PUBLISH_MAIN: ${{ github.ref == 'refs/heads/main' }}
 
 jobs:
   plan:
@@ -188,6 +188,29 @@ jobs:
             echo "### Staging images for \`${HEAD_SHA:0:7}\`"
             echo "- built: ${{ needs.plan.outputs.node }} $([[ '${{ needs.plan.outputs.analyzer }}' == 'true' ]] && echo risk-analyzer)"
             echo "- reused: ${{ needs.plan.outputs.reuse }}"
-            echo
-            echo "Deploy: \`cd /opt/true-claim-insight/deploy/staging && ./deploy.sh --pull --yes\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: release
+    # Pushes to main only: the server deploys origin/main, so a branch run has
+    # nothing of its own to deploy.
+    if: ${{ !cancelled() && needs.release.result == 'success' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - name: Deploy to staging
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          HOST: ${{ vars.STAGING_HOST || '89.233.105.237' }}
+        # The key is locked on the host to deploy/staging/ci-deploy.sh, which
+        # reads this job's GITHUB_TOKEN from stdin to pull the images and
+        # discards it afterwards. Nothing is passed as a command: the host
+        # ignores one.
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          start=$SECONDS
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh -o BatchMode=yes "root@${HOST}" deploy
+          echo "### Deployed \`${HEAD_SHA:0:7}\` to staging in $((SECONDS - start))s" >> "$GITHUB_STEP_SUMMARY"
