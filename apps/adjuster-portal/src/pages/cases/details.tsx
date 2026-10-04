@@ -51,6 +51,7 @@ import {
   TravelClaimType,
   checkPayeeName,
   displayAnswer,
+  pathSteps,
   type FlowStep,
 } from '@tci/shared-types';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -58,6 +59,7 @@ import { ExpertReferralCard } from '@/components/cases/expert-referral-card';
 import {
   caseKeys,
   useCase,
+  useCaseFlow,
   useConvertCase,
   useCorrectAnswer,
   useLinkCasePolicy,
@@ -67,6 +69,7 @@ import {
   useAbandonCase,
   useRequestCaseInfo,
   useSubmitCase,
+  useUploadStepDocument,
 } from '@/hooks/use-cases';
 import { useQueryClient } from '@tanstack/react-query';
 import { caseStatusConfig } from './index';
@@ -95,8 +98,10 @@ export function CaseDetailPage() {
   const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
   const { data: policyResults } = usePolicySearch(policySearch);
 
-  const [uploadType, setUploadType] = useState<string>('');
+  // A step id when the case has a flow, a bare document type when it does not.
+  const [uploadTarget, setUploadTarget] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const uploadStepDocument = useUploadStepDocument();
   const [viewing, setViewing] = useState<EvidenceDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -183,6 +188,21 @@ export function CaseDetailPage() {
    */
   const payeeCheck = useMemo(() => checkPayeeName(caseData?.answers), [caseData]);
 
+  const { data: pinnedFlow } = useCaseFlow(id, { enabled: !!caseData?.travelClaimType });
+
+  /**
+   * The document steps an upload can be filed against: those on the claimant's
+   * actual path through the pinned flow. A step off the path is never asked
+   * for, so offering it would attach evidence the submit guard ignores.
+   */
+  const documentSteps = useMemo(() => {
+    if (!pinnedFlow) return [] as FlowStep[];
+    const onPath = pathSteps(pinnedFlow, caseData?.answers ?? {});
+    return pinnedFlow.steps.filter(
+      step => step.answerType === 'document' && onPath.has(step.id)
+    );
+  }, [pinnedFlow, caseData?.answers]);
+
   if (isLoading || !caseData) {
     return (
       <div className="flex flex-col h-full">
@@ -221,19 +241,31 @@ export function CaseDetailPage() {
   };
 
   const handleUpload = async (file: File) => {
-    if (!uploadType) {
+    if (!uploadTarget) {
       toast({ title: 'Choose a document type first', variant: 'destructive' });
       return;
     }
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', uploadType);
-      await apiClient.post(`/cases/${id}/documents/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      queryClient.invalidateQueries({ queryKey: caseKeys.detail(id) });
+      // A case with a flow files the upload against its step and answers it,
+      // which is what the submit guard reads. Only a case with no flow (the
+      // property lines, for now) has no step to answer, so it is filed by type.
+      const step = documentSteps.find(s => s.id === uploadTarget);
+      if (step) {
+        const result = await uploadStepDocument.mutateAsync({ caseId: id, step, file });
+        if (!result.accepted) {
+          toast({ title: 'Not attached', description: result.error, variant: 'destructive' });
+          return;
+        }
+      } else {
+        const formData = new FormData();
+        formData.append('type', uploadTarget);
+        formData.append('file', file);
+        await apiClient.post(`/cases/${id}/documents/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        queryClient.invalidateQueries({ queryKey: caseKeys.detail(id) });
+      }
       toast({ title: 'Document uploaded' });
     } catch (error: any) {
       toast({
@@ -399,16 +431,23 @@ export function CaseDetailPage() {
 
                 {isEditable && (
                   <div className="flex items-center gap-2 pt-3 border-t border-border mt-3">
-                    <Select value={uploadType} onValueChange={setUploadType}>
+                    <Select value={uploadTarget} onValueChange={setUploadTarget}>
                       <SelectTrigger className="w-[260px]">
                         <SelectValue placeholder="Document type…" />
                       </SelectTrigger>
                       <SelectContent>
-                        {requirements.map(req => (
-                          <SelectItem key={req.documentType} value={req.documentType}>
-                            {convertToTitleCase(req.documentType)}
-                          </SelectItem>
-                        ))}
+                        {flow
+                          ? documentSteps.map(step => (
+                              <SelectItem key={step.id} value={step.id}>
+                                {step.label}
+                                {step.optional ? ' (optional)' : ''}
+                              </SelectItem>
+                            ))
+                          : requirements.map(req => (
+                              <SelectItem key={req.documentType} value={req.documentType}>
+                                {convertToTitleCase(req.documentType)}
+                              </SelectItem>
+                            ))}
                       </SelectContent>
                     </Select>
                     <input
