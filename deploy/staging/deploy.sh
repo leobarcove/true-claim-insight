@@ -3,9 +3,16 @@
 # USAGE-START
 # True Claim Insight — deploy to a shared host that already runs Traefik.
 #
-#   ./deploy.sh                  build changed images and (re)start the stack
-#   ./deploy.sh --pull           git pull first, then the above
-#   ./deploy.sh --no-build       restart without rebuilding (config changes)
+#   ./deploy.sh                  pull this commit's images and (re)start
+#   ./deploy.sh --pull           git pull first, then the above — the normal
+#                                deploy. Images are built by GitHub Actions
+#                                (.github/workflows/staging-images.yml); this
+#                                waits for that run if it is still going.
+#   ./deploy.sh --no-build       restart on the images already deployed
+#                                (config changes; no pull, no build)
+#   ./deploy.sh --build-local    EMERGENCY ONLY: build every image on this
+#                                host, as before CI built them. 15-35 minutes
+#                                on a shared box; use when GitHub is down.
 #   ./deploy.sh --seed           ...and load demo data (safe: refuses if the
 #                                database already has tenants)
 #   ./deploy.sh --yes            never prompt (for non-interactive runs)
@@ -83,6 +90,14 @@ DBACCESS_COMPOSE="docker-compose.dbaccess.yml"
 
 DO_PULL=0
 DO_BUILD=1
+# registry: pull images CI built for the checked-out commit (the normal path).
+# local:    build them here with the whole-workspace Dockerfile (--build-local).
+IMAGE_SOURCE=registry
+TCI_REGISTRY="${TCI_REGISTRY:-ghcr.io/leobarcove}"
+# Every image this stack runs that is ours to build.
+IMAGE_SERVICES=(migrate api-gateway case-service video-service risk-engine risk-analyzer edge)
+# How long to wait for CI to publish this commit's images: 60 x 15 s.
+PULL_WAIT_ATTEMPTS="${PULL_WAIT_ATTEMPTS:-60}"
 DO_SEED=0
 ASSUME_YES=0
 # empty = leave the recorded setting alone; 1/0 = the user asked to change it.
@@ -178,6 +193,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --pull)     DO_PULL=1; shift ;;
     --no-build) DO_BUILD=0; shift ;;
+    --build-local) IMAGE_SOURCE=local; shift ;;
     --seed)     DO_SEED=1; shift ;;
     --yes|-y)   ASSUME_YES=1; shift ;;
     --db-access)    DB_ACCESS_REQUEST=1; shift ;;
@@ -512,68 +528,19 @@ ok "nothing published to a public interface — traffic arrives via Traefik"
 # associative array emits one BLANK line; mapfile read that as a single empty
 # element, so redeploying an unchanged commit ran `dc build ""` and aborted the
 # whole deployment on "no such service".
-changed_build_services() {
-  local previous_rev="$1" current_rev="$2" path svc
-  local -A services=()
-  # Every image built from deploy/staging/Dockerfile — the Node workspace.
-  # risk-analyzer is NOT here: it is Python, has its own Dockerfile, and reads
-  # nothing from the workspace, so no shared-package change can reach it.
-  local workspace_images=(migrate api-gateway case-service video-service risk-engine edge)
+# The rules live in lib/changed-services.sh so that CI, which builds the
+# images, and this script, which can still build them locally, agree.
+# shellcheck source=lib/changed-services.sh
+source "$(dirname "$0")/lib/changed-services.sh"
 
-  while IFS= read -r path; do
-    case "$path" in
-      # Never enters an image: not in the build context (see .dockerignore) or
-      # not read by anything at runtime. Rebuilding for these is pure waiting.
-      docs/*|screenshots/*|.github/*|*.md|.gitignore|.gitattributes|.prettierrc)
-        ;;
-      # Read by the host at deploy time, never copied into an image.
-      deploy/staging/deploy.sh|deploy/staging/README*|deploy/staging/*.example)
-        ;;
-      apps/claimant-web/*|apps/adjuster-portal/*|deploy/staging/Caddyfile)
-        services[edge]=1 ;;
-      apps/api-gateway/*)
-        services[api-gateway]=1 ;;
-      apps/case-service/*)
-        services[case-service]=1 ;;
-      apps/video-service/*)
-        services[video-service]=1 ;;
-      apps/risk-engine/*)
-        services[risk-engine]=1 ;;
-      apps/risk-analyzer/*|deploy/staging/risk-analyzer.Dockerfile)
-        services[risk-analyzer]=1 ;;
-      # Shared packages go to exactly the images whose apps depend on them
-      # (the @tci/* workspace dependencies in each package.json). A wider
-      # list is safe and slow; a narrower one serves a stale package, so
-      # keep these in step with those manifests.
-      packages/ui-components/*)
-        services[edge]=1 ;;
-      packages/crypto/*)
-        # prisma-client depends on crypto, so its consumers come along.
-        for svc in migrate api-gateway case-service video-service risk-engine; do services[$svc]=1; done ;;
-      packages/prisma-client/*)
-        for svc in migrate api-gateway case-service video-service risk-engine; do services[$svc]=1; done ;;
-      packages/shared-types/*)
-        for svc in "${workspace_images[@]}"; do services[$svc]=1; done ;;
-      # Root manifests, the lockfile and the Node Dockerfile shape every
-      # workspace image — but still none of them is the Python one.
-      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|tsconfig.base.json|.dockerignore|deploy/staging/Dockerfile)
-        for svc in "${workspace_images[@]}"; do services[$svc]=1; done ;;
-      # Anything else (the compose files, a new top-level directory) cannot
-      # be placed from its path alone. Falling back to a full build is
-      # deliberate: a fast deployment must never serve a stale image.
-      *)
-        return 1 ;;
-    esac
-  done < <(git -C "$REPO_ROOT" diff --name-only "$previous_rev" "$current_rev")
-
-  # Guarded: see the note above about the blank-line bug.
-  if [[ ${#services[@]} -gt 0 ]]; then
-    printf '%s\n' "${!services[@]}" | sort
-  fi
-}
-
-if [[ "$DO_BUILD" -eq 1 ]]; then
-  step "Building images"
+if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "local" ]]; then
+  step "Building images on this host (--build-local)"
+  warn "this is the emergency path — the normal one pulls what CI built"
+  # Built images are tagged :local. Selective rebuilds rely on the other
+  # images already existing under that tag, which holds only if the last
+  # deploy was local too; after a registry deploy, build the lot.
+  previous_tag="$(env_value TCI_IMAGE_TAG)"
+  export TCI_IMAGE_TAG=local
 
   # The build is the one phase no mem_limit covers: it happens before any
   # container exists. On a swapless host the kernel picks the largest process
@@ -597,7 +564,9 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
   build_services=()
   # 0 = could not work out what changed, so build everything.
   build_decided=0
-  if [[ "$DO_PULL" -eq 1 && -f "$DEPLOY_STATE_FILE" ]]; then
+  if [[ "$previous_tag" != "local" ]]; then
+    info "last deploy used registry images — building every image this once"
+  elif [[ "$DO_PULL" -eq 1 && -f "$DEPLOY_STATE_FILE" ]]; then
     deployed_rev="$(tr -d '[:space:]' < "$DEPLOY_STATE_FILE")"
     if git -C "$REPO_ROOT" rev-parse --verify -q "${deployed_rev}^{commit}" >/dev/null; then
       # Branch on the EXIT STATUS; the output alone cannot tell "nothing to
@@ -630,6 +599,46 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
     dc build
     ok "images built"
   fi
+  set_env_var TCI_IMAGE_TAG local
+fi
+
+if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "registry" ]]; then
+  step "Pulling images"
+  # The tag names the commit, so the stack runs exactly the code checked out
+  # here — never "whatever was built last".
+  release_tag="sha-$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  info "${TCI_REGISTRY}/tci-staging-*:${release_tag}"
+
+  pull_err="$(mktmp)"
+  pulled=0
+  for ((attempt = 1; attempt <= PULL_WAIT_ATTEMPTS; attempt++)); do
+    # The shell's TCI_IMAGE_TAG wins over .env.staging for interpolation, so
+    # nothing is recorded until every image has arrived.
+    if TCI_IMAGE_TAG="$release_tag" dc pull --quiet "${IMAGE_SERVICES[@]}" 2>"$pull_err"; then
+      pulled=1
+      break
+    fi
+    if grep -qiE 'denied|unauthorized|authentication required' "$pull_err"; then
+      die "the registry refused this host. Log in once with a token that can
+       read packages (a classic PAT with only read:packages):
+         echo <token> | docker login ghcr.io -u leobarcove --password-stdin"
+    fi
+    if ! grep -qiE 'manifest unknown|not found' "$pull_err"; then
+      cat "$pull_err" >&2
+      die "pulling images failed for a reason other than CI still running."
+    fi
+    # Still building: CI publishes every image of a commit, then this succeeds.
+    [[ "$attempt" -eq 1 ]] && info "CI has not published this commit's images yet — waiting"
+    sleep 15
+  done
+  [[ "$pulled" -eq 1 ]] || die "no images for ${release_tag} after $((PULL_WAIT_ATTEMPTS * 15 / 60)) minutes.
+       Check the staging-images run for this commit in GitHub Actions."
+  set_env_var TCI_IMAGE_TAG "$release_tag"
+  ok "images pulled"
+elif [[ "$DO_BUILD" -eq 0 ]]; then
+  [[ -n "$(env_value TCI_IMAGE_TAG)" ]] \
+    || die "no deployed image tag recorded in ${ENV_FILE} — deploy once with --pull."
+  info "restarting on ${TCI_REGISTRY}/tci-staging-*:$(env_value TCI_IMAGE_TAG)"
 fi
 
 # --- 7. Start --------------------------------------------------------------
@@ -637,7 +646,9 @@ fi
 # Prisma migrations and exits. The four Node services gate on it completing,
 # so they never start against an un-migrated database.
 step "Starting the stack"
-dc up -d --remove-orphans
+# --no-build: a missing image must fail loudly here, not quietly start a
+# 30-minute build on a shared host.
+dc up -d --remove-orphans --no-build
 ok "containers up; migrations applied"
 
 # --- 8. Wait for health ----------------------------------------------------
@@ -696,7 +707,7 @@ if [[ "$DO_SEED" -eq 1 ]]; then
     info "seeding twice duplicates data or fails on a unique constraint."
   else
     warn "synthetic identities only — never real claimant data"
-    dc run --rm migrate pnpm seed || die "seed failed; see the output above."
+    dc run --rm migrate node node_modules/tsx/dist/cli.mjs prisma/seed.ts || die "seed failed; see the output above."
     ok "seeded"
   fi
 fi

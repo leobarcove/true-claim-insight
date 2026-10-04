@@ -613,6 +613,38 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Staging images built in CI; deploys are automatic — 5 October 2026
+
+Target set by the principal: **at most 5 minutes from merge to live, build
+included.** Building on the shared host could not meet it (16-35 minutes), so
+the host no longer builds.
+
+- **GitHub Actions builds** (`.github/workflows/staging-images.yml`) only the
+  images a commit can reach, judged per image against the commit its current
+  `:main` image was built from, so a failed run never leaves a stale image
+  looking current. Images go to `ghcr.io/leobarcove/tci-staging-<svc>`, tagged
+  `sha-<commit>`; unchanged ones are retagged registry-side.
+- **Slim images.** Each Node service ships `pnpm deploy --prod` output —
+  289-721 MB, against the 1.5 GB workspace `node_modules` every image carried —
+  on a separately published base (OpenSSL + curl), with timestamps clamped so an
+  unchanged dependency set produces byte-identical layers the host already has.
+- **Auto-deploy.** The last job SSHes in with a key restricted on the host to
+  `deploy/staging/ci-deploy.sh` (forced command; no shell, no forwarding). The
+  job's own short-lived `GITHUB_TOKEN` is passed on stdin and used in a
+  throwaway Docker config, so no registry credential is kept on the shared host.
+- `deploy.sh --build-local` keeps the old on-host build as the GitHub-is-down
+  fallback.
+
+Bootstrap run (every image cold, empty caches): **4 min 38 s** to build and
+push all eight images. Smoke-tested before merge: each service image loads its
+generated Prisma client and boots Nest; migrate carries the Linux query engine
+and `tsx` for seeding.
+
+**Open:** the GHCR packages were created **public**, inheriting the public
+repository's visibility. They hold only what the public repo already holds (no
+`.env`; runtime secrets come from `.env.staging` on the host), but switching
+them to private is a per-package setting in GitHub's UI with no API.
+
 ### Staging builds only what changed — 4 October 2026
 
 The deploy of the portal-upload fix (below) took ~35 minutes for a change to

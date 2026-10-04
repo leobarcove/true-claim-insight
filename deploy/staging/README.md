@@ -67,11 +67,32 @@ docker compose --env-file .env.staging -f docker-compose.staging.yml \
 
 ## Redeploy after a code change
 
-```bash
-git pull
-docker compose --env-file .env.staging -f docker-compose.staging.yml build
-docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
-```
+**Automatic.** A push to `main` runs `.github/workflows/staging-images.yml`:
+
+1. **plan** — for each image, compare this commit with the one its `:main`
+   image was built from (`ci/plan-images.sh`, using the same path rules as
+   `lib/changed-services.sh`). Only images whose inputs changed are rebuilt.
+2. **build** — turbo builds what those images need; `ci/assemble.sh` gives each
+   Node service a self-contained folder via `pnpm deploy --prod` (production
+   dependencies only); `ci/push-images.sh` packages and pushes them to
+   `ghcr.io/leobarcove/tci-staging-<svc>`, tagged `sha-<commit>`.
+3. **release** — unchanged images are retagged `sha-<commit>` registry-side.
+4. **deploy** — SSHes to this host with a key that can run only
+   `ci-deploy.sh` (a forced command in `/root/.ssh/authorized_keys`). That
+   logs in to the registry with the job's short-lived token, in a throwaway
+   Docker config, and runs `deploy.sh --pull --yes`, which pulls exactly the
+   `sha-<commit>` images and restarts.
+
+Nothing is built on this host. The secrets are `STAGING_SSH_KEY` and
+`STAGING_SSH_KNOWN_HOSTS` on the GitHub repository.
+
+**By hand** (e.g. re-deploying the current commit): re-run the workflow from
+the Actions tab, or on this host `./deploy.sh --pull --yes` — which needs a
+registry login, as no credential is kept here.
+
+**If GitHub is down:** `./deploy.sh --pull --build-local --yes` builds every
+image on this host with the whole-workspace `Dockerfile`, as before. 15-35
+minutes, and it loads a shared machine — emergencies only.
 
 `migrate` runs committed Prisma migrations on every `up` and is a no-op when
 there is nothing new. (Migrations are still **authored** locally, never on

@@ -1,0 +1,216 @@
+name: staging-images
+
+# Builds the staging images here, not on the staging host.
+#
+# The host is a shared VPS (an ERPNext stack lives beside us); building there
+# took 16-35 minutes under the neighbour's load, and on 4 Oct 2026 an attempt
+# to inspect that build crashed the shared Docker daemon. Now the host only
+# pulls: `deploy.sh --pull` fetches the images tagged sha-<the commit it
+# checked out>, so what runs is exactly what this workflow built.
+#
+# Target: a code-only change built and pushed in under 5 minutes.
+#  - Only the images a change can reach are built (ci/plan-images.sh, using
+#    the same rules deploy.sh always used — deploy/staging/lib).
+#  - Each Node image ships production dependencies only (pnpm deploy --prod),
+#    in a layer whose bytes do not change while the dependencies do not.
+#  - turbo's cache and the pnpm store persist between runs.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_all:
+        description: Ignore what is already built and rebuild every image
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+# One at a time: two runs moving :main concurrently could leave it naming a
+# commit older than the images it points at.
+concurrency:
+  group: staging-images
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/leobarcove
+  HEAD_SHA: ${{ github.sha }}
+  PUBLISH_MAIN: ${{ github.ref == 'refs/heads/main' }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      base: ${{ steps.plan.outputs.base }}
+      node: ${{ steps.plan.outputs.node }}
+      analyzer: ${{ steps.plan.outputs.analyzer }}
+      reuse: ${{ steps.plan.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: each image is compared with the commit it was built
+          # from, which can be any number of pushes back.
+          fetch-depth: 0
+      - name: Log in to the registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - id: plan
+        name: Decide what to build
+        env:
+          FORCE_ALL: ${{ inputs.rebuild_all || false }}
+        run: bash deploy/staging/ci/plan-images.sh
+
+  node-images:
+    needs: plan
+    if: needs.plan.outputs.node != '' || needs.plan.outputs.base == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Node base image
+        id: base
+        run: |
+          ref="${REGISTRY}/tci-staging-node-base"
+          if [[ "${{ needs.plan.outputs.base }}" == "true" ]]; then
+            tags="${ref}:sha-${HEAD_SHA}"
+            [[ "$PUBLISH_MAIN" == "true" ]] && tags+=",${ref}:main"
+            docker buildx build deploy/staging --file deploy/staging/node-base.Dockerfile \
+              --label "org.opencontainers.image.revision=${HEAD_SHA}" \
+              --provenance=false --sbom=false \
+              --output "type=image,\"name=${tags}\",push=true"
+            src="${ref}:sha-${HEAD_SHA}"
+          else
+            src="${ref}:main"
+          fi
+          # Pinned by digest, so every service in this run sits on the same base.
+          digest="$(docker buildx imagetools inspect "$src" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          echo "ref=${ref}@${digest}" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: 0
+      - run: pnpm prisma:generate
+
+      - name: Restore the turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo-cache
+          key: turbo-${{ github.sha }}
+          restore-keys: turbo-
+
+      - name: Build what the images need
+        env:
+          # Inlined by Vite: the claimant bundle tells the agent surface apart
+          # by hostname. See apps/claimant-web/src/lib/surface.ts.
+          VITE_API_URL: /api/v1
+          VITE_AGENT_HOSTS: ${{ vars.TCI_AGENT_FQDN || 'tci-agent.smitherytech.com' }}
+        run: |
+          filters=()
+          for svc in ${{ needs.plan.outputs.node }}; do
+            case "$svc" in
+              migrate) filters+=(--filter=@tci/prisma-client) ;;
+              edge)    filters+=(--filter=@tci/adjuster-portal --filter=@tci/claimant-web) ;;
+              *)       filters+=(--filter="@tci/$svc") ;;
+            esac
+          done
+          pnpm exec turbo run build "${filters[@]}" --cache-dir=.turbo-cache
+
+      - name: Assemble image contexts
+        run: bash deploy/staging/ci/assemble.sh "$RUNNER_TEMP/tci-images" ${{ needs.plan.outputs.node }}
+
+      - name: Build and push
+        env:
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        run: bash deploy/staging/ci/push-images.sh "$RUNNER_TEMP/tci-images" ${{ needs.plan.outputs.node }}
+
+  analyzer-image:
+    needs: plan
+    if: needs.plan.outputs.analyzer == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push risk-analyzer
+        run: |
+          tags="${REGISTRY}/tci-staging-risk-analyzer:sha-${HEAD_SHA}"
+          [[ "$PUBLISH_MAIN" == "true" ]] && tags+=",${REGISTRY}/tci-staging-risk-analyzer:main"
+          # The pip layer is 1.2 GB and changes only with requirements.txt;
+          # the Actions cache keeps it between runs.
+          docker buildx build . --file deploy/staging/risk-analyzer.Dockerfile \
+            --label "org.opencontainers.image.revision=${HEAD_SHA}" \
+            --cache-from type=gha,scope=risk-analyzer \
+            --cache-to type=gha,mode=max,scope=risk-analyzer \
+            --provenance=false --sbom=false \
+            --output "type=image,\"name=${tags}\",push=true"
+
+  release:
+    needs: [plan, node-images, analyzer-image]
+    # Runs when the build jobs succeeded or had nothing to do; never after a failure.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag unchanged images for this commit
+        # A registry-side retag: no image data moves. After this, every image
+        # exists as sha-<this commit>, which is the set a deploy pulls.
+        run: |
+          for svc in ${{ needs.plan.outputs.reuse }}; do
+            docker buildx imagetools create \
+              -t "${REGISTRY}/tci-staging-${svc}:sha-${HEAD_SHA}" \
+              "${REGISTRY}/tci-staging-${svc}:main"
+            echo "  reused ${svc}"
+          done
+      - name: Summary
+        run: |
+          {
+            echo "### Staging images for \`${HEAD_SHA:0:7}\`"
+            echo "- built: ${{ needs.plan.outputs.node }} $([[ '${{ needs.plan.outputs.analyzer }}' == 'true' ]] && echo risk-analyzer)"
+            echo "- reused: ${{ needs.plan.outputs.reuse }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: release
+    # Pushes to main only: the server deploys origin/main, so a branch run has
+    # nothing of its own to deploy.
+    if: ${{ !cancelled() && needs.release.result == 'success' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - name: Deploy to staging
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          HOST: ${{ vars.STAGING_HOST || '89.233.105.237' }}
+        # The key is locked on the host to deploy/staging/ci-deploy.sh, which
+        # reads this job's GITHUB_TOKEN from stdin to pull the images and
+        # discards it afterwards. Nothing is passed as a command: the host
+        # ignores one.
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          start=$SECONDS
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh -o BatchMode=yes "root@${HOST}" deploy
+          echo "### Deployed \`${HEAD_SHA:0:7}\` to staging in $((SECONDS - start))s" >> "$GITHUB_STEP_SUMMARY"
