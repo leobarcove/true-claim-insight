@@ -27,9 +27,11 @@
  * case-service's own tables, and a file under packages/ makes the staging
  * deploy rebuild every image, while one here rebuilds case-service alone.
  *
- * On staging, inside the running container (its WORKDIR is this package):
+ * Run by Node's own type stripping, not ts-node: the staging image carries
+ * production dependencies only, so ts-node is not in it. On staging, inside
+ * the running container (its WORKDIR is this package):
  *   docker exec tci-staging-case-service-1 \
- *     node -r ts-node/register/transpile-only scripts/backfill-document-step-answers.ts
+ *     node --experimental-strip-types --no-warnings scripts/backfill-document-step-answers.ts
  */
 import { CaseStatus, Prisma, PrismaClient } from '@prisma/client';
 import {

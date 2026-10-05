@@ -16,7 +16,7 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typecheck": "tsc --noEmit",
-    "backfill:document-steps": "node --env-file-if-exists=../../.env -r ts-node/register/transpile-only scripts/backfill-document-step-answers.ts",
+    "backfill:document-steps": "node --env-file-if-exists=../../.env --experimental-strip-types --no-warnings scripts/backfill-document-step-answers.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
