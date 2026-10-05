@@ -25,14 +25,27 @@ app_dir() {
   esac
 }
 
+# What a dependency tree IS, and nothing about how pnpm happened to lay it
+# out: every file's path and content hash, every symlink's target, which files
+# are executable. Not a tar stream — tar also records hard links, and pnpm
+# hard-links from its store or copies depending on cache state, so identical
+# trees hashed differently and dependencies were re-packaged (and re-downloaded
+# by the host) on a code-only change.
+deps_fingerprint() {
+  ( cd "$1" && {
+      find node_modules -type f -print0 | sort -z | xargs -0 sha256sum
+      find node_modules -type l -printf 'L %p -> %l\n' | sort
+      find node_modules -type f -perm -u+x -printf 'X %p\n' | sort
+    } )
+}
+
 # The deps image for <svc>, by reference. Built and pushed only when no image
 # with this exact content exists: the tag is a hash of the dependency tree plus
 # the base it sits on, so "same tag" means "same bytes" and skipping is safe.
 # Prints the reference; records "built" or "reused" in <ctx>/<svc>.deps.
 deps_image() {
   local svc="$1" key ref log="$CTX/$1.build.log"
-  key="$( { echo "$BASE_REF"; tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-            -cf - -C "$CTX/$svc/deps" node_modules; } | sha256sum | cut -c1-24)"
+  key="$( { echo "$BASE_REF"; deps_fingerprint "$CTX/$svc/deps"; } | sha256sum | cut -c1-24)"
   ref="${REGISTRY}/tci-staging-${svc}:deps-${key}"
   if docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
     echo reused > "$CTX/$svc.deps"

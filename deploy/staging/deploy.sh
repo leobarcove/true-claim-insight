@@ -174,6 +174,15 @@ set_env_var() {
 
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE" | head -n1; }
 
+# Point the local :current tag of every image at <release-tag>, which must
+# already be on this host. A local retag: no data moves.
+point_current_at() {
+  local svc
+  for svc in "${IMAGE_SERVICES[@]}"; do
+    docker tag "${TCI_REGISTRY}/tci-staging-${svc}:$1" "${TCI_REGISTRY}/tci-staging-${svc}:current"
+  done
+}
+
 confirm() {
   local prompt="$1"
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
@@ -600,6 +609,7 @@ if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "local" ]]; then
     ok "images built"
   fi
   set_env_var TCI_IMAGE_TAG local
+  set_env_var TCI_RELEASE local
 fi
 
 if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "registry" ]]; then
@@ -612,15 +622,13 @@ if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "registry" ]]; then
   pull_err="$(mktmp)"
   pulled=0
   for ((attempt = 1; attempt <= PULL_WAIT_ATTEMPTS; attempt++)); do
-    # The shell's TCI_IMAGE_TAG wins over .env.staging for interpolation, so
-    # nothing is recorded until every image has arrived.
     if TCI_IMAGE_TAG="$release_tag" dc pull --quiet "${IMAGE_SERVICES[@]}" 2>"$pull_err"; then
       pulled=1
       break
     fi
     if grep -qiE 'denied|unauthorized|authentication required' "$pull_err"; then
-      die "the registry refused this host. Log in once with a token that can
-       read packages (a classic PAT with only read:packages):
+      die "the registry refused this host. CI deploys log in with the job's own
+       token; by hand, log in first:
          echo <token> | docker login ghcr.io -u leobarcove --password-stdin"
     fi
     if ! grep -qiE 'manifest unknown|not found' "$pull_err"; then
@@ -633,14 +641,26 @@ if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "registry" ]]; then
   done
   [[ "$pulled" -eq 1 ]] || die "no images for ${release_tag} after $((PULL_WAIT_ATTEMPTS * 15 / 60)) minutes.
        Check the staging-images run for this commit in GitHub Actions."
-  # What to go back to if the new images do not stay up (section 8b).
-  rollback_tag="$(env_value TCI_IMAGE_TAG)"
-  set_env_var TCI_IMAGE_TAG "$release_tag"
-  ok "images pulled"
+
+  # Compose runs the fixed local tag :current, re-pointed here at the release.
+  # Naming the release tag in compose instead changed every service's
+  # configuration on every deploy, so Compose recreated ALL containers —
+  # including ones whose image was byte-identical — and a one-service change
+  # restarted the whole stack. With a fixed name, Compose compares image IDs
+  # and recreates only what actually changed.
+  #
+  # The previous release is what a failed rollout returns to (section 8b).
+  # Before :current existed, TCI_IMAGE_TAG itself named the release.
+  rollback_release="$(env_value TCI_RELEASE)"
+  [[ -n "$rollback_release" ]] || rollback_release="$(env_value TCI_IMAGE_TAG)"
+  point_current_at "$release_tag"
+  set_env_var TCI_RELEASE "$release_tag"
+  set_env_var TCI_IMAGE_TAG current
+  ok "images pulled; :current is ${release_tag}"
 elif [[ "$DO_BUILD" -eq 0 ]]; then
   [[ -n "$(env_value TCI_IMAGE_TAG)" ]] \
     || die "no deployed image tag recorded in ${ENV_FILE} — deploy once with --pull."
-  info "restarting on ${TCI_REGISTRY}/tci-staging-*:$(env_value TCI_IMAGE_TAG)"
+  info "restarting on ${TCI_REGISTRY}/tci-staging-*:$(env_value TCI_IMAGE_TAG) ($(env_value TCI_RELEASE))"
 fi
 
 # --- 7. Start --------------------------------------------------------------
@@ -778,11 +798,12 @@ if [[ ${#unstable[@]} -eq 0 && "$api_status" == "200" ]]; then
 else
   [[ ${#unstable[@]} -gt 0 ]] && warn "not stable: ${unstable[*]}"
   [[ "$api_status" != "200" ]] && warn "API liveness through Traefik returned ${api_status:-000}"
-  if [[ -n "${rollback_tag:-}" && "${rollback_tag}" != "$(env_value TCI_IMAGE_TAG)" ]]; then
-    warn "rolling back to ${rollback_tag}"
-    set_env_var TCI_IMAGE_TAG "$rollback_tag"
+  if [[ -n "${rollback_release:-}" && "$rollback_release" != "$(env_value TCI_RELEASE)" ]]; then
+    warn "rolling back to ${rollback_release}"
+    point_current_at "$rollback_release"
+    set_env_var TCI_RELEASE "$rollback_release"
     dc up -d --remove-orphans --no-build
-    die "the new images did not stay up; staging is back on ${rollback_tag}.
+    die "the new images did not stay up; staging is back on ${rollback_release}.
        Inspect the failed release with: ./deploy.sh --logs <service>"
   fi
   die "the stack is not stable and there is no previous release to return to."
