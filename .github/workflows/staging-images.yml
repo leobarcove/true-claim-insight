@@ -80,7 +80,6 @@ jobs:
           ref="${REGISTRY}/tci-staging-node-base"
           if [[ "${{ needs.plan.outputs.base }}" == "true" ]]; then
             tags="${ref}:sha-${HEAD_SHA}"
-            [[ "$PUBLISH_MAIN" == "true" ]] && tags+=",${ref}:main"
             docker buildx build deploy/staging --file deploy/staging/node-base.Dockerfile \
               --label "org.opencontainers.image.revision=${HEAD_SHA}" \
               --provenance=false --sbom=false \
@@ -135,6 +134,25 @@ jobs:
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: bash deploy/staging/ci/push-images.sh "$RUNNER_TEMP/tci-images" ${{ needs.plan.outputs.node }}
 
+      # The gate before anything is released or deployed: each rebuilt service
+      # must actually start against a real (throwaway) database. A failure
+      # here fails the job, so release and deploy never run.
+      - name: Boot test
+        run: bash deploy/staging/ci/verify-images.sh ${{ needs.plan.outputs.node }}
+
+      # Only now does :main move — to images that booted. Later runs compare
+      # against :main and reuse it for unchanged services, so it must never
+      # name an image that failed the test above.
+      - name: Promote to :main
+        if: env.PUBLISH_MAIN == 'true'
+        run: |
+          promote=(${{ needs.plan.outputs.node }})
+          [[ "${{ needs.plan.outputs.base }}" == "true" ]] && promote+=(node-base)
+          for svc in "${promote[@]}"; do
+            docker buildx imagetools create -t "${REGISTRY}/tci-staging-${svc}:main" \
+              "${REGISTRY}/tci-staging-${svc}:sha-${HEAD_SHA}" >/dev/null
+          done
+
   analyzer-image:
     needs: plan
     if: needs.plan.outputs.analyzer == 'true'
@@ -150,7 +168,6 @@ jobs:
       - name: Build and push risk-analyzer
         run: |
           tags="${REGISTRY}/tci-staging-risk-analyzer:sha-${HEAD_SHA}"
-          [[ "$PUBLISH_MAIN" == "true" ]] && tags+=",${REGISTRY}/tci-staging-risk-analyzer:main"
           # The pip layer is 1.2 GB and changes only with requirements.txt;
           # the Actions cache keeps it between runs.
           docker buildx build . --file deploy/staging/risk-analyzer.Dockerfile \
@@ -159,6 +176,20 @@ jobs:
             --cache-to type=gha,mode=max,scope=risk-analyzer \
             --provenance=false --sbom=false \
             --output "type=image,\"name=${tags}\",push=true"
+      - name: Boot test
+        run: |
+          img="${REGISTRY}/tci-staging-risk-analyzer:sha-${HEAD_SHA}"
+          docker run -d --name boot-analyzer -p 3005:3005 "$img" >/dev/null
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3005/health >/dev/null && { echo "  booted risk-analyzer in ${i}s"; exit 0; }
+            sleep 1
+          done
+          echo "::error::risk-analyzer did not answer /health"; docker logs --tail 40 boot-analyzer; exit 1
+      - name: Promote to :main
+        if: env.PUBLISH_MAIN == 'true'
+        run: |
+          docker buildx imagetools create -t "${REGISTRY}/tci-staging-risk-analyzer:main" \
+            "${REGISTRY}/tci-staging-risk-analyzer:sha-${HEAD_SHA}" >/dev/null
 
   release:
     needs: [plan, node-images, analyzer-image]

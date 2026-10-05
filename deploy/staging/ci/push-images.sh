@@ -3,12 +3,11 @@
 #
 #   ci/push-images.sh <ctx-dir> <svc> [<svc> ...]
 #
-# Env: REGISTRY, HEAD_SHA, BASE_REF (the node base, pinned by digest),
-#      PUBLISH_MAIN=true to also move :main (only for pushes to main).
+# Env: REGISTRY, HEAD_SHA, BASE_REF (the node base, pinned by digest).
 #
 # Every image is tagged sha-<commit>; that tag is what a deploy pulls, so a
-# deploy names exactly the code it runs. :main marks the newest build and
-# carries the commit it was built from, which ci/plan-images.sh reads.
+# deploy names exactly the code it runs. :main — the newest VERIFIED build,
+# read by ci/plan-images.sh — is moved by the workflow after the boot test.
 set -euo pipefail
 
 CTX="$1"; shift
@@ -52,8 +51,9 @@ deps_image() {
 
 push_one() {
   local svc="$1" names file args=() deps_ref
+  # sha-<commit> only. :main moves after the boot test passes (the workflow's
+  # "Promote" step), so a broken image is never what later runs reuse.
   names="${REGISTRY}/tci-staging-${svc}:sha-${HEAD_SHA}"
-  [[ "${PUBLISH_MAIN:-false}" == "true" ]] && names+=",${REGISTRY}/tci-staging-${svc}:main"
 
   if [[ "$svc" == "edge" ]]; then
     file="$ROOT/deploy/staging/edge.Dockerfile"
