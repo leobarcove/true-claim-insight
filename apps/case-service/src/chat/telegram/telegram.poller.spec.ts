@@ -78,10 +78,27 @@ describe('TelegramPoller', () => {
     await new Promise(resolve => setTimeout(resolve, 5));
   };
 
+  /**
+   * Run the loop until `done()` holds (or a generous ceiling passes), then stop.
+   *
+   * For assertions about the NEXT request: a fixed window raced the scheduler,
+   * and on a loaded CI runner the error backoff plus timer jitter outran 60 ms
+   * — the test failed with the request simply not made yet.
+   */
+  const runUntil = async (poller: TelegramPoller, done: () => boolean, ceilingMs = 2000) => {
+    poller.onModuleInit();
+    const started = Date.now();
+    while (!done() && Date.now() - started < ceilingMs) {
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+    poller.onModuleDestroy();
+    await new Promise(resolve => setTimeout(resolve, 5));
+  };
+
   it('acknowledges each update exactly once, in order', async () => {
     const { poller, handled, requested } = setup([[update(10), update(11)], []]);
 
-    await runBriefly(poller);
+    await runUntil(poller, () => requested.length >= 2);
 
     expect(handled.slice(0, 2)).toEqual(['10', '11']);
     // The next poll asks for everything after the highest id seen — not the
@@ -108,7 +125,7 @@ describe('TelegramPoller', () => {
       new TurnNotRecordedError('30', new Error('db down'))
     );
 
-    await runBriefly(poller, 60);
+    await runUntil(poller, () => requested.length >= 2);
 
     // Rewound to the update itself, not past it — so Telegram sends it again
     // rather than the claimant's message ceasing to exist.
