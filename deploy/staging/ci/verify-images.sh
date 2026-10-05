@@ -20,16 +20,23 @@ BOOT_TIMEOUT=90
 
 image() { echo "${REGISTRY}/tci-staging-$1:sha-${HEAD_SHA}"; }
 
+# Fetch the images while Postgres starts: the pulls are most of this step.
+migrate="$(image migrate)"
+docker manifest inspect "$migrate" >/dev/null 2>&1 || migrate="${REGISTRY}/tci-staging-migrate:main"
+for svc in "$@"; do
+  case "$svc" in migrate|edge) ;; *) docker pull -q "$(image "$svc")" >/dev/null & ;; esac
+done
+docker pull -q "$migrate" >/dev/null &
+
 docker network create "$NET" >/dev/null
 docker run -d --name smoke-pg --network "$NET" \
   -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=tci postgres:16.6-alpine >/dev/null
 docker run -d --name smoke-redis --network "$NET" redis:7.4-alpine >/dev/null
 until docker exec smoke-pg pg_isready -U postgres -q; do sleep 1; done
 
+wait   # the pulls started above
 # The migrations this commit ships, run by the migrate image this commit ships
 # (or the current one, when migrate did not change).
-migrate="$(image migrate)"
-docker manifest inspect "$migrate" >/dev/null 2>&1 || migrate="${REGISTRY}/tci-staging-migrate:main"
 docker run --rm --network "$NET" --env-file "$ENV_FILE" "$migrate"
 
 services=()
