@@ -640,6 +640,24 @@ push all eight images. Smoke-tested before merge: each service image loads its
 generated Prisma client and boots Nest; migrate carries the Linux query engine
 and `tsx` for seeding.
 
+**Incident, 5 Oct 2026 ~00:12–00:19 UTC — staging login 502.** The first
+deploy of the slim images crash-looped api-gateway and video-service: Nest
+lazily loads `@fastify/static` for Swagger on Fastify, and neither service
+declared it — it had only ever been found in the shared workspace
+`node_modules`. Rolled back by retagging the previous server-built images. My
+pre-merge smoke test watched each service for 12 seconds and read the first
+log lines; the error comes after module initialisation. Three fixes:
+
+- both services now declare `@fastify/static`;
+- **CI boot test** (`ci/verify-images.sh`): every rebuilt service image is
+  started against a throwaway Postgres + Redis, after the migrate image has run
+  this commit's migrations, and must reach "successfully started" — verified to
+  fail the two broken images and pass the others. `:main` moves only after it
+  passes, so a broken image is never reused by a later run;
+- **`deploy.sh` stability check with automatic rollback**: 20 s after start,
+  every service must be running with zero restarts and the API must answer
+  through Traefik; otherwise it restores the previous image tag and exits red.
+
 **Open:** the GHCR packages were created **public**, inheriting the public
 repository's visibility. They hold only what the public repo already holds (no
 `.env`; runtime secrets come from `.env.staging` on the host), but switching

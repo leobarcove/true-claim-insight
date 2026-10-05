@@ -633,6 +633,8 @@ if [[ "$DO_BUILD" -eq 1 && "$IMAGE_SOURCE" == "registry" ]]; then
   done
   [[ "$pulled" -eq 1 ]] || die "no images for ${release_tag} after $((PULL_WAIT_ATTEMPTS * 15 / 60)) minutes.
        Check the staging-images run for this commit in GitHub Actions."
+  # What to go back to if the new images do not stay up (section 8b).
+  rollback_tag="$(env_value TCI_IMAGE_TAG)"
   set_env_var TCI_IMAGE_TAG "$release_tag"
   ok "images pulled"
 elif [[ "$DO_BUILD" -eq 0 ]]; then
@@ -751,6 +753,40 @@ case "${edge_status:-000}" in
   2*|3*) ok "claimant app answering over HTTPS (${edge_status})" ;;
   *) warn "claimant host returned HTTP ${edge_status} — check ./deploy.sh --logs edge" ;;
 esac
+
+# --- 8b. Does it stay up? ---------------------------------------------------
+# The health wait above can pass in the seconds before a service dies: on
+# 5 Oct 2026 api-gateway and video-service reported healthy, then crash-looped
+# on a missing package, and this script printed success while login returned
+# 502. And the HTTPS probe above only fetches the claimant app — static files
+# Caddy serves with the whole API down. So: give it time, then ask the API
+# itself, through Traefik, and look for restarts. On failure, put the previous
+# images back rather than leave staging broken behind a green deploy.
+step "Checking the stack stays up"
+sleep "${STABILITY_WAIT_SECONDS:-20}"
+unstable=()
+for svc in api-gateway case-service video-service risk-engine risk-analyzer edge; do
+  cid="$(dc_admin ps -aq "$svc" 2>/dev/null | head -n1)"
+  state="$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$cid" 2>/dev/null || echo "missing 0")"
+  [[ "$state" == "running 0" ]] || unstable+=("${svc} (${state% *}, restarts ${state#* })")
+done
+api_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+  "https://$(env_value TCI_ADJUSTER_FQDN)/api/v1/health/liveness" 2>/dev/null || true)"
+
+if [[ ${#unstable[@]} -eq 0 && "$api_status" == "200" ]]; then
+  ok "all services running without restarts; API answering through Traefik (200)"
+else
+  [[ ${#unstable[@]} -gt 0 ]] && warn "not stable: ${unstable[*]}"
+  [[ "$api_status" != "200" ]] && warn "API liveness through Traefik returned ${api_status:-000}"
+  if [[ -n "${rollback_tag:-}" && "${rollback_tag}" != "$(env_value TCI_IMAGE_TAG)" ]]; then
+    warn "rolling back to ${rollback_tag}"
+    set_env_var TCI_IMAGE_TAG "$rollback_tag"
+    dc up -d --remove-orphans --no-build
+    die "the new images did not stay up; staging is back on ${rollback_tag}.
+       Inspect the failed release with: ./deploy.sh --logs <service>"
+  fi
+  die "the stack is not stable and there is no previous release to return to."
+fi
 
 # The baseline answers exactly one question: which commit are the images in
 # this daemon built from? That is settled once `dc build` and `dc up -d` have
