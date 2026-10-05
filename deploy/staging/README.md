@@ -83,7 +83,14 @@ docker compose --env-file .env.staging -f docker-compose.staging.yml \
    Docker config, and runs `deploy.sh --pull --yes`, which pulls exactly the
    `sha-<commit>` images and restarts.
 
-Nothing is built on this host. The secrets are `STAGING_SSH_KEY` and
+Compose runs each image as the local tag `:current`; `deploy.sh` pulls
+`sha-<commit>` and re-points `:current` at it (recorded as `TCI_RELEASE` in
+`.env.staging`), so only containers whose image changed are recreated. If the
+stack is not stable 20 s after start, `:current` is pointed back at the previous
+release automatically.
+
+Nothing is built on this host. A code-only change goes from merge to live in
+about 3½ minutes. The secrets are `STAGING_SSH_KEY` and
 `STAGING_SSH_KNOWN_HOSTS` on the GitHub repository.
 
 **By hand** (e.g. re-deploying the current commit): re-run the workflow from

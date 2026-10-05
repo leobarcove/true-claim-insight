@@ -658,6 +658,25 @@ log lines; the error comes after module initialisation. Three fixes:
   every service must be running with zero restarts and the API must answer
   through Traefik; otherwise it restores the previous image tag and exits red.
 
+**Measured against the target (5 Oct 2026), merge → live:**
+
+| Change | Time | Notes |
+|---|---|---|
+| Code-only, one service (PR #19) | **3 min 41 s** | plan 9 s · build + push + boot test 1 min 27 s · retag + deploy 1 min 53 s |
+| First code-only attempt (PR #17) | 6 min 29 s | before the two fixes below |
+| Dependency change, two services (PR #16) | 9 min 13 s | new dependency images built and downloaded |
+
+PR #17 exposed two wastes, both fixed in PR #18: the dependency fingerprint
+hashed a tar stream (which records pnpm's hard links), so identical
+dependencies were re-packaged and re-downloaded; and compose named the
+per-commit tag, so every deploy recreated every container. Compose now runs a
+fixed local `:current` tag that `deploy.sh` re-points at the release
+(`TCI_RELEASE` in `.env.staging`), and recreates only what changed.
+
+A dependency change still exceeds five minutes — the host downloads the new
+dependency layer (~300-700 MB per service from GHCR). Accepted: those are rare,
+and the boot test and rollback make them safe if not fast.
+
 **Open:** the GHCR packages were created **public**, inheriting the public
 repository's visibility. They hold only what the public repo already holds (no
 `.env`; runtime secrets come from `.env.staging` on the host), but switching
