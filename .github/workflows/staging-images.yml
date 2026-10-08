@@ -236,7 +236,12 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           start=$SECONDS
-          echo "${{ secrets.GITHUB_TOKEN }}" | ssh -o BatchMode=yes "root@${HOST}" deploy
+          # Keepalives: a deploy that changes dependencies pulls ~2 GB in
+          # silence, and on 8 Oct 2026 the idle connection was cut after ~5
+          # minutes ("Broken pipe"). The host finished the deploy anyway, but
+          # this job reported failure and saw none of the result.
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh -o BatchMode=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "root@${HOST}" deploy
           echo "deployed in $((SECONDS - start))s"
 
       - name: Summary
