@@ -17,7 +17,7 @@ import {
   type SlaTarget,
 } from './sla.calculator';
 import { UnverifiedHolidayYearError } from './working-days';
-import { assertClaimAccess } from '../common/access/claim-access';
+import { assertClaimAccess, claimVisibilityWhere } from '../common/access/claim-access';
 
 /** Live states — a clock in either is still the firm's problem. */
 const LIVE: SlaClockState[] = [SlaClockState.RUNNING, SlaClockState.PAUSED];
@@ -466,11 +466,18 @@ export class SlaService {
    * This is the evidence that a delay originated with the insurer — measured,
    * never escalated against the firm (the monitorOnly design), and now
    * reportable per insurer.
+   *
+   * Scoped to the claims the caller may see. Until 8 Oct 2026 it read every
+   * tenant's clocks, so any firm admin got figures built from other firms'
+   * claims; and it loaded whole clock rows with no bound. Now it reads three
+   * fields per clock, only for visible claims.
    */
-  async insurerMi() {
+  async insurerMi(tenantContext: TenantContext) {
+    const visible = claimVisibilityWhere(tenantContext);
     const clocks = await this.prisma.slaClock.findMany({
-      where: { policy: { monitorOnly: true } },
-      include: {
+      where: { policy: { monitorOnly: true }, ...(visible ? { claim: visible } : {}) },
+      select: {
+        state: true,
         policy: { select: { stage: true } },
         claim: { select: { insurerTenantId: true, insurerTenant: { select: { name: true } } } },
       },

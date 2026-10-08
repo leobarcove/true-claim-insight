@@ -130,6 +130,7 @@ model Tenant {
   travelClaims         TravelClaim[]
   evidenceRequirements EvidenceRequirement[]
   cases                Case[]
+  piamRegisteredAgents PiamRegisteredAgent[]
   policies             Policy[]
   slaPolicies          SlaPolicy[]
   authorityLimits      AuthorityLimit[]
@@ -3140,6 +3141,11 @@ model PiamRegisteredAgent {
   /// tenant exists. A null here means "not onboarded yet", which is a thing to
   /// report, never a reason to refuse the agent's identity.
   tenantId            String?
+  /// Declared so the schema matches the database: the foreign key has existed
+  /// since migration 20260903170000, and without this line `prisma migrate
+  /// diff` proposed dropping it in every new migration. SetNull, as there:
+  /// removing a tenant must not delete the evidence an agency was registered.
+  tenant              Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   phoneNumber         String?
   principals         Json
   corporateNominees  String[] @default([])

@@ -1,4 +1,5 @@
 import { Logger, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { TenantContext } from '../guards/tenant.guard';
 import { TenantScope } from '../decorators/tenant.decorator';
@@ -76,4 +77,37 @@ export async function assertClaimAccess(
     );
     throw new NotFoundException(`Claim with ID ${claimId} not found`);
   }
+}
+
+/**
+ * `assertClaimAccess` as a list filter: the claims this tenant context may
+ * see, for queries that read many claims at once (reports, aggregates).
+ *
+ * The same rule, kept beside it so the two cannot drift: owner, assigned
+ * adjuster's firm, appointing insurer; a claimant's own claims; everything for
+ * the platform operator. Returns `undefined` when no restriction applies.
+ *
+ * Written after `SlaService.insurerMi` was found reading every tenant's SLA
+ * clocks for any firm admin (8 Oct 2026) — there was no list form of the rule
+ * to reach for, so the aggregate had none.
+ */
+export function claimVisibilityWhere(
+  tenantContext: TenantContext
+): Prisma.ClaimWhereInput | undefined {
+  if (
+    tenantContext.scope === TenantScope.NONE ||
+    (tenantContext.allowCrossTenant && tenantContext.userRole === 'SUPER_ADMIN')
+  ) {
+    return undefined;
+  }
+  if (tenantContext.userRole === 'CLAIMANT') {
+    return { claimantId: tenantContext.userId };
+  }
+  return {
+    OR: [
+      { tenantId: tenantContext.tenantId },
+      { adjuster: { tenantId: tenantContext.tenantId } },
+      { insurerTenantId: tenantContext.tenantId },
+    ],
+  };
 }

@@ -613,6 +613,42 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Scale-readiness and a cross-tenant fix — 8 October 2026
+
+Follow-up to the architecture review (video analyzer excluded: being
+reimplemented).
+
+- **Security — `GET /sla/insurer-mi` read every tenant's SLA clocks.** Allowed
+  for `FIRM_ADMIN` / `COMPLIANCE_OFFICER` of any tenant, it aggregated clocks
+  across all firms' and insurers' claims: per-insurer counts, so no personal
+  data, but other firms' performance and insurer relationships. Found while
+  bounding unbounded queries. Now scoped by `claimVisibilityWhere`, the list
+  form of `assertClaimAccess`, kept beside it; `claim-visibility.spec.ts`
+  checks the two agree claim by claim for firm admin, claimant and operator.
+  The query also now reads three fields per clock, not whole rows.
+- **Rate limits shared across copies.** The gateway's throttler counted in
+  process memory, so N copies allowed N× every limit — including 5 OTP sends
+  an hour. Counts now live in Redis (`@nest-lab/throttler-storage-redis`, the
+  store the NestJS docs point to), prefixed `tci:throttle:`; verified two store
+  instances share one count. Without `REDIS_URL` it falls back to memory and
+  logs that it has.
+- **One anonymisation sweep across copies.** The 04:00 `@Cron` would run on
+  every copy. It now takes a transaction-scoped Postgres advisory lock; a copy
+  that cannot take it skips. Verified on Postgres that a second session is
+  refused while the first holds it. A copy waking after the first finished
+  would sweep again — harmless, the sweep is idempotent.
+- **Schema drift fixed.** `PiamRegisteredAgent` now declares the `tenant`
+  relation its foreign key has had since `20260903170000`; `prisma migrate diff`
+  is empty, so generated migrations stop proposing to drop the constraint.
+- **Unbounded lists:** re-checked — the earlier "43" was a heuristic. Every list
+  on a growing table is bounded by claim, session or an explicit `take`, except
+  `insurerMi` (now tenant-scoped, above).
+
+Not done, each needing a decision: hosted monitoring (A6 — the usual services
+are offshore), object storage for case/video files (Supabase is offshore; the
+AWS ap-southeast-5 target is not built), production environment (A5), and
+inbox pagination (the preview fix removed its cost; paging needs portal UX).
+
 ### Database optimisation — 8 October 2026
 
 Audit of schema, queries and the live staging database, then fixes researched
