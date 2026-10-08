@@ -613,6 +613,41 @@ MI dashboards (SLA per insurer, fee ageing, adjuster utilisation, fraud hit rate
 
 **Keep this section current after every completed item** — it is the context handover between working sessions. Commit refs are on `feature/non-motor-claims-ui`.
 
+### Database optimisation — 8 October 2026
+
+Audit of schema, queries and the live staging database, then fixes researched
+against current (Oct 2026) practice. The database is small (20 MB), so most
+findings are about cost that grows with data rather than present slowness.
+
+- **Inbox preview read every message, every refresh.** `ConversationsService.list`
+  used `include: { messages: { take: 1 } }`, which Prisma cannot push into SQL:
+  staging read **4,287 rows to show 133 previews**, by full table scan, on a
+  list the portal refreshes every 10 s per open tab (1,399 scans / 6.06 M rows
+  read in 3.7 days). Now one `CROSS JOIN LATERAL … ORDER BY "createdAt" DESC
+  LIMIT 1` per binding on the existing `(bindingId, createdAt)` index — verified
+  locally as an index-only backward scan, one row per conversation, and zero
+  mismatches against the old result. Prisma's `relationJoins` LATERAL strategy
+  was rejected: still Preview, with open performance regressions (prisma#22596).
+  `inbox-preview.spec.ts`.
+- **27 of 111 foreign keys unindexed**, including `Claim.insurerTenantId` (the
+  insurer's claim-access rule), `Document.tenantId`, `Case.policyId`. All
+  indexed (migration `20261008090000`); `fk-indexes.spec.ts` reads the schema
+  and fails the build on any new one. Plain `CREATE INDEX IF NOT EXISTS`:
+  Prisma runs migrations in a transaction, where `CONCURRENTLY` is impossible
+  (prisma#14456), and at these sizes the lock lasts milliseconds — for large
+  tables, build `CONCURRENTLY` out of band first.
+- **Postgres ran on image defaults** (`shared_buffers` 128 MB, `random_page_cost`
+  4.0 — spinning-disk pricing on an SSD VPS) with no query statistics. Now sized
+  for the 1 GB container (256 MB / 768 MB / 1.1 / io_concurrency 200), with
+  `pg_stat_statements`, `track_io_timing` and a 500 ms slow-query log. Verified
+  on a throwaway container that the server starts and collects.
+- **Deferred, on evidence:** `pg_trgm` GIN indexes for the `contains` searches
+  (they cost on every write; add when `pg_stat_statements` shows search cost),
+  pagination of the inbox and of ~4 unbounded lists on growing tables, and the
+  schema drift on `piam_registered_agents.tenantId` (constraint exists, the
+  schema lacks its `@relation`, so `migrate diff` proposes dropping it — kept,
+  and excluded from this migration by hand).
+
 ### Staging images built in CI; deploys are automatic — 5 October 2026
 
 Target set by the principal: **at most 5 minutes from merge to live, build

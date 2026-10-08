@@ -7,6 +7,7 @@ import {
   MessageDirection,
   UserRole,
   UserTenantStatus,
+  Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
@@ -39,6 +40,14 @@ export const ASSIGNABLE_ROLES = [
  * already sees, against a §3.4 position that is PARTIAL with no basis
  * established.
  */
+/** The inbox preview of a conversation's latest message. */
+export interface LastMessage {
+  text: string | null;
+  direction: MessageDirection;
+  createdAt: Date;
+  sentByUserId: string | null;
+}
+
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
@@ -79,19 +88,10 @@ export class ConversationsService {
             convertedClaim: { select: { id: true, claimNumber: true, status: true } },
           },
         },
-        messages: {
-          // The preview is what the conversation said, so an internal note is
-          // excluded: a queue row reading "note: chase the policy number" next
-          // to a claimant's name looks like something we sent them.
-          where: {
-            direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { text: true, direction: true, createdAt: true, sentByUserId: true },
-        },
       },
     });
+
+    const previews = await this.lastMessages(bindings.map(binding => binding.id));
 
     // Counted rather than inferred from the last message: a claimant who sends
     // three messages while nobody is watching should read as three waiting, not
@@ -128,9 +128,47 @@ export class ConversationsService {
       lastSeenAt: binding.lastSeenAt,
       claimant: binding.claimant,
       case: binding.activeCase,
-      lastMessage: binding.messages[0] ?? null,
+      lastMessage: previews.get(binding.id) ?? null,
       awaitingAgent: waiting.get(binding.id) ?? 0,
     }));
+  }
+
+  /**
+   * The latest message of each conversation, for the inbox preview.
+   *
+   * One indexed probe per conversation, not a read of every message. This was
+   * `include: { messages: { take: 1 } }` under the bindings query, which Prisma
+   * cannot push into SQL: it fetched every message of every listed
+   * conversation and kept one each in memory. On staging (5 Oct 2026) that was
+   * 4,287 rows sorted and shipped to show 133 previews — a full table scan on
+   * every inbox refresh, which the portal makes every 10 s per open tab, and a
+   * cost that grew with every message ever sent.
+   *
+   * Prisma's own fix, the `relationJoins` LATERAL strategy, is still a Preview
+   * feature with open performance regressions (prisma#22596), so the LATERAL
+   * is written here. `ORDER BY "createdAt" DESC LIMIT 1` per binding is served
+   * by the `(bindingId, createdAt)` index.
+   *
+   * The preview is what the conversation said, so an internal note is
+   * excluded: a queue row reading "note: chase the policy number" next to a
+   * claimant's name looks like something we sent them.
+   */
+  private async lastMessages(bindingIds: string[]) {
+    if (bindingIds.length === 0) return new Map<string, LastMessage>();
+    const rows = await this.prisma.$queryRaw<Array<LastMessage & { bindingId: string }>>(Prisma.sql`
+      SELECT b.id AS "bindingId", m.text, m.direction, m."createdAt", m."sentByUserId"
+      FROM unnest(${bindingIds}::text[]) AS b(id)
+      CROSS JOIN LATERAL (
+        SELECT text, direction, "createdAt", "sentByUserId"
+        FROM conversation_messages
+        WHERE "bindingId" = b.id
+          AND direction IN (${MessageDirection.INBOUND}::"MessageDirection",
+                            ${MessageDirection.OUTBOUND}::"MessageDirection")
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+      ) m
+    `);
+    return new Map(rows.map(({ bindingId, ...message }) => [bindingId, message]));
   }
 
   /**
