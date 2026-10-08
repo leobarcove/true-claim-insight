@@ -269,7 +269,8 @@ async findOne(id: string, tenantContext?: TenantContext) {
   (`common/access/claim-access.ts`) — owner, assigned adjuster's firm, appointing
   insurer, claimant for their own. Never compare `claim.tenantId` by hand;
   `claim-access-coverage.spec.ts` fails on a method that takes a `claimId`
-  without reaching it.
+  without reaching it. For queries over many claims (reports, aggregates) use its list form,
+  `claimVisibilityWhere`, beside it — never a hand-written tenant filter.
 
 ### Key Rules
 

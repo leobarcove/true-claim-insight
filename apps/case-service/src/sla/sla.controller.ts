@@ -98,7 +98,7 @@ export class SlaController {
   @Get('insurer-mi')
   @ApiOperation({ summary: 'Insurer-side CSP performance (decision/payment windows) per insurer' })
   @Roles(UserRole.FIRM_ADMIN, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
-  insurerMi() {
-    return this.sla.insurerMi();
+  insurerMi(@Tenant() tenantContext: TenantContext) {
+    return this.sla.insurerMi(tenantContext);
   }
 }
