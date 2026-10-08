@@ -43,8 +43,13 @@ changed_build_services() {
       # not read by anything at runtime. Rebuilding for these is pure waiting.
       docs/*|screenshots/*|.github/*|*.md|.gitignore|.gitattributes|.prettierrc)
         ;;
-      # Read by the host at deploy time, never copied into an image.
-      deploy/staging/deploy.sh|deploy/staging/ci-deploy.sh|deploy/staging/README*|deploy/staging/*.example)
+      # Read by the host at deploy time, never copied into an image. The
+      # compose files included: since CI builds the images (.github/workflows/
+      # staging-images.yml), compose only says how to RUN them — service
+      # settings, Postgres flags — and changing that needs a restart, not a
+      # rebuild. (--build-local, the one path that builds from compose,
+      # rebuilds everything anyway.)
+      deploy/staging/deploy.sh|deploy/staging/ci-deploy.sh|deploy/staging/README*|deploy/staging/*.example|deploy/staging/docker-compose*.yml)
         ;;
       apps/claimant-web/*|apps/adjuster-portal/*|deploy/staging/Caddyfile)
         services[edge]=1 ;;

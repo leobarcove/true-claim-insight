@@ -91,6 +91,8 @@ model TenantAccessLog {
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])
+  @@index([fromTenantId])
+  @@index([toTenantId])
   @@map("tenant_access_logs")
 }
 
@@ -346,6 +348,8 @@ model Claim {
   @@index([userId])
   @@index([category])
   @@index([createdAt(sort: Desc)])
+  @@index([insurerTenantId])
+  @@index([siuInvestigatorId])
   @@map("claims")
 }
 
@@ -391,6 +395,7 @@ model SiteVisit {
 
   @@index([claimId])
   @@index([tenantId])
+  @@index([attendedByUserId])
   @@map("site_visits")
 }
 
@@ -652,6 +657,8 @@ model Case {
   @@index([tenantId, status])
   @@index([claimantId])
   @@index([createdAt(sort: Desc)])
+  @@index([policyId])
+  @@index([flowDefinitionId])
   @@map("cases")
 }
 
@@ -1086,6 +1093,7 @@ model Session {
 
   @@index([claimId])
   @@index([tenantId])
+  @@index([userId])
   @@map("sessions")
 }
 
@@ -1104,6 +1112,8 @@ model DeceptionScore {
   user                  User?    @relation(fields: [userId], references: [id])
 
   @@index([sessionId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("deception_scores")
 }
 
@@ -1127,6 +1137,8 @@ model RiskAssessment {
 
   @@index([sessionId, assessmentType])
   @@index([sessionId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("risk_assessments")
 }
 
@@ -1168,6 +1180,8 @@ model Document {
 
   @@index([claimId])
   @@index([signatureStatus])
+  @@index([tenantId])
+  @@index([userId])
   @@map("documents")
 }
 
@@ -1201,6 +1215,8 @@ model DocumentAnalysis {
   document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   tenant         Tenant?  @relation(fields: [tenantId], references: [id])
   user           User?    @relation(fields: [userId], references: [id])
+  @@index([tenantId])
+  @@index([userId])
 
   @@map("document_analyses")
 }
@@ -1225,6 +1241,8 @@ model TrinityCheck {
   user              User?    @relation(fields: [userId], references: [id])
 
   @@index([claimId])
+  @@index([tenantId])
+  @@index([userId])
   @@map("trinity_checks")
 }
 
@@ -1560,6 +1578,8 @@ model VideoUpload {
 
   @@index([claimId])
   @@index([status])
+  @@index([tenantId])
+  @@index([userId])
   @@map("video_uploads")
 }
 
@@ -1785,6 +1805,7 @@ model SlaClock {
   @@index([assignmentId])
   @@index([state, dueAt])
   @@index([stage])
+  @@index([policyId])
   @@map("sla_clocks")
 }
 
@@ -1876,6 +1897,8 @@ model AdjusterReport {
   @@index([claimId])
   @@index([status])
   @@index([authorAdjusterId])
+  @@index([reviewerAdjusterId])
+  @@index([signedByAdjusterId])
   @@map("adjuster_reports")
 }
 
@@ -2028,6 +2051,7 @@ model Consent {
 
   @@index([claimantId, purpose])
   @@index([status])
+  @@index([noticeId])
   @@map("consents")
 }
 
@@ -2302,6 +2326,7 @@ model ConflictAttestation {
   adjuster Adjuster @relation(fields: [adjusterId], references: [id], onDelete: Cascade)
 
   @@unique([claimId, adjusterId])
+  @@index([adjusterId])
   @@map("conflict_attestations")
 }
 
@@ -2682,6 +2707,7 @@ model TimeEntry {
   adjuster Adjuster @relation(fields: [adjusterId], references: [id])
 
   @@index([claimId])
+  @@index([adjusterId])
   @@map("time_entries")
 }
 
@@ -2742,6 +2768,7 @@ model FeeNote {
 
   @@index([insurerTenantId, status])
   @@index([status, dueAt])
+  @@index([claimId])
   @@map("fee_notes")
 }
 
